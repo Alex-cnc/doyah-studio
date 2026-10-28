@@ -378,6 +378,12 @@ public enum LKey: String, CaseIterable, Sendable {
     case gitDiffTruncated
     case gitDiffStaged
     case gitDiffUnstaged
+    case gitDiffIgnoreWhitespace
+    case gitDiffContextLines
+    case gitDiffFoldHidden
+    case gitDiffFoldExpand
+    case gitDiffShowMore
+    case gitDiffEmptyAfterWhitespace
     case gitChangeUntracked
     case gitChangeAdded
     case gitChangeModified
@@ -3497,6 +3503,18 @@ public enum LocalizedStrings {
                          .english: "Staged (no further working-tree changes)"],
         .gitDiffUnstaged: [.simplifiedChinese: "未暂存（工作区相对暂存区）",
                            .english: "Unstaged (working tree against the index)"],
+        .gitDiffIgnoreWhitespace: [.simplifiedChinese: "忽略空白",
+                                   .english: "Ignore whitespace"],
+        .gitDiffContextLines: [.simplifiedChinese: "上下文 %d 行",
+                               .english: "%d lines of context"],
+        .gitDiffFoldHidden: [.simplifiedChinese: "⋯ %d 行未变",
+                             .english: "⋯ %d unchanged lines"],
+        .gitDiffFoldExpand: [.simplifiedChinese: "展开这 %d 行",
+                             .english: "Show these %d lines"],
+        .gitDiffShowMore: [.simplifiedChinese: "还有 %d 行未显示 · 显示更多",
+                           .english: "%d more lines · Show more"],
+        .gitDiffEmptyAfterWhitespace: [.simplifiedChinese: "忽略空白之后，这一侧没有可显示的差异。",
+                                       .english: "Nothing to show on this side once whitespace is ignored."],
         .gitChangeUntracked: [.simplifiedChinese: "未跟踪", .english: "Untracked"],
         .gitChangeAdded: [.simplifiedChinese: "新增", .english: "Added"],
         .gitChangeModified: [.simplifiedChinese: "已修改", .english: "Modified"],

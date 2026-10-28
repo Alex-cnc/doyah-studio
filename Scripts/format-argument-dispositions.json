@@ -1,7 +1,7 @@
 {
- "note": "语言表模板占位符 ↔ `L(...)` 调用点实参的对账台账（队列 L-46）。判据与用法见 Scripts/check-format-arguments.py 头部。shapes = 门禁**判不出类型**的实参形状，逐条登记：kind 只认有出处可引的（text / number，理由写清 file:line）；没有出处的一律 unverified —— unverified 不参与槽位交叉检查，只被形状与处数棘轮钉住，不是放行。 预算棘轮：unknownBudget 116 → 117（2026-09-30 循环第 119 轮 `L-107`）：新增一处 `L(.workspaceFormatFailed, …, failure.exitCode.map(String.init) ?? \"—\", …)` —— 该实参形状已按 `kind=text` 登记（见 shapes 末条），但「类型不明实参数」这一计数**在登记之前就自增** ⇒ 预算必须同批 +1，否则判据 D 会把「已登记」的也算成超支。 预算棘轮 117 → 123（2026-10-02 队列 `L-114` 工作区文件操作：2 处 `<inside>` + 3 处 `<name>` + 1 处 `<reason>`，三处形状都已按 kind 登记；同 `L-107` 的先例 —— 登记之前那个计数就已自增，不 +6 判据 D 会把已登记的也算成超支）。 预算棘轮 123 → 124（2026-10-03 队列 `L-172` 关闭确认框：1 处 `tabs.pendingClose?.title ?? \"\"`，形状已按 kind=unverified 登记；同 `L-107` / `L-114` 的先例 —— 登记之前那个计数就已自增，不 +1 判据 D 会把已登记的也算成超支）。 预算棘轮 124 → 125（2026-10-03 开发循环第 169 轮 `L-97` 界面半第一片：1 处 `<notebook>`（跨笔记本搜索结果行的所属标注），形状已按 kind=text 登记并附出处；同 `L-107` / `L-114` / `L-172` 的先例 —— 登记之前那个计数就已自增，不 +1 判据 D 会把已登记的也算成超支）。 预算棘轮 125 → 129（2026-10-03 开发循环第 170 轮队列 `L-97` 界面半第二片：删除确认框的「影响面」那句有 4 处按形状分档的实参 —— `<noteCount>` ×2 + `<notebookCount>` ×2，两个形状都已按 kind=number 登记并附出处；同 `L-107` / `L-114` / `L-172` / 第 169 轮的先例 —— 登记之前那个计数就已自增，不 +4 判据 D 会把已登记的也算成超支）。 2026-10-14（台账 v1.324 · `T-20261008-050`/WY-2b 的收尾）：`App/AppState.swift:6926` 的迁移提示 `L(.notesMigrationNeedsAttention, detail)` 原先写成内联拼接表达式（形状判据认不出 ⇒ 未登记、全局超预算 1）。本批把它改成**具名 + 显式标注**（`let detail: String = …`）⇒ 形状归入已登记的 `<detail>`，该形状上限 4 → 5、全局预算 130 → 131，两项均在本条理由里写明（棘轮只许不增，本次增 1 有据）。 预算棘轮 131 → 137（2026-10-18 macOS 开发循环 · 队列 9「门禁欠账两笔」）：六处一次说清 —— `<model>` ×2（`App/Views/AgentChatView.swift:232`、`App/Views/AgentSettingsSheet.swift:158`）、`<modelName>` ×1（`AgentChatView.swift:411`）、`URL(…)` ×1（`AgentChatView.swift:423`）三个形状本轮新入台账；`<reason>` 14 → 15（`AgentSettingsSheet.swift:160`）、`<next>` 1 → 2（`AgentScheduleSheet.swift:128`）；再把同一行的 `millis` 登记成 `<millis>`（kind=number，`AgentConnectionTest.passed(model: String, millis: Int)` ⇒ Int，正好由判据 A′ 反向确认 `%d` 槽收的是数字）。七处在基线 `f4e3d89` 的干净工作树里逐处点名核过，**不是本轮新写的**；台账长期只登记形状、预算没跟着调，这半截本轮销干净。同批两处门禁自身修正：把 `agentTestPassed` 的 `%d` 槽改成收 `Int`（原来收字符串，界面会印垃圾数 —— 真缺陷）；类型索引不再收函数体里的**嵌套函数**（`Core/CodeCommentToggle.swift` 的局部 `func map(_ offsetInBlock: Int) -> Int` 曾让每处 `x.map(...)` 被判成数字 ⇒ 判据 A 假红 + 台账形状被判陈旧）。 预算棘轮 138 → 153（2026-10-18 `FR-AGT-LINK-EXT-002` 界面片）：MCP 服务器面板新增 15 处类型不明实参（六种新形状 `<connected>` / `<error>` / `<serverName>` / `<version>` / `.rawValue` / `<line>` 逐条登记 + 四个已有形状抬上限），同 `L-107` / `L-114` / `L-172` 先例 —— 登记之前那个计数就已自增，不 +15 判据 D 会把已登记的也算成超支。",
+ "note": "语言表模板占位符 ↔ `L(...)` 调用点实参的对账台账（队列 L-46）。判据与用法见 Scripts/check-format-arguments.py 头部。shapes = 门禁**判不出类型**的实参形状，逐条登记：kind 只认有出处可引的（text / number，理由写清 file:line）；没有出处的一律 unverified —— unverified 不参与槽位交叉检查，只被形状与处数棘轮钉住，不是放行。 预算棘轮：unknownBudget 116 → 117（2026-09-30 循环第 119 轮 `L-107`）：新增一处 `L(.workspaceFormatFailed, …, failure.exitCode.map(String.init) ?? \"—\", …)` —— 该实参形状已按 `kind=text` 登记（见 shapes 末条），但「类型不明实参数」这一计数**在登记之前就自增** ⇒ 预算必须同批 +1，否则判据 D 会把「已登记」的也算成超支。 预算棘轮 117 → 123（2026-10-02 队列 `L-114` 工作区文件操作：2 处 `<inside>` + 3 处 `<name>` + 1 处 `<reason>`，三处形状都已按 kind 登记；同 `L-107` 的先例 —— 登记之前那个计数就已自增，不 +6 判据 D 会把已登记的也算成超支）。 预算棘轮 123 → 124（2026-10-03 队列 `L-172` 关闭确认框：1 处 `tabs.pendingClose?.title ?? \"\"`，形状已按 kind=unverified 登记；同 `L-107` / `L-114` 的先例 —— 登记之前那个计数就已自增，不 +1 判据 D 会把已登记的也算成超支）。 预算棘轮 124 → 125（2026-10-03 开发循环第 169 轮 `L-97` 界面半第一片：1 处 `<notebook>`（跨笔记本搜索结果行的所属标注），形状已按 kind=text 登记并附出处；同 `L-107` / `L-114` / `L-172` 的先例 —— 登记之前那个计数就已自增，不 +1 判据 D 会把已登记的也算成超支）。 预算棘轮 125 → 129（2026-10-03 开发循环第 170 轮队列 `L-97` 界面半第二片：删除确认框的「影响面」那句有 4 处按形状分档的实参 —— `<noteCount>` ×2 + `<notebookCount>` ×2，两个形状都已按 kind=number 登记并附出处；同 `L-107` / `L-114` / `L-172` / 第 169 轮的先例 —— 登记之前那个计数就已自增，不 +4 判据 D 会把已登记的也算成超支）。 2026-10-14（台账 v1.324 · `T-20261008-050`/WY-2b 的收尾）：`App/AppState.swift:6926` 的迁移提示 `L(.notesMigrationNeedsAttention, detail)` 原先写成内联拼接表达式（形状判据认不出 ⇒ 未登记、全局超预算 1）。本批把它改成**具名 + 显式标注**（`let detail: String = …`）⇒ 形状归入已登记的 `<detail>`，该形状上限 4 → 5、全局预算 130 → 131，两项均在本条理由里写明（棘轮只许不增，本次增 1 有据）。 预算棘轮 131 → 137（2026-10-18 macOS 开发循环 · 队列 9「门禁欠账两笔」）：六处一次说清 —— `<model>` ×2（`App/Views/AgentChatView.swift:232`、`App/Views/AgentSettingsSheet.swift:158`）、`<modelName>` ×1（`AgentChatView.swift:411`）、`URL(…)` ×1（`AgentChatView.swift:423`）三个形状本轮新入台账；`<reason>` 14 → 15（`AgentSettingsSheet.swift:160`）、`<next>` 1 → 2（`AgentScheduleSheet.swift:128`）；再把同一行的 `millis` 登记成 `<millis>`（kind=number，`AgentConnectionTest.passed(model: String, millis: Int)` ⇒ Int，正好由判据 A′ 反向确认 `%d` 槽收的是数字）。七处在基线 `f4e3d89` 的干净工作树里逐处点名核过，**不是本轮新写的**；台账长期只登记形状、预算没跟着调，这半截本轮销干净。同批两处门禁自身修正：把 `agentTestPassed` 的 `%d` 槽改成收 `Int`（原来收字符串，界面会印垃圾数 —— 真缺陷）；类型索引不再收函数体里的**嵌套函数**（`Core/CodeCommentToggle.swift` 的局部 `func map(_ offsetInBlock: Int) -> Int` 曾让每处 `x.map(...)` 被判成数字 ⇒ 判据 A 假红 + 台账形状被判陈旧）。 预算棘轮 138 → 153（2026-10-18 `FR-AGT-LINK-EXT-002` 界面片）：MCP 服务器面板新增 15 处类型不明实参（六种新形状 `<connected>` / `<error>` / `<serverName>` / `<version>` / `.rawValue` / `<line>` 逐条登记 + 四个已有形状抬上限），同 `L-107` / `L-114` / `L-172` 先例 —— 登记之前那个计数就已自增，不 +15 判据 D 会把已登记的也算成超支。 预算棘轮 170 → 188（2026-10-29 第五十八批 `FR-STD-WS-VCS-002`：差异视图的取值开关 + 折叠 + 按需渲染）。两笔一起说清：① **本批新增 4 处**（`<step>` ×1 —— `GitDiffRequest.contextSteps` 是 `[Int]`；`<hidden>` ×1 —— `GitDiffShowMore(hidden: Int)` 的关联值；`$0` ×1 与 `$1`/`$2` ×2 —— 回执标签改成值格式闭包后，语言表那一句原地带上了实参，`$1`/`$2` 是 `@Sendable (Int, Int, Int) -> String` 的形参）；② **本批把 `L(.receiptSeconds)` 那四处「实参 0 个、模板却带占位符」的真红修掉**：判据 B 当时判得对 —— Core 拿的是模板串，占位符没人填；改成闭包后模板与实参回到同一句，B 不再是假红、A/A′ 也开始真的检查这四句。按先例（`L-107` / `L-114` / `L-172`），登记之前那个计数就已自增 ⇒ 预算同批抬到位，不抬判据 D 会把已登记的也算成超支。 处数重取（同批）：`<name>` 11 → 13、`tabs[index].title` 2 → 4、`<count>` 4 → 5 —— 三笔增量都是先前几批（R52 的 `.intoOwnSubtree` / `.trashCopyMissing`、R56 的 `workspaceSaveFormatFailed` / `workspaceFormatRedetectFailed`、R57 的 `receiptCopied`）登记了形状却没跟处数；本轮**自己没新增**这三类形状的调用点，只把台账按实测对齐。",
  "version": 1,
- "unknownBudget": 170,
+ "unknownBudget": 188,
  "shapes": [
   {
    "shape": "<reason>",
@@ -12,8 +12,8 @@
   {
    "shape": "<name>",
    "kind": "text",
-   "maxSites": 11,
-   "reason": "库名 / 表名：App/AppState.swift:2058 形参 `name: String`；2026-10-02 队列 `L-114` 新增三处（`App/WorkspaceStore.swift` 的 `operationMessage(for:)`：`case .illegalName(let name)` / `.alreadyExists(let name)` / `.notADirectory(let name)` ⇒ `name: String`） 2026-10-18（`FR-AGT-LINK-EXT-002` 界面片）：MCP 服务器面板（`App/Views/MCPServersSheet.swift`）新增的状态 / 毛病那几句带实参，这些实参在仓里没有可机械引用的显式标注 ⇒ 按形状登记并抬上限（同 `L-107` / `L-114` 先例：登记之前计数就已自增）。（新增一处：`L(.mcpServersProblemDuplicateName, index + 1, name)` 的 `name`）"
+   "maxSites": 13,
+   "reason": "库名 / 表名：App/AppState.swift:2058 形参 `name: String`；2026-10-02 队列 `L-114` 新增三处（`App/WorkspaceStore.swift` 的 `operationMessage(for:)`：`case .illegalName(let name)` / `.alreadyExists(let name)` / `.notADirectory(let name)` ⇒ `name: String`） 2026-10-18（`FR-AGT-LINK-EXT-002` 界面片）：MCP 服务器面板（`App/Views/MCPServersSheet.swift`）新增的状态 / 毛病那几句带实参，这些实参在仓里没有可机械引用的显式标注 ⇒ 按形状登记并抬上限（同 `L-107` / `L-114` 先例：登记之前计数就已自增）。（新增一处：`L(.mcpServersProblemDuplicateName, index + 1, name)` 的 `name`） 处数 11 → 13（2026-10-29 第五十八批按实测重取）：两处增量来自 R52 的 `App/WorkspaceStore.swift` `operationMessage(for:)` 里 `case .intoOwnSubtree(let name)` / `case .trashCopyMissing(let name)` （两处都是 `name: String`），当时登记了形状却没跟处数。"
   },
   {
    "shape": "<written>",
@@ -72,8 +72,8 @@
   {
    "shape": "$0",
    "kind": "unverified",
-   "maxSites": 2,
-   "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
+   "maxSites": 6,
+   "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查 2026-10-29 第五十八批：2 → 6 —— 新增四处是执行回执的**值格式闭包**（`App/AppState.swift` 的 `receiptLabels`：`durationFormat` / `resultsFormat` / `resultsTruncated` / `redactionFormat`，形参类型见 `Core/ExecutionReceipt.swift` 的 `ReceiptLabels`：`(Double)` 与 `(Int, Int, Int)`）。仍按 unverified：同名形状的两处老站点（`artifactName.map { … $0 }` 与 `searched.map { … $0 }`）收的是 String，混在一起判不出唯一类型 ⇒ 只钉形状与处数。"
   },
   {
    "shape": ".line",
@@ -114,8 +114,8 @@
   {
    "shape": "tabs[index].title",
    "kind": "unverified",
-   "maxSites": 2,
-   "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查"
+   "maxSites": 4,
+   "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查 处数 2 → 4（2026-10-29 第五十八批按实测重取）：两处增量来自 R56 的 `App/WorkspaceTabsModel.swift` `workspaceSaveFormatFailed` / `workspaceFormatRedetectFailed`（`tabs[index].title` 是 String）。"
   },
   {
    "shape": ".defaultBrowseLimit",
@@ -168,8 +168,8 @@
   {
    "shape": "<count>",
    "kind": "unverified",
-   "maxSites": 4,
-   "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查 2026-10-18（`FR-AGT-LINK-EXT-002` 界面片）：MCP 服务器面板（`App/Views/MCPServersSheet.swift`）新增的状态 / 毛病那几句带实参，这些实参在仓里没有可机械引用的显式标注 ⇒ 按形状登记并抬上限（同 `L-107` / `L-114` 先例：登记之前计数就已自增）。（新增三处：`L(.mcpServersSaved, count)` / `L(.mcpServersNoteDisabled, count)` / `L(.mcpServersSummary, connected, servers.count)`）"
+   "maxSites": 5,
+   "reason": "类型不明：仓库里没有可机械引用的显式标注（同名的无标注 `let x = String(format:…)` 会让文件级索引误判，见脚本头注释）⇒ 只登记形状与处数棘轮，不做槽位交叉检查 2026-10-18（`FR-AGT-LINK-EXT-002` 界面片）：MCP 服务器面板（`App/Views/MCPServersSheet.swift`）新增的状态 / 毛病那几句带实参，这些实参在仓里没有可机械引用的显式标注 ⇒ 按形状登记并抬上限（同 `L-107` / `L-114` 先例：登记之前计数就已自增）。（新增三处：`L(.mcpServersSaved, count)` / `L(.mcpServersNoteDisabled, count)` / `L(.mcpServersSummary, connected, servers.count)`） 处数 4 → 5（2026-10-29 第五十八批按实测重取）：一处增量来自 R57 的 `App/AppState.swift:1511` `L(.receiptCopied, count)`（`count: Int`，模板收 `%d`）。"
   },
   {
    "shape": "<databaseName>",
@@ -542,6 +542,48 @@
    "kind": "text",
    "maxSites": 1,
    "reason": "IM 通道密钥尾 4：同文件 `let tail: String = appState.agentIMSecretTail ?? \"\"` ⇒ String，进同一模板的 `%@` 槽（只给尾 4，本体不出钥匙串）。"
+  },
+  {
+   "shape": "$1",
+   "kind": "unverified",
+   "maxSites": 2,
+   "reason": "2026-10-29 第五十八批（`FR-STD-WS-VCS-002` 同批的回执修复）：`L(.receiptResultsFormat, $0, $1, $2)` 与`L(.receiptRedactionFormat, $0, $1, $2)` 的第二个闭包形参 —— `ReceiptLabels.resultsFormat` / `.redactionFormat`都是 `@Sendable (Int, Int, Int) -> String`（`Core/ExecutionReceipt.swift`）⇒ 值域是 Int。仍按 unverified：门禁对闭包形参没有类型索引（同 `$0` 的理由），处 2。"
+  },
+  {
+   "shape": "$2",
+   "kind": "unverified",
+   "maxSites": 2,
+   "reason": "2026-10-29 第五十八批：同 `$1`，第三个闭包形参（`resultsFormat` / `redactionFormat`），Int，处 2。"
+  },
+  {
+   "shape": "<step>",
+   "kind": "number",
+   "maxSites": 1,
+   "reason": "2026-10-29 第五十八批 `FR-STD-WS-VCS-002`：`App/Views/GitChangesPanel.swift` 的 `ForEach(GitDiffRequest.contextSteps, id: \\.self) { step in L(.gitDiffContextLines, step) }` —— `GitDiffRequest.contextSteps` 是 `[Int]`（`Core/GitDiffRequest.swift`），元素即 `step: Int`，模板收 `%d`。"
+  },
+  {
+   "shape": "<hidden>",
+   "kind": "number",
+   "maxSites": 1,
+   "reason": "2026-10-29 第五十八批 `FR-STD-WS-VCS-002`：`App/Views/GitChangesPanel.swift` 的 `moreRow(hidden: Int, file:)` 里 `L(.gitDiffShowMore, hidden)` —— 值来自 `GitDiffRow.more(hidden: Int)` 与 `GitDiffFilePresentation.hiddenRows`，都是 Int，模板收 `%d`。"
+  },
+  {
+   "shape": ".defaultMaxLinesPerFile",
+   "kind": "number",
+   "maxSites": 1,
+   "reason": "2026-10-29 第五十八批：`App/Views/GitChangesPanel.swift` 的 `L(.gitDiffTruncated, GitUnifiedDiff.defaultMaxLinesPerFile)` —— 该常量是 `public static let defaultMaxLinesPerFile = 50_000`（`Core/GitUnifiedDiff.swift`，Int 字面量），模板收 `%d`。本批只改了它的取值（4_000 → 50_000：解析层兜底，渲染改由呈现层按需分页），形状此前就漏登记。"
+  },
+  {
+   "shape": "moved.deletingLastPathComponent(…)",
+   "kind": "text",
+   "maxSites": 1,
+   "reason": "2026-10-29 第五十八批（存量补齐）：`App/WorkspaceStore.swift:360` 的 `L(.workspaceFileMoved, moved.deletingLastPathComponent().lastPathComponent)` —— `URL.lastPathComponent` 是 String，模板收 `%@`。该处是 R52 拖拽移动那片写的，形状一直没登记（一直红）。"
+  },
+  {
+   "shape": "entry.originalURL?.lastPathCompo",
+   "kind": "text",
+   "maxSites": 1,
+   "reason": "2026-10-29 第五十八批（存量补齐）：`App/WorkspaceStore.swift:405` 的 `L(.workspaceUndoRename, entry.originalURL?.lastPathComponent ?? \"\")` —— `URL?.lastPathComponent ?? \"\"` 是 String，模板收 `%@`。同 R52 那片，形状一直没登记。"
   }
  ],
  "exceptions": []

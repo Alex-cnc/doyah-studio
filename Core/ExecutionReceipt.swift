@@ -269,13 +269,18 @@ public struct ExecutionReceipt: Identifiable, Equatable, Codable, Sendable {
 
     /// 渲染要用的**文案**。由界面从语言表取好再传进来 —— Core 不留任何面向用户的字面量
     /// （`Scripts/check-core-localization.py` 的两条棘轮都扫这里）。
-    public struct ReceiptLabels: Equatable, Sendable {
+    public struct ReceiptLabels: Sendable {
         public var title: String
         public var executedAt: String
         public var outcome: String
         public var duration: String
-        /// 含 `%.3f` 的格式串。
-        public var durationFormat: String
+        /// 耗时的**值格式**（`%.3f 秒` / `%.3f s`）。由界面侧填 —— Core 不持有文案。
+        ///
+        /// 为什么是闭包而不是「带占位符的模板串」：模板串在这一层**没有实参**，
+        /// 语言表对账门禁（`Scripts/check-format-arguments.py` 判 B）判它「实参 0 个、
+        /// 模板有 1 个占位符」是**对的** —— 它看不到这份串是拿去别处 `String(format:)` 的。
+        /// 让语言表那一句在它自己的原地带上实参，模板与实参就重新是同一件事。
+        public var durationFormat: @Sendable (Double) -> String
         public var affectedRows: String
         public var affectedRowsUnmeasured: String
         public var statements: String
@@ -283,16 +288,16 @@ public struct ExecutionReceipt: Identifiable, Equatable, Codable, Sendable {
         public var database: String
         public var scope: String
         public var results: String
-        /// 含三个 `%d`（结果集数 · 行 · 列）。
-        public var resultsFormat: String
-        /// 含一个 `%d`（被截断的结果集个数）。
-        public var resultsTruncated: String
+        /// 结果集读数（几个 · 共几行 · 最宽几列）。
+        public var resultsFormat: @Sendable (Int, Int, Int) -> String
+        /// 被截断的结果集个数。
+        public var resultsTruncated: @Sendable (Int) -> String
         public var error: String
         public var sql: String
         /// 脱敏那一行的**标签**（"脱敏" / "Redacted"）。
         public var redaction: String
-        /// 含三个 `%d`（总 · 口令 · 连接串）。
-        public var redactionFormat: String
+        /// 脱敏账（总 · 口令 · 连接串）。
+        public var redactionFormat: @Sendable (Int, Int, Int) -> String
         /// 四档结局各自的说法。
         public var outcomes: [ExecutionOutcome: String]
 
@@ -301,7 +306,7 @@ public struct ExecutionReceipt: Identifiable, Equatable, Codable, Sendable {
             executedAt: String,
             outcome: String,
             duration: String,
-            durationFormat: String,
+            durationFormat: @escaping @Sendable (Double) -> String,
             affectedRows: String,
             affectedRowsUnmeasured: String,
             statements: String,
@@ -309,12 +314,12 @@ public struct ExecutionReceipt: Identifiable, Equatable, Codable, Sendable {
             database: String,
             scope: String,
             results: String,
-            resultsFormat: String,
-            resultsTruncated: String,
+            resultsFormat: @escaping @Sendable (Int, Int, Int) -> String,
+            resultsTruncated: @escaping @Sendable (Int) -> String,
             error: String,
             sql: String,
             redaction: String,
-            redactionFormat: String,
+            redactionFormat: @escaping @Sendable (Int, Int, Int) -> String,
             outcomes: [ExecutionOutcome: String]
         ) {
             self.title = title
@@ -355,7 +360,7 @@ public struct ExecutionReceipt: Identifiable, Equatable, Codable, Sendable {
         lines.append("\(labels.title) · \(stamp)")
         lines.append("\(labels.executedAt)：\(stamp)")
         lines.append("\(labels.outcome)：\(labels.outcomes[outcome] ?? outcome.rawValue)")
-        lines.append("\(labels.duration)：\(String(format: labels.durationFormat, duration))")
+        lines.append("\(labels.duration)：\(labels.durationFormat(duration))")
         if let affectedRows {
             lines.append("\(labels.affectedRows)：\(affectedRows)")
         } else {
@@ -366,14 +371,9 @@ public struct ExecutionReceipt: Identifiable, Equatable, Codable, Sendable {
         lines.append("\(labels.database)：\(database)")
         lines.append("\(labels.scope)：\(scopeTitle)")
 
-        var resultLine = String(
-            format: labels.resultsFormat,
-            results.resultSetCount,
-            results.rowCount,
-            results.columnCount
-        )
+        var resultLine = labels.resultsFormat(results.resultSetCount, results.rowCount, results.columnCount)
         if results.truncatedCount > 0 {
-            resultLine += " · " + String(format: labels.resultsTruncated, results.truncatedCount)
+            resultLine += " · " + labels.resultsTruncated(results.truncatedCount)
         }
         lines.append("\(labels.results)：\(resultLine)")
 
@@ -383,12 +383,7 @@ public struct ExecutionReceipt: Identifiable, Equatable, Codable, Sendable {
         if !redaction.isClean {
             lines.append(
                 "\(labels.redaction)："
-                    + String(
-                        format: labels.redactionFormat,
-                        redaction.total,
-                        redaction.passwordLiterals,
-                        redaction.urlCredentials
-                    )
+                    + labels.redactionFormat(redaction.total, redaction.passwordLiterals, redaction.urlCredentials)
             )
         }
 

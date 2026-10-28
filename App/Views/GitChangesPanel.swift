@@ -247,28 +247,56 @@ struct GitChangesPanel: View {
         }
     }
 
-    /// 同一个文件两侧都有改动时，给「看哪一侧」一个开关；只有一侧时不摆这个开关
-    /// （摆了也只是两条一模一样的路）。
+    /// 差异区顶部的取值开关（`FR-STD-WS-VCS-002`）：这一份差异「怎么取」。
+    ///
+    /// 为什么把「忽略空白」做成**重新取数**而不是本地过滤：`git diff -w` 是 git 自己算的差异，
+    /// 本地按空白过滤等于我们另写一套差异算法 —— 两份结果迟早对不上（而界面上分不出哪份是真的）。
     @ViewBuilder
     private func diffToolbar(entry: GitWorktreeEntry) -> some View {
-        if entry.isStaged && entry.isUnstaged && !entry.isUntracked {
-            HStack(spacing: Spacing.xs) {
+        HStack(spacing: Spacing.xs) {
+            if entry.isStaged && entry.isUnstaged && !entry.isUntracked {
                 sideButton(L(.gitDiffUnstaged), staged: false)
                 sideButton(L(.gitDiffStaged), staged: true)
-                Spacer(minLength: 0)
-            }
-            .padding(.horizontal, Spacing.s)
-            .padding(.vertical, 2)
-        } else if entry.isStaged && !entry.isUnstaged {
-            HStack(spacing: Spacing.xs) {
+            } else if entry.isStaged && !entry.isUnstaged {
                 Text(L(.gitDiffStaged))
                     .font(Theme.font(.caption))
                     .foregroundStyle(Theme.text(.tertiary))
-                Spacer(minLength: 0)
             }
-            .padding(.horizontal, Spacing.s)
-            .padding(.vertical, 2)
+            Spacer(minLength: Spacing.s)
+            Toggle(isOn: Binding(
+                get: { model.request.ignoresWhitespace },
+                set: { model.setIgnoresWhitespace($0) }
+            )) {
+                Text(L(.gitDiffIgnoreWhitespace))
+                    .font(Theme.font(.caption))
+                    .foregroundStyle(Theme.text(.secondary))
+            }
+            .toggleStyle(.checkbox)
+            .controlSize(.small)
+            contextMenu()
         }
+        .padding(.horizontal, Spacing.s)
+        .padding(.vertical, 2)
+    }
+
+    /// 上下文档位（3 = git 缺省 / 12 / 40）：档位越大越要靠折叠把长段收起来。
+    private func contextMenu() -> some View {
+        Menu {
+            ForEach(GitDiffRequest.contextSteps, id: \.self) { step in
+                Button {
+                    model.setContextLines(step)
+                } label: {
+                    Text(L(.gitDiffContextLines, step))
+                }
+            }
+        } label: {
+            Text(L(.gitDiffContextLines, model.request.contextLines))
+                .font(Theme.font(.caption))
+                .foregroundStyle(Theme.text(.secondary))
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
+        .help(L(.gitDiffContextLines, model.request.contextLines))
     }
 
     private func sideButton(_ title: String, staged: Bool) -> some View {
@@ -286,10 +314,14 @@ struct GitChangesPanel: View {
     @ViewBuilder
     private func diffBody(_ document: GitDiffDocument) -> some View {
         if document.isEmpty || (!document.hasBody && !document.hasBinary) {
-            emptyState(symbol: "text.alignleft", text: L(.gitDiffEmptySide))
+            // 忽略空白之后「整份差异消失」是很常见的（只改了缩进）—— 那时说「这一侧没有差异」
+            // 会让人以为文件没改；那句话要说清是**这个开关**造成的。
+            emptyState(symbol: "text.alignleft",
+                       text: model.request.ignoresWhitespace ? L(.gitDiffEmptyAfterWhitespace)
+                                                             : L(.gitDiffEmptySide))
         } else {
             ScrollView([.vertical, .horizontal]) {
-                VStack(alignment: .leading, spacing: 0) {
+                LazyVStack(alignment: .leading, spacing: 0) {
                     ForEach(Array(document.files.enumerated()), id: \.offset) { _, file in
                         fileHeader(file)
                         if file.isBinary {
@@ -299,12 +331,7 @@ struct GitChangesPanel: View {
                                 .padding(.horizontal, Spacing.s)
                                 .padding(.vertical, 2)
                         } else {
-                            ForEach(Array(file.hunks.enumerated()), id: \.offset) { _, hunk in
-                                hunkHeader(hunk)
-                                ForEach(Array(hunk.lines.enumerated()), id: \.offset) { _, line in
-                                    lineRow(line)
-                                }
-                            }
+                            rows(for: file)
                         }
                         if file.truncated {
                             Text(L(.gitDiffTruncated, GitUnifiedDiff.defaultMaxLinesPerFile))
@@ -318,6 +345,78 @@ struct GitChangesPanel: View {
                 .padding(.vertical, Spacing.hair)
             }
         }
+    }
+
+    /// 一个文件的行：分段头 / 正文 / 折起来的上下文 / 「还有 N 行」。
+    ///
+    /// **一律走 `model.presentation`**：折叠与分页都不在视图里算 —— 视图每次 body 求值都会重算，
+    /// 而折叠状态住在模型里（视图树重建不丢）。
+    @ViewBuilder
+    private func rows(for file: GitDiffFile) -> some View {
+        let presentation = model.presentation(for: file)
+        ForEach(Array(presentation.rows.enumerated()), id: \.offset) { _, row in
+            switch row {
+            case .hunkHeader(let header):
+                hunkHeaderText(header)
+            case .line(let line):
+                lineRow(line)
+            case .fold(let fold):
+                foldRow(fold)
+            case .more(let hidden):
+                moreRow(hidden: hidden, file: file)
+            }
+        }
+    }
+
+    /// 折起来的一段未变行：点一下展开（再点折回去由展开后的编辑器路径不涉及 —— 展开后这一行就没了）。
+    private func foldRow(_ fold: GitDiffFold) -> some View {
+        // 一句文案只拼一次（三处提示共用同一个串 —— 也免得语言表对账把同一句记成三处调用点）。
+        let hidden = L(.gitDiffFoldHidden, fold.hiddenCount)
+        let hint = L(.gitDiffFoldExpand, fold.hiddenCount)
+        return Button {
+            model.toggleFold(fold)
+        } label: {
+            HStack(spacing: Spacing.xs) {
+                Image(systemName: "chevron.down.circle")
+                    .font(Theme.font(.caption))
+                    .foregroundStyle(Theme.text(.tertiary))
+                Text(hidden)
+                    .font(Theme.font(.monoSmall))
+                    .foregroundStyle(Theme.text(.tertiary))
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, Spacing.s)
+            .padding(.vertical, 1)
+            .background(Theme.surface(.panel))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(hint)
+        .accessibilityLabel(Text(hint))
+    }
+
+    /// 按需渲染：这一页之后还有多少行（点一次多一页，不是一次性全塞进视图）。
+    private func moreRow(hidden: Int, file: GitDiffFile) -> some View {
+        let title = L(.gitDiffShowMore, hidden)
+        return Button {
+            model.showMore(file: file)
+        } label: {
+            HStack(spacing: Spacing.xs) {
+                Image(systemName: "ellipsis.circle")
+                    .font(Theme.font(.caption))
+                    .foregroundStyle(Theme.text(.tertiary))
+                Text(title)
+                    .font(Theme.font(.caption))
+                    .foregroundStyle(Theme.text(.secondary))
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, Spacing.s)
+            .padding(.vertical, 2)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(title)
+        .accessibilityLabel(Text(title))
     }
 
     private func fileHeader(_ file: GitDiffFile) -> some View {
@@ -342,8 +441,8 @@ struct GitChangesPanel: View {
         .background(Theme.surface(.panel))
     }
 
-    private func hunkHeader(_ hunk: GitDiffHunk) -> some View {
-        Text(hunk.header)
+    private func hunkHeaderText(_ header: String) -> some View {
+        Text(header)
             .font(Theme.font(.monoSmall))
             .foregroundStyle(Theme.text(.tertiary))
             .padding(.horizontal, Spacing.s)

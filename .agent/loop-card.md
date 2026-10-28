@@ -32,6 +32,12 @@
   面板与手机的端到端人工点验一次。
 
 **★ 区已清空**：下一条活按台账取（`FR-STD-*` 里实现 `⬜`／`🟡`，优先=高 → 中；同档取判据可机械跑的）。
+**R58（2026-10-29）已把 `FR-STD-WS-VCS-002`（差异视图）做成一条纵切**：取值面 `Core/GitDiffRequest.swift`（忽略空白 / 上下文行数收成一个值 · 开关**必须插在 `--` 之前** · 忽略空白走 git `-w`，**不本地过滤**）+ 呈现面 `Core/GitDiffPresentation.swift`（长段上下文折成一行「⋯ N 行未变」· 折叠锚按「首行号 + 条数」· **改动行永不折** · 一页 400 行按需渲染 · 折与分页各自记账）+ 解析上限 4000 → 50000（只兜底病态输入）。接线：probe 的 `loadDiff(request:)` / 模型持开关与折叠分页状态 / 「变更」页顶栏「忽略空白」勾选与「上下文 N 行」档位、折行点一下就地展开、末尾「还有 N 行」点一次多一页。实现 **🟡**（差人工点一次：① 只改缩进的文件勾「忽略空白」应什么都不剩；② 上下文切 40 行看长段折行且点开；③ 上万行文件一屏出来不卡、末尾有「还有 N 行」）/ 判据 **✅**（8 + 14 + 4 例，反例六段各判红后逐字节还原）；包 `2d2ad6b8（04:40:27）`，同标签 04:20:28 那份 `eb3d368f` 作废。明细见 `.agent/evidence/2026-10-29-VCS-002.md`。
+⚠️ 同批把第五十七批留下的 8 条 `check-format-arguments` 真红修干净：四处回执文案从「模板串交给 Core 去格式化」改成**值格式闭包**（`{ L(.receiptSeconds, $0) }`）—— 模板与实参回到同一句，判 B 不再是假红、A/A′ 开始真的检查这四句；形状台账按实测对齐（+5 形状 / 3 处处数跟版 / 预算 170 → 188，理由写进 note）。
+下一条活 = 台账**高**档里「判据还 🟡」那几条优先（`FR-STD-DB-META-007` 跨库浏览 · `FR-STD-WS-EDIT-015` 整批撤回 · `FR-STD-WS-NAV-004` 补全接线）；取之前先读该行备注，确认「缺的是机械可跑的那一半」还是「只差人点」。备选：`FR-STD-DB-DIAG-006` · `FR-STD-WS-LIC-001` · 低档四条（`FS-010` / `NAV-006` / `NAV-005` / `EDIT-014`）。
+⚠️ `FR-STD-WS-TOOL-003`（DAP 调试器）与 `FR-STD-WS-AI-001`（编辑区 AI 辅助）纵切过大，排后。
+**存量红六条（2026-10-29 在干净工作树 `git worktree add 874a3e48` 里逐条对照过：基线就红、本循环未加重）**：`check-core-portability`（`Core/AgentCodeRunner.swift:57` 硬编码 `/usr/local/`）· `check-core-localization`（`Binary files` 未白名单）· `check-button-icon-only`（11 处，含 R53 `HTMLPreviewView`）· `check-literal-language`（`Core/AgentNotifyChannel.swift:178`）· `check-doc-q-series`（`Docs/通用开发规范.md` 解析不到 §4/§6）· `check-doc-layout`（12 条）。**这六条使 `verify-all.sh` 不可能全绿 —— 别每轮重复当新账报，要清它们得单开一条活。**
+**`verify-all.sh` 全跑（2026-10-29 R58 实测 18 项 rc=1）另有五处红，也都不是功能片的账**：第 4 项 `check-pending-agenda --self-test` 缺本机文件 `Docs/智能体助手-开发规范.md`（.gitignore 内）· 第 9 项 `test-empty-action-buttons` 的负例夹具还找 `.disabled(trimmedName.isEmpty)`（R57 改走 `isEnabled:` 后没跟夹具，基线同样红）与 `check-panel-root-frames` 的 `scannedFiles` 104 vs 实测 105（R57 新增回执页视图后没跟版，基线同样红）· 第 11 项 `check-menu-language` 起不来应用 dump 菜单（**本会话无 GUI**）· 第 16 项 `check-tri-repo-parity`（共享脚本 sha 与三仓台账不符）· 第 18 项 `check-release-version` 缺 `Docs/发布方案.md` / `Docs/发布计划.md`（本机未同步）。⇒ **收尾只报「五门 + check-format-arguments」；`verify-all` 的红逐条对基线，不重复当新账。**
 **R57（2026-10-29）已把 `FR-STD-DB-TASK-003`（执行回执）做成一条纵切**：
 `Core/ExecutionReceipt.swift` —— 一跑一条回执：**结局四档**（成功 / 失败 / **已取消** / **未发出**；取消不许记成成功，
 「被拦下」与「执行失败」也不是一回事）· 影响行数 `Int?`（`nil` = **没测到**，不是 0 行）· 结果集读数（几个 / 共几行 /
@@ -45,7 +51,7 @@
 ⚠️ 本批顺带修掉一处存量红：`Scripts/empty-action-button-dispositions.json` 里 `saveCurrentQuery` 的视图锚点停在第五十批之前
 （`.disabled(trimmedName.isEmpty)` → 那批改走 `DialogActionRow` 的 `isEnabled:` 之后没跟版）⇒ 那条判据一直在红。已改成
 `isEnabled: !trimmedName.isEmpty`，处置本身没变。
-下一条活 = 台账 `FR-STD-WS-VCS-002`（差异视图：**忽略空白** / **上下文折叠** / 万行级按需渲染 —— 中档、判据可机械跑，
+~~下一条活 = 台账 `FR-STD-WS-VCS-002`（R58 已完成，本行作废，见上段）~~
 且 `Core/GitUnifiedDiff` 与「变更」页已在，属同族补齐，不是新起一摊）。
 备选：`FR-STD-DB-DIAG-006`（从连接上下文唤起诊断、结论可点回对象）· `FR-STD-WS-LIC-001`（授权决定哪些入口出现）·
 低档四条（`FS-010` / `NAV-006` / `NAV-005` / `EDIT-014`）。
@@ -55,7 +61,8 @@
 **待人工点验的累积清单**（别重复追问，扫一眼就够）：网页预览那一眼（R53）· 文件树拖拽与「在终端中打开」（R52）·
 缩进那一格（R54：状态栏显示 / 改完再按 Tab / 改宽度后硬 tab 占几格）· 折叠那一格（R55：小三角折 / 再点展开 / 切页签再回来仍折着 / ⌘F 仍能搜到）·
 编码与换行那一格（R56：CRLF 文件的状态栏读数 / 改一行保存后 `git diff` 只一行 / 切 GB18030 保存后文件仍是 GB18030）·
-**回执那一格（R57：跑一条查询看四项读数 / 报错语句也有回执 / 只读连接被拦下读「未发出」/ 复制与导出各一次）**。
+**回执那一格（R57：跑一条查询看四项读数 / 报错语句也有回执 / 只读连接被拦下读「未发出」/ 复制与导出各一次）**。·
+**差异视图那一格（R58：只改缩进的文件勾「忽略空白」应归零 / 上下文切 40 行看折行且点开 / 上万行文件一屏出来不卡且末尾有「还有 N 行」）**。
 **接力机制如实记一笔**：本会话没有 `cronjob_manage` 工具 ⇒ 收尾用 `hermes cron run e98fad41f72d`（CLI 等价）点火；
 点不着就靠 5 分钟兜底定时器，别手工改 schedule。
 

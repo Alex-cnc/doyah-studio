@@ -87,17 +87,21 @@ enum GitWorktreeProbe {
     /// - `staged = false`：看**工作区相对暂存区**（`git diff`）；
     /// - 未跟踪的文件：git 没有两侧可比，改走 `--no-index /dev/null <path>`（
     ///   **它的退出码 1 是「有差异」，不是失败** —— 当作失败就等于「新增文件永远看不到内容」）。
-    static func loadDiff(root: String, entry: GitWorktreeEntry, staged: Bool) -> Result<GitDiffDocument, GitProbeFailure> {
-        let arguments: [String]
+    /// - `request`：忽略空白 / 上下文行数（`FR-STD-WS-VCS-002`）。开关由 `GitDiffRequest`
+    ///   插进参数（**`--` 之前**），这里不自己拼 —— 两处各拼一次就会「开关亮着、差异没变」。
+    static func loadDiff(root: String, entry: GitWorktreeEntry, staged: Bool,
+                         request: GitDiffRequest = GitDiffRequest()) -> Result<GitDiffDocument, GitProbeFailure> {
+        let base: [String]
         var allowExitOne = false
         if entry.isUntracked {
-            arguments = ["diff", "--no-color", "--no-ext-diff", "--no-index", "--", "/dev/null", entry.path]
+            base = ["diff", "--no-color", "--no-ext-diff", "--no-index", "--", "/dev/null", entry.path]
             allowExitOne = true
         } else if staged {
-            arguments = ["diff", "--no-color", "--no-ext-diff", "--cached", "--", entry.path]
+            base = ["diff", "--no-color", "--no-ext-diff", "--cached", "--", entry.path]
         } else {
-            arguments = ["diff", "--no-color", "--no-ext-diff", "--", entry.path]
+            base = ["diff", "--no-color", "--no-ext-diff", "--", entry.path]
         }
+        let arguments = request.applying(to: base)
         switch run(arguments, root: root, timeout: 8) {
         case .unavailable:
             return .failure(.noGit)

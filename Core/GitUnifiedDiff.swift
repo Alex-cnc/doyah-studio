@@ -14,8 +14,10 @@ import Foundation
 //      **不推进游标**（它描述的是上一行，不是一行内容）。
 //   ③ **认不出的头忽略**（`index` / `similarity index` / `old mode`…）：它们是元数据，
 //      画不到屏幕上；但**文件本身不许丢** —— 只要出现过 `diff --git` 就有一条。
-//   ④ **有上限**：一个巨型文件不整份塞进视图（`maxLinesPerFile`），超了就 `truncated = true`
-//      并在界面上如实说「只显示前 N 行」。
+//   ④ **上限只在解析层兜底**（`maxLinesPerFile` = 50000 行）：它挡的是病态输入（一份几十万行的
+//      生成物），**不是**正常的大文件 —— 「万行级文件看不动」那件事由呈现层的按需渲染解决
+//      （`GitDiffPresentation` 一页 400 行，见 `FR-STD-WS-VCS-002`），不是靠把后面的行丢掉。
+//      超了才 `truncated = true` 并在界面上如实说「只显示前 N 行」。
 
 /// 差异里的一行。
 public struct GitDiffLine: Equatable, Sendable {
@@ -128,8 +130,12 @@ public struct GitDiffDocument: Equatable, Sendable {
 
 public enum GitUnifiedDiff {
 
-    /// 单个文件最多画多少行（超了 `truncated`，界面上说明「只显示前 N 行」）。
-    public static let defaultMaxLinesPerFile = 4_000
+    /// 单个文件最多解析多少行（超了 `truncated`，界面上说明「只显示前 N 行」）。
+    ///
+    /// 这个数**只兜底病态输入**，不是给正常大文件用的：万行级文件的「看不动」由呈现层的
+    /// 按需渲染解决（`GitDiffPresentation` 一页 400 行），不靠丢行。改这个数之前先想清楚
+    /// 是不是在拿它当渲染性能的挡箭牌 —— 那是把「看不见后面」当成「不卡」。
+    public static let defaultMaxLinesPerFile = 50_000
 
     /// 解析 `git diff`（`--no-color`、统一格式）的原文。
     public static func parse(_ text: String,

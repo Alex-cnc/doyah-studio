@@ -32,6 +32,65 @@ final class GitChangesModel: ObservableObject {
     @Published private(set) var diffIsStaged = false
     @Published private(set) var isRefreshing = false
 
+    // MARK: 差异怎么取 / 怎么画（`FR-STD-WS-VCS-002`）
+
+    /// 取数口径（忽略空白 / 上下文行数）。界面上的开关与真正发给 git 的开关是**同一个值**。
+    @Published private(set) var request = GitDiffRequest()
+    /// 已经点开的那些折（存折叠锚）。
+    @Published private(set) var expandedFolds: Set<String> = []
+    /// 每个文件已经展开了几页（按 `displayPath` 记 —— 大文件按需渲染）。
+    @Published private(set) var visiblePages: [String: Int] = [:]
+
+    /// 改「忽略空白」：**重新取一次**（`-w` 是 git 那边算的，不是我们过滤文本 ——
+    /// 本地过滤等于自己再实现一遍差异算法，两份结果迟早对不上）。
+    func setIgnoresWhitespace(_ on: Bool) {
+        guard request.ignoresWhitespace != on else { return }
+        request.ignoresWhitespace = on
+        reloadForRequestChange()
+    }
+
+    /// 改上下文行数（3 = git 缺省 / 12 / 40）：档位越大，越需要靠折叠把长段收起来。
+    func setContextLines(_ lines: Int) {
+        let value = max(0, lines)
+        guard request.contextLines != value else { return }
+        request.contextLines = value
+        reloadForRequestChange()
+    }
+
+    private func reloadForRequestChange() {
+        // 换口径 = 换一份内容 ⇒ 上一份的折与页没有意义了。
+        expandedFolds = []
+        visiblePages = [:]
+        guard let entry = selection else { return }
+        loadDiff(entry: entry, staged: diffIsStaged)
+    }
+
+    /// 这个文件此刻该画成什么样（折叠 + 按需渲染）。
+    func presentation(for file: GitDiffFile) -> GitDiffFilePresentation {
+        let pages = max(1, visiblePages[file.displayPath] ?? 1)
+        return GitDiffPresentation.make(
+            for: file,
+            options: GitDiffDisplayOptions(
+                pageLimit: GitDiffPresentation.defaultPageLimit * pages,
+                expandedFolds: expandedFolds
+            )
+        )
+    }
+
+    /// 折 / 展一段上下文。
+    func toggleFold(_ fold: GitDiffFold) {
+        if expandedFolds.contains(fold.id) {
+            expandedFolds.remove(fold.id)
+        } else {
+            expandedFolds.insert(fold.id)
+        }
+    }
+
+    /// 「还有 N 行」→ 多给一页。
+    func showMore(file: GitDiffFile) {
+        visiblePages[file.displayPath] = max(1, visiblePages[file.displayPath] ?? 1) + 1
+    }
+
     /// 请求序号（状态 / 差异各一个）：只有各自最后一次请求的结果落地。
     /// **不能共用一个**——共用时切一次文件就会把还在路上的状态刷新结果丢掉，面板卡在 loading。
     private var statusToken = 0
@@ -80,6 +139,10 @@ final class GitChangesModel: ObservableObject {
         selection = entry
         diff = nil
         diffFailure = nil
+        // 换文件 ⇒ 上一份的折与页作废（折叠锚是按内容的，留着不会错，但会让新文件一打开就
+        // 有一段莫名其妙是折着的）。
+        expandedFolds = []
+        visiblePages = [:]
         guard let entry else { return }
         // 两侧都有改动时**先给工作区那一侧**：用户刚改完的东西通常还没暂存。
         let staged = entry.isUnstaged ? false : true
@@ -94,8 +157,10 @@ final class GitChangesModel: ObservableObject {
         diffIsStaged = staged
         diff = nil
         diffFailure = nil
+        let request = self.request
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            let result = GitWorktreeProbe.loadDiff(root: root, entry: entry, staged: staged)
+            let result = GitWorktreeProbe.loadDiff(root: root, entry: entry, staged: staged,
+                                                   request: request)
             DispatchQueue.main.async {
                 guard let self, current == self.diffToken else { return }
                 switch result {
