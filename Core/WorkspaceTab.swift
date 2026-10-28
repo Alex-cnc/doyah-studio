@@ -36,9 +36,16 @@ public struct WorkspaceTab: Identifiable, Sendable, Equatable {
     /// 状态栏显示它、编辑器的 Tab 与自动缩进用它 —— 三处读同一格，不各判一次。
     public var indent: IndentProfile
 
+    /// 这一页**在会话内**的折叠状态（`FR-STD-WS-EDIT-017` ③）。
+    ///
+    /// 为什么挂在页签上：需求要的是「切到别的文件再回来仍保持」。页签就是"这份文件在本次会话里
+    /// 的那一份"（`openAsText` 按路径去重 ⇒ 一个文件只有一页），所以状态住这里既不丢、
+    /// 也不会串到别的文件上。**新打开的页签一律全展开** —— 一进来就是折的会让人以为文件短了一截。
+    public var folds: FoldState
+
     public init(id: UUID = UUID(), title: String, path: String? = nil, language: TextLanguage,
                 content: String = "", savedContent: String? = nil, kind: Kind? = nil,
-                indent: IndentProfile = .fallback) {
+                indent: IndentProfile = .fallback, folds: FoldState = FoldState()) {
         self.id = id
         self.title = title
         self.path = path
@@ -47,6 +54,7 @@ public struct WorkspaceTab: Identifiable, Sendable, Equatable {
         self.savedContent = savedContent ?? content
         self.kind = kind ?? (path == nil ? .home : .file)
         self.indent = indent
+        self.folds = folds
     }
 
     /// 是不是 Home 欢迎页（**注意：对话页签不是它**）。

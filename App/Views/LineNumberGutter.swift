@@ -32,6 +32,17 @@ final class LineNumberGutter {
     /// 列宽；`0` 表示还没算过（此时不画）。
     private(set) var width: CGFloat = 0
 
+    /// 折叠标记（`FR-STD-WS-EDIT-017` ②）：行号 → 这一行的块折着没有。
+    ///
+    /// 空表 = 这份文档没有可折的块 ⇒ **列宽不多占那一格**（否则纯文本 / HTML 的行号列
+    /// 会无端宽出一截，和 SQL 编辑器那一份也不一致）。
+    private(set) var foldMarkers: [Int: Bool] = [:]
+
+    /// 标记列宽（一枚三角 + 两侧留白）。只在有标记时占位。
+    static let markerWidth: CGFloat = 11
+    /// 三角的半边长（画出来的实际大小）。
+    static let markerRadius: CGFloat = 3.5
+
     /// 逻辑行数（行起点个数）—— 判据读它，与「画」无关。
     var lineCount: Int { lineStarts.count }
 
@@ -48,13 +59,14 @@ final class LineNumberGutter {
     /// 上下留白（两个编辑器同一档：`Spacing.s`）。
     static let verticalInset = Spacing.s
 
-    /// 行号列宽 = 左留白 + 位数 × 数字宽 + 右留白。
+    /// 行号列宽 = 左留白 + 位数 × 数字宽 + 右留白（+ 有折叠标记时再留一格标记列）。
     ///
     /// 数字宽按**当前字体实量**而不是写死：列宽写死的话，用户把字号调大（或换个更宽的等宽字体）
     /// 之后数字会被裁掉，而 99 → 100 行这种「多一位」同样会挤（`CodeLines.digits`）。
-    static func width(digits: Int) -> CGFloat {
+    static func width(digits: Int, hasMarkers: Bool = false) -> CGFloat {
         let digitWidth = ("0" as NSString).size(withAttributes: [.font: font]).width
         return paddingLeft + CGFloat(max(1, digits)) * digitWidth + paddingRight
+            + (hasMarkers ? markerWidth : 0)
     }
 
     /// 重算行起点与列宽，并把列宽交给 `textContainerInset`（正文从列的右边开始）。
@@ -63,7 +75,7 @@ final class LineNumberGutter {
     @discardableResult
     func reload(_ textView: NSTextView) -> Bool {
         lineStarts = CodeLines.lineStarts(in: textView.string)
-        let newWidth = Self.width(digits: digits)
+        let newWidth = Self.width(digits: digits, hasMarkers: !foldMarkers.isEmpty)
         let changed = width == 0 || abs(newWidth - width) > 0.5
         if changed {
             width = newWidth
@@ -74,6 +86,17 @@ final class LineNumberGutter {
         }
         textView.needsDisplay = true
         return changed
+    }
+
+    /// 换上这一份折叠标记（行号 → 折没折），并按「标记列占不占位」重算列宽。
+    ///
+    /// 标记数一变（0 → N 或 N → 0）列宽就变，正文的可用宽度也跟着变 ⇒ 必须重排，
+    /// 否则会出现「行号列宽了、正文却还按旧宽度换行」的错位。
+    @discardableResult
+    func applyFoldMarkers(_ markers: [Int: Bool], to textView: NSTextView) -> Bool {
+        guard markers != foldMarkers else { return false }
+        foldMarkers = markers
+        return reload(textView)
     }
 
     /// 先让 `NSTextView` 画底色与正文，再把行号画上去（顺序反了会被底色盖掉 ——
@@ -125,10 +148,72 @@ final class LineNumberGutter {
             let label = "\(index + 1)" as NSString
             let size = label.size(withAttributes: attributes)
             let x = width - Self.paddingRight - size.width
+                - (foldMarkers.isEmpty ? 0 : Self.markerWidth)
             let y = top + (bodyAscender - Self.font.ascender)
             label.draw(at: NSPoint(x: x, y: y), withAttributes: attributes)
+            // 折叠标记（`FR-STD-WS-EDIT-017` ②）：只给「有块可折」的那几行画。
+            if let folded = foldMarkers[index + 1] {
+                drawFoldMarker(isFolded: folded, top: top, lineHeight: bodyAscender + 2)
+            }
             index += 1
         }
+    }
+
+    /// 画一枚折叠标记：**折着 = 向右的三角**（`▸`，表示"展开看看里面"），
+    /// **展开 = 向下的三角**（`▾`，表示"收起来"）。方向语义与系统里所有折叠控件一致。
+    ///
+    /// 颜色走令牌（深浅两套都在 `AccentFamily` / `TextTone` 里）：折着的那一枚用强调色，
+    /// 一眼能看出「这几行是被折起来的，不是文件本来就短」。
+    private func drawFoldMarker(isFolded: Bool, top: CGFloat, lineHeight: CGFloat) {
+        let columnMinX = width - Self.markerWidth
+        let centerX = columnMinX + Self.markerWidth / 2
+        let centerY = top + lineHeight / 2
+        let radius = Self.markerRadius
+        let path = NSBezierPath()
+        // 视图是 flipped 的（y 向下增长）⇒ 「下方」= `centerY + radius`。
+        if isFolded {
+            path.move(to: NSPoint(x: centerX - radius / 2, y: centerY - radius))
+            path.line(to: NSPoint(x: centerX - radius / 2, y: centerY + radius))
+            path.line(to: NSPoint(x: centerX + radius, y: centerY))
+        } else {
+            path.move(to: NSPoint(x: centerX - radius, y: centerY - radius / 2))
+            path.line(to: NSPoint(x: centerX + radius, y: centerY - radius / 2))
+            path.line(to: NSPoint(x: centerX, y: centerY + radius))
+        }
+        path.close()
+        (isFolded
+            ? Theme.nsColor(AccentFamily.accent.color(in: Theme.designTheme))
+            : Theme.nsColor(TextTone.secondary)).setFill()
+        path.fill()
+    }
+
+    // MARK: 命中（点标记 = 折 / 展）
+
+    /// 这一点落在哪一行的折叠标记上（`nil` = 这一点不是标记 ⇒ 调用方交还默认点击行为）。
+    ///
+    /// 判定的是**标记列**（行号列最右边那一格）而整条行号列：行号本身还能点着选中整行
+    /// （那条老行为不动），只有点在小三角上才折。
+    func foldMarkerLine(at point: NSPoint, of textView: NSTextView) -> Int? {
+        guard !foldMarkers.isEmpty, width > 0 else { return nil }
+        let columnMinX = width - Self.markerWidth
+        guard point.x >= columnMinX, point.x <= width else { return nil }
+        guard let line = lineNumber(atY: point.y, of: textView) else { return nil }
+        return foldMarkers[line] == nil ? nil : line
+    }
+
+    /// 纵坐标 → 行号（1 起）。口径与画行号那一侧同一个 `CodeLines`。
+    private func lineNumber(atY y: CGFloat, of textView: NSTextView) -> Int? {
+        guard let layoutManager = textView.layoutManager, let container = textView.textContainer else { return nil }
+        let origin = textView.textContainerOrigin
+        let probeY = max(0, y - origin.y)
+        let character = layoutManager.characterIndex(
+            for: NSPoint(x: 0, y: probeY),
+            in: container,
+            fractionOfDistanceBetweenInsertionPoints: nil
+        )
+        let length = (textView.string as NSString).length
+        guard character <= length else { return nil }
+        return CodeLines.lineNumber(at: character, lineStarts: lineStarts)
     }
 
     /// 某一行的**顶边**（文本容器坐标）。

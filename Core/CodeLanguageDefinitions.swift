@@ -68,6 +68,10 @@ public struct CodeLanguageDefinition: Sendable {
     public let format: CodeFormatCapability
     /// 这个语言的文件**默认用哪种视图打开**（`FR-EDIT-36` 消费者口径；见 `CodeDefaultView`）。
     public let defaultView: CodeDefaultView
+    /// 代码折叠按什么规则找块（`FR-STD-WS-EDIT-017`；见 `CodeFolding` / `FoldRule`）。
+    /// 与 `format` 一样是**单列的表**（`folds`）合成进来的数据 —— 加一个语言的可折性
+    /// 只动那张表一行，不动上面每一条登记项。
+    public let fold: FoldRule
 
     public init(
         _ language: TextLanguage,
@@ -79,7 +83,8 @@ public struct CodeLanguageDefinition: Sendable {
         traits: CodeLanguageTraits = .none,
         isFallback: Bool = false,
         format: CodeFormatCapability = .none,
-        defaultView: CodeDefaultView = .editor
+        defaultView: CodeDefaultView = .editor,
+        fold: FoldRule = .none
     ) {
         self.language = language
         self.displayName = displayName
@@ -91,6 +96,24 @@ public struct CodeLanguageDefinition: Sendable {
         self.isFallback = isFallback
         self.format = format
         self.defaultView = defaultView
+        self.fold = fold
+    }
+
+    /// 复制一份、换掉折叠规则（与 `withFormat` 同一条理由：单列的表在取定义时合成一次）。
+    func withFold(_ rule: FoldRule) -> CodeLanguageDefinition {
+        CodeLanguageDefinition(
+            language,
+            displayName: displayName,
+            fileExtensions: fileExtensions,
+            fileNames: fileNames,
+            isCode: isCode,
+            syntax: syntax,
+            traits: traits,
+            isFallback: isFallback,
+            format: format,
+            defaultView: defaultView,
+            fold: rule
+        )
     }
 
     /// 复制一份、换掉格式化能力。
@@ -109,7 +132,8 @@ public struct CodeLanguageDefinition: Sendable {
             traits: traits,
             isFallback: isFallback,
             format: capability,
-            defaultView: defaultView
+            defaultView: defaultView,
+            fold: fold
         )
     }
 }
@@ -131,7 +155,10 @@ public enum CodeLanguageRegistry {
     /// 带上 `formats` 表里的格式化能力（FR-EDIT-39）——「这个语言怎么格式化」与
     /// 「怎么着色」一样是定义的一部分，两条路取到的必须是同一份定义。
     public static var all: [CodeLanguageDefinition] {
-        definitions.map { $0.withFormat(formats[$0.language.rawValue] ?? .none) }
+        definitions.map {
+            $0.withFormat(formats[$0.language.rawValue] ?? .none)
+                .withFold(folds[$0.language.rawValue] ?? .none)
+        }
     }
 
     public static func definition(of language: TextLanguage) -> CodeLanguageDefinition {
@@ -848,6 +875,37 @@ public enum CodeLanguageRegistry {
         "swift": CodeFormatCapability(builtin: .braceIndent),
         // ArkTS 是 **TypeScript 方言** ⇒ 同 TS 的档（大括号缩进）。
         "arkts": CodeFormatCapability(builtin: .braceIndent)
+    ]
+
+    /// 各语言「按什么规则折叠」（`FR-STD-WS-EDIT-017`）—— 与 `formats` 同一条做法：
+    /// **单列一张表**，加一个语言的可折性只加一行。
+    ///
+    /// 分档只按「块级结构的形态」，不按语言亲疏：
+    /// · `braces` = C 族 / SQL / JSON / Swift / Go / Rust / PHP / ArkTS（`{` … `}`）；
+    /// · `indentation` = Python / YAML / Shell（以 `:` 收尾的行 + 更深缩进）；
+    /// · 不登记 = 没有块级结构可折（HTML 要按标签配对、Markdown 要按标题层级 ——
+    ///   那都是**另一套规则**，用「花括号」顶上去只会折出错误的段，所以如实不给）。
+    ///
+    /// 为什么不写「HTML 也有 `{`」：HTML 里的 `{` 出现在 CSS / 模板插值里，
+    /// 折起来会把整段正文卷进一个伪块 —— 宁可没有折叠，也不给一个会藏错东西的折叠。
+    private static let folds: [String: FoldRule] = [
+        "sql": .braces,
+        "javascript": .braces,
+        "typescript": .braces,
+        "css": .braces,
+        "json": .braces,
+        "swift": .braces,
+        "arkts": .braces,
+        "java": .braces,
+        "c": .braces,
+        "cpp": .braces,
+        "csharp": .braces,
+        "go": .braces,
+        "rust": .braces,
+        "php": .braces,
+        "python": .indentation,
+        "yaml": .indentation,
+        "shell": .indentation
     ]
 
     /// Prettier 靠**文件名**判 parser，所以实参里带上文件路径（`%FILE%` 由 Core 填）。

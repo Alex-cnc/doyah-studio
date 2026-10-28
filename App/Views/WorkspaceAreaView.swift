@@ -95,7 +95,13 @@ struct WorkspaceAreaView: View {
             },
             // 缩进口径（`FR-STD-WS-EDIT-022`）：状态栏显示的那一格与这里读的是同一个值 ——
             // 按一次 Tab 插什么、回车继承几级，都跟状态栏上写的一致。
-            indent: tabs.indentProfile(for: tab.id)
+            indent: tabs.indentProfile(for: tab.id),
+            // 代码折叠（`FR-STD-WS-EDIT-017`）：标记 + 该藏哪几段由模型算好；这里只把
+            // 「点了标记 / 光标进了折起来的块 / 内容稳定了」三条事回投给模型。
+            foldPresentation: tabs.foldPresentation(for: tab.id),
+            onToggleFold: { line in tabs.toggleFold(tabID: tab.id, line: line) },
+            onCaretEnteredFoldedBlock: { line in tabs.unfoldAroundCaret(tabID: tab.id, line: line) },
+            onDocumentSettled: { tabs.refreshFolds(tabID: tab.id) }
         )
         if tab.language == .markdown && tabs.previewVisible {
             HSplitView {

@@ -34,6 +34,13 @@ final class WorkspaceTabsModel: ObservableObject {
     /// 全局一个开关（不按页签各记一份）：用户要的是"看的时候分屏、写的时候全宽"。
     @Published var previewVisible = true
 
+    /// 每页的**折叠展示面**（`FR-STD-WS-EDIT-017`）：行号槽要画哪些标记、现在该藏哪几段字符。
+    ///
+    /// 缓存住而不是让视图每帧重算：算一次要先跑一遍词法器（`CodeFolding.projection`），
+    /// 而 SwiftUI 一次更新里这个值会被读好几次。失效点只有三个：打开 / 恢复文件、
+    /// 折展动作、以及内容稳定后的 `refreshFolds`。
+    @Published private(set) var foldPresentations: [UUID: FoldPresentation] = [:]
+
     /// 把文件交给**工作区的浏览器页签**那一侧（队列 `L-149` 剩余②）。
     ///
     /// 为什么是注入的闭包而不是本模型直接持一个 `WorkspaceBrowserModel`：浏览器页签的
@@ -170,12 +177,90 @@ final class WorkspaceTabsModel: ObservableObject {
     private func forceClose(_ id: UUID) {
         let next = WorkspaceTabSet.selection(afterClosing: id, in: tabs, selected: selectedID)
         tabs = WorkspaceTabSet.closing(id: id, in: tabs)
+        foldPresentations[id] = nil
         selectedID = next ?? tabs.first?.id
     }
 
     func updateContent(_ text: String, for id: UUID) {
         guard let index = tabs.firstIndex(where: { $0.id == id }), tabs[index].content != text else { return }
         tabs[index].content = text
+        // 文本一变，**按旧文本算出来的隐藏段立刻作废**（继续按它藏，藏的就是错的那几行了）；
+        // 标记表与折叠状态留给 `refreshFolds` 在**着色那一拍**（代理已 debounce）重算 ——
+        // 每次击键都跑一遍词法器，5,000 行的文件上就是 `NFR-PERF-05` 那类卡顿。
+        foldPresentations[id]?.hiddenRanges = []
+    }
+
+    // MARK: 代码折叠（`FR-STD-WS-EDIT-017`）
+    //
+    // 区域的**唯一算法**在 `Core/CodeFolding`；这里只做三件事：缓存判定结果（视图每帧都要读，
+    // 不能每次重算）、把用户折 / 展的意图落到**页签上的那一格状态**（`WorkspaceTab.folds`，
+    // 会话内按文件记）、把「光标进了折起来的块」翻译成「展开那几条」。
+
+    /// 视图要的东西：行号槽的标记 + 现在该藏起来的字符范围。
+    ///
+    /// 为什么把它算好再交给视图：`markers(in:)` / `hiddenRanges(in:text:)` 都要先有
+    /// `FoldProjection`（一次词法切分），视图每帧自己算一遍是不行的。
+    struct FoldPresentation: Equatable {
+        /// 每一段区域一枚标记（首行 + 折没折）。
+        var markers: [FoldMarker] = []
+        /// 现在该藏起来的字符范围（已合并成连续段）。
+        var hiddenRanges: [NSRange] = []
+        /// 有几段折着（状态栏 / 判据读数用）。
+        var foldedCount: Int = 0
+    }
+
+    /// 折叠的展示面（没有这一页时给空表：不折、不画标记）。
+    func foldPresentation(for tabID: UUID) -> FoldPresentation {
+        foldPresentations[tabID] ?? FoldPresentation()
+    }
+
+    /// 这一页的折叠状态（值类型，视图只读）。
+    func foldState(for tabID: UUID) -> FoldState {
+        tabs.first(where: { $0.id == tabID })?.folds ?? FoldState()
+    }
+
+    /// 点一行号槽上的折叠标记：折 / 展那一行对应的块。**写入口只有这一个**。
+    func toggleFold(tabID: UUID, line: Int) {
+        guard let index = tabs.firstIndex(where: { $0.id == tabID }) else { return }
+        let projection = CodeFolding.projection(in: tabs[index].content, language: tabs[index].language)
+        let next = tabs[index].folds.toggling(line: line, in: projection)
+        guard next != tabs[index].folds else { return }
+        tabs[index].folds = next
+        foldPresentations[tabID] = presentation(for: tabs[index], projection: projection)
+    }
+
+    /// 光标落进折起来的块里 ⇒ 把那几段展开（否则用户会在看不见的行里打字）。
+    ///
+    /// 只在**块里**展开：光标停在首行（折起来之后仍看得见的那一行）不算进去，否则
+    /// 「点一下函数签名」就把折叠打开了，等于没折。
+    func unfoldAroundCaret(tabID: UUID, line: Int) {
+        guard let index = tabs.firstIndex(where: { $0.id == tabID }), !tabs[index].folds.isEmpty else { return }
+        let projection = CodeFolding.projection(in: tabs[index].content, language: tabs[index].language)
+        let containing = tabs[index].folds.foldedRegions(containing: line, in: projection)
+        guard !containing.isEmpty else { return }
+        tabs[index].folds = tabs[index].folds.expanding(containing, in: projection)
+        foldPresentations[tabID] = presentation(for: tabs[index], projection: projection)
+    }
+
+    /// 内容稳定之后重算折叠的展示面：区域重算 + 锚对账（首行没变的折叠留着，删掉的如实丢）。
+    ///
+    /// 由编辑器在**着色那一拍**调（代理已按文档大小 debounce），不是每次击键都跑。
+    func refreshFolds(tabID: UUID) {
+        guard let index = tabs.firstIndex(where: { $0.id == tabID }) else { return }
+        let tab = tabs[index]
+        let projection = CodeFolding.projection(in: tab.content, language: tab.language)
+        // 对账放在这里而不是 `updateContent`：对账要一次完整判定，和重算展示面是同一笔开销。
+        let reconciled = tab.folds.reconciled(with: projection)
+        if reconciled != tab.folds { tabs[index].folds = reconciled }
+        foldPresentations[tabID] = presentation(for: tabs[index], projection: projection)
+    }
+
+    private func presentation(for tab: WorkspaceTab, projection: FoldProjection) -> FoldPresentation {
+        FoldPresentation(
+            markers: tab.folds.markers(in: projection),
+            hiddenRanges: tab.folds.hiddenRanges(in: projection, text: tab.content),
+            foldedCount: tab.folds.count
+        )
     }
 
     // MARK: 缩进口径（`FR-STD-WS-EDIT-022`）
@@ -256,6 +341,8 @@ final class WorkspaceTabsModel: ObservableObject {
             tabs = opened.tabs
             selectedID = opened.selected
             record(file: path)
+            // 折叠的标记表要按新打开这份内容算一次（否则「有块可折」的行上没有标记）。
+            refreshFolds(tabID: opened.selected)
             // 编码不是 UTF-8 时说出来：用户得知道"看到的字为什么对了"（FR-IO-07 的同一套判决）。
             if decoded.isFallback {
                 noticeText = L(.workspaceOpenedWithEncoding, url.lastPathComponent, decoded.encoding.shortName)
@@ -403,6 +490,11 @@ final class WorkspaceTabsModel: ObservableObject {
 
         tabs = restoredTabs
         selectedID = restored.selectedTabID ?? restoredTabs.first?.id
+        // 会话恢复也要算一遍标记（与「打开文件」同一条路）：否则恢复出来的页签上
+        // 「有块可折」的行一个标记都没有，用户以为折叠坏了。
+        for tab in restoredTabs where !tab.isHome && !tab.isAgentChat {
+            refreshFolds(tabID: tab.id)
+        }
 
         // 落脚点挂到**选中的那一页**上，等它的编辑器来取（取走即没）。
         if let caret = restored.caretOffset, let selectedID {

@@ -41,6 +41,19 @@ struct CodeEditorView: NSViewRepresentable {
     /// 硬 tab 在屏幕上占几格 —— 三处读同一个值（口径与屏幕上看到的东西必须是同一件事）。
     var indent: IndentProfile = .fallback
 
+    /// 这一页的**折叠展示面**（`FR-STD-WS-EDIT-017`）：行号槽要画哪些标记、现在该藏哪几段字符。
+    /// 判定与状态都在模型侧（`CodeFolding` + `WorkspaceTab.folds`），这里只负责搬。
+    var foldPresentation: WorkspaceTabsModel.FoldPresentation = WorkspaceTabsModel.FoldPresentation()
+
+    /// 点了行号槽上的折叠标记（参数 = 行号，1 起）。
+    var onToggleFold: ((Int) -> Void)?
+
+    /// 光标落进折起来的块里（参数 = 光标所在行）—— 展开哪几段由模型判（`unfoldAroundCaret`）。
+    var onCaretEnteredFoldedBlock: ((Int) -> Void)?
+
+    /// 内容稳定了（着色那一拍）：模型据此重算折叠区域与标记（不是每次击键都跑词法器）。
+    var onDocumentSettled: (() -> Void)?
+
     /// 订阅字体偏好：偏好一变，SwiftUI 重跑 `updateNSView` → 编辑器换字体。
     @ObservedObject private var fonts = FontManager.shared
 
@@ -108,6 +121,9 @@ struct CodeEditorView: NSViewRepresentable {
         // 行号列的宽度由「行数位数」定（`textContainerInset.width` 就是它的宽度），
         // 所以必须在**文本进去之后**算一次 —— 顺序反了会先按空文档算成 1 位。
         textView.reloadLineNumbers()
+        // 折叠（`FR-STD-WS-EDIT-017`）：标记挂到行号槽、该藏的行先藏起来。
+        // 顺序在行号列之后：标记列占不占位会改变列宽，列宽又决定正文的可用宽度。
+        textView.applyFolds(foldPresentation)
 
         context.coordinator.textView = textView
         context.coordinator.language = language
@@ -146,6 +162,18 @@ struct CodeEditorView: NSViewRepresentable {
         textView.tabID = tabID
         textView.onSave = onSave
         textView.onFormat = onFormat
+        // 折叠（`FR-STD-WS-EDIT-017`）：回调每次都重绑（视图会重建，旧的那个捕获的是旧模型）。
+        textView.onToggleFold = onToggleFold
+        textView.onCaretEnteredFoldedBlock = onCaretEnteredFoldedBlock
+        textView.onDocumentSettled = onDocumentSettled
+        textView.onFoldDisplayChanged = { [weak coordinator = context.coordinator] in
+            coordinator?.rehighlightAfterFold()
+        }
+        // 展示面变了才重设（折 / 展 / 换内容）：`applyFolds` 会重排段落高度，不该每帧跑。
+        if context.coordinator.lastFoldPresentation != foldPresentation {
+            context.coordinator.lastFoldPresentation = foldPresentation
+            textView.applyFolds(foldPresentation)
+        }
         // 显示中的那个视图才算数（重建之后登记的必须是新的这个）—— `FR-AI-22` ②：
         // 对话要带上「用户选的那段」，取的就是这里登记的 `selectedRange()`。
         EditorCommandCenter.shared.register(textView: textView, for: tabID)
@@ -210,6 +238,8 @@ struct CodeEditorView: NSViewRepresentable {
         var appliedFormatID: UUID?
         /// 已经应用过的「跳到第 N 行」投递（同上）。
         var appliedRevealID: UUID?
+        /// 上一次交给视图的折叠展示面（同一条不重复应用 —— 它会重排段落高度）。
+        var lastFoldPresentation = WorkspaceTabsModel.FoldPresentation()
         private var highlightWorkItem: DispatchWorkItem?
 
         init(_ parent: CodeEditorView) {
@@ -241,7 +271,20 @@ struct CodeEditorView: NSViewRepresentable {
             // 光标动 ⇒ 括号匹配高亮跟着换（`FR-STD-WS-EDIT-020`）：它判的是「光标紧邻哪个括号」，
             // 不重算就会一直亮着上一个位置的那一对。
             textView?.refreshBracketHighlight()
+            // 光标落进**折起来的块**里 ⇒ 交给模型展开（`FR-STD-WS-EDIT-017`）：
+            // 不展开的话用户是在看不见的行里打字 —— 折叠最典型的「按了没反应」。
+            // 只在行号变了时才问一次（模型侧也会在「没折任何东西」时立刻返回）。
+            if let textView {
+                let line = CodeLines.lineNumber(at: textView.selectedRange().location, in: textView.string)
+                if line != lastReportedFoldLine {
+                    lastReportedFoldLine = line
+                    parent.onCaretEnteredFoldedBlock?(line)
+                }
+            }
         }
+
+        /// 上一次问过「这一行在折起来的块里吗」的行号（避免同一行反复问模型）。
+        private var lastReportedFoldLine = 0
 
         func reportCursorLine() {
             guard let textView else { return }
@@ -315,6 +358,18 @@ struct CodeEditorView: NSViewRepresentable {
             // 行内灰字用的文档词**跟着这一次切分算**（`words(inTokens:)` 不再重切整篇）：
             // 这样击键路径（`refreshGhost`）只做候选比较，大文档不会被每次按键拖成 O(n)。
             textView.updateGhostWords(CodeCompletion.words(inTokens: tokens, text: current))
+            // 内容稳定了（这一拍已经重新切过分词）：模型据此重算**折叠区域与标记**
+            // （`FR-STD-WS-EDIT-017`）—— 不是每次击键都跑，「一次击键一次词法器」在大文档上
+            // 就是 `NFR-PERF-05` 那类卡顿。
+            parent.onDocumentSettled?()
+        }
+
+        /// 折 / 展之后补一次着色：`applyFoldCollapse` 会摘掉被藏那几行的前景色与字体
+        /// （不摘就画得出来），展开时那些行要按语法重上色 —— 否则它们会一直是正文色，
+        /// 肉眼一看就是「折过一次的文件少了高亮」。
+        func rehighlightAfterFold() {
+            lastHighlightedText = nil
+            applyHighlighting()
         }
 
         // MARK: 补全（FR-EDIT-36）
@@ -486,6 +541,96 @@ final class CodeTextView: NSTextView {
     /// 重算行起点与列宽。**加行、改字体会改变位数与数字宽**，所以这两条路都要调它。
     func reloadLineNumbers() {
         gutter.reload(self)
+    }
+
+    // MARK: 代码折叠（`FR-STD-WS-EDIT-017`）
+    //
+    // 判定与状态都在 Core / 模型侧；这一层只做两件事：**把标记挂到行号槽**、**把藏起来的行
+    // 折掉**。折叠**不改一个字**：藏起来靠段落样式（行高 1pt + 前景透明），字符仍在
+    // `textStorage` 里 ⇒ 搜索搜得到、保存存得全、撤销栈里多一条都不多（需求 ④）。
+
+    /// 点了行号槽上的折叠标记（参数 = 行号，1 起）。
+    var onToggleFold: ((Int) -> Void)?
+
+    /// 光标落进折起来的块里（参数 = 光标所在行）。
+    var onCaretEnteredFoldedBlock: ((Int) -> Void)?
+
+    /// 内容稳定了（着色那一拍）。
+    var onDocumentSettled: (() -> Void)?
+
+    /// 折 / 展之后要补一次着色（被摘掉前景色的那几行要按语法重上色）。
+    var onFoldDisplayChanged: (() -> Void)?
+
+    /// 现在该藏起来的字符范围（由模型给，已合并成连续段）。
+    private(set) var foldHiddenRanges: [NSRange] = []
+
+    /// 上一次真正写进 `textStorage` 的段落样式范围（展开时按它逐段摘掉）。
+    private var appliedFoldRanges: [NSRange] = []
+
+    /// 换上这一份折叠展示面：标记先挂（它可能改变列宽 ⇒ 要重排），再折行。
+    func applyFolds(_ presentation: WorkspaceTabsModel.FoldPresentation) {
+        // 同一行可能既有块、又有手写区域标记 ⇒ 取「任一折着就算折着」（标记只有一枚）。
+        var markers: [Int: Bool] = [:]
+        for marker in presentation.markers {
+            markers[marker.line] = (markers[marker.line] ?? false) || marker.isFolded
+        }
+        // 标记列占不占位会改列宽（正文可用宽度跟着变）⇒ 变了就重排。
+        gutter.applyFoldMarkers(markers, to: self)
+        let changed = foldHiddenRanges != presentation.hiddenRanges
+        foldHiddenRanges = presentation.hiddenRanges
+        applyFoldCollapse()
+        // 折 / 展之后补一次着色：展开时那几行的语法色是被上一轮折叠摘掉的。
+        if changed { onFoldDisplayChanged?() }
+    }
+
+    /// 按 `foldHiddenRanges` 把该藏的行「折」起来 —— **只动段落样式，不动字符**。
+    ///
+    /// 做法：被藏的行给一个「行高 1pt + 前景透明 + 极小字号」的段落样式。为什么不删文本 /
+    /// 不换一份显示用字符串：那两条路都会让 `textView.string` 与模型里的内容分叉，
+    /// 而模型那份内容正是搜索、保存、撤销、光标行上报的唯一来源（需求 ④）。
+    ///
+    /// 为什么不 `invalidateLayout`：非连续布局下把可见区判成「没排过」⇒ 编辑区整块不画
+    /// （本仓已栽过，见 `references/macos-ui-conventions.md` §十七）。属性变更会由
+    /// `textStorage` 自己触发对应范围的重排，这里只需要重画。
+    func applyFoldCollapse() {
+        guard let storage = textStorage else { return }
+        let length = storage.length
+        storage.beginEditing()
+        for range in appliedFoldRanges where range.location >= 0 && range.location + range.length <= length {
+            storage.removeAttribute(.paragraphStyle, range: range)
+            storage.removeAttribute(.foregroundColor, range: range)
+            storage.removeAttribute(.font, range: range)
+        }
+        appliedFoldRanges = []
+        let ranges = foldHiddenRanges.filter {
+            $0.length > 0 && $0.location >= 0 && $0.location + $0.length <= length
+        }
+        if !ranges.isEmpty {
+            let collapsed = NSMutableParagraphStyle()
+            collapsed.minimumLineHeight = 1
+            collapsed.maximumLineHeight = 1
+            let invisible: [NSAttributedString.Key: Any] = [
+                .paragraphStyle: collapsed,
+                .foregroundColor: NSColor.clear,
+                .font: NSFont.monospacedSystemFont(ofSize: 0.1, weight: .regular)
+            ]
+            for range in ranges {
+                storage.addAttributes(invisible, range: range)
+                appliedFoldRanges.append(range)
+            }
+        }
+        storage.endEditing()
+        needsDisplay = true
+    }
+
+    /// 点在行号槽的**标记列**上 = 折 / 展那一块；其余位置的点击原样交还（选词、拖选都不受影响）。
+    override func mouseDown(with event: NSEvent) {
+        let point = convert(event.locationInWindow, from: nil)
+        if let line = gutter.foldMarkerLine(at: point, of: self) {
+            onToggleFold?(line)
+            return
+        }
+        super.mouseDown(with: event)
     }
 
     /// 先让 `NSTextView` 画底色与正文，再把行号画上去 —— 顺序反了会被底色盖掉
@@ -987,6 +1132,8 @@ final class CodeTextView: NSTextView {
         // 上面那次 `setAttributes` 铺满全文 ⇒ 括号底色被一起抹掉了，这里补回来
         // （`FR-STD-WS-EDIT-020`：光标不动、只是文本变了时也得继续亮着）。
         reapplyBracketHighlight()
+        // 同一条理由：`setAttributes` 也把折叠的段落样式抹掉了 ⇒ 折着的块会当场展开一下再被藏回去。
+        applyFoldCollapse()
     }
 
     private static func attributes(
