@@ -166,6 +166,12 @@ struct LowerPaneView: View {
             // `GitChangesModel` 里，这一层只摆位置 —— 面板自己的空态四档也在那一页。
             GitChangesPanel()
 
+        case .receipts:
+            // `FR-STD-DB-TASK-003`：本页签每一跑的执行回执（四项读数 + 执行时刻，可复制 / 导出）。
+            // 取数与动作都在 `AppState`（`receiptLog` / `copyReceipts` / `exportReceipts`），
+            // 这一层只摆位置 —— 与「变更」页同一条做法。
+            ExecutionReceiptPane(tab: tab)
+
         case .history:
             historyPane
         }

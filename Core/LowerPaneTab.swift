@@ -26,6 +26,13 @@ public enum LowerPaneTab: String, CaseIterable, Identifiable, Sendable {
     /// 与「历史」不同，它**不按段隐藏**：仓库身份跟着工作区走，与用户在哪个活动栏项上无关；
     /// 没有工作区时这一页如实画空态（见 `App/Views/GitChangesPanel.swift`）。
     case changes
+    /// **执行回执**（`FR-STD-DB-TASK-003`）：本查询页签上每一跑的四项读数 + 执行时刻，
+    /// 可复制 / 导出，导出前已脱敏。
+    ///
+    /// 与「输出」的分工：输出是**过程流水**（每次执行清空重来），回执是**审计读数**
+    /// （成功 / 失败 / 被拦下 / 取消各留一条，不随后一跑消失）。它**不按段隐藏** ——
+    /// 与输出同一口径：工作区段没有查询页签时如实画空态。
+    case receipts
     /// 本次会话执行过的 **SQL 与 DDL**（`FR-EDIT-10` v3.326 扩写 · `DR-02` · 队列 `HIST-2`）。
     ///
     /// **只在 Database 客户端段出现**（工作区段没有查询上下文）—— 序 = 问题 / 输出 / 终端 /
@@ -47,6 +54,7 @@ public enum LowerPaneTab: String, CaseIterable, Identifiable, Sendable {
         case .terminal: return .lowerPaneTerminal
         case .debugConsole: return .lowerPaneDebugConsole
         case .changes: return .lowerPaneChanges
+        case .receipts: return .lowerPaneReceipts
         case .history: return .lowerPaneHistory
         }
     }
@@ -59,6 +67,7 @@ public enum LowerPaneTab: String, CaseIterable, Identifiable, Sendable {
         case .terminal: return "terminal"
         case .debugConsole: return "ladybug"
         case .changes: return "arrow.triangle.branch"
+        case .receipts: return "doc.text.magnifyingglass"
         case .history: return "clock.arrow.circlepath"
         }
     }

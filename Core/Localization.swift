@@ -322,6 +322,42 @@ public enum LKey: String, CaseIterable, Sendable {
     case lowerPaneOutputEmpty
     case lowerPaneDebugPlaceholder
     case lowerPaneClear
+    // `FR-STD-DB-TASK-003`（执行回执）：下方面板的「回执」页 + 回执里的字段名 / 动作 / 结局四档。
+    case lowerPaneReceipts
+    case receiptEmpty
+    case receiptCopyOne
+    case receiptCopyAll
+    case receiptExport
+    case receiptClear
+    case receiptCopied
+    case receiptExported
+    case receiptExportFailed
+    case receiptCleared
+    case receiptCopyEmpty
+    case receiptExportEmpty
+    case receiptClearEmpty
+    case receiptTitle
+    case receiptExecutedAt
+    case receiptOutcome
+    case receiptDuration
+    case receiptSeconds
+    case receiptAffectedRows
+    case receiptAffectedUnmeasured
+    case receiptStatements
+    case receiptConnection
+    case receiptDatabase
+    case receiptScope
+    case receiptResults
+    case receiptResultsFormat
+    case receiptResultsTruncated
+    case receiptError
+    case receiptSQL
+    case receiptRedaction
+    case receiptRedactionFormat
+    case receiptOutcomeSucceeded
+    case receiptOutcomeFailed
+    case receiptOutcomeCancelled
+    case receiptOutcomeRefused
     // `FR-STD-WS-VCS-001`（Git 只读与差异）：下方面板的「变更」页与它的空态 / 读失败 / 标签。
     case lowerPaneChanges
     case gitNoWorkspace
@@ -3482,6 +3518,42 @@ public enum LocalizedStrings {
         .lowerPaneOutputEmpty: [.simplifiedChinese: "还没有输出。执行 SQL 的状态、影响行数与耗时摘要会出现在这里。", .english: "No output yet. Execution status, affected rows and timings will show up here."],
         .lowerPaneDebugPlaceholder: [.simplifiedChinese: "调试控制台占位：等客户端具备编程 IDE 能力（断点 / 变量查看 / 求值）时接入。", .english: "Debug console placeholder: to be wired up when the client gains IDE-style debugging (breakpoints, variables, evaluation)."],
         .lowerPaneClear: [.simplifiedChinese: "清空", .english: "Clear"],
+        .lowerPaneReceipts: [.simplifiedChinese: "回执", .english: "Receipts"],
+        .receiptEmpty: [.simplifiedChinese: "还没有执行回执 —— 每次执行（成功 / 失败 / 被拦下 / 取消）都会在这里留一条，带执行时刻、影响行数、耗时与错误原文。",
+                        .english: "No receipts yet — every run (succeeded, failed, blocked, cancelled) leaves one here with the time, rows affected, duration and error text."],
+        .receiptCopyOne: [.simplifiedChinese: "复制这条回执", .english: "Copy this receipt"],
+        .receiptCopyAll: [.simplifiedChinese: "复制全部回执", .english: "Copy all receipts"],
+        .receiptExport: [.simplifiedChinese: "导出回执…", .english: "Export receipts…"],
+        .receiptClear: [.simplifiedChinese: "清空回执", .english: "Clear receipts"],
+        .receiptCopied: [.simplifiedChinese: "已复制 %d 条回执（内容已脱敏）", .english: "Copied %d receipts (secrets already masked)"],
+        .receiptExported: [.simplifiedChinese: "已导出 %d 条回执到 %@", .english: "Exported %d receipts to %@"],
+        .receiptExportFailed: [.simplifiedChinese: "导出回执失败：%@", .english: "Exporting receipts failed: %@"],
+        .receiptCleared: [.simplifiedChinese: "回执已清空", .english: "Receipts cleared"],
+        .receiptCopyEmpty: [.simplifiedChinese: "还没有回执可复制 —— 执行一次之后这里会有一条。", .english: "No receipts to copy yet — run a query and one shows up here."],
+        .receiptExportEmpty: [.simplifiedChinese: "还没有回执可导出 —— 执行一次之后这里会有一条。", .english: "No receipts to export yet — run a query and one shows up here."],
+        .receiptClearEmpty: [.simplifiedChinese: "还没有回执可清空。", .english: "No receipts to clear."],
+        .receiptTitle: [.simplifiedChinese: "执行回执", .english: "Execution receipt"],
+        .receiptExecutedAt: [.simplifiedChinese: "执行时刻", .english: "Executed at"],
+        .receiptOutcome: [.simplifiedChinese: "结局", .english: "Outcome"],
+        .receiptDuration: [.simplifiedChinese: "耗时", .english: "Duration"],
+        .receiptSeconds: [.simplifiedChinese: "%.3f 秒", .english: "%.3f s"],
+        .receiptAffectedRows: [.simplifiedChinese: "影响行数", .english: "Rows affected"],
+        .receiptAffectedUnmeasured: [.simplifiedChinese: "未测到（这一跑没有报行数）", .english: "not measured (this run reported no row count)"],
+        .receiptStatements: [.simplifiedChinese: "语句数", .english: "Statements"],
+        .receiptConnection: [.simplifiedChinese: "连接", .english: "Connection"],
+        .receiptDatabase: [.simplifiedChinese: "库", .english: "Database"],
+        .receiptScope: [.simplifiedChinese: "范围", .english: "Scope"],
+        .receiptResults: [.simplifiedChinese: "结果集", .english: "Result sets"],
+        .receiptResultsFormat: [.simplifiedChinese: "%d 个 · 共 %d 行 × %d 列", .english: "%d · %d rows × %d columns"],
+        .receiptResultsTruncated: [.simplifiedChinese: "其中 %d 个被截断", .english: "%d of them truncated"],
+        .receiptError: [.simplifiedChinese: "错误原文", .english: "Error"],
+        .receiptSQL: [.simplifiedChinese: "SQL 原文", .english: "SQL"],
+        .receiptRedaction: [.simplifiedChinese: "脱敏", .english: "Redacted"],
+        .receiptRedactionFormat: [.simplifiedChinese: "%d 处（口令 %d · 连接串 %d）", .english: "%d places (%d secrets, %d in URLs)"],
+        .receiptOutcomeSucceeded: [.simplifiedChinese: "成功", .english: "Succeeded"],
+        .receiptOutcomeFailed: [.simplifiedChinese: "失败", .english: "Failed"],
+        .receiptOutcomeCancelled: [.simplifiedChinese: "已取消", .english: "Cancelled"],
+        .receiptOutcomeRefused: [.simplifiedChinese: "未发出", .english: "Not sent"],
         .treeMenuEmpty: [.simplifiedChinese: "这一行没有可用的操作", .english: "No actions for this row"],
         .maintenanceTitle: [.simplifiedChinese: "维护任务编排", .english: "Maintenance tasks"],
         .maintenanceSaveNote: [.simplifiedChinese: "存进笔记", .english: "Save to notes"],

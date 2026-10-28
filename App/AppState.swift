@@ -63,6 +63,12 @@ struct QueryTab: Identifiable {
     /// 问题日志（下方面板 Problem 页签）：执行错误与语法检查失败、告警。
     var problemLog: [TabLogEntry] = []
 
+    /// **执行回执册**（`FR-STD-DB-TASK-003`）：每次执行（成功 / 失败 / 被拦下 / 取消）留一条，
+    /// 挂在页签上 —— 回执回答的是「我刚才那一跑发生了什么」，跨页签混在一起就答不出「哪一跑」。
+    /// 与 Output 日志分工：Output 是**过程流水**（每次执行清空重来），回执是**审计读数**
+    /// （四项读数 + 执行时刻，可复制 / 导出，且构造时已脱敏）。
+    var receiptLog = ExecutionReceiptLog()
+
     var statusMessage: String {
         didSet { outputLog = TabLog.appended(outputLog, message: statusMessage, severity: .info) }
     }
@@ -1185,7 +1191,7 @@ final class AppState: ObservableObject {
     /// `FR-EDIT-10`（v3.326 扩写 · 队列 `HIST-2`）：「历史」**只在 Database 客户端段出现**
     /// —— 工作区段没有查询上下文。段条件的**唯一出处就是这一句**：视图里再写一遍 `if`
     /// 就是第二处口径，页签条与将来别的消费者迟早各说各话。
-    /// 序 = 问题 / 输出 / 终端 / 调试控制台 / 变更 / 历史（`LowerPaneTab.allCases` 的顺序就是显示顺序）。
+    /// 序 = 问题 / 输出 / 终端 / 调试控制台 / 变更 / 回执 / 历史（`LowerPaneTab.allCases` 的顺序就是显示顺序）。
     /// **「变更」两段都在**（`FR-STD-WS-VCS-001`）：仓库身份跟着工作区走，跟用户此刻在哪一段无关；
     /// 没有工作区时那一页如实画空态，不藏起来（藏起来会让「为什么这里没有 Git」多一次提问）。
     var availableLowerPaneTabs: [LowerPaneTab] {
@@ -1409,8 +1415,100 @@ final class AppState: ObservableObject {
         case .output: tabs[index].outputLog = TabLog.cleared()
         // 「历史」页不是日志页（它读的是查询历史、清空走 `requestClearQueryHistory` 那条确认路）；
         // 「变更」页（`FR-STD-WS-VCS-001`）同理 —— 它的内容是 git 的输出，不是这个页签的日志。
-        case .terminal, .debugConsole, .changes, .history: break
+        // 「回执」页也不吃这枚 trash —— 它的清空走自己那一页的 `clearReceipts`（口径分开：
+        // 清日志不许顺手抹掉审计读数）。
+        case .terminal, .debugConsole, .changes, .receipts, .history: break
         }
+    }
+
+    // MARK: 执行回执（`FR-STD-DB-TASK-003`）
+
+    /// 回执渲染要用的文案 —— **唯一出处**（Core 里没有面向用户的字面量，这里把语言表搬过去）。
+    var receiptLabels: ExecutionReceipt.ReceiptLabels {
+        ExecutionReceipt.ReceiptLabels(
+            title: L(.receiptTitle),
+            executedAt: L(.receiptExecutedAt),
+            outcome: L(.receiptOutcome),
+            duration: L(.receiptDuration),
+            durationFormat: L(.receiptSeconds),
+            affectedRows: L(.receiptAffectedRows),
+            affectedRowsUnmeasured: L(.receiptAffectedUnmeasured),
+            statements: L(.receiptStatements),
+            connection: L(.receiptConnection),
+            database: L(.receiptDatabase),
+            scope: L(.receiptScope),
+            results: L(.receiptResults),
+            resultsFormat: L(.receiptResultsFormat),
+            resultsTruncated: L(.receiptResultsTruncated),
+            error: L(.receiptError),
+            sql: L(.receiptSQL),
+            redaction: L(.receiptRedaction),
+            redactionFormat: L(.receiptRedactionFormat),
+            outcomes: [
+                .succeeded: L(.receiptOutcomeSucceeded),
+                .failed: L(.receiptOutcomeFailed),
+                .cancelled: L(.receiptOutcomeCancelled),
+                .refused: L(.receiptOutcomeRefused)
+            ]
+        )
+    }
+
+    /// 复制**一条**回执（验收 ②「可复制」）：上剪贴板的就是渲染后的**已脱敏**文本。
+    func copyReceipt(_ receipt: ExecutionReceipt) {
+        putReceiptsOnPasteboard(receipt.render(labels: receiptLabels), count: 1)
+    }
+
+    /// 复制**整本**（同一页签的全部回执，旧 → 新）。
+    func copyReceipts(for tabID: UUID) {
+        guard let tab = tabs.first(where: { $0.id == tabID }), !tab.receiptLog.isEmpty else {
+            statusMessage = L(.receiptCopyEmpty)
+            return
+        }
+        putReceiptsOnPasteboard(tab.receiptLog.exportText(labels: receiptLabels), count: tab.receiptLog.count)
+    }
+
+    /// 导出成 JSON 文件（验收 ②「可导出」）。写出去的是**结构里那些已脱敏字段** ——
+    /// 导出路径上没有任何一处能碰到 SQL 原文（它在 `ExecutionReceipt.init` 里就没进来）。
+    func exportReceipts(for tabID: UUID) -> Bool {
+        guard let tab = tabs.first(where: { $0.id == tabID }), !tab.receiptLog.isEmpty else {
+            statusMessage = L(.receiptExportEmpty)
+            return false
+        }
+
+        let panel = NSSavePanel()
+        panel.canCreateDirectories = true
+        panel.nameFieldStringValue = "execution-receipts.json"
+        if let type = UTType(filenameExtension: "json") {
+            panel.allowedContentTypes = [type]
+        }
+        guard panel.runModal() == .OK, let url = panel.url else { return false }
+
+        do {
+            let data = try tab.receiptLog.exportData()
+            try data.write(to: url, options: [.atomic])
+            statusMessage = L(.receiptExported, tab.receiptLog.count, url.lastPathComponent)
+            return true
+        } catch {
+            errorMessage = L(.receiptExportFailed, ErrorPresenter.message(for: error))
+            return false
+        }
+    }
+
+    /// 清空这个页签的回执（它与「清空输出日志」是两枚按钮：日志是流水，回执是审计读数）。
+    func clearReceipts(for tabID: UUID) {
+        guard let index = tabs.firstIndex(where: { $0.id == tabID }), !tabs[index].receiptLog.isEmpty else {
+            statusMessage = L(.receiptClearEmpty)
+            return
+        }
+        tabs[index].receiptLog.removeAll()
+        statusMessage = L(.receiptCleared)
+    }
+
+    private func putReceiptsOnPasteboard(_ text: String, count: Int) {
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(text, forType: .string)
+        statusMessage = L(.receiptCopied, count)
     }
 
     /// 当前生效的执行安全策略。
@@ -7809,6 +7907,42 @@ final class AppState: ObservableObject {
         }
     }
 
+    /// 记一条**执行回执**（`FR-STD-DB-TASK-003` 的**唯一写入口**）。
+    ///
+    /// 为什么收成一处：回执有六处出口（成功 / 失败 / 取消 / 安全判定拦下 / 任务定义拦下 / 事务态拦下），
+    /// 各写一遍必然有一处漏字段 —— 漏的那一处正是需求 ③ 的否定面（「失败也有回执，不因报错丢失」）。
+    ///
+    /// 脱敏在 `ExecutionReceipt.init` 里做（原文根本不进那个结构），所以这里照原样传 SQL 与错误原文。
+    private func recordReceipt(
+        for tabID: UUID,
+        configuration: ConnectionConfig,
+        database: String,
+        sql: String,
+        scopeTitle: String,
+        statementCount: Int,
+        outcome: ExecutionOutcome,
+        affectedRows: Int?,
+        results: ExecutionReceipt.ResultReading,
+        executedAt: Date,
+        duration: TimeInterval,
+        errorText: String?
+    ) {
+        let receipt = ExecutionReceipt(
+            executedAt: executedAt,
+            duration: duration,
+            connectionName: configuration.name,
+            database: database,
+            scopeTitle: scopeTitle,
+            statementCount: statementCount,
+            outcome: outcome,
+            affectedRows: affectedRows,
+            results: results,
+            sql: sql,
+            errorText: errorText
+        )
+        updateTab(tabID) { $0.receiptLog.append(receipt) }
+    }
+
     /// 从 UI 触发执行：把执行放到可跟踪的 Task 里，「停止」按钮才能取消它。
     func startQuery(for tabID: UUID) {
         guard executionTasks[tabID] == nil else { return }
@@ -7912,6 +8046,22 @@ final class AppState: ObservableObject {
                 let detail = (reasons + statements.map { "· " + $0 }).joined(separator: "\n")
                 updateTab(tabID) { $0.errorMessage = detail }
                 statusMessage = reasons.first ?? L(.safetyReadOnlyRefused)
+                // 回执（`FR-STD-DB-TASK-003`）：**被拦下也是一次尝试** —— 一条语句都没发出去，
+                // 因此里读作「未发出」（`.refused`）而不是失败，更不是成功。
+                recordReceipt(
+                    for: tabID,
+                    configuration: configuration,
+                    database: queryDatabase(for: configuration),
+                    sql: sql,
+                    scopeTitle: resolution.source.title,
+                    statementCount: StatementSplitter(databaseType: configuration.dbType).split(sql).count,
+                    outcome: .refused,
+                    affectedRows: nil,
+                    results: ExecutionReceipt.ResultReading(),
+                    executedAt: Date(),
+                    duration: 0,
+                    errorText: detail
+                )
                 return
             }
         }
@@ -7945,6 +8095,21 @@ final class AppState: ObservableObject {
                     $0.errorMessage = detail
                     $0.statusMessage = L(.sqlTaskRefusedStatus, task.name)
                 }
+                // 回执同 A：定义与实际参数不一致 ⇒ 一条语句都没发，里读「未发出」。
+                recordReceipt(
+                    for: tabID,
+                    configuration: configuration,
+                    database: targetDatabase,
+                    sql: sql,
+                    scopeTitle: resolution.source.title,
+                    statementCount: StatementSplitter(databaseType: configuration.dbType).split(sql).count,
+                    outcome: .refused,
+                    affectedRows: nil,
+                    results: ExecutionReceipt.ResultReading(),
+                    executedAt: Date(),
+                    duration: 0,
+                    errorText: detail
+                )
                 return
 
             case .needsApproval(let reasons, let statements):
@@ -8006,6 +8171,15 @@ final class AppState: ObservableObject {
         // 通道只剩 `.resultSet(affectedRows:)` 一条，且只有 absorb 一处会加。
         var affectedTally = AffectedRowsTally()
 
+        // 回执的结果集读数（`FR-STD-DB-TASK-003`）：与 Output 的逐条摘要**分开累计** ——
+        // 回执要的是「这一跑一共返回了什么」，Output 是逐条流水。
+        var receiptRows = 0
+        var receiptColumns = 0
+        var receiptTruncated = 0
+        // 结果集条数也要在 `do` 之外 —— **失败分支的回执同样要报「这一跑返回了几个结果集」**
+        // （出错前可能已经成功返回过几条）。
+        var resultCount = 0
+
         // 事务上下文按「连接 + 数据库」归属（FR-EXEC-15）。
         // 声明在 `do` 之外：失败分支也要用它把事务标记成失败态。
         let transactionKey = ServiceKey(connectionID: configuration.id, database: targetDatabase)
@@ -8015,7 +8189,6 @@ final class AppState: ObservableObject {
             updateTab(tabID) { $0.statusMessage = L(.stateExecuting) }
 
             var currentStatementIndex = 0
-            var resultCount = 0
 
             let handle = executionHandles[tabID] ?? ExecutionHandle()
             executionHandles[tabID] = handle
@@ -8027,11 +8200,27 @@ final class AppState: ObservableObject {
             let transactionAction = transactionSession.prepareStatement()
             if case .refuse(let refusal) = transactionAction {
                 transactionSessions[transactionKey] = transactionSession
+                let refusalMessage = transactionRefusalMessage(refusal)
                 updateTab(tabID) {
                     $0.isExecuting = false
-                    $0.errorMessage = transactionRefusalMessage(refusal)
+                    $0.errorMessage = refusalMessage
                     $0.statusMessage = L(.stateNotExecuted)
                 }
+                // 回执：事务已进入失败态 ⇒ 这次一条语句都没发出去（`.refused`，不是失败）。
+                recordReceipt(
+                    for: tabID,
+                    configuration: configuration,
+                    database: targetDatabase,
+                    sql: sql,
+                    scopeTitle: (runningSource ?? resolution.source).title,
+                    statementCount: scopeSummary.runningStatements,
+                    outcome: .refused,
+                    affectedRows: nil,
+                    results: ExecutionReceipt.ResultReading(),
+                    executedAt: executionStart,
+                    duration: Date().timeIntervalSince(executionStart),
+                    errorText: refusalMessage
+                )
                 return
             }
             transactionSessions[transactionKey] = transactionSession
@@ -8042,11 +8231,27 @@ final class AppState: ObservableObject {
                     // BEGIN 没成功 = 没有事务：状态退回 idle，别让界面显示「事务进行中」。
                     transactionSession.serverCommandFailed()
                     transactionSessions[transactionKey] = transactionSession
+                    let beginMessage = L(.transactionBeginFailed, ErrorPresenter.message(for: error))
                     updateTab(tabID) {
                         $0.isExecuting = false
-                        $0.errorMessage = L(.transactionBeginFailed, ErrorPresenter.message(for: error))
+                        $0.errorMessage = beginMessage
                         $0.statusMessage = L(.stateNotExecuted)
                     }
+                    // 回执：BEGIN 失败 = 已经连上了但没跑起来 ⇒ `.failed`（不是 `.refused`）。
+                    recordReceipt(
+                        for: tabID,
+                        configuration: configuration,
+                        database: targetDatabase,
+                        sql: sql,
+                        scopeTitle: (runningSource ?? resolution.source).title,
+                        statementCount: scopeSummary.runningStatements,
+                        outcome: .failed,
+                        affectedRows: nil,
+                        results: ExecutionReceipt.ResultReading(),
+                        executedAt: executionStart,
+                        duration: Date().timeIntervalSince(executionStart),
+                        errorText: beginMessage
+                    )
                     return
                 }
             }
@@ -8067,6 +8272,9 @@ final class AppState: ObservableObject {
                     // 否则两个页签会重复同一件事。没有表格的（影响行数 / 无结果集）才进日志，
                     // 因为结果表里根本不会出现它们。
                     affectedTally.absorb(event)
+                receiptRows += result.rowCount
+                receiptColumns = max(receiptColumns, result.columnCount)
+                if result.isTruncated { receiptTruncated += 1 }
                     let isTabular = result.affectedRows == nil && result.columnCount > 0
                     let logLine: String?
                     if let affected = result.affectedRows {
@@ -8128,6 +8336,27 @@ final class AppState: ObservableObject {
             // （或驱动没把取消变成抛错），归档里就留下一条"成功执行"的假记录 ——
             // 归档是审计依据，假成功比失败更糟。
             let cancelled = Task.isCancelled
+            // 回执（`FR-STD-DB-TASK-003`）：这一跑的**四项读数 + 执行时刻**都记下来。
+            // 取消这一档也走这里 —— 回执面上它读「已取消」，与归档里 `succeeded: false` 同一条口径。
+            recordReceipt(
+                for: tabID,
+                configuration: configuration,
+                database: targetDatabase,
+                sql: sql,
+                scopeTitle: (runningSource ?? resolution.source).title,
+                statementCount: scopeSummary.runningStatements,
+                outcome: cancelled ? .cancelled : .succeeded,
+                affectedRows: affectedTally.value,
+                results: ExecutionReceipt.ResultReading(
+                    resultSetCount: resultCount,
+                    rowCount: receiptRows,
+                    columnCount: receiptColumns,
+                    truncatedCount: receiptTruncated
+                ),
+                executedAt: executionStart,
+                duration: Date().timeIntervalSince(executionStart),
+                errorText: cancelled ? L(.stateCancelled) : nil
+            )
             await recordHistory(
                 sql: sql,
                 connectionID: configuration.id,
@@ -8148,6 +8377,26 @@ final class AppState: ObservableObject {
                     $0.statusMessage = L(.stateExecutionFailed)
                 }
             }
+            // 需求 ③：**失败也有回执**（不因报错丢失）—— 错误原文照实带上（构造时脱敏）。
+            recordReceipt(
+                for: tabID,
+                configuration: configuration,
+                database: targetDatabase,
+                sql: sql,
+                scopeTitle: (runningSource ?? resolution.source).title,
+                statementCount: scopeSummary.runningStatements,
+                outcome: cancelled ? .cancelled : .failed,
+                affectedRows: affectedTally.value,
+                results: ExecutionReceipt.ResultReading(
+                    resultSetCount: resultCount,
+                    rowCount: receiptRows,
+                    columnCount: receiptColumns,
+                    truncatedCount: receiptTruncated
+                ),
+                executedAt: executionStart,
+                duration: Date().timeIntervalSince(executionStart),
+                errorText: message
+            )
             await recordHistory(
                 sql: sql,
                 connectionID: configuration.id,
