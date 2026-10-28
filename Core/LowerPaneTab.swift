@@ -20,6 +20,12 @@ public enum LowerPaneTab: String, CaseIterable, Identifiable, Sendable {
     case terminal
     /// 占位：将来客户端具备编程 IDE 能力（断点 / 变量查看）时的调试控制台。
     case debugConsole
+    /// **Git 变更**（`FR-STD-WS-VCS-001`）：当前工作区的分支 / 改动清单 / 逐行差异。
+    ///
+    /// **只读**：这一页不提交、不推送、不改暂存区 —— 它回答的是「我改了哪些、改成了什么」。
+    /// 与「历史」不同，它**不按段隐藏**：仓库身份跟着工作区走，与用户在哪个活动栏项上无关；
+    /// 没有工作区时这一页如实画空态（见 `App/Views/GitChangesPanel.swift`）。
+    case changes
     /// 本次会话执行过的 **SQL 与 DDL**（`FR-EDIT-10` v3.326 扩写 · `DR-02` · 队列 `HIST-2`）。
     ///
     /// **只在 Database 客户端段出现**（工作区段没有查询上下文）—— 序 = 问题 / 输出 / 终端 /
@@ -40,6 +46,7 @@ public enum LowerPaneTab: String, CaseIterable, Identifiable, Sendable {
         case .output: return .lowerPaneOutput
         case .terminal: return .lowerPaneTerminal
         case .debugConsole: return .lowerPaneDebugConsole
+        case .changes: return .lowerPaneChanges
         case .history: return .lowerPaneHistory
         }
     }
@@ -51,6 +58,7 @@ public enum LowerPaneTab: String, CaseIterable, Identifiable, Sendable {
         case .output: return "text.alignleft"
         case .terminal: return "terminal"
         case .debugConsole: return "ladybug"
+        case .changes: return "arrow.triangle.branch"
         case .history: return "clock.arrow.circlepath"
         }
     }

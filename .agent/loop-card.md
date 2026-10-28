@@ -8,8 +8,9 @@
   配置面四样 → 三样（环境 / AppID / Secret，`gatewayURL` / `botIdentifier` 作废）· 旧 `gatewayURL` 读成自建中继（迁移）·
   面板删地址格 / 加环境选择器 / 自建中继降高级项 / 「去 QQ 开放平台」按钮（**不做运行时扫码**）/ 画出程序取到的地址与 token 尾 4 位 ·
   传输层 `AgentIMGatewayHandshake`（nil = 自建中继原样）· 判据 `Tests/AgentIMQQProvisioningTests` 18 例 + `AgentIMSettingsTests` 27 例。
-- **仍差**（不是本条的重复项）：真 AppID + Secret 与一次端到端点验（记 blocked）；**官方外发**（`POST /v2/users/{openid}/messages`）
-  尚未做 —— 已写进 `.agent/checkpoint.md` 的「下一项 1」。
+- **仍差**（不是本条的重复项）：真 AppID + Secret 与一次端到端点验（记 blocked）。
+- **官方外发**（`POST /v2/users/{openid}/messages`）**已做**（R43 第四十三批 `Core/AgentIMOutboundSend.swift`）——
+  上一版这条写「尚未做」，本行更正（旧说法作废）。
 
 **★1 · IM 通道的「真配置界面」+ 判据收口（`FR-AGT-LINK-CHAN-003`）—— ✅ 已落地，本条关闭，不得重复执行**
 
@@ -31,7 +32,11 @@
   面板与手机的端到端人工点验一次。
 
 **★ 区已清空**：下一条活按台账取（`FR-STD-*` 里实现 `⬜`／`🟡`，优先=高 → 中；同档取判据可机械跑的）。
-**R45（2026-10-28）已把静态检查结果上屏做完**（`Core/DiagnosticMarks.swift` 投影 + 画线与命中同源 + `SQLTextView` 即时悬浮说明 + 修好 `Tests/SQLLinterTests` 花括号错位，判据 `Tests/DiagnosticMarksTests` 9 例）—— 台账 `FR-STD-WS-NAV-012` 实现 🟡 / 判据 ✅，只剩「鼠标停到虚线上看一眼」这一件人工项。下一轮按 `.agent/checkpoint.md` 的「下一项 1」= 台账 `FR-STD-WS-VCS-001`（Git 只读与差异；先核 `App/GitStatusProbe.swift`（40 行，只给 Agent 用的 `facts`）已有的面再定缺口）。
+**R46（2026-10-29）已把「Git 只读与差异」做完**（`Core/GitWorktreeStatus.swift` + `Core/GitUnifiedDiff.swift`
+两份投影 + `App/GitWorktreeProbe.swift` 取数 + 下方面板**「变更」页** `App/Views/GitChangesPanel.swift`；
+判据 13 + 11 例，反例八段各判红）—— 台账 `FR-STD-WS-VCS-001` 实现 🟡 / 判据 ✅，只剩「选一个有改动的仓库，
+点开一个文件看逐行差异」这一件人工项。下一轮按 `.agent/checkpoint.md` 的「下一项 1」= 台账 `FR-STD-WS-UI-010`
+（页签条高度不由内容与数量决定；同档还有 `WS-UI-011 / 013 / 014` 三条可量出来的界面口径）。
 
 # 每轮卡 · Studio macOS 端自主开发（2026-10-28 起）
 

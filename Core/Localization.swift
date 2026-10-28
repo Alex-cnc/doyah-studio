@@ -317,6 +317,36 @@ public enum LKey: String, CaseIterable, Sendable {
     case lowerPaneOutputEmpty
     case lowerPaneDebugPlaceholder
     case lowerPaneClear
+    // `FR-STD-WS-VCS-001`（Git 只读与差异）：下方面板的「变更」页与它的空态 / 读失败 / 标签。
+    case lowerPaneChanges
+    case gitNoWorkspace
+    case gitNotRepository
+    case gitNoGit
+    case gitTimedOut
+    case gitStatusFailed
+    case gitClean
+    case gitRefresh
+    case gitReadOnlyNote
+    case gitAheadBehind
+    case gitBranchLabel
+    case gitPickFile
+    case gitDiffUnavailable
+    case gitDiffBinary
+    case gitDiffEmptySide
+    case gitDiffNoNewline
+    case gitDiffTruncated
+    case gitDiffStaged
+    case gitDiffUnstaged
+    case gitChangeUntracked
+    case gitChangeAdded
+    case gitChangeModified
+    case gitChangeDeleted
+    case gitChangeRenamed
+    case gitChangeCopied
+    case gitChangeConflicted
+    case gitChangeTypeChanged
+    case gitChangeUnknown
+    case gitOmittedEntries
     case treeMenuEmpty
     // SSH 隧道（FR-CONN-18）：Core 只给键，界面按当前语言取
     case maintenanceTitle
@@ -3339,6 +3369,51 @@ public enum LocalizedStrings {
         .lowerPaneTerminal: [.simplifiedChinese: "终端", .english: "Terminal"],
         .lowerPaneDebugConsole: [.simplifiedChinese: "调试控制台", .english: "Debug Console"],
         .lowerPaneHistory: [.simplifiedChinese: "历史", .english: "History"],
+        .lowerPaneChanges: [.simplifiedChinese: "变更", .english: "Changes"],
+        .gitNoWorkspace: [.simplifiedChinese: "还没有选择工作区 —— Git 变更以工作区根目录为准。",
+                          .english: "No workspace yet — Git changes are read from the workspace folder."],
+        .gitNotRepository: [.simplifiedChinese: "这个目录不是一个 Git 仓库（没有 .git）。",
+                            .english: "This folder is not a Git repository (no .git)."],
+        .gitNoGit: [.simplifiedChinese: "这台机器上找不到 git 命令，读不到仓库状态。",
+                    .english: "The git command was not found on this machine; repository state is unavailable."],
+        .gitTimedOut: [.simplifiedChinese: "git 没有在预期时间内返回（仓库太大或磁盘很忙）。",
+                       .english: "git did not answer in time (huge repository or a busy disk)."],
+        .gitStatusFailed: [.simplifiedChinese: "读仓库状态失败（退出码 %d），下面可能是旧结果。",
+                           .english: "Reading the repository state failed (exit code %d); what follows may be stale."],
+        .gitClean: [.simplifiedChinese: "工作区干净：没有未提交的改动。",
+                    .english: "Working tree clean: nothing uncommitted."],
+        .gitRefresh: [.simplifiedChinese: "重新读取", .english: "Refresh"],
+        .gitReadOnlyNote: [.simplifiedChinese: "只读：这里不提交、不推送，也不改暂存区。",
+                           .english: "Read-only: nothing here commits, pushes, or touches the index."],
+        .gitAheadBehind: [.simplifiedChinese: "领先 %d · 落后 %d",
+                          .english: "%d ahead · %d behind"],
+        .gitBranchLabel: [.simplifiedChinese: "分支", .english: "Branch"],
+        .gitPickFile: [.simplifiedChinese: "在左边选一个文件看逐行差异。",
+                       .english: "Pick a file on the left to see its line-by-line diff."],
+        .gitDiffUnavailable: [.simplifiedChinese: "这个文件的差异读不出来（退出码 %d）。",
+                              .english: "Could not read this file's diff (exit code %d)."],
+        .gitDiffBinary: [.simplifiedChinese: "二进制文件：不显示逐行差异。",
+                         .english: "Binary file: no line-by-line diff."],
+        .gitDiffEmptySide: [.simplifiedChinese: "这一侧没有可显示的差异（可能只改了权限或文件名）。",
+                            .english: "No diff to show on this side (maybe only mode or name changed)."],
+        .gitDiffTruncated: [.simplifiedChinese: "差异太长，只显示前 %d 行。",
+                            .english: "Diff too long; showing the first %d lines only."],
+        .gitDiffNoNewline: [.simplifiedChinese: "（末尾没有换行）", .english: "(no newline at end)"],
+        .gitDiffStaged: [.simplifiedChinese: "已暂存（工作区没有更多改动）",
+                         .english: "Staged (no further working-tree changes)"],
+        .gitDiffUnstaged: [.simplifiedChinese: "未暂存（工作区相对暂存区）",
+                           .english: "Unstaged (working tree against the index)"],
+        .gitChangeUntracked: [.simplifiedChinese: "未跟踪", .english: "Untracked"],
+        .gitChangeAdded: [.simplifiedChinese: "新增", .english: "Added"],
+        .gitChangeModified: [.simplifiedChinese: "已修改", .english: "Modified"],
+        .gitChangeDeleted: [.simplifiedChinese: "已删除", .english: "Deleted"],
+        .gitChangeRenamed: [.simplifiedChinese: "已重命名", .english: "Renamed"],
+        .gitChangeCopied: [.simplifiedChinese: "已复制", .english: "Copied"],
+        .gitChangeConflicted: [.simplifiedChinese: "有冲突", .english: "Conflicted"],
+        .gitChangeTypeChanged: [.simplifiedChinese: "类型变了", .english: "Type changed"],
+        .gitChangeUnknown: [.simplifiedChinese: "认不出的状态", .english: "Unrecognized state"],
+        .gitOmittedEntries: [.simplifiedChinese: "另有 %d 条改动没有列出（仓库改动太多）。",
+                             .english: "%d more changes are not listed (too many)."],
         .lowerPaneToggle: [.simplifiedChinese: "显示 / 隐藏下方面板", .english: "Show/Hide Bottom Pane"],
         .lowerPaneHide: [.simplifiedChinese: "收起面板", .english: "Collapse pane"],
         .lowerPaneExpand: [.simplifiedChinese: "展开面板", .english: "Expand pane"],

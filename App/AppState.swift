@@ -1185,7 +1185,9 @@ final class AppState: ObservableObject {
     /// `FR-EDIT-10`（v3.326 扩写 · 队列 `HIST-2`）：「历史」**只在 Database 客户端段出现**
     /// —— 工作区段没有查询上下文。段条件的**唯一出处就是这一句**：视图里再写一遍 `if`
     /// 就是第二处口径，页签条与将来别的消费者迟早各说各话。
-    /// 序 = 问题 / 输出 / 终端 / 调试控制台 / 历史（`LowerPaneTab.allCases` 的顺序就是显示顺序）。
+    /// 序 = 问题 / 输出 / 终端 / 调试控制台 / 变更 / 历史（`LowerPaneTab.allCases` 的顺序就是显示顺序）。
+    /// **「变更」两段都在**（`FR-STD-WS-VCS-001`）：仓库身份跟着工作区走，跟用户此刻在哪一段无关；
+    /// 没有工作区时那一页如实画空态，不藏起来（藏起来会让「为什么这里没有 Git」多一次提问）。
     var availableLowerPaneTabs: [LowerPaneTab] {
         isHistoryPaneAvailable ? LowerPaneTab.allCases : LowerPaneTab.allCases.filter { $0 != .history }
     }
@@ -1405,8 +1407,9 @@ final class AppState: ObservableObject {
         switch lowerPaneTab {
         case .problem: tabs[index].problemLog = TabLog.cleared()
         case .output: tabs[index].outputLog = TabLog.cleared()
-        // 「历史」页不是日志页（它读的是查询历史、清空走 `requestClearQueryHistory` 那条确认路）。
-        case .terminal, .debugConsole, .history: break
+        // 「历史」页不是日志页（它读的是查询历史、清空走 `requestClearQueryHistory` 那条确认路）；
+        // 「变更」页（`FR-STD-WS-VCS-001`）同理 —— 它的内容是 git 的输出，不是这个页签的日志。
+        case .terminal, .debugConsole, .changes, .history: break
         }
     }
 

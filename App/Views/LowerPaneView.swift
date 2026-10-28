@@ -161,6 +161,11 @@ struct LowerPaneView: View {
                 text: L(.lowerPaneDebugPlaceholder)
             )
 
+        case .changes:
+            // `FR-STD-WS-VCS-001`：分支 / 改动清单 / 逐行差异（只读）。取数与状态都在
+            // `GitChangesModel` 里，这一层只摆位置 —— 面板自己的空态四档也在那一页。
+            GitChangesPanel()
+
         case .history:
             historyPane
         }

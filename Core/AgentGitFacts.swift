@@ -47,27 +47,12 @@ public struct AgentGitFacts: Equatable, Sendable {
     public static func parse(porcelain: String) -> AgentGitFacts? {
         let lines = porcelain.split(separator: "\n", omittingEmptySubsequences: true).map(String.init)
         guard let branchLine = lines.first(where: { $0.hasPrefix("## ") }) else { return nil }
-        let head = String(branchLine.dropFirst(3))
-
-        var branch = head
-        var ahead = 0
-        var behind = 0
-        if let bracket = head.range(of: " [") {
-            branch = String(head[head.startIndex..<bracket.lowerBound])
-            let tail = String(head[bracket.upperBound...]).replacingOccurrences(of: "]", with: "")
-            for part in tail.split(separator: ",") {
-                let piece = part.trimmingCharacters(in: .whitespaces)
-                if piece.hasPrefix("ahead ") { ahead = Int(piece.dropFirst("ahead ".count)) ?? 0 }
-                if piece.hasPrefix("behind ") { behind = Int(piece.dropFirst("behind ".count)) ?? 0 }
-            }
-        }
-        // `main...origin/main` ⇒ 只要本地那半段；`No commits yet on main` 原样留一句可读的。
-        if let dots = branch.range(of: "...") {
-            branch = String(branch[branch.startIndex..<dots.lowerBound])
-        }
-        if branch.hasPrefix("No commits yet on ") {
-            branch = "NoCommits(" + String(branch.dropFirst("No commits yet on ".count)) + ")"
-        }
+        // 分支那一行交给 `GitBranchHeader`（与界面那份 `GitWorktreeStatus` **同一个解析器**）：
+        // 两处各写一份，迟早一处认 `ahead` 一处不认（`FR-STD-WS-VCS-001` 同批收口）。
+        let header = GitBranchHeader.parse(String(branchLine.dropFirst(3)))
+        let branch = header.branch
+        let ahead = header.ahead
+        let behind = header.behind
 
         var changed: [String] = []
         for line in lines where !line.hasPrefix("## ") {

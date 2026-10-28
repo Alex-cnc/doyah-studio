@@ -12,29 +12,14 @@ enum GitStatusProbe {
 
     static func facts(root: String?) -> AgentGitFacts? {
         guard let root, !root.isEmpty else { return nil }
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-        process.arguments = ["git", "-C", root, "status", "--porcelain=v1", "--branch"]
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = FileHandle.nullDevice
-        do {
-            try process.run()
-        } catch {
+        // 进程与超时那一套只在 `GitWorktreeProbe.run` 里写一遍（本片同批收口）：
+        // 两处各写一份 `Process` + 轮询，迟早一处超时 1.5 秒一处 3 秒，同样的仓库两个面板说法不同。
+        switch GitWorktreeProbe.run(["status", "--porcelain=v1", "--branch"], root: root, timeout: 1.5) {
+        case .finished(let code, let output):
+            guard code == 0 else { return nil }
+            return AgentGitFacts.parse(porcelain: output)
+        case .timeout, .unavailable:
             return nil
         }
-        // 1.5 秒上限（读不完就掐掉，当作「没有仓库信息」）。
-        let deadline = Date().addingTimeInterval(1.5)
-        while process.isRunning && Date() < deadline {
-            Thread.sleep(forTimeInterval: 0.02)
-        }
-        if process.isRunning {
-            process.terminate()
-            return nil
-        }
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        guard process.terminationStatus == 0,
-              let text = String(data: data, encoding: .utf8) else { return nil }
-        return AgentGitFacts.parse(porcelain: text)
     }
 }
