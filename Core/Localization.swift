@@ -3120,6 +3120,22 @@ public enum LKey: String, CaseIterable, Sendable {
     case sqlTaskSavedStatus
     case sqlTaskLoadedStatus
     case sqlTaskRefusedStatus
+
+    // 撤销动作名（`FR-STD-WS-EDIT-014`）：编辑菜单里「撤销 …」那一行读的就是这里。
+    case undoActionTyping
+    case undoActionDeleting
+    case undoActionNewline
+    case undoActionPaste
+    case undoActionCompletion
+    case undoActionSnippet
+    case undoActionPairing
+    case undoActionLineMove
+    case undoActionDuplicateLine
+    case undoActionCommentToggle
+    case undoActionTaskToggle
+    case undoActionIndent
+    case undoActionFormatting
+    case undoActionDocumentReplace
 }
 
 public enum LocalizedStrings {
@@ -6089,5 +6105,20 @@ public enum LocalizedStrings {
         .sqlTaskSavedStatus: [.simplifiedChinese: "已保存任务「%@」", .english: "Saved task \"%@\""],
         .sqlTaskLoadedStatus: [.simplifiedChinese: "已载入任务「%@」", .english: "Loaded task \"%@\""],
         .sqlTaskRefusedStatus: [.simplifiedChinese: "任务「%@」的执行被拒绝（原因见问题页签）", .english: "Task \"%@\" was refused (see the Problems tab)"],
+        // 撤销动作名（`FR-STD-WS-EDIT-014`）：编辑菜单里「撤销 …」那一行的后半句。
+        .undoActionTyping: [.simplifiedChinese: "键入", .english: "Typing"],
+        .undoActionDeleting: [.simplifiedChinese: "删除", .english: "Delete"],
+        .undoActionNewline: [.simplifiedChinese: "换行", .english: "New Line"],
+        .undoActionPaste: [.simplifiedChinese: "粘贴", .english: "Paste"],
+        .undoActionCompletion: [.simplifiedChinese: "补全", .english: "Completion"],
+        .undoActionSnippet: [.simplifiedChinese: "插入片段", .english: "Insert Snippet"],
+        .undoActionPairing: [.simplifiedChinese: "配对", .english: "Pairing"],
+        .undoActionLineMove: [.simplifiedChinese: "移动行", .english: "Move Lines"],
+        .undoActionDuplicateLine: [.simplifiedChinese: "复制行", .english: "Duplicate Lines"],
+        .undoActionCommentToggle: [.simplifiedChinese: "切换注释", .english: "Toggle Comment"],
+        .undoActionTaskToggle: [.simplifiedChinese: "切换任务框", .english: "Toggle Task"],
+        .undoActionIndent: [.simplifiedChinese: "缩进", .english: "Indent"],
+        .undoActionFormatting: [.simplifiedChinese: "格式化", .english: "Format"],
+        .undoActionDocumentReplace: [.simplifiedChinese: "替换", .english: "Replace"],
     ]
 }

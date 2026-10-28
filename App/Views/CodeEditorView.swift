@@ -398,7 +398,11 @@ struct CodeEditorView: NSViewRepresentable {
 ///
 /// 为什么在这里拦：`NSTextView` 不处理保存（那是应用级动作），而 SwiftUI 侧的
 /// `.keyboardShortcut` 在文本视图获得焦点时收不到这个按键。拦在这里最稳。
-final class CodeTextView: NSTextView {
+final class CodeTextView: NSTextView, UndoScopedEditor {
+    /// 撤销步粒度的状态（`FR-STD-WS-EDIT-014`）：上一次动作是什么，据此决定这次要不要断开。
+    /// 状态必须**每个视图一份**（两个页签各自一条撤销链，共用一份会把 A 页签的动作名写到 B 上）。
+    var undoGranularity = UndoGranularity()
+
     var onSave: (() -> Void)?
 
     /// 触发格式化（FR-EDIT-39）。菜单项与 ⇧⌘F 都落到这一个口子。
@@ -421,7 +425,8 @@ final class CodeTextView: NSTextView {
             return self.applyEditPlan(
                 range: suggestion.range,
                 replacement: suggestion.insertText,
-                caret: suggestion.caretOffset
+                caret: suggestion.caretOffset,
+                kind: .completion
             )
         }
         overlay.candidateProvider = { [weak self] prefix in
@@ -692,9 +697,13 @@ final class CodeTextView: NSTextView {
         let prefix = String(characters[0..<offset])
 
         let replacement = NSRange(location: charRange.location, length: charRange.length)
-        guard shouldChangeText(in: replacement, replacementString: word) else { return }
-        storage.replaceCharacters(in: replacement, with: word)
-        didChangeText()
+        let landed = performUndoable(.completion) {
+            guard shouldChangeText(in: replacement, replacementString: word) else { return false }
+            storage.replaceCharacters(in: replacement, with: word)
+            didChangeText()
+            return true
+        }
+        guard landed else { return }
 
         // 注意：`caretOffset` 数的是**字符**，而 `NSRange` 数的是 UTF-16 单元 —— 中文注释里插入
         // 片段时两者会差，所以按前缀的 utf16 长度换算（片段里出现宽字符时不换算就会偏到别处）。
@@ -832,7 +841,8 @@ final class CodeTextView: NSTextView {
         guard applyEditPlan(
             range: plan.replaceRange,
             replacement: plan.insertion,
-            caret: location + (plan.insertion as NSString).length
+            caret: location + (plan.insertion as NSString).length,
+            kind: .snippet
         ) else { return false }
         let session = SnippetSession.starting(after: plan, at: location)
         if let range = session.activeRange {
@@ -925,7 +935,7 @@ final class CodeTextView: NSTextView {
         guard MarkdownEditingScope.applies(to: completionLanguage),
               let plan = MarkdownListEditing.toggleTask(in: string, selection: selectedRange())
         else { return false }
-        applyMarkdownPlan(plan)
+        applyMarkdownPlan(plan, kind: .taskToggle)
         return true
     }
 
@@ -943,14 +953,14 @@ final class CodeTextView: NSTextView {
     override func insertNewline(_ sender: Any?) {
         if MarkdownEditingScope.applies(to: completionLanguage),
            let plan = MarkdownListEditing.continuation(in: string, selection: selectedRange()),
-           applyMarkdownPlan(plan) {
+           applyMarkdownPlan(plan, kind: .newline) {
             return
         }
         // 自动缩进（`FR-STD-WS-EDIT-021` ① ② ③）：判定全在 `Core/AutoIndent`（纯函数，
         // `Tests/AutoIndentTests.swift`），这里只把计划搬过去。`nil` = 交还系统默认回车
         // （有选区 / 光标后面还有正文 / 顶格且无级可继承）—— **不许吞掉按键什么都不做**。
         if let plan = AutoIndent.newline(in: string, selection: selectedRange(), indentUnit: indentUnit),
-           applyEditPlan(range: plan.range, replacement: plan.replacement, caret: plan.caret) {
+           applyEditPlan(range: plan.range, replacement: plan.replacement, caret: plan.caret, kind: .newline) {
             return
         }
         super.insertNewline(sender)
@@ -963,7 +973,7 @@ final class CodeTextView: NSTextView {
     override func paste(_ sender: Any?) {
         if let clip = NSPasteboard.general.string(forType: .string),
            let plan = AutoIndent.paste(clip, into: string, selection: selectedRange(), indentUnit: indentUnit),
-           applyEditPlan(range: plan.range, replacement: plan.replacement, caret: plan.caret) {
+           applyEditPlan(range: plan.range, replacement: plan.replacement, caret: plan.caret, kind: .paste) {
             return
         }
         super.paste(sender)
@@ -978,16 +988,9 @@ final class CodeTextView: NSTextView {
     /// 返回 `false` = 这次没落成（越界 / 被 `shouldChangeText` 拒），调用方应当**交还默认实现**，
     /// 而不是把这个按键悄悄吞掉。
     @discardableResult
-    func applyMarkdownPlan(_ plan: MarkdownEditPlan) -> Bool {
-        guard let storage = textStorage, plan.range.location >= 0,
-              plan.range.location + plan.range.length <= storage.length else { return false }
-        guard shouldChangeText(in: plan.range, replacementString: plan.replacement) else { return false }
-        storage.replaceCharacters(in: plan.range, with: plan.replacement)
-        didChangeText()
-        let caret = min(max(0, plan.caret), storage.length)
-        setSelectedRange(NSRange(location: caret, length: 0))
-        scrollRangeToVisible(NSRange(location: caret, length: 0))
-        return true
+    func applyMarkdownPlan(_ plan: MarkdownEditPlan, kind: UndoEditKind) -> Bool {
+        // 落地口径只有 `applyEditPlan` 一处（撤销粒度 / 等长替换保选区都在那里）。
+        applyEditPlan(range: plan.range, replacement: plan.replacement, caret: plan.caret, kind: kind)
     }
 
     // MARK: 编程助手基础能力（FR-EDIT-49 / FR-EDIT-50）
@@ -1033,23 +1036,39 @@ final class CodeTextView: NSTextView {
     /// 返回 `false` = 没落成（越界 / 被 `shouldChangeText` 拒）⇒ 调用方应当**交还默认实现**，
     /// 而不是把这个按键悄悄吞掉。
     @discardableResult
-    func applyEditPlan(range: NSRange, replacement: String, caret: Int, selectionLength: Int = 0) -> Bool {
+    func applyEditPlan(range: NSRange,
+                       replacement: String,
+                       caret: Int,
+                       selectionLength: Int = 0,
+                       kind: UndoEditKind) -> Bool {
         guard let storage = textStorage, range.location >= 0,
               range.location + range.length <= storage.length else { return false }
-        guard shouldChangeText(in: range, replacementString: replacement) else { return false }
-        storage.replaceCharacters(in: range, with: replacement)
-        didChangeText()
-        let newCaret = min(max(0, caret), storage.length)
-        let length = min(max(0, selectionLength), storage.length - newCaret)
-        setSelectedRange(NSRange(location: newCaret, length: length))
-        scrollRangeToVisible(NSRange(location: newCaret, length: 0))
+        // 替换**之前**的选区：等长替换要原样留住它（需求 ③，`Core/EditSelectionPolicy`）。
+        let original = selectedRange()
+        let landed = performUndoable(kind) {
+            guard shouldChangeText(in: range, replacementString: replacement) else { return false }
+            storage.replaceCharacters(in: range, with: replacement)
+            didChangeText()
+            return true
+        }
+        guard landed else { return false }
+        let placement = EditSelectionPolicy.after(
+            original: original,
+            editRange: range,
+            replacementLength: (replacement as NSString).length,
+            requested: NSRange(location: min(max(0, caret), storage.length),
+                               length: min(max(0, selectionLength), storage.length)),
+            documentLength: storage.length
+        )
+        setSelectedRange(placement)
+        scrollRangeToVisible(NSRange(location: placement.location, length: 0))
         return true
     }
 
     @discardableResult
     func applyPairingPlan(_ plan: CodePairingPlan) -> Bool {
         applyEditPlan(range: plan.range, replacement: plan.replacement,
-                      caret: plan.caret, selectionLength: plan.selectionLength)
+                      caret: plan.caret, selectionLength: plan.selectionLength, kind: .pairing)
     }
 
     // MARK: 括号匹配高亮（FR-STD-WS-EDIT-020）
@@ -1106,7 +1125,8 @@ final class CodeTextView: NSTextView {
         guard let plan = CodeCommentToggling.plan(in: string, selection: selectedRange(), syntax: syntax)
         else { return false }
         return applyEditPlan(range: plan.range, replacement: plan.replacement,
-                             caret: plan.caret, selectionLength: plan.selectionLength)
+                             caret: plan.caret, selectionLength: plan.selectionLength,
+                             kind: .commentToggle)
     }
 
     /// 整行 / 整段上移、下移（`FR-STD-WS-EDIT-009`）：`⌥↑` / `⌥↓` 的落点。
@@ -1121,7 +1141,8 @@ final class CodeTextView: NSTextView {
                                            direction: direction)
         else { return false }
         return applyEditPlan(range: plan.range, replacement: plan.replacement,
-                             caret: plan.caret, selectionLength: plan.selectionLength)
+                             caret: plan.caret, selectionLength: plan.selectionLength,
+                             kind: .lineMove)
     }
 
     /// 向下复制当前行 / 选中整段（`FR-STD-WS-EDIT-009` ③）：`⇧⌥↓` 的落点。副本紧随原行、选区留在原件上。
@@ -1130,7 +1151,8 @@ final class CodeTextView: NSTextView {
         guard let plan = LineMoveEdit.duplicate(in: string, selection: selectedRange())
         else { return false }
         return applyEditPlan(range: plan.range, replacement: plan.replacement,
-                             caret: plan.caret, selectionLength: plan.selectionLength)
+                             caret: plan.caret, selectionLength: plan.selectionLength,
+                             kind: .duplicateLine)
     }
 
     /// 跳到第 `line` 行（1 起）：把光标挪过去并滚到可见（`FR-EDIT-44` 的「回车跳到命中行」）。
@@ -1192,9 +1214,12 @@ final class CodeTextView: NSTextView {
     func applyFormat(_ text: String) {
         guard text != string, let storage = textStorage else { return }
         let whole = NSRange(location: 0, length: storage.length)
-        guard shouldChangeText(in: whole, replacementString: text) else { return }
-        storage.replaceCharacters(in: whole, with: text)
-        didChangeText()
+        performUndoable(.formatting) {
+            guard shouldChangeText(in: whole, replacementString: text) else { return false }
+            storage.replaceCharacters(in: whole, with: text)
+            didChangeText()
+            return true
+        }
     }
 
     /// 把记号涂上去。基色与字体先铺满，再逐段覆盖 —— 与 SQL 编辑器同一手法。

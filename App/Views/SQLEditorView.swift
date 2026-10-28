@@ -297,6 +297,8 @@ struct SQLEditorView: NSViewRepresentable {
             // 整段替换属于「载入 / 切换」语义，不进撤销栈，
             // 避免 ⌘Z 把页签内容换成上一次的内容。
             textView.undoManager?.removeAllActions()
+            // 撤销链从这里不连续：粒度状态也重新起算（否则下一次键入会与上一份文档的动作合并）。
+            textView.restartUndoChain()
 
             textSync.noteAppliedExternal(text)
             textView.setSelectedRange(NSRange(location: 0, length: 0))
@@ -519,7 +521,10 @@ struct SQLEditorView: NSViewRepresentable {
 }
 
 /// 只做属性渲染的 NSTextView。
-final class SQLTextView: NSTextView {
+final class SQLTextView: NSTextView, UndoScopedEditor {
+    /// 撤销步粒度的状态（`FR-STD-WS-EDIT-014`）：与工作区编辑器同一套判定、各记各的状态。
+    var undoGranularity = UndoGranularity()
+
 
     // MARK: 行号列（队列 `L-111`；绘制件 = `LineNumberGutter`，与工作区编辑器同一个）
     //
@@ -572,11 +577,16 @@ final class SQLTextView: NSTextView {
     func applyGhost(_ suggestion: InlineGhostSuggestion) -> Bool {
         guard let storage = textStorage,
               suggestion.range.location >= 0,
-              NSMaxRange(suggestion.range) <= storage.length,
-              shouldChangeText(in: suggestion.range, replacementString: suggestion.insertText)
+              NSMaxRange(suggestion.range) <= storage.length
         else { return false }
-        storage.replaceCharacters(in: suggestion.range, with: suggestion.insertText)
-        didChangeText()
+        let landed = performUndoable(.completion) {
+            guard shouldChangeText(in: suggestion.range, replacementString: suggestion.insertText)
+            else { return false }
+            storage.replaceCharacters(in: suggestion.range, with: suggestion.insertText)
+            didChangeText()
+            return true
+        }
+        guard landed else { return false }
         let caret = min(max(0, suggestion.caretOffset), storage.length)
         setSelectedRange(NSRange(location: caret, length: 0))
         scrollRangeToVisible(NSRange(location: caret, length: 0))
@@ -632,10 +642,14 @@ final class SQLTextView: NSTextView {
            NSMaxRange(plan.replaceRange) <= storage.length
         else { return false }
         snippetSession = nil
-        guard shouldChangeText(in: plan.replaceRange, replacementString: plan.insertion) else { return false }
         let location = plan.replaceRange.location
-        storage.replaceCharacters(in: plan.replaceRange, with: plan.insertion)
-        didChangeText()
+        let landed = performUndoable(.snippet) {
+            guard shouldChangeText(in: plan.replaceRange, replacementString: plan.insertion) else { return false }
+            storage.replaceCharacters(in: plan.replaceRange, with: plan.insertion)
+            didChangeText()
+            return true
+        }
+        guard landed else { return false }
         let session = SnippetSession.starting(after: plan, at: location)
         if let range = session.activeRange {
             setSelectedRange(range)
@@ -1024,13 +1038,18 @@ final class SQLTextView: NSTextView {
     }
 
     /// 把一批编辑一次性写回去：**一次撤销**、保留输入法上下文。
-    private func applyMultiCursor(_ transform: (String) -> (text: String, cursors: MultiCursor)) {
+    private func applyMultiCursor(_ kind: UndoEditKind,
+                                  _ transform: (String) -> (text: String, cursors: MultiCursor)) {
         let (newText, cursors) = transform(string)
         guard newText != string else { return }
         let full = NSRange(location: 0, length: (string as NSString).length)
-        guard shouldChangeText(in: full, replacementString: newText) else { return }
-        textStorage?.replaceCharacters(in: full, with: newText)
-        didChangeText()
+        let landed = performUndoable(kind) {
+            guard shouldChangeText(in: full, replacementString: newText) else { return false }
+            textStorage?.replaceCharacters(in: full, with: newText)
+            didChangeText()
+            return true
+        }
+        guard landed else { return }
         setRangeValues(cursors.selections)
     }
 
@@ -1045,7 +1064,7 @@ final class SQLTextView: NSTextView {
             return
         }
         let cursor = MultiCursor(selections: rangeValues, textLength: string.utf16.count)
-        applyMultiCursor { cursor.applying(text, to: $0) }
+        applyMultiCursor(.typing) { cursor.applying(text, to: $0) }
     }
 
     /// 回车：多光标时**自己应用**（与打字 / 退格同一套 Core 引擎）。
@@ -1058,14 +1077,14 @@ final class SQLTextView: NSTextView {
             // 自动缩进（`FR-STD-WS-EDIT-021` ① ② ③）：与工作区编辑器**同一份判定**
             // （`Core/AutoIndent`），这里只搬计划；`nil` 就交还系统默认回车。
             if let plan = AutoIndent.newline(in: string, selection: selectedRange()),
-               applyAutoIndentPlan(plan) {
+               applyAutoIndentPlan(plan, kind: .newline) {
                 return
             }
             super.insertNewline(sender)
             return
         }
         let cursor = MultiCursor(selections: rangeValues, textLength: string.utf16.count)
-        applyMultiCursor { cursor.applying("\n", to: $0) }
+        applyMultiCursor(.newline) { cursor.applying("\n", to: $0) }
     }
 
     /// 粘贴：多行文本按上下文重排缩进（`FR-STD-WS-EDIT-021` ④）—— 与工作区编辑器同一份判定。
@@ -1076,19 +1095,23 @@ final class SQLTextView: NSTextView {
         }
         if let clip = NSPasteboard.general.string(forType: .string),
            let plan = AutoIndent.paste(clip, into: string, selection: selectedRange()),
-           applyAutoIndentPlan(plan) {
+           applyAutoIndentPlan(plan, kind: .paste) {
             return
         }
         super.paste(sender)
     }
 
     /// 把 `Core/AutoIndent` 的计划落到 SQL 编辑器上：**一次替换、一步撤销**（与 `applyMultiCursor` 同一条路）。
-    private func applyAutoIndentPlan(_ plan: AutoIndentPlan) -> Bool {
+    private func applyAutoIndentPlan(_ plan: AutoIndentPlan, kind: UndoEditKind) -> Bool {
         guard let storage = textStorage, plan.range.location >= 0,
               plan.range.location + plan.range.length <= storage.length else { return false }
-        guard shouldChangeText(in: plan.range, replacementString: plan.replacement) else { return false }
-        storage.replaceCharacters(in: plan.range, with: plan.replacement)
-        didChangeText()
+        let landed = performUndoable(kind) {
+            guard shouldChangeText(in: plan.range, replacementString: plan.replacement) else { return false }
+            storage.replaceCharacters(in: plan.range, with: plan.replacement)
+            didChangeText()
+            return true
+        }
+        guard landed else { return false }
         let caret = min(max(0, plan.caret), storage.length)
         setSelectedRange(NSRange(location: caret, length: 0))
         scrollRangeToVisible(NSRange(location: caret, length: 0))
@@ -1102,7 +1125,7 @@ final class SQLTextView: NSTextView {
             return
         }
         let cursor = MultiCursor(selections: rangeValues, textLength: string.utf16.count)
-        applyMultiCursor { cursor.deletingBackward(in: $0) }
+        applyMultiCursor(.deleting) { cursor.deletingBackward(in: $0) }
     }
 
     /// ⌥ 拖拽：列选择。
