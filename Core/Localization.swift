@@ -1248,6 +1248,11 @@ public enum LKey: String, CaseIterable, Sendable {
     case workspaceDirtyTag
     case workspaceEditorHint
     case workspacePreviewToggle
+    // 网页预览（`FR-STD-WS-WEB-003`）：与 Markdown 预览同一套交互，另给「在浏览器页签中打开」这条出路。
+    case workspaceHTMLPreviewToggle
+    case workspaceHTMLPreviewRefresh
+    case workspaceHTMLPreviewOpenInBrowser
+    case workspaceOpenAsSource
     case workspacePreviewEmpty
     case workspacePreviewSkippedNotice
     case workspacePreviewSkippedLines
@@ -1982,6 +1987,16 @@ public enum LKey: String, CaseIterable, Sendable {
     case browserCertificateUntrustedAnchor
     case browserCertificatePrompt
     case browserNeedsSystemBrowser
+    // 网页文件在编辑器内的预览（`FR-STD-WS-WEB-003`）：打不开的原因 + 页面里越界请求的原因。
+    // 与上面那族同一口径 —— 语言由调用方给，Core 自己不挑语言。
+    case htmlPreviewNeedsSavedFile
+    case htmlPreviewFileMissing
+    case htmlPreviewPathIsDirectory
+    case htmlPreviewRootDirectoryRefused
+    case htmlPreviewEmptyAddress
+    case htmlPreviewRemoteBlocked
+    case htmlPreviewSchemeBlocked
+    case htmlPreviewResourceOutsideRoot
     case menuEgressLog
     case egressColumnTime
     case egressColumnKind
@@ -4309,6 +4324,10 @@ public enum LocalizedStrings {
         .workspaceDirtyTag: [.simplifiedChinese: "有未保存的改动", .english: "Unsaved changes"],
         .workspaceEditorHint: [.simplifiedChinese: "⌘S 保存 · ⌃Space / F5 触发补全 · 左侧点文件即可打开", .english: "⌘S saves · ⌃Space / F5 for completion · click a file on the left to open it"],
         .workspacePreviewToggle: [.simplifiedChinese: "Markdown 预览", .english: "Markdown preview"],
+        .workspaceHTMLPreviewToggle: [.simplifiedChinese: "网页预览（渲染本文件）", .english: "Web page preview (render this file)"],
+        .workspaceHTMLPreviewRefresh: [.simplifiedChinese: "重新渲染预览", .english: "Re-render the preview"],
+        .workspaceHTMLPreviewOpenInBrowser: [.simplifiedChinese: "在浏览器页签中打开（可输入地址 / 后退 / 访问本地服务）", .english: "Open in a browser tab (address bar, back, local services)"],
+        .workspaceOpenAsSource: [.simplifiedChinese: "以源码打开", .english: "Open as source"],
         .workspacePreviewEmpty: [.simplifiedChinese: "这个文件没有可预览的内容", .english: "Nothing to preview in this file"],
         .workspacePreviewSkippedNotice: [.simplifiedChinese: "部分内容未预览", .english: "Some content was not previewed"],
         .workspacePreviewSkippedLines: [.simplifiedChinese: "跳过", .english: "skipped"],
@@ -5015,6 +5034,14 @@ public enum LocalizedStrings {
         .browserCertificateUntrustedAnchor: [.simplifiedChinese: "证书签发者不受信任", .english: "The certificate issuer is not trusted"],
         .browserCertificatePrompt: [.simplifiedChinese: "%@。继续访问有中间人风险，取消则留在本页。", .english: "%@. Continuing risks a man-in-the-middle; cancel to stay on this page."],
         .browserNeedsSystemBrowser: [.simplifiedChinese: "该站点要求在常规浏览器中打开：%@", .english: "This site requires a regular browser: %@"],
+        .htmlPreviewNeedsSavedFile: [.simplifiedChinese: "这份文件还没落盘：先保存一次再预览", .english: "This file is not on disk yet — save it once before previewing"],
+        .htmlPreviewFileMissing: [.simplifiedChinese: "文件不在原处（可能被移走或删掉）：预览打不开", .english: "The file is no longer where it was (moved or deleted) — the preview cannot open"],
+        .htmlPreviewPathIsDirectory: [.simplifiedChinese: "这是一个目录，不是网页文件", .english: "This is a folder, not a web page"],
+        .htmlPreviewRootDirectoryRefused: [.simplifiedChinese: "这个文件直接在磁盘根目录下：不为页面授予整机读权限（请把它放进一个目录再预览）", .english: "This file sits directly in the disk root — the page is not given read access to the whole machine (move it into a folder and preview again)"],
+        .htmlPreviewEmptyAddress: [.simplifiedChinese: "空地址：不加载", .english: "Empty address — nothing to load"],
+        .htmlPreviewRemoteBlocked: [.simplifiedChinese: "远程地址不在预览里加载：需要它请在浏览器页签中打开（%@）", .english: "Remote addresses are not loaded in the preview — open it in a browser tab instead (%@)"],
+        .htmlPreviewSchemeBlocked: [.simplifiedChinese: "预览不加载 %@ 协议的地址", .english: "The preview does not load %@ addresses"],
+        .htmlPreviewResourceOutsideRoot: [.simplifiedChinese: "这个地址在读权限目录之外，已被拒绝：%@", .english: "That address is outside the directory this preview may read — refused: %@"],
 
         .egressColumnTime: [.simplifiedChinese: "时间", .english: "Time"],
         .egressColumnKind: [.simplifiedChinese: "类别", .english: "Kind"],

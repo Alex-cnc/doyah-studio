@@ -108,12 +108,31 @@ struct WorkspaceAreaView: View {
                     openLink: { target in browser.openInBrowser(target) }
                 )
             }
+        } else if webPageTab(tab) && tabs.previewVisible {
+            // 网页文件（`FR-STD-WS-WEB-003`）：与 Markdown 预览**同一套交互** —— 左边源码、右边渲染，
+            // 中间那条分隔线可拖。渲染由与浏览器页签**同一个引擎**做（策略 / 外发留痕 / 读权限一份口径），
+            // 「要不要地址栏 / 后退 / 本地服务」那条出路交给浏览器页签（同一份文件的另一个页签）。
+            HSplitView {
+                editor
+                HTMLPreviewView(
+                    tabID: tab.id,
+                    path: tab.path,
+                    isDirty: tab.isDirty,
+                    content: tab.content,
+                    onOpenInBrowser: { url in browser.openFileInBrowser(url) }
+                )
+            }
         } else {
             editor
         }
     }
 
-    /// 底部提示条：快捷键提示 + **Markdown 预览开关**（只有 Markdown 文件才给这个开关 ——
+    /// 这个页签是不是「该由网页引擎渲染」的那一类（知识住在语言登记表，问的唯一入口在页签模型里）。
+    private func webPageTab(_ tab: WorkspaceTab) -> Bool {
+        tabs.supportsWebPagePreview(path: tab.path)
+    }
+
+    /// 底部提示条：快捷键提示 + **预览开关**（Markdown 与网页文件共用这一枚 ——
     /// 别的语言上它按下去不会有任何变化，那是"可点却无反应"）。
     private func hintBar(tab: WorkspaceTab) -> some View {
         HStack(spacing: Spacing.s) {
@@ -122,7 +141,7 @@ struct WorkspaceAreaView: View {
                 .foregroundStyle(Theme.text(.tertiary))
                 .lineLimit(1)
             Spacer(minLength: Spacing.s)
-            if tab.language == .markdown {
+            if tab.language == .markdown || webPageTab(tab) {
                 Button {
                     tabs.togglePreview()
                 } label: {
@@ -130,7 +149,7 @@ struct WorkspaceAreaView: View {
                         .font(Theme.font(.caption))
                 }
                 .buttonStyle(.borderless)
-                .help(L(.workspacePreviewToggle))
+                .help(webPageTab(tab) ? L(.workspaceHTMLPreviewToggle) : L(.workspacePreviewToggle))
             }
         }
         .padding(.horizontal, Spacing.s)

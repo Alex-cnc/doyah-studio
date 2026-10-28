@@ -184,6 +184,13 @@ struct WorkspaceExplorerView: View {
             onCancelRename: { cancelRename() },
             onReveal: { workspace.reveal(entry) },
             onOpenInTerminal: { workspace.openInTerminal(entry) },
+            // 「以源码打开」只给网页文件（判据在页签模型里 —— 登记表那一档只有一个消费者）。
+            onOpenAsSource: workspaceTabs.supportsWebPagePreview(path: entry.relativePath)
+                ? {
+                    guard let url = workspace.url(for: entry) else { return }
+                    workspaceTabs.openAsSource(at: url)
+                }
+                : nil,
             // 拖拽落地：判定与落地都在 store 那一侧（`WorkspaceFileMove.placement` 同一份口径）。
             onDropInto: { sourcePath in
                 let outcome = workspace.move(sourcePath, into: entry.relativePath)
@@ -413,6 +420,9 @@ struct WorkspaceTreeRow: View {
     let onCancelRename: () -> Void
     let onReveal: () -> Void
     let onOpenInTerminal: () -> Void
+    /// 网页文件的「以源码打开」（`FR-STD-WS-WEB-003` ①）—— **只有网页文件才给这一枚**：
+    /// 别的文件双击本就开在编辑器里，再给一个「以源码打开」是两枚做同一件事的按钮。
+    let onOpenAsSource: (() -> Void)?
     /// 有东西被拖到这一行上（参数 = 被拖条目的相对路径）。返回是否接下这条拖拽。
     let onDropInto: (String) -> Bool
 
@@ -501,6 +511,9 @@ struct WorkspaceTreeRow: View {
         .contextMenu {
             Button(L(.workspaceReveal)) { onReveal() }
             Button(L(.workspaceOpenInTerminal)) { onOpenInTerminal() }
+            if let onOpenAsSource {
+                Button(L(.workspaceOpenAsSource)) { onOpenAsSource() }
+            }
         }
         // **整行不挂 tip**（2026-10-02 需求提出者原话：「鼠标悬停到目录上的自带文件名 tip 取消，
         // 因为没用，且遮住了增删改工具条按钮」）：行的 tip 会盖住行内三枚图标的 tip ——

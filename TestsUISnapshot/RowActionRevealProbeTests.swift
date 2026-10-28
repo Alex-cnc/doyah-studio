@@ -312,6 +312,7 @@ final class RowActionRevealProbeTests: XCTestCase {
                 onCancelRename: {},
                 onReveal: {},
                 onOpenInTerminal: {},
+                onOpenAsSource: nil,
                 onDropInto: { _ in true }
             )
             .frame(width: width ?? rowWidth)
@@ -401,6 +402,7 @@ final class RowActionRevealProbeTests: XCTestCase {
                 onCancelRename: {},
                 onReveal: {},
                 onOpenInTerminal: {},
+                onOpenAsSource: nil,
                 onDropInto: { _ in true }
             )
             .fixedSize(horizontal: true, vertical: false)

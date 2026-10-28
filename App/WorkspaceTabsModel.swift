@@ -46,6 +46,25 @@ final class WorkspaceTabsModel: ObservableObject {
         previewVisible.toggle()
     }
 
+    /// 这个文件能不能用**编辑器内的网页预览**（`FR-STD-WS-WEB-003`）。
+    ///
+    /// 「该用网页引擎渲染」这一档知识住在语言登记表里（`defaultView`），而**读它的地方
+    /// 只许这一处**（门禁 `check-language-registry.py` E 档双向对账）。所以界面不自己去查登记表、
+    /// 也不按扩展名分支 —— 一律问这里。
+    func supportsWebPagePreview(path: String?) -> Bool {
+        guard let path, !path.isEmpty else { return false }
+        return CodeLanguageRegistry.defaultView(forPath: path) == .browser
+    }
+
+    /// 把网页文件**当源码**开进编辑器（`FR-STD-WS-WEB-003` ①「一键切回源码」）。
+    ///
+    /// 与 `openFile(at:)` 的差别只有一条：**不走浏览器页签那条路由**。双击 `.html` 仍然
+    /// 默认看到渲染后的页面（那条口径没变），想改源码从树上右键走这里 ——
+    /// 到了编辑器里，`previewVisible` 那个开关就能在「源码 / 预览」之间翻。
+    func openAsSource(at url: URL) {
+        openAsText(url)
+    }
+
     private let store: WorkspaceHistoryStore
 
     /// 会话快照的落盘（`FR-EDIT-43`）。与「最近打开」**分开两份文件**：一份是历史，一份是现场。
@@ -175,6 +194,16 @@ final class WorkspaceTabsModel: ObservableObject {
             record(file: path)
             return
         }
+        openAsText(url)
+    }
+
+    /// 当文本打开这一段（路由之外的唯一实现）。
+    ///
+    /// 抽出来是因为还有一条路要走它：网页文件的「以源码打开」（`FR-STD-WS-WEB-003` ①）——
+    /// 那条路**刻意绕开浏览器页签**，但太大 / 二进制 / 编码这些拒绝路径必须与双击完全一致。
+    /// 复制一份的下场是某天只修了其中一份（症状：右键打不开的文件、双击却报得清清楚楚）。
+    private func openAsText(_ url: URL) {
+        let path = url.path
         if let existing = tabs.first(where: { $0.path == path }) {
             selectedID = existing.id
             return

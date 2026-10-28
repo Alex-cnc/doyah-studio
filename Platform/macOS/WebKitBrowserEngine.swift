@@ -54,6 +54,13 @@ public final class WebKitBrowserEngine: NSObject, BrowserEngine {
     /// 那是 `Core/BrowserPage.swift` 每个入口的默认值，不是这里另开的一个口径。
     public var languageProvider: (@MainActor () -> AppLanguage) = { .simplifiedChinese }
 
+    /// 预览页的**读权限根**（`FR-STD-WS-WEB-003` ④）：非 `nil` 时，`file:` 导航必须落在根里。
+    ///
+    /// 为什么由引擎判而不是只靠 `loadFileURL(_:allowingReadAccessTo:)`：那一条管的是**子资源读盘**，
+    /// 页面里点一个指向 `../../` 的链接仍然是一次导航。规则与 Core 共用 `HTMLPreview.decide`
+    /// （一处口径），浏览器页签不设它 ⇒ 行为一字未变。
+    public var localReadRoot: URL?
+
     /// 正在进行的下载：`WKDownload` 的完成 / 失败回调里拿不到文件名与落盘位置，
     /// 得在"选目标"那一步自己记下来（这也是唯一知道目标的时刻）。
     private var downloadTargets: [ObjectIdentifier: (filename: String, url: URL)] = [:]
@@ -106,6 +113,14 @@ public final class WebKitBrowserEngine: NSObject, BrowserEngine {
     public func load(_ url: URL) async {
         // 地址栏导航：用户显式发起，但仍**必须过策略**（策略是唯一出口）。
         await navigate(to: url, isUserInitiated: true)
+    }
+
+    /// 渲染一段**未保存的缓冲**（`FR-STD-WS-WEB-003` ②：编辑器里改了还没存，预览看到的就是改后的那份）。
+    ///
+    /// 与 `load(_:)` 的差别只在「内容从哪来」：这里内容已经在内存里 ⇒ **没有出网**，不写外发日志；
+    /// 读权限仍然只到 `baseDirectory`（同目录的 css / 图片照常能读，别处照旧读不到）。
+    public func loadHTMLString(_ html: String, baseDirectory: URL) {
+        view.loadHTMLString(html, baseURL: baseDirectory)
     }
 
     public func goBack() async {
@@ -260,6 +275,34 @@ extension WebKitBrowserEngine: WKNavigationDelegate {
             tabTitle: tabLabel,
             log: log
         )
+
+        // 预览页的读权限根（`FR-STD-WS-WEB-003` ④）：`file:` 落在根外、或页面想加载远程地址，
+        // 都在这里拦下并说清原因（远程那一档在 Core 里是「交给浏览器页签」—— 原因本身就是出路）。
+        if let root = localReadRoot, let url {
+            let decision = HTMLPreview.decide(
+                resource: url,
+                baseDirectory: root,
+                language: languageProvider()
+            )
+            if let reason = decision.reason {
+                var blocked = transition
+                blocked.page.rejectNavigation(reason: reason)
+                blocked.urlToLoad = nil
+                blocked.egressOutcome = .denied
+                blocked.egressDetail = reason
+                blocked.shouldRecord = true
+                page = blocked.page
+                publish()
+                await BrowserSession.record(
+                    blocked,
+                    origin: origin,
+                    tabID: pageID,
+                    tabTitle: tabLabel,
+                    log: log
+                )
+                return .cancel
+            }
+        }
 
         return transition.urlToLoad == nil ? .cancel : .allow
     }

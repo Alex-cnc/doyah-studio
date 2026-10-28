@@ -1,22 +1,24 @@
 # 检查点
 
-updated: 2026-10-29T02:40
+updated: 2026-10-29T02:56
 
 ## 现状
 
 - 循环卡 = `.agent/loop-card.md`（**2026-10-28 20:08 主人改成接力制**：一轮收尾即 `cronjob_manage action=run job_id=e98fad41f72d` 点火下一轮；定时器 5 分钟一跳只做兜底；不再按剩余条数自调阶梯）。
 - 队列唯一来源 = `Docs/Doyah产品开发计划任务清单-macOS端.md`（`FR-STD-*` 里实现为 `⬜`／`🟡`）；`.agent/plan.yaml` 已停用。
-- 最近读数（2026-10-29 R52）：`verify-core` **4604 项 / 0 failures**（4581 → +23 = `Tests/WorkspaceFileMoveTests` 15 + `Tests/WorkspaceTerminalOpenTests` 5 + `Tests/WorkspaceFileMoveSourceTests` 3）；
+- 最近读数（2026-10-29 R53）：`verify-core` **4619 项 / 0 failures**（4604 → +15 = `Tests/HTMLPreviewTests`）；
+  五门 rc 全 0（另 `check-panel-root-frames` rc=0，扫描面 99 → 104）；包 `dist/DoyahStudio-beta1.0.app` sha256 **`febe616d`**
+  （构建时刻 2026-10-29T02:50:28+0800；同标签 02:48:25 那版 `479310b5` 出在改发布说明之前、回执不含本批 ⇒ 作废）。
+  台账本条迁移：`FR-STD-WS-WEB-003` 实现 ⬜ → **🟡**、判据 ⬜ → **✅**。
+  ⚠️ 口径不一：R52 记的「✅ 127 / 🟡 72 / ⬜ 14」与本轮按全表（403 条）重算的 **✅ 210 / 🟡 96 / ⬜ 97** 不是同一套口径，待下一轮统一后再报总数（本批只报本条迁移，不重报总数）。
+- 上一轮读数（2026-10-29 R52）：`verify-core` **4604 项 / 0 failures**（4581 → +23 = `Tests/WorkspaceFileMoveTests` 15 + `Tests/WorkspaceTerminalOpenTests` 5 + `Tests/WorkspaceFileMoveSourceTests` 3）；
   五门 rc 全 0；包 `dist/DoyahStudio-beta1.0.app` sha256 前缀 **`13a099ae`** · 99,980 KB（构建时刻 2026-10-29T02:27:02+0800；
   同标签 02:26 那版 `b007bf82` 出在改发布说明之前、回执不含本批 ⇒ 作废）；台账逐行实数 **✅ 127 / 🟡 72 / ⬜ 14**。
 - 上一轮读数（R51）：4581 / 0 failures · 包 `f9e3f40b` · ✅ 127 / 🟡 71 / ⬜ 15。
 
 ## 下一项
 
-**1. 台账 `FR-STD-WS-WEB-003`（网页文件可在编辑器内切「预览」渲染）** —— 优先=中，判据可机械跑：
-Core 侧大概是「文件类别 → 可否预览 / 用哪个渲染器」的投影 + 视图侧一个「源码 / 预览」切换入口；
-先 grep `WorkspaceTabsModel` 现有的预览分区（`MarkdownPreviewView` / `previewVisible`）看能不能复用同一套切分，
-别新造第二个预览容器。
+**1. 台账 `FR-STD-WS-EDIT-022`（缩进检测与状态栏切换：打开文件时按内容判定软 / 硬 tab 与宽度，不靠扩展名猜）** —— 优先=低，但判据全是纯逻辑、跑得快。做法提示：判定是纯函数（`Core/IndentDetection`）+ 状态栏一枚切换（写回配置，下次打开同一文件按用户选择而非再猜）；**别按扩展名分支**（那一档知识在语言登记表里，见 `check-language-registry.py`）。
 
 其余按台账取「优先=高 → 中；同档取判据可机械跑的」（2026-10-28 R44 实测：**台账里已无「高」档的 `⬜`**）：
 
