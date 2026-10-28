@@ -92,7 +92,10 @@ struct WorkspaceAreaView: View {
             // 现场读数上报 —— 退出时落快照的输入面（选区变化 / 滚动各报一次）。
             onCursorPosition: { id, caret, scroll in
                 tabs.reportCursor(tabID: id, caretOffset: caret, scrollOffset: scroll)
-            }
+            },
+            // 缩进口径（`FR-STD-WS-EDIT-022`）：状态栏显示的那一格与这里读的是同一个值 ——
+            // 按一次 Tab 插什么、回车继承几级，都跟状态栏上写的一致。
+            indent: tabs.indentProfile(for: tab.id)
         )
         if tab.language == .markdown && tabs.previewVisible {
             HSplitView {
@@ -132,8 +135,8 @@ struct WorkspaceAreaView: View {
         tabs.supportsWebPagePreview(path: tab.path)
     }
 
-    /// 底部提示条：快捷键提示 + **预览开关**（Markdown 与网页文件共用这一枚 ——
-    /// 别的语言上它按下去不会有任何变化，那是"可点却无反应"）。
+    /// 底部提示条：快捷键提示 + **缩进口径**（`FR-STD-WS-EDIT-022`）+ **预览开关**
+    /// （Markdown 与网页文件共用这一枚 —— 别的语言上它按下去不会有任何变化，那是"可点却无反应"）。
     private func hintBar(tab: WorkspaceTab) -> some View {
         HStack(spacing: Spacing.s) {
             Text(L(.workspaceEditorHint))
@@ -141,6 +144,7 @@ struct WorkspaceAreaView: View {
                 .foregroundStyle(Theme.text(.tertiary))
                 .lineLimit(1)
             Spacer(minLength: Spacing.s)
+            indentMenu(tab: tab)
             if tab.language == .markdown || webPageTab(tab) {
                 Button {
                     tabs.togglePreview()
@@ -154,6 +158,84 @@ struct WorkspaceAreaView: View {
         }
         .padding(.horizontal, Spacing.s)
         .padding(.vertical, Spacing.hair)
+    }
+
+    // MARK: 缩进口径那一格（`FR-STD-WS-EDIT-022`）
+    //
+    // **状态栏说、菜单改，两件事读同一格数据**（`WorkspaceTab.indent`）：说的是「按内容判出来的
+    // 是什么」而不是「缺省是什么」—— 判不出证据时如实说「用的是缺省」，不冒充「按内容判定」。
+    // 这些文案与「制表符 / 空格」这一档话全部走语言表（Core 里没有用户可见文案）。
+
+    /// 状态栏上那一格：`空格 · 4` / `制表符 · 4`。
+    private func indentLabel(_ profile: IndentProfile) -> String {
+        // 实参写成 `String(...)` 的形式：门禁按形状认类型（裸标识符会被判成「类型不明」）。
+        profile.style == .tabs
+            ? L(.workspaceIndentTabsLabel, String(profile.width))
+            : L(.workspaceIndentSpacesLabel, String(profile.width))
+    }
+
+    /// 这个口径是怎么来的（菜单第一行那句话）。
+    private func indentOriginText(_ profile: IndentProfile) -> String {
+        switch profile.origin {
+        case .detected: return L(.workspaceIndentOriginDetected)
+        case .chosen: return L(.workspaceIndentOriginChosen)
+        case .fallback: return L(.workspaceIndentOriginFallback)
+        }
+    }
+
+    /// 缩进菜单：软 / 硬两档 + 宽度四档 + 「按内容重新判定」，每项都走页签模型那一个入口。
+    @ViewBuilder
+    private func indentMenu(tab: WorkspaceTab) -> some View {
+        let profile = tabs.indentProfile(for: tab.id)
+        let widths = [2, 3, 4, 8]
+        Menu {
+            Text(indentOriginText(profile))
+            if profile.conflictingLines > 0 {
+                Text(L(.workspaceIndentMixed, String(profile.conflictingLines)))
+            }
+            Divider()
+            Button {
+                tabs.chooseIndent(tabID: tab.id, style: .spaces)
+            } label: {
+                indentMenuItem(L(.workspaceIndentUseSpaces), checked: profile.style == .spaces)
+            }
+            Button {
+                tabs.chooseIndent(tabID: tab.id, style: .tabs)
+            } label: {
+                indentMenuItem(L(.workspaceIndentUseTabs), checked: profile.style == .tabs)
+            }
+            Divider()
+            ForEach(widths, id: \.self) { width in
+                Button {
+                    tabs.chooseIndent(tabID: tab.id, width: width)
+                } label: {
+                    indentMenuItem(L(.workspaceIndentWidth, String(width)), checked: profile.width == width)
+                }
+            }
+            Divider()
+            Button {
+                tabs.redetectIndent(tabID: tab.id)
+            } label: {
+                Text(L(.workspaceIndentRedetect))
+            }
+        } label: {
+            Text(indentLabel(profile))
+                .font(Theme.font(.caption))
+                .foregroundStyle(Theme.text(.secondary))
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
+        .help(L(.workspaceIndentMenuHelp))
+    }
+
+    /// 菜单项：勾选的那一档画一枚对勾，其余留一个等宽的空位（**不缩进错位**）。
+    private func indentMenuItem(_ title: String, checked: Bool) -> some View {
+        HStack(spacing: Spacing.xs) {
+            Image(systemName: "checkmark")
+                .font(Theme.font(.caption))
+                .opacity(checked ? 1 : 0)
+            Text(title)
+        }
     }
 
     /// 底部消息条：错误优先，其次一次性提示。**不静默**——打不开、存不下都要说出来。

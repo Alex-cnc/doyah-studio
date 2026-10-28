@@ -37,6 +37,10 @@ struct CodeEditorView: NSViewRepresentable {
     /// 与 `onCursorLine` 分开两条：预览只要行号，会话快照要**偏移**（行号换算不回偏移）。
     var onCursorPosition: ((UUID, Int, Double) -> Void)?
 
+    /// 这一页的**缩进口径**（`FR-STD-WS-EDIT-022`）：按一次 Tab 插什么、回车继承几级、
+    /// 硬 tab 在屏幕上占几格 —— 三处读同一个值（口径与屏幕上看到的东西必须是同一件事）。
+    var indent: IndentProfile = .fallback
+
     /// 订阅字体偏好：偏好一变，SwiftUI 重跑 `updateNSView` → 编辑器换字体。
     @ObservedObject private var fonts = FontManager.shared
 
@@ -110,6 +114,8 @@ struct CodeEditorView: NSViewRepresentable {
         textView.completionLanguage = language
         // 路径候选的表按工作区取（`ensure` 是幂等的：根没变、表没过期就立刻返回）。
         textView.workspaceRoot = workspaceRoot
+        // 缩进口径（`FR-STD-WS-EDIT-022`）：Tab 插什么、硬 tab 在屏幕上占几格。
+        textView.applyIndent(indent, forceRelayout: true)
         context.coordinator.applyHighlighting()
         // 首次上报光标行：页签刚打开时预览就该对齐到文档开头，而不是等第一次移动光标。
         context.coordinator.reportCursorLine()
@@ -168,6 +174,9 @@ struct CodeEditorView: NSViewRepresentable {
         // 路径候选：换了工作区就地换表；表过期（30 秒）则后台重搭，界面不等它。
         textView.workspaceRoot = workspaceRoot
         WorkspacePathIndex.shared.ensure(root: workspaceRoot)
+        // 缩进口径（`FR-STD-WS-EDIT-022`）：用户在状态栏改了口径 ⇒ 这里跟着换（同一格数据）；
+        // 换了字体也要重算制表位（制表位是按空格在这个字体下的宽度量的）。
+        textView.applyIndent(indent, forceRelayout: fontChanged)
         let textChanged = textView.string != text
         if textChanged {
             context.coordinator.isApplyingExternalText = true
@@ -603,10 +612,58 @@ final class CodeTextView: NSTextView {
 
     // MARK: 行内灰字补全的按键（FR-EDIT-57）
 
-    /// `Tab`：有灰字就**接受**，没有就照常缩进（不吞正常输入）。
+    /// `Tab`：有灰字就**接受**，没有就按这一页的口径缩进（不吞正常输入）。
     override func insertTab(_ sender: Any?) {
         if acceptGhost() { return }
-        super.insertTab(sender)
+        insertIndentUnit()
+    }
+
+    // MARK: 缩进口径（`FR-STD-WS-EDIT-022`）
+
+    /// 插进文本的那一份缩进单位（软 tab = N 个空格、硬 tab = 一个 `\t`）。
+    /// 从 `IndentProfile.unit` 取，**不在这里再拼一次**（口径与状态栏显示必须是同一个值）。
+    var indentUnit: String = IndentProfile.fallback.unit
+
+    /// 硬 tab 在屏幕上占几格（`defaultParagraphStyle` 的制表位按它算）。
+    private(set) var indentWidth: Int = IndentProfile.defaultWidth
+
+    /// 换上这一页的口径：单位 + 显示宽度。宽度没变就不重排（`applyIndent` 每次 `updateNSView` 都会被调）。
+    ///
+    /// 为什么显示宽度要跟着走：口径里说「制表符 · 4」，屏幕上却按系统那一档（8 格）展开，
+    /// 是「说的和看到的不一致」—— 而这类不一致用户只能靠肉眼发现，判据看不见。
+    /// `forceRelayout` 给「换了字体」那条路：制表位是按**空格在这个字体下的宽度**算的，
+    /// 字号一变同一个 `4` 对应的点数就变了，不重算就偏。
+    func applyIndent(_ profile: IndentProfile, forceRelayout: Bool = false) {
+        indentUnit = profile.unit
+        guard indentWidth != profile.width || forceRelayout else { return }
+        indentWidth = profile.width
+        applyIndentTabStops()
+    }
+
+    /// 把制表位设成 `width × 空格宽度`：已有正文里没有自带段落样式的段落，按文本视图的缺省段落样式排。
+    private func applyIndentTabStops() {
+        let font = self.font ?? CodeEditorView.baseFont
+        let spaceWidth = (" " as NSString).size(withAttributes: [.font: font]).width
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.defaultTabInterval = max(1, spaceWidth * CGFloat(indentWidth))
+        paragraph.tabStops = []
+        defaultParagraphStyle = paragraph
+        // 打字属性是分开存的一份：只设 `defaultParagraphStyle` 的话，**新打的字**仍按老制表位排。
+        var attributes = typingAttributes
+        attributes[.paragraphStyle] = paragraph
+        typingAttributes = attributes
+        // 换宽度要重排：不重排的话旧段落还按上一档排，肉眼看起来「改了没变」。
+        if let layoutManager, let textContainer = textContainer {
+            layoutManager.invalidateLayout(forCharacterRange: NSRange(location: 0, length: (string as NSString).length),
+                                           actualCharacterRange: nil)
+            textContainer.containerSize = textContainer.containerSize
+        }
+    }
+
+    /// 按 Tab 落一格（用 `insertText` 走系统那条路 ⇒ 撤销分组、输入法、选区替换都是现成的）。
+    func insertIndentUnit() {
+        guard !indentUnit.isEmpty else { return }
+        insertText(indentUnit, replacementRange: selectedRange())
     }
 
     /// `Esc`：有灰字就忽略它（并记住"这一条我不要"），没有就交还默认实现。
@@ -654,7 +711,7 @@ final class CodeTextView: NSTextView {
         // 自动缩进（`FR-STD-WS-EDIT-021` ① ② ③）：判定全在 `Core/AutoIndent`（纯函数，
         // `Tests/AutoIndentTests.swift`），这里只把计划搬过去。`nil` = 交还系统默认回车
         // （有选区 / 光标后面还有正文 / 顶格且无级可继承）—— **不许吞掉按键什么都不做**。
-        if let plan = AutoIndent.newline(in: string, selection: selectedRange()),
+        if let plan = AutoIndent.newline(in: string, selection: selectedRange(), indentUnit: indentUnit),
            applyEditPlan(range: plan.range, replacement: plan.replacement, caret: plan.caret) {
             return
         }
@@ -667,7 +724,7 @@ final class CodeTextView: NSTextView {
     /// 一律给 `nil`，这里就**原样交还系统粘贴**（别把默认粘贴换成自己那一份，尤其别吞掉富文本与文件粘贴）。
     override func paste(_ sender: Any?) {
         if let clip = NSPasteboard.general.string(forType: .string),
-           let plan = AutoIndent.paste(clip, into: string, selection: selectedRange()),
+           let plan = AutoIndent.paste(clip, into: string, selection: selectedRange(), indentUnit: indentUnit),
            applyEditPlan(range: plan.range, replacement: plan.replacement, caret: plan.caret) {
             return
         }

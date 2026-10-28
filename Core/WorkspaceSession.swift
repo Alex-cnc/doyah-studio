@@ -252,7 +252,10 @@ public struct WorkspaceSessionSnapshot: Codable, Sendable, Equatable {
                     content: content,
                     // 「上次存盘时的内容」= **现在盘上的内容**：于是有未保存内容的那一页回来仍是脏的
                     // （界面上那枚「未保存」标记自己会亮），没有未保存内容的那一页回来是干净的。
-                    savedContent: onDisk ?? ""
+                    savedContent: onDisk ?? "",
+                    // 缩进口径与「刚打开」同源（`FR-STD-WS-EDIT-022`）：恢复出来的页签也按**内容**判，
+                    // 否则重启后状态栏说「缺省」而正文明明两格缩进（口径与屏幕上看到的东西相抵）。
+                    indent: IndentProfile.detect(in: content)
                 )
             )
         }

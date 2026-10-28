@@ -178,6 +178,29 @@ final class WorkspaceTabsModel: ObservableObject {
         tabs[index].content = text
     }
 
+    // MARK: 缩进口径（`FR-STD-WS-EDIT-022`）
+    //
+    // 口径在**打开那一刻**按内容判定（`WorkspaceTab.file` 里那一次），此后只有两条路能改它：
+    // 用户从状态栏改（`chooseIndent`，改过就记 `chosen`、不再被检测冲掉）、或用户点「按内容重新判定」
+    // （`redetectIndent`，尊重 `chosen`）。**打字不改口径** —— 边打边重判会在用户眼前来回跳。
+
+    /// 某一页的口径（页签不在 ⇒ 缺省；状态栏与编辑器都从这里取，不各判一次）。
+    func indentProfile(for tabID: UUID) -> IndentProfile {
+        tabs.first(where: { $0.id == tabID })?.indent ?? .fallback
+    }
+
+    /// 用户在状态栏改口径：改过的记 `chosen`（`IndentProfile.choosing` 一处决定）。
+    func chooseIndent(tabID: UUID, style: IndentProfile.Style? = nil, width: Int? = nil) {
+        guard let index = tabs.firstIndex(where: { $0.id == tabID }) else { return }
+        tabs[index].indent = tabs[index].indent.choosing(style: style, width: width)
+    }
+
+    /// 按当前内容重新判定。**用户选过的不覆盖**（`adopting` 一处决定，不在这里再写一遍判断）。
+    func redetectIndent(tabID: UUID) {
+        guard let index = tabs.firstIndex(where: { $0.id == tabID }) else { return }
+        tabs[index].indent = tabs[index].indent.adopting(IndentProfile.detect(in: tabs[index].content))
+    }
+
     // MARK: 打开 / 保存
 
     /// 打开一个文件：已经开着就切过去（**不重复开**）。

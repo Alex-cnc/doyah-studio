@@ -32,9 +32,13 @@ public struct WorkspaceTab: Identifiable, Sendable, Equatable {
     /// 种类。**由既有字段推出来**：`path == nil` ⇒ Home，否则文件页；
     /// 对话页签是显式传入的第三种（老调用点一个字都不用改）。
     public var kind: Kind
+    /// 这一页的**缩进口径**（`FR-STD-WS-EDIT-022`）：打开时按内容判定，用户可以改（改过的不再被覆盖）。
+    /// 状态栏显示它、编辑器的 Tab 与自动缩进用它 —— 三处读同一格，不各判一次。
+    public var indent: IndentProfile
 
     public init(id: UUID = UUID(), title: String, path: String? = nil, language: TextLanguage,
-                content: String = "", savedContent: String? = nil, kind: Kind? = nil) {
+                content: String = "", savedContent: String? = nil, kind: Kind? = nil,
+                indent: IndentProfile = .fallback) {
         self.id = id
         self.title = title
         self.path = path
@@ -42,6 +46,7 @@ public struct WorkspaceTab: Identifiable, Sendable, Equatable {
         self.content = content
         self.savedContent = savedContent ?? content
         self.kind = kind ?? (path == nil ? .home : .file)
+        self.indent = indent
     }
 
     /// 是不是 Home 欢迎页（**注意：对话页签不是它**）。
@@ -54,12 +59,16 @@ public struct WorkspaceTab: Identifiable, Sendable, Equatable {
     public var isDirty: Bool { content != savedContent }
 
     /// 打开一个文件页签。
+    ///
+    /// **缩进口径在打开这一刻按内容判定**（`FR-STD-WS-EDIT-022`）：`WorkspaceTab.file` 是「打开文件」
+    /// 的唯一入口（双击、右键「以源码打开」、CLI 都走它）⇒ 口径只算一次、也不算第二次。
     public static func file(path: String, content: String) -> WorkspaceTab {
         WorkspaceTab(
             title: WorkspaceTabSet.title(for: path),
             path: path,
             language: TextLanguage.detect(path: path),
-            content: content
+            content: content,
+            indent: IndentProfile.detect(in: content)
         )
     }
 

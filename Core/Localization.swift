@@ -1258,6 +1258,18 @@ public enum LKey: String, CaseIterable, Sendable {
     case workspacePreviewSkippedLines
     case workspacePreviewUnparsedLines
     case workspacePreviewLineUnit
+    // 缩进口径（`FR-STD-WS-EDIT-022`）：状态栏那一格 + 菜单里的四档话。
+    case workspaceIndentSpacesLabel
+    case workspaceIndentTabsLabel
+    case workspaceIndentMenuHelp
+    case workspaceIndentOriginDetected
+    case workspaceIndentOriginChosen
+    case workspaceIndentOriginFallback
+    case workspaceIndentUseSpaces
+    case workspaceIndentUseTabs
+    case workspaceIndentWidth
+    case workspaceIndentRedetect
+    case workspaceIndentMixed
     case workspaceNoWorkspaceHint
     case workspaceLanguageLabel
     case workspaceHistoryLoadFailed
@@ -4333,6 +4345,18 @@ public enum LocalizedStrings {
         .workspacePreviewSkippedLines: [.simplifiedChinese: "跳过", .english: "skipped"],
         .workspacePreviewUnparsedLines: [.simplifiedChinese: "未解析", .english: "unparsed"],
         .workspacePreviewLineUnit: [.simplifiedChinese: "行", .english: "lines"],
+        // 缩进口径（`FR-STD-WS-EDIT-022`）：状态栏显示「按内容判出来的是什么」，菜单里能改。
+        .workspaceIndentSpacesLabel: [.simplifiedChinese: "空格 · %@", .english: "Spaces · %@"],
+        .workspaceIndentTabsLabel: [.simplifiedChinese: "制表符 · %@", .english: "Tabs · %@"],
+        .workspaceIndentMenuHelp: [.simplifiedChinese: "缩进：按内容判定，可手动改", .english: "Indentation: detected from content, can be changed"],
+        .workspaceIndentOriginDetected: [.simplifiedChinese: "按内容判定", .english: "Detected from content"],
+        .workspaceIndentOriginChosen: [.simplifiedChinese: "已手动设置", .english: "Set manually"],
+        .workspaceIndentOriginFallback: [.simplifiedChinese: "内容里没有缩进证据，用的是缺省", .english: "No indentation evidence in this file; using defaults"],
+        .workspaceIndentUseSpaces: [.simplifiedChinese: "空格缩进", .english: "Indent with spaces"],
+        .workspaceIndentUseTabs: [.simplifiedChinese: "制表符缩进", .english: "Indent with tabs"],
+        .workspaceIndentWidth: [.simplifiedChinese: "一级 %@ 格", .english: "%@ columns per level"],
+        .workspaceIndentRedetect: [.simplifiedChinese: "按内容重新判定", .english: "Re-detect from content"],
+        .workspaceIndentMixed: [.simplifiedChinese: "混用：%@ 行与多数派不一致", .english: "Mixed: %@ line(s) disagree with the majority"],
         .workspaceNoWorkspaceHint: [.simplifiedChinese: "还没有选择工作区 —— 在左侧点「选择工作区…」", .english: "No workspace chosen — click “Choose workspace…” on the left"],
         .workspaceLanguageLabel: [.simplifiedChinese: "语言：%@", .english: "Language: %@"],
         .workspaceHistoryLoadFailed: [.simplifiedChinese: "读取「最近打开」记录失败：%@（已按空历史继续）", .english: "Could not read the recent-items file: %@ (continuing with an empty list)"],
