@@ -73,6 +73,25 @@ public enum CodeLexer {
     public static func highlightedTokens(in text: String, language: TextLanguage) -> [CodeToken] {
         tokens(in: text, language: language).filter { $0.kind.isHighlighted }
     }
+
+    /// 字符串与注释占的字符范围（UTF-16 偏移）。
+    ///
+    /// **全工程唯一一份「这段文字是数据、不是代码」的判定**：折叠拿它判「括号在不在字符串里」，
+    /// 片段拿它判「光标是不是落在字符串 / 注释里」。各自写一套引号识别的后果是
+    /// 同一份文件在两处被切成不同的段 —— 而界面上看不出哪一份是对的。
+    public static func protectedSpans(in text: String, language: TextLanguage) -> [Range<Int>] {
+        guard !text.isEmpty else { return [] }
+        let tokens = tokens(in: text, language: language)
+        guard !tokens.isEmpty else { return [] }
+        var spans: [Range<Int>] = []
+        for token in tokens where token.kind == .string || token.kind == .comment {
+            let range = NSRange(token.range, in: text)
+            guard range.length > 0, range.location >= 0 else { continue }
+            spans.append(range.location..<(range.location + range.length))
+        }
+        spans.sort { $0.lowerBound < $1.lowerBound }
+        return spans
+    }
 }
 
 // MARK: - 扫描器

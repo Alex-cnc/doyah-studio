@@ -1,6 +1,6 @@
 # 检查点
 
-updated: 2026-10-29T05:50
+updated: 2026-10-29T06:12
 
 ## 现状
 
@@ -8,6 +8,10 @@ updated: 2026-10-29T05:50
   点火下一轮；定时器 5 分钟一跳只做兜底；不再按剩余条数自调阶梯）。**本会话无 `cronjob_manage` 工具** ⇒ 接力改用 CLI
   `hermes cron run e98fad41f72d`（同一效果：下一跳调度器拉起），详见 loop-card 的「节奏」段。
 - 队列唯一来源 = `Docs/Doyah产品开发计划任务清单-macOS端.md`（`FR-STD-*` 里实现为 `⬜`／`🟡`）；`.agent/plan.yaml` 已停用。
+- 最近读数（2026-10-29 **R61**）：`verify-core` **4804 项 / 0 failures**（4776 → +28 = `Tests/SnippetTemplateTests` 23 例 + `Tests/SnippetTemplateSourceTests` 5 例）；五门 + `check-format-arguments` rc 全 0；包 `dist/DoyahStudio-beta1.0.app` sha256 **`dafed86a`**（构建时刻 2026-10-29T06:04:40+0800；二进制 101,996,672 字节；同标签 05:45:45 那份 `50553049` 出在发布说明含片补本条之前 ⇒ 作废）。
+  台账本条：`FR-STD-WS-NAV-005`（片段模板）实现 ⬜ → **🟡**（**界面已接线**：两个编辑器的 `insertTab` 次序 会话 → 灰字 → 片段 → 缩进；差人工点一次 —— 打 `select` 按 Tab 出骨架且光标在第一个占位符 / 再按 Tab 依次跳、填完回缩进 / 字符串与注释里不展开 / `selects` 不展开）、判据 ⬜ → **✅**（23 + 5 例，反例六段各判红后逐字节还原）；分族读数（逐行实数）⇒ ✅ 127 / 🟡 79 / ⬜ 7 = 213。
+  **下一项**：高档与中档都只剩「人工点验 / 陈旧标记归正」⇒ ① `FR-STD-WS-NAV-004` 走陈旧标记归正（不加用例）；② 或低档三个真 ⬜：`FR-STD-WS-FS-010`（多工作区切换）/ `FR-STD-WS-NAV-006`（悬停 + 跳定义）/ `FR-STD-WS-EDIT-014`（撤销粒度）。
+  ⚠️ 同批改写 `Tests/IndentProfileTests` 的「Tab 三个动作」锚点（现为四分支、次序写死；理由写在该用例注释里）—— 不是放宽。
 - 最近读数（2026-10-29 **R60**）：`verify-core` **4776 项 / 0 failures**（4760 → +16 = `Tests/ObjectTreeRetryTests` 11 例 + `Tests/ObjectTreeRetrySourceTests` 5 例）；五门 + `check-format-arguments` rc 全 0；包 `dist/DoyahStudio-beta1.0.app` sha256 **`50553049`**（构建时刻 2026-10-29T05:45:45+0800；二进制 101,914,144 字节；同标签 05:45:26 那份 `164a7fe0` 出在发布说明含片补本条之前 ⇒ 作废）。
   台账本条：`FR-STD-DB-META-006`（③ 失败在该节点可重试）实现 🟡（**界面已接线**：失败那一行红字旁有「重试」，判定与计划同出 `Core/ObjectTreeRetry`；差人工点一次 —— 连不上的库展开看入口 / 点了旧红字先消失再重取 / 在途时入口消失）、判据 🟡 → **✅**（11 + 5 例，反例六段各判红后逐字节还原）；分族读数不变 ⇒ ✅ 127 / 🟡 78 / ⬜ 8 = 213。
   **下一项**：台账高档里已无「机械可推进」的 ⬜（`META-006` 只剩人工点验、`META-007` 的机器面早已在 `TestsUISnapshot/CrossDatabaseBrowseProbeTests`、`NAV-004` 判据列与备注互证属「陈旧标记归正」）⇒ 下一轮建议：① `FR-STD-WS-NAV-004` 走**陈旧标记归正**（只翻判据列 + 补登记用例数与文件名，不加用例、测试总数不变）；② 或中档找真有机械缺口的：`FR-STD-DB-META-011`（查看对象 DDL）/ `FR-STD-DB-META-015`（全库对象搜索）/ `FR-STD-DB-DATA-002`（一键 count）—— 取之前先 `grep` 源码看机械判据还差哪一半。

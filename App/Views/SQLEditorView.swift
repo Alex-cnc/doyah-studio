@@ -583,10 +583,78 @@ final class SQLTextView: NSTextView {
         return true
     }
 
-    /// `Tab`：有灰字就**接受**，没有就照常缩进（不吞正常输入）。
+    /// `Tab`：有片段会话就跳下一格 → 有灰字就**接受** → 触发词命中就插骨架 → 否则照常缩进（不吞正常输入）。
+    ///
+    /// 次序与工作区编辑器同一套口径（`FR-STD-WS-NAV-005` ②，见 `CodeEditorView.insertTab`）：
+    /// 已经在片段里 ⇒ Tab 是「跳下一格」；否则先让灰字落；再试片段；都不成立才缩进。
     override func insertTab(_ sender: Any?) {
+        if advanceSnippetStop() { return }
         if ghostOverlay.accept() { return }
+        if expandSnippetTrigger() { return }
         super.insertTab(sender)
+    }
+
+    // MARK: 片段模板（FR-STD-WS-NAV-005）
+
+    /// SQL 片段：`select` / `join` / `insert` / `ctable` 的骨架 —— **片段表在语言表里**
+    /// （`CodeLanguageDefinitions.snippets`），这里只说「这门语言是 SQL」。
+    var snippetSession: SnippetSession?
+
+    /// Tab：跳下一格；跳完最后一格 ⇒ 收尾并结束会话（返回 `false` 让调用方继续往下走）。
+    @discardableResult
+    func advanceSnippetStop() -> Bool {
+        guard var session = snippetSession else { return false }
+        if session.isFinished {
+            snippetSession = nil
+            return false
+        }
+        guard let next = session.advance() else {
+            snippetSession = nil
+            return false
+        }
+        snippetSession = session.isFinished ? nil : session
+        setSelectedRange(next)
+        scrollRangeToVisible(NSRange(location: next.location, length: 0))
+        return true
+    }
+
+    /// 光标前那个词命中 SQL 片段触发词 ⇒ 换成骨架、光标落到第一个落点。
+    @discardableResult
+    func expandSnippetTrigger() -> Bool {
+        let templates = SnippetCatalog.templates(for: .sql)
+        guard let plan = SnippetEngine.expansion(
+            in: string,
+            caret: selectedRange().location,
+            templates: templates,
+            language: .sql
+        ), let storage = textStorage,
+           plan.replaceRange.location >= 0,
+           NSMaxRange(plan.replaceRange) <= storage.length
+        else { return false }
+        snippetSession = nil
+        guard shouldChangeText(in: plan.replaceRange, replacementString: plan.insertion) else { return false }
+        let location = plan.replaceRange.location
+        storage.replaceCharacters(in: plan.replaceRange, with: plan.insertion)
+        didChangeText()
+        let session = SnippetSession.starting(after: plan, at: location)
+        if let range = session.activeRange {
+            setSelectedRange(range)
+            scrollRangeToVisible(NSRange(location: range.location, length: 0))
+        }
+        snippetSession = session.isFinished ? nil : session
+        return true
+    }
+
+    /// 每次编辑都让会话跟着平移；落在「两个落点之间」的改动 ⇒ 会话作废（不猜位置）。
+    override func shouldChangeText(in range: NSRange, replacementString: String?) -> Bool {
+        guard super.shouldChangeText(in: range, replacementString: replacementString) else { return false }
+        if snippetSession != nil {
+            let newLength = ((replacementString ?? "") as NSString).length
+            if snippetSession?.noteEdit(range: range, replacementLength: newLength) == false {
+                snippetSession = nil
+            }
+        }
+        return true
     }
 
     /// `Esc`：有灰字就忽略它（并记住"这一条我不要"），没有就交还默认实现。

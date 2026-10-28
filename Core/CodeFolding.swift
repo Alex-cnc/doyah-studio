@@ -266,19 +266,12 @@ public enum CodeFolding {
         return width
     }
 
-    /// 字符串与注释占的字符范围（UTF-16 偏移）—— 由**词法器**给，不另写一套引号识别。
+    /// 字符串与注释占的字符范围（UTF-16 偏移）—— **转发**到 `CodeLexer.protectedSpans`。
+    ///
+    /// 折叠与片段都要这份掩码（「这段文字是数据、不是代码」），所以它只有一份实现；
+    /// 这里保留这个方法名只是为了让人在折叠的代码里读得到它用的什么口径。
     static func maskedSpans(in text: String, language: TextLanguage) -> [Range<Int>] {
-        guard !text.isEmpty else { return [] }
-        let tokens = CodeLexer.tokens(in: text, language: language)
-        guard !tokens.isEmpty else { return [] }
-        var spans: [Range<Int>] = []
-        for token in tokens where token.kind == .string || token.kind == .comment {
-            let range = NSRange(token.range, in: text)
-            guard range.length > 0, range.location >= 0 else { continue }
-            spans.append(range.location..<(range.location + range.length))
-        }
-        spans.sort { $0.lowerBound < $1.lowerBound }
-        return spans
+        CodeLexer.protectedSpans(in: text, language: language)
     }
 }
 

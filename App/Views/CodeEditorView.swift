@@ -757,10 +757,82 @@ final class CodeTextView: NSTextView {
 
     // MARK: 行内灰字补全的按键（FR-EDIT-57）
 
-    /// `Tab`：有灰字就**接受**，没有就按这一页的口径缩进（不吞正常输入）。
+    /// `Tab`：有片段会话就跳下一格 → 有灰字就**接受** → 触发词命中就插入骨架 → 否则按这一页的口径缩进。
+    ///
+    /// **次序就是口径**（`FR-STD-WS-NAV-005` ②）：
+    /// · 会话排第一 —— 已经在片段里，Tab 的语义是「跳下一格」，此时再去接受灰字会把人从骨架里弹出去；
+    /// · 灰字排第二 —— 它是「补全这一整个词」，与片段在同一位置二选一时，先让灰字落（它的判定更窄更具体）；
+    /// · 片段第三；都不成立才缩进（**不吞正常输入**）。
     override func insertTab(_ sender: Any?) {
+        if advanceSnippetStop() { return }
         if acceptGhost() { return }
+        if expandSnippetTrigger() { return }
         insertIndentUnit()
+    }
+
+    // MARK: 片段模板（FR-STD-WS-NAV-005）
+
+    /// 当前这次片段插入的会话（`nil` = 不在片段里）。**状态在编辑器**上：
+    /// 片段是「一段正在填的骨架」，与页签模型无关；换页签再回来本来就该重新开始。
+    var snippetSession: SnippetSession?
+
+    /// Tab：跳下一个落点；跳完最后一格 ⇒ 收尾并结束会话（返回 `false` 让调用方继续往下走）。
+    @discardableResult
+    func advanceSnippetStop() -> Bool {
+        guard var session = snippetSession else { return false }
+        if session.isFinished {
+            snippetSession = nil
+            return false
+        }
+        guard let next = session.advance() else {
+            snippetSession = nil
+            return false
+        }
+        snippetSession = session.isFinished ? nil : session
+        setSelectedRange(next)
+        scrollRangeToVisible(NSRange(location: next.location, length: 0))
+        return true
+    }
+
+    /// 光标前那个词命中片段触发词 ⇒ 换成骨架、光标落到第一个落点。
+    /// 返回 `false` = 这一刻没有可展开的片段 ⇒ 调用方交还默认实现（Tab 仍然缩进）。
+    @discardableResult
+    func expandSnippetTrigger() -> Bool {
+        let templates = SnippetCatalog.templates(for: completionLanguage)
+        guard let plan = SnippetEngine.expansion(
+            in: string,
+            caret: selectedRange().location,
+            templates: templates,
+            language: completionLanguage
+        ) else { return false }
+        // 旧会话作废：这一次是**新插入**，不是在填上一份骨架。
+        snippetSession = nil
+        let location = plan.replaceRange.location
+        guard applyEditPlan(
+            range: plan.replaceRange,
+            replacement: plan.insertion,
+            caret: location + (plan.insertion as NSString).length
+        ) else { return false }
+        let session = SnippetSession.starting(after: plan, at: location)
+        if let range = session.activeRange {
+            setSelectedRange(range)
+            scrollRangeToVisible(NSRange(location: range.location, length: 0))
+        }
+        snippetSession = session.isFinished ? nil : session
+        return true
+    }
+
+    /// 每次编辑都要让会话跟着平移（否则用户在第一格多打两个字，后面所有落点就全错位）。
+    /// 落在「两个落点之间」的改动 ⇒ 会话作废（`noteEdit` 回 `false`）：宁可不跳，也不跳到猜出来的位置。
+    override func shouldChangeText(in range: NSRange, replacementString: String?) -> Bool {
+        guard super.shouldChangeText(in: range, replacementString: replacementString) else { return false }
+        if snippetSession != nil {
+            let newLength = ((replacementString ?? "") as NSString).length
+            if snippetSession?.noteEdit(range: range, replacementLength: newLength) == false {
+                snippetSession = nil
+            }
+        }
+        return true
     }
 
     // MARK: 缩进口径（`FR-STD-WS-EDIT-022`）

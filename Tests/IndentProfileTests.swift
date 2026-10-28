@@ -269,10 +269,21 @@ final class IndentProfileTests: XCTestCase {
         ] {
             XCTAssertTrue(body.contains(anchor), "编辑器缺少缩进口径的接线锚点：\(anchor)")
         }
-        // 按 Tab 必须真的落到口径上：这一段三个动作缺一不可（灰字优先 / 插单位 / 不交还系统）。
+        // 按 Tab 必须真的落到口径上：这一段四个动作缺一不可、且**次序写死**
+        // （片段会话 → 灰字 → 片段触发 → 插单位 → 不交还系统）。
+        //
+        // 2026-10-29 第六十一批（`FR-STD-WS-NAV-005` 片段模板）把片段那两档插了进来，
+        // 于是这条锚点跟着改写 —— **不是放宽**：原来那三分支的次序原样保留在中间，
+        // 多出来的是「已经在片段里 ⇒ Tab 跳下一格」与「触发词命中 ⇒ 插入骨架」两档，
+        // 它们各自有更窄的成立条件（见 `Core/SnippetTemplate.swift`）。
         XCTAssertTrue(
-            body.contains("override func insertTab(_ sender: Any?) {\n        if acceptGhost() { return }\n        insertIndentUnit()\n    }"),
-            "Tab 的三个动作顺序：有灰字先接受，否则按口径插一格"
+            body.contains("override func insertTab(_ sender: Any?) {\n"
+                          + "        if advanceSnippetStop() { return }\n"
+                          + "        if acceptGhost() { return }\n"
+                          + "        if expandSnippetTrigger() { return }\n"
+                          + "        insertIndentUnit()\n"
+                          + "    }"),
+            "Tab 的分支次序：片段会话 → 灰字 → 片段触发 → 按口径插一格"
         )
         // 反向：交还 `super.insertTab` 等于把口径架空（系统那套按制表位走，不看这份文件的写法）。
         XCTAssertFalse(body.contains("super.insertTab(sender)"), "Tab 不许交还系统")

@@ -72,6 +72,10 @@ public struct CodeLanguageDefinition: Sendable {
     /// 与 `format` 一样是**单列的表**（`folds`）合成进来的数据 —— 加一个语言的可折性
     /// 只动那张表一行，不动上面每一条登记项。
     public let fold: FoldRule
+    /// 这个语言的片段模板（`FR-STD-WS-NAV-005`；见 `SnippetTemplate` / `SnippetEngine`）。
+    /// 与 `fold` 同一条做法：**单列的表**（`snippets`）合成进来 —— 加一条片段只动那张表一处，
+    /// 引擎与界面一行都不用改。
+    public let snippets: [SnippetTemplate]
 
     public init(
         _ language: TextLanguage,
@@ -84,7 +88,8 @@ public struct CodeLanguageDefinition: Sendable {
         isFallback: Bool = false,
         format: CodeFormatCapability = .none,
         defaultView: CodeDefaultView = .editor,
-        fold: FoldRule = .none
+        fold: FoldRule = .none,
+        snippets: [SnippetTemplate] = []
     ) {
         self.language = language
         self.displayName = displayName
@@ -97,6 +102,7 @@ public struct CodeLanguageDefinition: Sendable {
         self.format = format
         self.defaultView = defaultView
         self.fold = fold
+        self.snippets = snippets
     }
 
     /// 复制一份、换掉折叠规则（与 `withFormat` 同一条理由：单列的表在取定义时合成一次）。
@@ -112,7 +118,26 @@ public struct CodeLanguageDefinition: Sendable {
             isFallback: isFallback,
             format: format,
             defaultView: defaultView,
-            fold: rule
+            fold: rule,
+            snippets: snippets
+        )
+    }
+
+    /// 复制一份、换掉片段表（`FR-STD-WS-NAV-005`；与上面两个同一条理由）。
+    func withSnippets(_ templates: [SnippetTemplate]) -> CodeLanguageDefinition {
+        CodeLanguageDefinition(
+            language,
+            displayName: displayName,
+            fileExtensions: fileExtensions,
+            fileNames: fileNames,
+            isCode: isCode,
+            syntax: syntax,
+            traits: traits,
+            isFallback: isFallback,
+            format: format,
+            defaultView: defaultView,
+            fold: fold,
+            snippets: templates
         )
     }
 
@@ -133,7 +158,8 @@ public struct CodeLanguageDefinition: Sendable {
             isFallback: isFallback,
             format: capability,
             defaultView: defaultView,
-            fold: fold
+            fold: fold,
+            snippets: snippets
         )
     }
 }
@@ -158,6 +184,7 @@ public enum CodeLanguageRegistry {
         definitions.map {
             $0.withFormat(formats[$0.language.rawValue] ?? .none)
                 .withFold(folds[$0.language.rawValue] ?? .none)
+                .withSnippets(snippets[$0.language.rawValue] ?? [])
         }
     }
 
@@ -906,6 +933,83 @@ public enum CodeLanguageRegistry {
         "python": .indentation,
         "yaml": .indentation,
         "shell": .indentation
+    ]
+
+    // MARK: 片段模板（FR-STD-WS-NAV-005）
+
+    /// 各语言的片段（`FR-STD-WS-NAV-005`）—— 与 `formats` / `folds` 同一条做法：**单列一张表**，
+    /// 加一条片段只加一行数据，`SnippetEngine` / 编辑器 / 菜单一行都不用改。
+    ///
+    /// 登记口径（三条）：
+    /// 1. **触发词小写**（匹配时不区分大小写：写 SQL 的人习惯把关键字打大写，表里只该有一行）；
+    /// 2. 骨架里用占位符标出要填的地方（`$1` / `${1:默认}` / `$0`），Tab 依次跳过去；
+    /// 3. **只登记「骨架能自洽」的那几种** —— 半截语法（比如 `SELECT` 后面没有 `FROM`）不如不给：
+    ///    用户按一次 Tab 得到一段还得自己补全半句的文本，比他自己打更慢。
+    ///
+    /// 为什么不登记 `SELECT *` 这种一行完事的：一句话就能打完的东西做成片段只是噪声。
+    private static let snippets: [String: [SnippetTemplate]] = [
+        "sql": [
+            SnippetTemplate(
+                trigger: "select",
+                body: "SELECT ${1:*}\nFROM ${2:table}\nWHERE ${3:condition};"
+            ),
+            SnippetTemplate(
+                trigger: "join",
+                body: "SELECT ${1:*}\nFROM ${2:left_table} AS a\nJOIN ${3:right_table} AS b ON ${4:a.id = b.left_id}\nWHERE ${5:condition};"
+            ),
+            SnippetTemplate(
+                trigger: "insert",
+                body: "INSERT INTO ${1:table} (${2:columns})\nVALUES (${3:values});"
+            ),
+            SnippetTemplate(
+                trigger: "ctable",
+                body: "CREATE TABLE ${1:table} (\n    ${2:id} ${3:bigint} PRIMARY KEY,\n    ${4:name} ${5:text} NOT NULL\n);"
+            )
+        ],
+        "markdown": [
+            SnippetTemplate(
+                trigger: "table",
+                body: "| ${1:列一} | ${2:列二} |\n| --- | --- |\n| ${3:值} | ${4:值} |"
+            ),
+            SnippetTemplate(
+                trigger: "task",
+                body: "- [ ] ${1:待办}"
+            )
+        ],
+        "python": [
+            SnippetTemplate(
+                trigger: "def",
+                body: "def ${1:name}(${2}):\n    ${3:pass}"
+            ),
+            SnippetTemplate(
+                trigger: "forin",
+                body: "for ${1:item} in ${2:items}:\n    ${3:pass}"
+            )
+        ],
+        "swift": [
+            SnippetTemplate(
+                trigger: "func",
+                body: "func ${1:name}(${2}) -> ${3:Void} {\n    ${4}\n}"
+            )
+        ],
+        "javascript": [
+            SnippetTemplate(
+                trigger: "func",
+                body: "function ${1:name}(${2}) {\n    ${3}\n}"
+            )
+        ],
+        "typescript": [
+            SnippetTemplate(
+                trigger: "func",
+                body: "function ${1:name}(${2}): ${3:void} {\n    ${4}\n}"
+            )
+        ],
+        "shell": [
+            SnippetTemplate(
+                trigger: "forin",
+                body: "for ${1:item} in ${2:items}; do\n    ${3:echo \"$item\"}\ndone"
+            )
+        ]
     ]
 
     /// Prettier 靠**文件名**判 parser，所以实参里带上文件路径（`%FILE%` 由 Core 填）。
