@@ -86,7 +86,11 @@ final class LocalizationTests: XCTestCase {
         .agentProviderGemini,
         // 队列 `L-100` 落法 ④（提醒）：星期名之间的**分隔符**是一枚标点，中英各一个标点
         // （顿号 / 逗号加空格），两种语言里都没有「词」可译 —— 它不是「忘了翻」，是**没有可翻的东西**。
-        .reminderListSeparator
+        .reminderListSeparator,
+        // `FR-AGT-LINK-CHAN-003` 配置面：状态行里点名的两个**字段名**是产品/协议术语，
+        // 中文界面也该写 AppID / App Secret（写「应用编号」会与网关文档对不上，用户反而找不到那一格）。
+        .agentIMFieldAppID,
+        .agentIMFieldSecret
     ]
 
     /// 英文文案里不得残留汉字。

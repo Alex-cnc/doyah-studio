@@ -1777,7 +1777,6 @@ public enum LKey: String, CaseIterable, Sendable {
     case agentIMSecretKeepHint
     case agentIMClear
     case agentIMSave
-    case agentIMTransportPending
     case agentIMAppIDEmpty
     case agentIMAppIDNotNumeric
     case agentIMAppIDTooLong
@@ -1785,6 +1784,44 @@ public enum LKey: String, CaseIterable, Sendable {
     case agentIMSecretHasWhitespace
     case agentIMSaved
     case agentIMCleared
+    // IM 通道的**配置面**（`FR-AGT-LINK-CHAN-003` 的「能配 / 能看状态 / 能测」那一节）：
+    // 地址与标识的校验、状态行四档、测试连接四档、接收任务开关。
+    case agentIMGatewayURLMissing
+    case agentIMGatewayURLMalformed
+    case agentIMGatewayURLNotWebSocket
+    case agentIMGatewayURLMissingHost
+    case agentIMGatewayURLHasWhitespace
+    case agentIMBotIdentifierEmpty
+    case agentIMBotIdentifierHasWhitespace
+    case agentIMBotIdentifierTooLong
+    case agentIMFieldGatewayURL
+    case agentIMFieldBotIdentifier
+    case agentIMFieldAppID
+    case agentIMFieldSecret
+    case agentIMStatusUnconfigured
+    case agentIMStatusReady
+    case agentIMStatusConnecting
+    case agentIMStatusOnline
+    case agentIMStatusWaiting
+    case agentIMStatusStopped
+    case agentIMReasonConnectFailed
+    case agentIMReasonReceiveFailed
+    case agentIMReasonHeartbeatLost
+    case agentIMReasonSendFailed
+    case agentIMReasonStopped
+    case agentIMReasonReceiveDisabled
+    case agentIMReasonUnknown
+    case agentIMTestReachable
+    case agentIMTestOpenFailed
+    case agentIMTestSendFailed
+    case agentIMTestNoResponse
+    case agentIMTestNotReady
+    case agentIMConnect
+    case agentIMDisconnect
+    case agentIMTest
+    case agentIMReceiveTasks
+    case agentIMReceiveTasksHint
+    case agentIMInboundReceived
     case agentLocalEndpointHint
     case agentStatusSection
     case agentSave
@@ -4658,7 +4695,6 @@ public enum LocalizedStrings {
         .agentIMSecretKeepHint: [.simplifiedChinese: "留空 = 不改动已存的 Secret", .english: "Leave blank to keep the stored secret"],
         .agentIMClear: [.simplifiedChinese: "清除通道凭据", .english: "Clear channel credentials"],
         .agentIMSave: [.simplifiedChinese: "保存凭据", .english: "Save credentials"],
-        .agentIMTransportPending: [.simplifiedChinese: "传输层（WebSocket / 心跳 / 重连）尚未实现：这一格只存凭据，不联网，也不假装连过。", .english: "Transport (WebSocket / heartbeat / reconnect) is not implemented yet: this only stores credentials — no network, no pretending it connected."],
         .agentIMAppIDEmpty: [.simplifiedChinese: "AppID 不能为空", .english: "AppID cannot be empty"],
         .agentIMAppIDNotNumeric: [.simplifiedChinese: "AppID 必须是纯数字（是不是把 Secret 粘进来了？）", .english: "AppID must be all digits (did the secret get pasted here?)"],
         .agentIMAppIDTooLong: [.simplifiedChinese: "AppID 过长（上限 64 位）", .english: "AppID is too long (64 characters max)"],
@@ -4666,6 +4702,42 @@ public enum LocalizedStrings {
         .agentIMSecretHasWhitespace: [.simplifiedChinese: "App Secret 里不能有空格或换行（粘贴时带进来的？）", .english: "App Secret cannot contain spaces or line breaks (pasted by accident?)"],
         .agentIMSaved: [.simplifiedChinese: "通道凭据已写入系统钥匙串", .english: "Channel credentials saved to Keychain"],
         .agentIMCleared: [.simplifiedChinese: "通道凭据已清除", .english: "Channel credentials cleared"],
+        .agentIMGatewayURLMissing: [.simplifiedChinese: "网关端点不能为空", .english: "Gateway endpoint cannot be empty"],
+        .agentIMGatewayURLMalformed: [.simplifiedChinese: "网关端点写法认不出（示例：wss://host/path）", .english: "Gateway endpoint is not a valid URL (e.g. wss://host/path)"],
+        .agentIMGatewayURLNotWebSocket: [.simplifiedChinese: "网关端点要用 ws:// 或 wss://（写 http(s) 连的是另一条会话）", .english: "The gateway must use ws:// or wss:// (http(s) opens a different kind of session)"],
+        .agentIMGatewayURLMissingHost: [.simplifiedChinese: "网关端点缺主机名", .english: "Gateway endpoint has no host"],
+        .agentIMGatewayURLHasWhitespace: [.simplifiedChinese: "网关端点里不能有空格或换行（粘贴时带进来的？）", .english: "Gateway endpoint cannot contain spaces or line breaks (pasted by accident?)"],
+        .agentIMBotIdentifierEmpty: [.simplifiedChinese: "机器人标识不能为空", .english: "Bot identifier cannot be empty"],
+        .agentIMBotIdentifierHasWhitespace: [.simplifiedChinese: "机器人标识里不能有空格或换行", .english: "Bot identifier cannot contain spaces or line breaks"],
+        .agentIMBotIdentifierTooLong: [.simplifiedChinese: "机器人标识过长（上限 64 字符）", .english: "Bot identifier is too long (64 characters max)"],
+        .agentIMFieldGatewayURL: [.simplifiedChinese: "网关端点", .english: "Gateway endpoint"],
+        .agentIMFieldBotIdentifier: [.simplifiedChinese: "机器人标识", .english: "Bot identifier"],
+        .agentIMFieldAppID: [.simplifiedChinese: "AppID", .english: "AppID"],
+        .agentIMFieldSecret: [.simplifiedChinese: "App Secret", .english: "App Secret"],
+        .agentIMStatusUnconfigured: [.simplifiedChinese: "未配置：还缺 %@", .english: "Not configured; still missing: %@"],
+        .agentIMStatusReady: [.simplifiedChinese: "未连接（配置已齐，先点「测试连接」确认网关可达）", .english: "Not connected (configuration is complete; run Test connection first)"],
+        .agentIMStatusConnecting: [.simplifiedChinese: "正在连接（第 %d 次尝试）", .english: "Connecting (attempt %d)"],
+        .agentIMStatusOnline: [.simplifiedChinese: "已连接（第 %d 次尝试就成）", .english: "Connected (succeeded on attempt %d)"],
+        .agentIMStatusWaiting: [.simplifiedChinese: "未连通：%@；%d 秒后重试", .english: "Not connected: %@; retrying in %d s"],
+        .agentIMStatusStopped: [.simplifiedChinese: "已断开：%@", .english: "Disconnected: %@"],
+        .agentIMReasonConnectFailed: [.simplifiedChinese: "网关连不上（地址 / 端口 / 网络 / 代理）", .english: "Cannot reach the gateway (address, port, network or proxy)"],
+        .agentIMReasonReceiveFailed: [.simplifiedChinese: "连接被对端断开", .english: "The peer closed the connection"],
+        .agentIMReasonHeartbeatLost: [.simplifiedChinese: "心跳超时（对端不应答 ping）", .english: "Heartbeat timed out (the peer stopped answering pings)"],
+        .agentIMReasonSendFailed: [.simplifiedChinese: "发送失败", .english: "Sending failed"],
+        .agentIMReasonStopped: [.simplifiedChinese: "已停止", .english: "Stopped"],
+        .agentIMReasonReceiveDisabled: [.simplifiedChinese: "已关闭「接收任务」", .english: "Receive tasks is off"],
+        .agentIMReasonUnknown: [.simplifiedChinese: "原因码 %@", .english: "Reason code %@"],
+        .agentIMTestReachable: [.simplifiedChinese: "网关已应答（收到一帧）：地址与凭据这一层是通的", .english: "The gateway answered (one frame received): the address and credentials work at this layer"],
+        .agentIMTestOpenFailed: [.simplifiedChinese: "连不上网关：检查地址 / 端口 / 代理，以及网关是否要求先握手", .english: "Cannot reach the gateway: check address, port, proxy, and whether it needs a handshake first"],
+        .agentIMTestSendFailed: [.simplifiedChinese: "连上了但发不出帧：对端可能在握手阶段就拒了", .english: "Connected but could not send: the peer may reject during the handshake"],
+        .agentIMTestNoResponse: [.simplifiedChinese: "连上了但 %d 秒内没有应答：可能是握手 / op 码口径不对，或 AppID 不被接受", .english: "Connected but no answer within %d s: the handshake or op codes may be wrong, or the AppID is not accepted"],
+        .agentIMTestNotReady: [.simplifiedChinese: "还不能测：先补齐 %@", .english: "Not testable yet; fill in: %@"],
+        .agentIMConnect: [.simplifiedChinese: "连接", .english: "Connect"],
+        .agentIMDisconnect: [.simplifiedChinese: "断开", .english: "Disconnect"],
+        .agentIMTest: [.simplifiedChinese: "测试连接", .english: "Test connection"],
+        .agentIMReceiveTasks: [.simplifiedChinese: "接收任务（在聊天里发一句话派活）", .english: "Receive tasks (send a message in chat to assign work)"],
+        .agentIMReceiveTasksHint: [.simplifiedChinese: "关掉即断开：聊天里的任务不再进来，已排队的结果留在队列里，重开再补发。", .english: "Turning this off disconnects: chat tasks stop arriving. Queued results stay queued and are resent when you turn it back on."],
+        .agentIMInboundReceived: [.simplifiedChinese: "已收到 %d 条任务（本版只登记，还未接进对话）", .english: "%d task(s) received (registered only in this version; not wired into the conversation yet)"],
         .agentLocalEndpointHint: [.simplifiedChinese: "本地 / 局域网端点无需 API Key（本地模型优先）。", .english: "Local or LAN endpoints need no API key."],
         .agentStatusSection: [.simplifiedChinese: "当前状态", .english: "Status"],
         .agentSave: [.simplifiedChinese: "保存", .english: "Save"],

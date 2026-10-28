@@ -1,16 +1,16 @@
 # 检查点
 
-updated: 2026-10-28T21:58
+updated: 2026-10-28T22:20
 
 ## 现状
 
 - 循环卡 = `.agent/loop-card.md`（**2026-10-28 20:08 主人改成接力制**：一轮收尾即 `cronjob_manage action=run job_id=e98fad41f72d` 点火下一轮；定时器 5 分钟一跳只做兜底；不再按剩余条数自调阶梯）。
 - 队列唯一来源 = `Docs/Doyah产品开发计划任务清单-macOS端.md`（`FR-STD-*` 里实现为 `⬜`／`🟡`）；`.agent/plan.yaml` 已停用。
-- 最近读数（2026-10-28 R39）：`verify-core` **4400 例 / 0 failures**（`--filter` 只作过滤读数）；五门 rc 全 0；包 `dist/DoyahStudio-beta1.0.app` sha256 前缀 `38ce7061` · 97,584 KB（2026-10-28 21:54 出）。
+- 最近读数（2026-10-28 R40）：`verify-core` **4426 例 / 0 failures**（`--filter` 只作过滤读数）；五门 rc 全 0；包 `dist/DoyahStudio-beta1.0.app` 身份见台账「现行包」行（R40 重出）。
 
 ## 下一项
 
-**0. `.agent/loop-card.md` 顶部的 `★1 · IM 通道的真配置界面 + 判据收口（FR-AGT-LINK-CHAN-003）`** —— 主人 2026-10-28 当面点出、写进卡里的 ★ 条目，**优先于下面所有常规取活**（不得顺延、不得再问）。真跑通 QQ 网关需主人给 URL / AppID / Secret，那半如实记 blocked。
+**0. `.agent/loop-card.md` 顶部的 `★2 · IM 通道「入站任务真跑 + 结果推回」`** —— ★1（配置面 / 状态行 / 测试连接 / 真通路接线）已在 R40 落地并关闭；★2 是同一号的后半，**优先于下面所有常规取活**。真连 QQ 需主人给网关 URL / AppID / Secret，那半如实记 blocked。
 
 其余按台账取「优先=高 → 中；同档取判据可机械跑的」：
 
@@ -24,6 +24,14 @@ updated: 2026-10-28T21:58
 
 ## 已完成的片
 
+- **R40（2026-10-28 22:20）· `FR-AGT-LINK-CHAN-003` IM 通道配置面** —— 新 `Core/AgentIMSettings.swift`
+  （地址只认 `ws://` / `wss://`；标识规则与 64 上限；问题一次列全；`AgentIMReadiness` 四样一处 ——
+  地址非空但认不出也算缺；`AgentIMStatusKind` 状态行四档**以配置为先**（传输层说在线也不许画绿）；
+  `AgentIMInboundPolicy` 三档；`AgentIMConnectivityProbe` 四档，**只有收到一帧才算通**）+ 配置文件扩为
+  「AppID + 网关端点 + 机器人标识 + 接收任务」（字段全可选 ⇒ 老文件仍能读；只改 AppID 不冲掉配置面）+
+  面板那一节补全并接真 WebSocket 通路（`AppState` 持传输层，面板关掉不掉线）+ 判据 `Tests/AgentIMSettingsTests`
+  **26 例**（反例五段：配齐判定不看 Secret / 状态行不先看配置 / 入站不看开关 / 探针把 open 当通 / 只改 AppID 冲掉配置面）。
+  **未验证**：真网关 URL 与 AppID/Secret（缺）、面板三枚按钮的人工点验、入站任务真跑（★2）。
 - **R39（2026-10-28 21:58）· `FR-STD-WS-EDIT-021` 自动缩进与智能粘贴** —— 新 `Core/AutoIndent.swift`
   （① 回车继承当前行**实际**缩进（`\t` / 不规则缩进原样带走）② `{` `(` `[` 之后 +一级 ③ `} ) ]` 打头的行 −一级
   （减到 0 为止；`} else {` 先退再进回到本行那一级）④ 行终止符跟当前行（`\r\n` 文档不插裸 `\n`）

@@ -350,6 +350,18 @@ final class AppState: ObservableObject {
     /// 面板只显示「长度 + 尾 4」，不回显本体。
     @Published var agentIMSecretLength: Int?
     @Published var agentIMSecretTail: String?
+    /// 通道的非敏感配置面（网关端点 / 机器人标识 / 接收任务开关）—— 与凭据同一份文件。
+    @Published var agentIMSettings: AgentIMChannelSettings = .empty
+    /// 传输层状态：**只有传输层自己发出来的那一档**（界面不许自己猜「大概连上了」）。
+    @Published var agentIMConnectionState: AgentIMConnectionState = .idle
+    /// 最近一次「测试连接 / 连接」的结论行（面板那一行；`nil` = 还没测过）。
+    @Published var agentIMProbeLine: String?
+    /// 入站任务的登记（本版只登记、不进对话 —— 面板如实写「已收到 N 条」）。
+    @Published var agentIMInboundTexts: [String] = []
+    /// 最近一条被策略挡下的原因（`nil` = 没挡过）。
+    @Published var agentIMLastInboundDrop: AgentIMInboundDropReason?
+    /// 传输层本体：连上后由 AppState 持有（面板关掉不掉线）。
+    private var agentIMTransport: AgentIMTransport?
     /// 「智能体设置…」面板的呈现开关（菜单命令驱动）。
     @Published var isAgentSettingsPresented = false
 
@@ -2897,6 +2909,8 @@ final class AppState: ObservableObject {
         hasAgentIMSecret = status.secretConfigured
         agentIMSecretLength = status.secretLength
         agentIMSecretTail = status.secretTail
+        // 配置面与凭据同一份文件：刷新凭据时一起读，避免「凭据换了、地址还是上一次的」。
+        agentIMSettings = agentIMCredentialStore.settings(for: .qq)
     }
 
     /// 存通道凭据。`secret` 传 nil（面板留空）⇒ 只改 AppID，不动已存的 Secret。
@@ -2924,6 +2938,132 @@ final class AppState: ObservableObject {
         }
     }
 
+
+    // MARK: - IM 通道：配置面 / 连接 / 测试（`FR-AGT-LINK-CHAN-003`）
+
+    /// 通道要连起来还缺什么（面板、连接按钮、测试按钮读**同一份**答复）。
+    var agentIMReadiness: AgentIMReadiness {
+        AgentIMReadiness.evaluate(settings: agentIMSettings,
+                                  appID: agentIMAppID,
+                                  secretConfigured: hasAgentIMSecret)
+    }
+
+    /// 面板那一行状态：配置齐不齐 + 传输层状态合成**一档**（不许出现「未配置」与「已连接」并存）。
+    var agentIMStatusKind: AgentIMStatusKind {
+        AgentIMStatusKind.of(readiness: agentIMReadiness, connection: agentIMConnectionState)
+    }
+
+    private var agentIMLanguage: AppLanguage { LocalizationManager.shared.effectiveLanguage }
+
+    /// 存配置面（地址 / 标识 / 开关）。校验失败时**什么都不落盘**，原因写进 `errorMessage`。
+    @discardableResult
+    func saveAgentIMSettings(gatewayURL: String, botIdentifier: String, receiveTasks: Bool) -> Bool {
+        let draft = AgentIMChannelSettings(gatewayURL: gatewayURL,
+                                           botIdentifier: botIdentifier,
+                                           receiveTasks: receiveTasks)
+        do {
+            let clean = try agentIMCredentialStore.save(settings: draft, for: .qq)
+            agentIMSettings = clean
+            statusMessage = L(.agentIMSaved)
+            // 关掉「接收任务」= 真断开：留着连接却一条都不投递，面板上那句「已连接」就是假话。
+            if !clean.receiveTasks, agentIMTransport != nil {
+                disconnectAgentIM(reason: "receiveDisabled")
+            }
+            return true
+        } catch let problem as AgentIMSettingsProblem {
+            errorMessage = AgentIMSettingsProblemText.line(for: problem, language: agentIMLanguage)
+            return false
+        } catch {
+            errorMessage = L(.agentSaveFailed, ErrorPresenter.message(for: error))
+            return false
+        }
+    }
+
+    /// 建连：配置齐才动手；缺什么**当场说出来**，不静默失败。
+    func connectAgentIM() {
+        let readiness = agentIMReadiness
+        guard readiness.isReady else {
+            agentIMProbeLine = L(.agentIMTestNotReady,
+                                 AgentIMStatusText.fieldList(readiness.missing, language: agentIMLanguage))
+            return
+        }
+        guard agentIMTransport == nil else { return }
+        let secret = (try? agentIMCredentialStore.secret(for: .qq)) ?? nil
+        guard let url = try? AgentIMSettingsValidator.normalizedGatewayURL(agentIMSettings.gatewayURL),
+              let secret else {
+            agentIMProbeLine = L(.agentIMTestNotReady,
+                                 AgentIMStatusText.fieldList([.gatewayURL, .secret], language: agentIMLanguage))
+            return
+        }
+        let transport = AgentIMTransport(
+            config: AgentIMTransportConfig(gatewayURL: url),
+            signer: AgentIMGatewaySigner(appID: agentIMAppID, secret: secret),
+            makeSocket: AgentIMSocketFactories.webSocket())
+        agentIMTransport = transport
+        agentIMConnectionState = .connecting(attempt: 1)
+        Task { [weak self] in
+            await transport.onStateChange { [weak self] state in
+                Task { @MainActor in self?.agentIMConnectionState = state }
+            }
+            await transport.onInbound { [weak self] frame in
+                await MainActor.run { self?.acceptAgentIMInbound(frame) }
+            }
+            await transport.start()
+        }
+    }
+
+    /// 断开（`reason` 是机器码：面板会翻成人话，`receiveDisabled` = 用户关掉了接收开关）。
+    func disconnectAgentIM(reason: String = "stopped") {
+        guard let transport = agentIMTransport else { return }
+        agentIMTransport = nil
+        Task { await transport.stop(reason: reason) }
+    }
+
+    /// 测试连接：**真发一帧**看网关答不答（只看 `open` 成功就报绿 = 把「握手口径错」画成通）。
+    func testAgentIMConnection() async -> String {
+        let readiness = agentIMReadiness
+        guard readiness.isReady else {
+            let line = L(.agentIMTestNotReady,
+                         AgentIMStatusText.fieldList(readiness.missing, language: agentIMLanguage))
+            agentIMProbeLine = line
+            return line
+        }
+        let secret = (try? agentIMCredentialStore.secret(for: .qq)) ?? nil
+        guard let url = try? AgentIMSettingsValidator.normalizedGatewayURL(agentIMSettings.gatewayURL),
+              let secret else {
+            let line = L(.agentIMTestNotReady,
+                         AgentIMStatusText.fieldList([.gatewayURL, .secret], language: agentIMLanguage))
+            agentIMProbeLine = line
+            return line
+        }
+        let headers = AgentIMGatewaySigner(appID: agentIMAppID, secret: secret)
+            .headers(timestamp: Int(Date().timeIntervalSince1970),
+                     nonce: UUID().uuidString,
+                     body: "")
+        let outcome = await AgentIMConnectivityProbe.run(
+            makeSocket: AgentIMSocketFactories.webSocket(),
+            url: url,
+            headers: headers)
+        let line = AgentIMConnectivityProbe.line(for: outcome,
+                                                 receiveTimeout: AgentIMConnectivityProbe.defaultReceiveTimeout,
+                                                 language: agentIMLanguage)
+        agentIMProbeLine = line
+        return line
+    }
+
+    /// 入站一帧：**先过策略**（开关关掉 / 离线 / 没配齐 一条都不收），再登记。
+    /// 本版只登记、不进对话（下一片接对话与结果推回）；面板如实写「已收到 N 条」，不假装能干活。
+    private func acceptAgentIMInbound(_ frame: AgentIMInboundFrame) {
+        guard case .message(let message) = frame else { return }
+        if let drop = AgentIMInboundPolicy.decide(receiveTasks: agentIMSettings.receiveTasks,
+                                                  readiness: agentIMReadiness,
+                                                  connection: agentIMConnectionState) {
+            agentIMLastInboundDrop = drop
+            return
+        }
+        agentIMInboundTexts.append(message.text)
+        if agentIMInboundTexts.count > 20 { agentIMInboundTexts.removeFirst(agentIMInboundTexts.count - 20) }
+    }
 
     /// 一次性迁移：把旧版**文件存储**（`FileAgentKeyStore` / `FileSecretStore`，XOR 混淆）
     /// 里的凭据搬进系统钥匙串，搬完删文件里的明文槽位。

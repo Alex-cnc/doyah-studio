@@ -30,6 +30,11 @@ struct AgentSettingsSheet: View {
     @State private var imAppID = ""
     @State private var imSecretInput = ""
     @State private var imLine: String?
+    /// 配置面三格（网关端点 / 机器人标识 / 接收任务开关）—— 与凭据同一份文件。
+    @State private var imGatewayURL = ""
+    @State private var imBotIdentifier = ""
+    @State private var imReceiveTasks = false
+    @State private var isTestingIM = false
     /// 连接测试的结果行（`nil` = 还没测过）。
     @State private var testLine: String?
     @State private var isTesting = false
@@ -353,10 +358,14 @@ struct AgentSettingsSheet: View {
                     }
                 }
 
-                // IM 通道（`FR-AGT-LINK-CHAN-003`）：**只落凭据**。
-                // 传输层（WebSocket / 心跳 / 重连）还没实现，所以这里故意**没有「连接」开关** ——
-                // 画一个明知连不上的开关，比不画更误导。
+                // IM 通道（`FR-AGT-LINK-CHAN-003`）：**能配、能看状态、能测**。
+                // 2026-10-28 主人原话：「怎么连配置IM通道的界面都没有呢？」—— 此前这一节只有
+                // AppID / Secret 两格 + 一句「传输层未实现」，于是「配齐了没」「连没连上」
+                // 没有任何一处说得清。现在四样配置 + 一行状态（未配置 / 未连接 / 正在连接 /
+                // 已连接 / 未连通+原因）+ 测试连接；状态与「缺什么」全由 Core 合成，界面只搬结论。
                 Section(L(.agentIMSection)) {
+                    TextField(L(.agentIMFieldGatewayURL), text: $imGatewayURL, prompt: Text("wss://"))
+                    TextField(L(.agentIMFieldBotIdentifier), text: $imBotIdentifier)
                     TextField(L(.agentIMAppID), text: $imAppID)
                     SecureField(L(.agentIMSecret), text: $imSecretInput)
                     Text(imSecretStatusLine)
@@ -365,8 +374,30 @@ struct AgentSettingsSheet: View {
                     Text(L(.agentIMSecretKeepHint))
                         .font(Theme.font(.caption))
                         .foregroundStyle(Theme.text(.secondary))
+
+                    Toggle(isOn: $imReceiveTasks) {
+                        Label(L(.agentIMReceiveTasks), systemImage: "tray.and.arrow.down")
+                    }
+                    .help(L(.agentIMReceiveTasks))
+                    .accessibilityLabel(Text(L(.agentIMReceiveTasks)))
+                    Text(L(.agentIMReceiveTasksHint))
+                        .font(Theme.font(.caption))
+                        .foregroundStyle(Theme.text(.secondary))
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    // 状态行：**一档**（配置齐不齐与传输层状态在 Core 里合成，界面不再各写一句）。
+                    Text(imStatusLine)
+                        .font(Theme.font(.caption))
+                        .foregroundStyle(appState.agentIMStatusKind.isOnline
+                                         ? Theme.status(.success) : Theme.status(.warning))
+                        .fixedSize(horizontal: false, vertical: true)
+
                     HStack(spacing: Spacing.m) {
                         Button(L(.agentIMSave)) { saveIMCredentials() }
+                        Button(L(.agentIMTest)) { testIMConnection() }
+                            .disabled(isTestingIM)
+                        Button(L(.agentIMConnect)) { connectIMChannel() }
+                        Button(L(.agentIMDisconnect)) { disconnectIMChannel() }
                         Button(L(.agentIMClear), role: .destructive) { clearIMCredentials() }
                     }
                     if let imLine {
@@ -375,10 +406,11 @@ struct AgentSettingsSheet: View {
                             .foregroundStyle(Theme.text(.secondary))
                             .fixedSize(horizontal: false, vertical: true)
                     }
-                    Text(L(.agentIMTransportPending))
-                        .font(Theme.font(.caption))
-                        .foregroundStyle(Theme.status(.warning))
-                        .fixedSize(horizontal: false, vertical: true)
+                    if !appState.agentIMInboundTexts.isEmpty {
+                        Text(L(.agentIMInboundReceived, Int64(appState.agentIMInboundTexts.count)))
+                            .font(Theme.font(.caption))
+                            .foregroundStyle(Theme.text(.secondary))
+                    }
                 }
             }
             .formStyle(.columns)
@@ -456,6 +488,9 @@ struct AgentSettingsSheet: View {
             // IM 通道凭据：回填 AppID（明文）；Secret 草稿留空 —— 输入框里永不出现密钥本体。
             appState.refreshAgentIMCredentials()
             imAppID = appState.agentIMAppID
+            imGatewayURL = appState.agentIMSettings.gatewayURL
+            imBotIdentifier = appState.agentIMSettings.botIdentifier
+            imReceiveTasks = appState.agentIMSettings.receiveTasks
             imSecretInput = ""
             imLine = nil
             // 真值源（`FR-AI-25`）：这一档填过的窗口 / 价目要回填 —— 否则重开面板就是空白，
@@ -946,8 +981,21 @@ struct AgentSettingsSheet: View {
         return L(.agentIMSecretMissing)
     }
 
-    /// 存通道凭据。空输入 = 「不改动已存的那把」；校验失败时**什么都不落盘**（Core 保证）。
+    /// 面板那一行状态（Core 合成的一档：未配置 / 未连接 / 正在连接 / 已连接 / 未连通+原因）。
+    private var imStatusLine: String {
+        AgentIMStatusText.line(for: appState.agentIMStatusKind,
+                               language: LocalizationManager.shared.effectiveLanguage)
+    }
+
+    /// 存通道：**先存配置面（地址 / 标识 / 开关），再存凭据**。
+    /// 两步都走 Core 校验：任何一步不合法，那一步什么都不落盘，原因落在 `imLine`。
     private func saveIMCredentials() {
+        guard appState.saveAgentIMSettings(gatewayURL: imGatewayURL,
+                                           botIdentifier: imBotIdentifier,
+                                           receiveTasks: imReceiveTasks) else {
+            imLine = appState.errorMessage
+            return
+        }
         let secret: String? = imSecretInput.isEmpty ? nil : imSecretInput
         if appState.saveAgentIMCredentials(appID: imAppID, secret: secret) {
             imSecretInput = ""
@@ -957,9 +1005,42 @@ struct AgentSettingsSheet: View {
         }
     }
 
+    /// 连接：**先存再连**（否则连的是上一次落盘的那份配置 —— 面板上刚改的地址不生效）。
+    private func connectIMChannel() {
+        saveIMCredentials()
+        guard appState.agentIMReadiness.isReady else {
+            imLine = appState.agentIMProbeLine ?? imStatusLine
+            return
+        }
+        appState.connectAgentIM()
+        imLine = nil
+    }
+
+    private func disconnectIMChannel() {
+        appState.disconnectAgentIM()
+        imLine = nil
+    }
+
+    /// 测试连接：真发一帧（失败给可读原因，**不弹成功**）。
+    private func testIMConnection() {
+        isTestingIM = true
+        Task {
+            let line = await appState.testAgentIMConnection()
+            await MainActor.run {
+                imLine = line
+                isTestingIM = false
+            }
+        }
+    }
+
     private func clearIMCredentials() {
+        appState.disconnectAgentIM()
         if appState.saveAgentIMCredentials(appID: imAppID, secret: nil, clearFirst: true) {
+            // 清除是**整条通道**：凭据文件一起没了 ⇒ 面板上那三格也必须跟着空（否则显示的是盘上不存在的配置）。
             imAppID = ""
+            imGatewayURL = ""
+            imBotIdentifier = ""
+            imReceiveTasks = false
             imSecretInput = ""
             imLine = L(.agentIMCleared)
         } else {

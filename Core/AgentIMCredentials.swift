@@ -165,24 +165,70 @@ public struct AgentIMCredentialStore: Sendable {
 
     // MARK: - 落盘（只有 AppID）
 
+    /// 盘上那一份：**只有非敏感字段**（Secret 一律在钥匙串）。
+    ///
+    /// 字段全为可选是**向后兼容**的要求：2026-10-27 之前落下的文件只有 `{"appID": "..."}`
+    /// —— 那份老文件必须仍能读，且读出来的是一份「地址与标识都没配」的配置（而不是解析失败、
+    /// 连带把 AppID 也当没配）。
     private struct ChannelFile: Codable, Equatable {
-        var appID: String
+        var appID: String?
+        var gatewayURL: String?
+        var botIdentifier: String?
+        var receiveTasks: Bool?
+    }
+
+    private func loadChannelFile(for kind: AgentIMChannelCredentialKind) -> ChannelFile? {
+        guard let data = try? Data(contentsOf: fileURL(for: kind)) else { return nil }
+        return try? JSONDecoder().decode(ChannelFile.self, from: data)
     }
 
     private func loadAppID(for kind: AgentIMChannelCredentialKind) -> String? {
-        guard let data = try? Data(contentsOf: fileURL(for: kind)),
-              let file = try? JSONDecoder().decode(ChannelFile.self, from: data) else { return nil }
+        guard let file = loadChannelFile(for: kind) else { return nil }
         // 盘上被手改成空串 ⇒ 当作「没配」，不把空串当凭据。
-        let trimmed = file.appID.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmed = (file.appID ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? nil : trimmed
     }
 
-    private func writeAppID(_ appID: String, for kind: AgentIMChannelCredentialKind) throws {
+    /// 非敏感配置面（网关端点 / 机器人标识 / 接收任务开关）。
+    ///
+    /// 读的是与 AppID **同一份文件**：两处各存一份 JSON，迟早出现「AppID 与地址来自不同次保存」。
+    public func settings(for kind: AgentIMChannelCredentialKind) -> AgentIMChannelSettings {
+        guard let file = loadChannelFile(for: kind) else { return .empty }
+        return AgentIMChannelSettings(
+            gatewayURL: file.gatewayURL ?? "",
+            botIdentifier: file.botIdentifier ?? "",
+            receiveTasks: file.receiveTasks ?? false
+        )
+    }
+
+    /// 存配置面：**先校验、再落盘**（不合法时一个字节都不写，判据钉住）。
+    /// AppID 与 Secret 都不在这一步动 —— 这是「只改地址 / 标识 / 开关」的入口。
+    @discardableResult
+    public func save(settings: AgentIMChannelSettings,
+                     for kind: AgentIMChannelCredentialKind) throws -> AgentIMChannelSettings {
+        let clean = try AgentIMSettingsValidator.normalized(settings)
+        var file = loadChannelFile(for: kind) ?? ChannelFile(appID: nil, gatewayURL: nil, botIdentifier: nil, receiveTasks: nil)
+        file.gatewayURL = clean.gatewayURL
+        file.botIdentifier = clean.botIdentifier
+        file.receiveTasks = clean.receiveTasks
+        try write(file, for: kind)
+        return clean
+    }
+
+    private func write(_ file: ChannelFile, for kind: AgentIMChannelCredentialKind) throws {
         try FileManager.default.createDirectory(at: directoryURL, withIntermediateDirectories: true)
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys, .prettyPrinted]
-        let data = try encoder.encode(ChannelFile(appID: appID))
+        let data = try encoder.encode(file)
         try data.write(to: fileURL(for: kind), options: .atomic)
+    }
+
+    private func writeAppID(_ appID: String, for kind: AgentIMChannelCredentialKind) throws {
+        // **保留已存的配置面**：只改 AppID 时把地址 / 标识 / 开关一起写回去（否则保存一次凭据
+        // 就等于静默清掉用户填过的地址）。
+        var file = loadChannelFile(for: kind) ?? ChannelFile(appID: nil, gatewayURL: nil, botIdentifier: nil, receiveTasks: nil)
+        file.appID = appID
+        try write(file, for: kind)
     }
 }
 
