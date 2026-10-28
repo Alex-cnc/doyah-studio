@@ -299,6 +299,13 @@ final class AppState: ObservableObject {
     @Published var tabs: [QueryTab] = []
     @Published var selectedTabID: UUID?
     @Published var savedQueries: [SavedQuery] = []
+    /// 已保存的**可执行任务**定义（`sql-tasks.json`，`FR-STD-DB-TASK-001`）。
+    ///
+    /// 与 `savedQueries` 分开两份：那边是 SQL 片段（书签），这边是带「连接 / 目标库 / 读写模式 /
+    /// 行数上限 / 要不要审批」的可执行任务 —— 混成一份文件，两种语义迟早互相污染。
+    @Published var sqlTasks: [SQLTaskDefinition] = []
+    /// 每个页签当前绑定的任务（tabID → 任务 id）。绑定着的时候，执行前要过 `SQLTaskGuard`。
+    @Published var boundSQLTaskIDs: [UUID: UUID] = [:]
 
     /// 查询编辑器里**正在编辑的文本**（队列 `L-148`）。
     ///
@@ -1471,6 +1478,7 @@ final class AppState: ObservableObject {
     /// 开发 / 验收形态需要文件实现时**显式注入**，不再靠改源码默认值。
     private let secretStore: SecretStore
     private let savedQueryStore = SavedQueryStore.shared
+    private let sqlTaskStore = SQLTaskStore.shared
     private let agentConfigurationStore = AgentConfigurationStore.shared
     /// 模型 API Key 的存储：同样是系统钥匙串（`NFR-ALL-GATE-AI-007`「密钥只进系统凭据存储」）。
     private let agentKeyStore: AgentKeyStore
@@ -1559,6 +1567,7 @@ final class AppState: ObservableObject {
         startupChain = Task {
             await loadConnections()
             await loadSavedQueries()
+            await loadSQLTasks()
             await workspaceBrowser.restoreBrowserTabs()
             // 笔记列表在启动时就载入：它现在是活动栏上的一栏，切过去必须**立刻有内容**，
             // 不能再依赖"先点一下菜单项"来触发加载。
@@ -7246,6 +7255,106 @@ final class AppState: ObservableObject {
         }
     }
 
+    // MARK: - 任务定义（`FR-STD-DB-TASK-001`）
+
+    /// 从盘上读回已保存的任务（启动时与每次改完都过这里 —— 单一读盘点）。
+    func loadSQLTasks() async {
+        do {
+            sqlTasks = try await sqlTaskStore.tasks()
+                .sorted { $0.updatedAt > $1.updatedAt }
+        } catch {
+            errorMessage = ErrorPresenter.message(for: error)
+        }
+    }
+
+    /// 这个页签当前绑定的任务（没有就是 `nil`）。执行前判定读它。
+    func boundSQLTask(for tabID: UUID) -> SQLTaskDefinition? {
+        guard let id = boundSQLTaskIDs[tabID] else { return nil }
+        return sqlTasks.first { $0.id == id }
+    }
+
+    /// 把当前页签存成一条任务定义：目标库取**当前库**，连接取这个页签的连接。
+    ///
+    /// - Returns: 失败时的可读原因（成功为 `nil`）—— 界面直接显示它，不再自己拼话术。
+    @discardableResult
+    func saveCurrentTabAsSQLTask(
+        tabID: UUID,
+        name: String,
+        accessMode: SQLTaskDefinition.AccessMode,
+        rowLimitText: String,
+        requiresApproval: Bool
+    ) async -> String? {
+        guard let tab = tabs.first(where: { $0.id == tabID }) else {
+            return L(.sqlTaskNoTab)
+        }
+
+        let limitText = rowLimitText.trimmingCharacters(in: .whitespacesAndNewlines)
+        var rowLimit: Int?
+        if !limitText.isEmpty {
+            guard let value = Int(limitText) else { return L(.sqlTaskRowLimitInvalid) }
+            rowLimit = value
+        }
+
+        let definition = SQLTaskDefinition(
+            name: name,
+            sql: tab.sql,
+            connectionID: tab.connectionID ?? selectedConnectionID,
+            connectionName: selectedConnection?.name,
+            targetDatabase: (tab.database ?? selectedDatabase ?? "")
+                .trimmingCharacters(in: .whitespacesAndNewlines),
+            accessMode: accessMode,
+            rowLimit: rowLimit,
+            requiresApproval: requiresApproval
+        )
+
+        do {
+            let saved = try await sqlTaskStore.save(definition)
+            await loadSQLTasks()
+            // 存完就绑上：用户刚写的这条定义，下一次执行的基准就是它。
+            boundSQLTaskIDs[tabID] = saved.id
+            statusMessage = L(.sqlTaskSavedStatus, saved.name)
+            return nil
+        } catch {
+            let message = ErrorPresenter.message(for: error)
+            errorMessage = message
+            return message
+        }
+    }
+
+    /// 载入一条任务（复用）：语句进页签、连接与库切到定义那一对、页签绑上它。
+    ///
+    /// 三样一起做是刻意的：只把 SQL 贴回来、不切库，下一次执行就会撞上「目标库与定义不符」，
+    /// 而那个拒绝本身是对的 —— 不该让用户先撞一次才知道。
+    func loadSQLTask(_ task: SQLTaskDefinition, into tabID: UUID) {
+        if let connectionID = task.connectionID,
+           connections.contains(where: { $0.id == connectionID }) {
+            selectedConnectionID = connectionID
+        }
+        selectedDatabase = task.targetDatabase
+        updateTab(tabID) {
+            $0.sql = task.sql
+            $0.syntaxCheckMessage = nil
+            $0.syntaxCheckFailed = false
+            $0.statusMessage = L(.sqlTaskLoadedStatus, task.name)
+        }
+        boundSQLTaskIDs[tabID] = task.id
+    }
+
+    /// 解除绑定：之后这个页签按普通 SQL 执行（安全判定仍照旧走 `ExecutionSafety`）。
+    func unbindSQLTask(from tabID: UUID) {
+        boundSQLTaskIDs[tabID] = nil
+    }
+
+    func deleteSQLTask(_ task: SQLTaskDefinition) async {
+        do {
+            try await sqlTaskStore.delete(id: task.id)
+            boundSQLTaskIDs = boundSQLTaskIDs.filter { $0.value != task.id }
+            await loadSQLTasks()
+        } catch {
+            errorMessage = ErrorPresenter.message(for: error)
+        }
+    }
+
     // MARK: - 查询文件（打开 / 保存）
 
     private static let noConnectionID = UUID()
@@ -7460,6 +7569,8 @@ final class AppState: ObservableObject {
         commitEditorDraft(for: tabID)
         EditorCommandCenter.shared.forgetSelection(tabID: tabID)
         tabs.removeAll { $0.id == tabID }
+        // 页签没了，绑定也该跟着没：留着的 id 会让「同一 tabID」在重建后莫名其妙地重新绑上旧任务。
+        boundSQLTaskIDs[tabID] = nil
         if selectedTabID == tabID {
             selectedTabID = tabs.last?.id
         }
@@ -7804,6 +7915,49 @@ final class AppState: ObservableObject {
 
         let targetDatabase = queryDatabase(for: configuration)
 
+        // 任务定义（`FR-STD-DB-TASK-001`）：这个页签绑着一条保存过的任务时，
+        // **先逐项核对定义与这次的实际参数**，再谈安全判定。
+        //
+        // 位置刻意在这里（不是更早）：`targetDatabase` 是这次真要连的库，判定必须拿它比；
+        // 又不能更晚 —— 晚了就已经建了连接、发了语句，那时候拒绝只是事后诸葛亮。
+        // 拒绝**不经过确认流程**：库不符 / 只读任务里出现写语句都不是「要不要冒险」，
+        // 与 `ExecutionSafetyPolicy.isReadOnly` 同一条道理（能点「仍然执行」就等于没拦）。
+        if let task = boundSQLTask(for: tabID) {
+            let planned = SQLTaskExecution(
+                connectionID: configuration.id,
+                database: targetDatabase,
+                accessMode: configuration.isReadOnly ? .readOnly : .writable,
+                // 本侧没有「执行时放宽上限」的入口，所以这里带的就是定义自己那一条；
+                // 判定口仍按「更松即拒」写 —— 让 CLI / 以后的调度器走同一套时不会漏。
+                rowLimit: task.rowLimit,
+                sql: sql
+            )
+            switch SQLTaskGuard.check(task: task, execution: planned, databaseType: configuration.dbType) {
+            case .allow:
+                break
+
+            case .refused(let reasons, let statements):
+                let detail = (reasons + statements.map { "· " + $0 }).joined(separator: "\n")
+                updateTab(tabID) {
+                    $0.errorMessage = detail
+                    $0.statusMessage = L(.sqlTaskRefusedStatus, task.name)
+                }
+                return
+
+            case .needsApproval(let reasons, let statements):
+                // 已经批准过一轮（`bypassingSafetyCheck`）就不再问第二次；拒绝那一档上面已挡掉。
+                guard !bypassingSafetyCheck else { break }
+                pendingExecution = PendingExecution(
+                    tabID: tabID,
+                    sql: sql,
+                    // 复用同一张确认弹窗：用户看到的是**任务要求审批**的理由与语句，不是伪造的风险点。
+                    decision: .needsConfirmation(reasons: reasons, findings: [], statements: statements),
+                    source: resolution.source
+                )
+                return
+            }
+        }
+
         updateTab(tabID) {
             $0.isExecuting = true
             $0.errorMessage = nil
@@ -7954,6 +8108,16 @@ final class AppState: ObservableObject {
 
             if resultCount == 0 {
                 updateTab(tabID) { $0.statusMessage = L(.stateFinishedEmpty) }
+            }
+
+            // 影响行数上限（`FR-STD-DB-TASK-001`）：**执行之后**才量得到读数。
+            // 超了 / 量不到都要当场说 —— 已经执行的那部分不会被撤销，
+            // 而「没有读数」更不许当「动了 0 行」（`unmeasured` 与 `within(0)` 是两条结论）。
+            if let task = boundSQLTask(for: tabID) {
+                let verdict = SQLTaskGuard.rowVerdict(limit: task.rowLimit, actual: affectedTally.value)
+                if !verdict.message.isEmpty {
+                    updateTab(tabID) { $0.errorMessage = verdict.message }
+                }
             }
 
             // 取消必须在历史里留痕，且**不得记成成功**（R-31）。

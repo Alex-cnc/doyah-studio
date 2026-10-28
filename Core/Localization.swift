@@ -2957,6 +2957,28 @@ public enum LKey: String, CaseIterable, Sendable {
     case agentAlternativeMarker
     case agentAlternativeMarkerLong
     case agentPromptAlternativeRule
+
+    // 任务定义（`FR-STD-DB-TASK-001`）
+    case sqlTaskMenuHelp
+    case sqlTaskSaveAction
+    case sqlTaskListEmpty
+    case sqlTaskUnbind
+    case sqlTaskBoundTo
+    case sqlTaskSheetTitle
+    case sqlTaskNameField
+    case sqlTaskTargetDatabase
+    case sqlTaskTargetDatabaseHint
+    case sqlTaskAccessMode
+    case sqlTaskModeReadOnly
+    case sqlTaskModeWritable
+    case sqlTaskRowLimitField
+    case sqlTaskRowLimitHint
+    case sqlTaskRequiresApproval
+    case sqlTaskNoTab
+    case sqlTaskRowLimitInvalid
+    case sqlTaskSavedStatus
+    case sqlTaskLoadedStatus
+    case sqlTaskRefusedStatus
 }
 
 public enum LocalizedStrings {
@@ -5740,5 +5762,25 @@ public enum LocalizedStrings {
         .importNothingMapped: [.simplifiedChinese: "没有任何列能映射到目标表，已中止。", .english: "No column maps to the target table; aborted."],
         .importSampleNote: [.simplifiedChinese: "预览只取前若干行；执行时按批处理全部行。", .english: "The preview shows only the first rows; the run processes every row in batches."],
         .importCopyAtomicNote: [.simplifiedChinese: "COPY 在单条语句内是原子的：失败即整批未写入，不会留下半截。", .english: "COPY is atomic within a single statement: on failure nothing is written, so no half-import remains."],
+        .sqlTaskMenuHelp: [.simplifiedChinese: "保存当前脚本为任务 / 载入已存任务", .english: "Save the current script as a task, or load a saved task"],
+        .sqlTaskSaveAction: [.simplifiedChinese: "保存当前脚本为任务…", .english: "Save Current Script as Task…"],
+        .sqlTaskListEmpty: [.simplifiedChinese: "还没有保存过任务", .english: "No saved tasks yet"],
+        .sqlTaskUnbind: [.simplifiedChinese: "解除绑定", .english: "Unbind"],
+        .sqlTaskBoundTo: [.simplifiedChinese: "本页签绑定任务：%@", .english: "This tab is bound to task: %@"],
+        .sqlTaskSheetTitle: [.simplifiedChinese: "保存为任务", .english: "Save as Task"],
+        .sqlTaskNameField: [.simplifiedChinese: "任务名", .english: "Task name"],
+        .sqlTaskTargetDatabase: [.simplifiedChinese: "目标库", .english: "Target database"],
+        .sqlTaskTargetDatabaseHint: [.simplifiedChinese: "取当前库；执行时换了库会被拒绝。", .english: "Uses the current database; running against another one is refused."],
+        .sqlTaskAccessMode: [.simplifiedChinese: "读写模式", .english: "Access mode"],
+        .sqlTaskModeReadOnly: [.simplifiedChinese: "只读", .english: "Read-only"],
+        .sqlTaskModeWritable: [.simplifiedChinese: "可写", .english: "Writable"],
+        .sqlTaskRowLimitField: [.simplifiedChinese: "影响行数上限", .english: "Row limit"],
+        .sqlTaskRowLimitHint: [.simplifiedChinese: "留空 = 不限；执行后超限会当场说出来。", .english: "Leave empty for no limit; exceeding it is reported after the run."],
+        .sqlTaskRequiresApproval: [.simplifiedChinese: "执行前需审批", .english: "Ask before running"],
+        .sqlTaskNoTab: [.simplifiedChinese: "没有可保存的页签。", .english: "There is no tab to save."],
+        .sqlTaskRowLimitInvalid: [.simplifiedChinese: "影响行数上限要写正整数（不限就留空）。", .english: "The row limit must be a positive whole number (leave empty for no limit)."],
+        .sqlTaskSavedStatus: [.simplifiedChinese: "已保存任务「%@」", .english: "Saved task \"%@\""],
+        .sqlTaskLoadedStatus: [.simplifiedChinese: "已载入任务「%@」", .english: "Loaded task \"%@\""],
+        .sqlTaskRefusedStatus: [.simplifiedChinese: "任务「%@」的执行被拒绝（原因见问题页签）", .english: "Task \"%@\" was refused (see the Problems tab)"],
     ]
 }

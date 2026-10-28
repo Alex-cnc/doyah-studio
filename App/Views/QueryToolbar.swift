@@ -26,6 +26,7 @@ struct QueryToolbar: View {
     let onEditCommand: (EditorCommand) -> Void
 
     @State private var isHelpPresented = false
+    @State private var isTaskSheetPresented = false
 
     /// 历史下拉里展示的最大条数（内存历史最多 50 条）。
     private static let historyMenuLimit = 20
@@ -39,6 +40,7 @@ struct QueryToolbar: View {
             historyMenu
             saveQueryButton
             savedQueriesMenu
+            taskMenu
 
             Divider()
                 .frame(height: 16)
@@ -85,6 +87,10 @@ struct QueryToolbar: View {
         }
         .padding(.horizontal, Spacing.m)
         .padding(.vertical, Spacing.s)
+        // 保存表单挂在工具条这一层（不是菜单项里）：菜单一收起，挂在菜单上的 sheet 会被一起带走。
+        .sheet(isPresented: $isTaskSheetPresented) {
+            SQLTaskSaveSheet(tab: tab)
+        }
     }
 
     // MARK: - 文件
@@ -341,8 +347,73 @@ struct QueryToolbar: View {
         .keyboardShortcut(AppShortcut.savedQueries.key, modifiers: AppShortcut.savedQueries.modifiers)
     }
 
-    // MARK: - 执行 / 停止 / 检查
+    /// 任务（可保存复用，`FR-STD-DB-TASK-001`）。
+    ///
+    /// 一枚菜单里三件事：**存**（当前脚本 → 定义，含模式 / 上限 / 审批）、
+    /// **取**（定义 → 当前页签，同时切连接与库）、**解绑**。
+    /// 与「保存查询」并排但分开两个图标：那是书签，这是可执行任务，两者跑起来受的判定不一样。
+    private var taskMenu: some View {
+        Menu {
+            Button(L(.sqlTaskSaveAction)) {
+                isTaskSheetPresented = true
+            }
+            .disabled(tab.sql.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
 
+            Divider()
+
+            if appState.sqlTasks.isEmpty {
+                Text(L(.sqlTaskListEmpty))
+            } else {
+                ForEach(appState.sqlTasks) { task in
+                    Button {
+                        appState.loadSQLTask(task, into: tab.id)
+                    } label: {
+                        Text(taskLabel(for: task))
+                    }
+                }
+
+                Divider()
+
+                Menu(L(.commonDelete)) {
+                    ForEach(appState.sqlTasks) { task in
+                        Button(task.name, role: .destructive) {
+                            Task { await appState.deleteSQLTask(task) }
+                        }
+                    }
+                }
+            }
+
+            if let bound = appState.boundSQLTask(for: tab.id) {
+                Divider()
+                Text(L(.sqlTaskBoundTo, bound.name))
+                Button(L(.sqlTaskUnbind)) {
+                    appState.unbindSQLTask(from: tab.id)
+                }
+            }
+        } label: {
+            toolbarIcon("checklist")
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help(L(.sqlTaskMenuHelp))
+    }
+
+    /// 菜单项一行写清「叫什么 · 哪个库 · 只读还是可写 · 上限」——
+    /// 只写任务名的话，同名不同库的两条定义在菜单里长得一模一样。
+    private func taskLabel(for task: SQLTaskDefinition) -> String {
+        var parts = [
+            task.name,
+            task.targetDatabase,
+            task.accessMode == .readOnly ? L(.sqlTaskModeReadOnly) : L(.sqlTaskModeWritable)
+        ]
+        if let limit = task.rowLimit {
+            parts.append("≤ \(limit)")
+        }
+        return parts.joined(separator: " · ")
+    }
+
+    // MARK: - 执行 / 停止 / 检查
     private var executeButton: some View {
         Button {
             appState.startQuery(for: tab.id)
