@@ -56,7 +56,7 @@ struct AboutLicenseSheet: View {
         VStack(alignment: .leading, spacing: Spacing.s) {
             HStack {
                 Spacer()
-                DialogActionButton(systemName: "xmark", title: L(.commonClose)) { dismiss() }
+                DialogActionButton(systemName: "xmark", title: L(.commonClose), role: .cancel) { dismiss() }
             }
             // 品牌区（2026-10-27 人类主人令）：**左图标 · 右产品名 → 版权 → 版本 / 开发者**。
             // 版式钉死在这一处：换行位置、谁在上谁在下都不许各页面自己发挥。
@@ -160,7 +160,7 @@ struct AboutLicenseSheet: View {
     private var footer: some View {
         HStack {
             Spacer()
-            DialogActionButton(systemName: "xmark", title: L(.commonClose)) { dismiss() }
+            DialogActionButton(systemName: "xmark", title: L(.commonClose), role: .cancel) { dismiss() }
                 .keyboardShortcut(.defaultAction)
         }
         .padding(Spacing.l)

@@ -213,7 +213,7 @@ struct MCPServersSheet: View {
                 Button(L(.mcpServersAdd)) { draft.addServer() }
                     .buttonStyle(.bordered)
                 Spacer()
-                Button(L(.commonCancel)) { dismiss() }
+                Button(L(.commonCancel), role: .cancel) { dismiss() }
                     .buttonStyle(.bordered)
                 Button(L(.commonSave)) { save(andConnect: false) }
                     .buttonStyle(.bordered)

@@ -452,7 +452,10 @@ struct DataTaskPanel: View {
                         }
                     }
                 } label: {
-                    Image(systemName: "clock.arrow.circlepath")
+                    // 纯图标在表单里省不出空间（`FR-STD-WS-UI-014`）：这枚菜单的语义
+                    // 正是「使用已授权目录」，文字就取这一句，不再另编。
+                    Label(L(.dataTaskUseStoredDirectory), systemImage: "clock.arrow.circlepath")
+                        .labelStyle(.titleAndIcon)
                 }
                 .menuStyle(.borderlessButton)
                 .menuIndicator(.hidden)

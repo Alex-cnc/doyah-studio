@@ -1,21 +1,21 @@
 # 检查点
 
-updated: 2026-10-29T01:25
+updated: 2026-10-29T01:47
 
 ## 现状
 
 - 循环卡 = `.agent/loop-card.md`（**2026-10-28 20:08 主人改成接力制**：一轮收尾即 `cronjob_manage action=run job_id=e98fad41f72d` 点火下一轮；定时器 5 分钟一跳只做兜底；不再按剩余条数自调阶梯）。
 - 队列唯一来源 = `Docs/Doyah产品开发计划任务清单-macOS端.md`（`FR-STD-*` 里实现为 `⬜`／`🟡`）；`.agent/plan.yaml` 已停用。
-- 最近读数（2026-10-29 R49）：`verify-core` **4547 项 / 0 failures**（4537 → +10 = `Tests/RowActionPolicyTests`）；
-  界面 11 例在 `DoyahUISnapshotTests`（`RowActionRevealProbeTests`），不进 core-tests 台账；五门 rc 全 0；
-  包 `dist/DoyahStudio-beta1.0.app` sha256 前缀 `d60062aa` · 99,756 KB（`xcodegen generate` + `build-app.sh` 均 rc=0）。
+- 最近读数（2026-10-29 R50）：`verify-core` **4567 项 / 0 failures**（4547 → +20 = `Tests/DialogButtonPolicyTests` 14 + `Tests/DialogButtonSourceTests` 6）；
+  五门 rc 全 0；包 `dist/DoyahStudio-beta1.0.app` sha256 前缀 **`eb814e76`** · 99,840 KB（构建时刻 2026-10-29T01:36:28+0800；
+  前一次 01:35 的 `afb88dcb` 出在改发布说明之前、回执不含本批 ⇒ 作废）；台账逐行实数 **✅ 127 / 🟡 70 / ⬜ 16**（本批按逐行实数清了一次号）。
 
 ## 下一项
 
-**1. 台账 `FR-STD-WS-UI-014`（对话框按钮用系统文字按钮：Sheet/Form 内无纯图标按钮，取消为 `role: .cancel`）** ——
-先把本仓所有 Sheet / Form 里的按钮形态扫一遍（`grep` `.alert(` / `.sheet(` / `DialogActionButton` /
-`ToolbarIconButton` 在 `*Sheet.swift` 里的用法），列出「纯图标按钮」的落点与「取消没写 `role: .cancel`」的落点，
-再定最小纵切（形态收一处 `DialogActionButton` + 判据：源码锚点 + 一档可量的按钮形态）。判据可机械跑优先。
+**1. 台账 `FR-STD-WS-WEB-002`（工作区编辑器的 Markdown 预览）** —— 先核已有面：`Core/MarkdownDocument.swift`（块级模型，
+2026-09-30 第 130 轮的 27 条判据）与 `App/Views/MarkdownPreviewView.swift` **都已在盘**，所以这一条大概率缺的是
+「编辑器里怎么切到预览 / 两者是否同源滚动」那一半 —— 先 `grep` 出这条需求在需求书里的原文与验收要点，再定最小纵切
+（判据可机械跑优先：块模型与预览共享同一份切分 = 结构判据）。
 
 其余按台账取「优先=高 → 中；同档取判据可机械跑的」（2026-10-28 R44 实测：**台账里已无「高」档的 `⬜`**）：
 
@@ -29,6 +29,20 @@ updated: 2026-10-29T01:25
 6. 存量红（与 HEAD 逐条相同，非任何一片引入；见 `.agent/evidence/2026-10-28-DB-TASK-001.md` §7）。
 
 ## 已完成的片
+
+- **R50（2026-10-29 01:47）· `FR-STD-WS-UI-014` 对话框按钮用系统文字按钮** —— 这条需求此前实现 `⬜`、判据 `—`。
+  动手前核查：本仓早有「工具条纯图标 / 对话框图标 + 文字」的分工（`DialogActionButton` 文件头，2026-10-18 主人留言），
+  「图标 + 文字」那半**本来就在**；缺的是另外两件且**没有任何东西在管** —— ① 纯图标动作 1 处（`AgentSettingsSheet` 的模型菜单，
+  另有同样风格的 1 处在表单区（`DataTaskPanel` 的「使用已授权目录」菜单）；② **32 处取消 / 关闭按钮没有 `role: .cancel`**（只挂
+  `.keyboardShortcut(.cancelAction)` 凑 Esc ⇒「Esc 能关」在、「这是取消」不在），跨 21 个文件；③ 动作行次序每处手写。
+  落法：`Core/DialogButtonPolicy.swift` 一处投影（次序 cancel → neutral → destructive → primary / 回车与 Esc 各一枚 /
+  空标题动作**被拒而不是被自动补文案** / 同名两条与双取消·双主按都判违规，五档违规各带 id 与机器码）+ 动作行
+  `App/Views/DialogActionRow.swift`（一行只填声明）+ 三个代表性对话框改走它（建库 / 保存查询 + 跳转行 / 删库，破坏性那枚
+  永远不拿回车）+ 21 个文件补 `role: .cancel` + 两处纯图标菜单补文字。判据 14（Core 投影）+ 6（源树：扫 25 个
+  `*Sheet*.swift`，非空跑下限 20）例，反例四段各判红后逐字节还原（A 纯图标回来 / B 取消丢 role / C 取消不排最左 /
+  D `title.isEmpty` 顶掉 `visibleTitle.isEmpty`）。读数 `verify-core` **4567 / 0 failures**（4547 → +20），五门全绿。
+  台账 实现 **🟡**（差人工点一次：取消按钮上是文字 · Esc 能关 · 悬停提示 = 按钮文字）/ 判据 **✅**。
+  同批把台账分族读数行按**逐行实数**清了号（127 / 70 / 16 = 213；旧格 127 / 23 / 63 是陈旧值）。
 
 - **R49（2026-10-29 01:25）· `FR-STD-WS-UI-013` 行内动作悬停出、常驻不占位** —— 需求三条验收此前**一条读数都没有**。
   两条腿：① 悬停态变**输入**（`treeRow` → `WorkspaceTreeRow`、`groupHeader` → `ConnectionGroupHeader`；
@@ -186,8 +200,13 @@ updated: 2026-10-29T01:25
   不成立；身份只能靠「标签 + 构建时刻 + sha256」那一行区分。「只改文档且产物逐字节不变可同号重出」这一档
   在本机**测不出来**（要判得先让构建可复现 —— 未做，未拍板）。
 - `FR-STD` 分族读数行的 🟡 / ⬜ 是**陈旧值**（R48 实测：按表格逐行 HEAD = ✅ 125 / 🟡 69 / ⬜ 19，该行写 125 / 23 / 65）。
-  R48 只做了自身增减（→ 126 / 23 / 64）并在行内标注；**收口归「清号」片**（同片还有 §3/§4/§5 节标题计数、
-  台账第 281 行的 `⟪HERMES-CONTEXT-COMPRESSION…⟫` 占位串）。
+  R48 只做了自身增减（→ 126 / 23 / 64）并在行内标注；**R50 已按逐行实数清号**（命令：取 `| FR-STD` 行第 6 列首字符计数
+  ⇒ ✅ 127 / 🟡 70 / ⬜ 16 = 213，旧格 127 / 23 / 63 已更正，历史行一字未改）。仍未收口的是同片的另外两项：
+  §3/§4/§5 节标题计数 与 台账第 281 行的 `⟪HERMES-CONTEXT-COMPRESSION…⟫` 占位串。
+- `FR-STD-WS-UI-014` 的**人工那一半没做**：离屏宿主量不出「系统给取消按钮的样式」、也点不到按钮 ⇒ 三条要人看：
+  ① 任选一个二级对话框，取消按钮上是**文字**（不是一枚 ×）；② Esc 能关；③ 悬停提示 = 按钮文字。
+  另两处补了文字的表单区（`AgentSettingsSheet` 模型菜单、`DataTaskPanel` 使用已授权目录）**观感没人看过** ——
+  多一段文字会不会把这一行挤窄，未量（两处都不是面板根，没进 `.frame` 对齐台账的判据面）。
 - `FR-STD-WS-UI-011` 的**观感**不在验收里（三面同色是像素事实，好不好看没人判）：深色下三面同为 `#0B1A2A`、
   壁纸皮肤开着时编辑面**仍是满不透明**（AppKit 三面都用 `Theme.nsColor(Surface.content)` 的令牌原值，不走
   `Theme.surface` 的半透明）—— 这是既有行为、本批未动，若要让编辑面也透出壁纸需先拍板（会改变「文字压在照片上」的观感）。

@@ -98,7 +98,10 @@ struct AgentSettingsSheet: View {
                             Button(name) { model = name }
                         }
                     } label: {
-                        Image(systemName: "chevron.up.chevron.down")
+                        // 纯图标的菜单在表单里就是一枚「不知道是什么」的箭头（`FR-STD-WS-UI-014`）：
+                        // 加文字之后它才说明自己挑的是「模型名」。
+                        Label(L(.agentModel), systemImage: "chevron.up.chevron.down")
+                            .labelStyle(.titleAndIcon)
                     }
                     .menuStyle(.borderlessButton)
                     .fixedSize()
@@ -517,7 +520,7 @@ struct AgentSettingsSheet: View {
 
                 Spacer()
 
-                Button(L(.commonCancel)) { dismiss() }
+                Button(L(.commonCancel), role: .cancel) { dismiss() }
                     .buttonStyle(.bordered)
 
                 Button(L(.agentSave)) { save() }

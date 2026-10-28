@@ -147,7 +147,7 @@ struct TableDesignSheet: View {
 
             HStack {
                 Spacer()
-                DialogActionButton(systemName: "xmark.circle", title: L(.commonCancel)) { dismiss() }
+                DialogActionButton(systemName: "xmark.circle", title: L(.commonCancel), role: .cancel) { dismiss() }
                     .keyboardShortcut(.cancelAction)
                 DialogActionButton(systemName: "pencil", title: isEditing ? L(.tableDesignApply) : L(.tableDesignCreate)) {
                     onSubmit(TableDesignSubmission(

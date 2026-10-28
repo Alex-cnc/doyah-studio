@@ -30,7 +30,7 @@ struct DataTaskSpecSheet: View {
                 Text(L(.dataTaskSpecTitle))
                     .font(.headline)
                 Spacer()
-                DialogActionButton(systemName: "xmark", title: L(.commonClose)) { dismiss() }
+                DialogActionButton(systemName: "xmark", title: L(.commonClose), role: .cancel) { dismiss() }
             }
 
             VStack(alignment: .leading, spacing: 4) {

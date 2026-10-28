@@ -33,18 +33,17 @@ struct CreateDatabaseSheet: View {
                     .foregroundStyle(.orange)
             }
 
-            HStack {
-                Spacer()
-
-                DialogActionButton(systemName: "xmark.circle", title: L(.commonCancel)) {
-                    dismiss()
-                }
-
-                DialogActionButton(systemName: "checkmark", title: L(.createDatabaseConfirm)) {
-                    submit()
-                }
-                .keyboardShortcut(.defaultAction)
-                .disabled(!PrivilegeProbe.isValidDatabaseName(trimmedName))
+            DialogActionRow(actions: [
+                DialogActionSpec(id: "cancel", title: L(.commonCancel), systemImage: "xmark.circle", role: .cancel),
+                DialogActionSpec(
+                    id: "create",
+                    title: L(.createDatabaseConfirm),
+                    systemImage: "checkmark",
+                    role: .primary,
+                    isEnabled: PrivilegeProbe.isValidDatabaseName(trimmedName)
+                )
+            ]) { chosen in
+                if chosen == "cancel" { dismiss() } else { submit() }
             }
         }
         .padding(20)

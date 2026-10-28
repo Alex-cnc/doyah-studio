@@ -29,7 +29,7 @@ struct RelaunchPromptSheet: View {
 
             HStack {
                 Spacer()
-                DialogActionButton(systemName: "clock", title: L(.relaunchLater)) {
+                DialogActionButton(systemName: "clock", title: L(.relaunchLater), role: .cancel) {
                     localization.isRelaunchPromptPresented = false
                 }
                 .keyboardShortcut(.cancelAction)

@@ -44,7 +44,7 @@ struct AgentScheduleSheet: View {
             HStack {
                 Text(L(.agentScheduleTitle)).font(Theme.font(.title))
                 Spacer()
-                Button(L(.commonClose)) { dismiss() }
+                Button(L(.commonClose), role: .cancel) { dismiss() }
             }
             if let missed = missedPrompt {
                 HStack(spacing: Spacing.s) {
@@ -54,7 +54,7 @@ struct AgentScheduleSheet: View {
                     Button(L(.dataTaskRunNow)) {
                         Task { await appState.runMissedAgentScheduleNow() }
                     }
-                    Button(L(.commonClose)) { appState.dismissAgentScheduleMissed() }
+                    Button(L(.commonClose), role: .cancel) { appState.dismissAgentScheduleMissed() }
                 }
                 .padding(Spacing.s)
                 .background(Theme.status(.warning).opacity(0.12), in: RoundedRectangle(cornerRadius: Radius.control))
@@ -248,7 +248,7 @@ private struct AgentScheduleForm: View {
             }
             Divider()
             HStack {
-                Button(L(.commonCancel)) { dismiss() }
+                Button(L(.commonCancel), role: .cancel) { dismiss() }
                 Spacer()
                 Button(L(.commonSave)) {
                     Task { await save() }

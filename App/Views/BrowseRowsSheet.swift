@@ -106,7 +106,7 @@ struct BrowseRowsSheet: View {
 
             HStack {
                 Spacer()
-                DialogActionButton(systemName: "xmark.circle", title: L(.commonCancel)) { onDismiss() }
+                DialogActionButton(systemName: "xmark.circle", title: L(.commonCancel), role: .cancel) { onDismiss() }
                 DialogActionButton(systemName: "number.circle", title: L(.browseSheetCount)) {
                     appState.countRows(object, filter: resolvedFilter)
                     onDismiss()

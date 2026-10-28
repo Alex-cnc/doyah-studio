@@ -79,7 +79,7 @@ struct AccountSyncSheet: View {
 
             HStack(spacing: Spacing.s) {
                 Spacer()
-                DialogActionButton(systemName: "xmark", title: L(.commonClose)) {
+                DialogActionButton(systemName: "xmark", title: L(.commonClose), role: .cancel) {
                     dismiss()
                 }
                 .keyboardShortcut(.cancelAction)

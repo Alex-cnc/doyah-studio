@@ -68,7 +68,7 @@ struct SQLTaskSaveSheet: View {
             HStack {
                 Spacer()
 
-                DialogActionButton(systemName: "xmark.circle", title: L(.commonCancel)) {
+                DialogActionButton(systemName: "xmark.circle", title: L(.commonCancel), role: .cancel) {
                     dismiss()
                 }
 

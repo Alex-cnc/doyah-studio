@@ -58,7 +58,7 @@ struct SQLArchiveSheet: View {
 
                 Spacer()
 
-                DialogActionButton(systemName: "xmark", title: L(.commonClose)) { dismiss() }
+                DialogActionButton(systemName: "xmark", title: L(.commonClose), role: .cancel) { dismiss() }
                     .keyboardShortcut(.defaultAction)
             }
         }

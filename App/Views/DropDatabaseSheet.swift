@@ -51,18 +51,19 @@ struct DropDatabaseSheet: View {
                 .foregroundStyle(.secondary)
                 .frame(width: 420, alignment: .leading)
 
-            HStack {
-                Spacer()
-
-                DialogActionButton(systemName: "xmark.circle", title: L(.commonCancel)) {
-                    dismiss()
-                }
-
-                DialogActionButton(systemName: "checkmark", title: L(.dropDbConfirm), role: .destructive) {
-                    onConfirm(databaseName)
-                    dismiss()
-                }
-                .disabled(typedName.trimmingCharacters(in: .whitespacesAndNewlines) != databaseName)
+            DialogActionRow(actions: [
+                DialogActionSpec(id: "cancel", title: L(.commonCancel), systemImage: "xmark.circle", role: .cancel),
+                DialogActionSpec(
+                    id: "drop",
+                    title: L(.dropDbConfirm),
+                    systemImage: "trash",
+                    role: .destructive,
+                    isEnabled: typedName.trimmingCharacters(in: .whitespacesAndNewlines) == databaseName
+                )
+            ]) { chosen in
+                guard chosen == "drop" else { return dismiss() }
+                onConfirm(databaseName)
+                dismiss()
             }
         }
         .padding(20)

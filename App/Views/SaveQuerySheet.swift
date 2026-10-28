@@ -1,4 +1,5 @@
 import SwiftUI
+import DoyahCore
 
 /// 「保存查询」命名表单。
 struct SaveQuerySheet: View {
@@ -34,19 +35,19 @@ struct SaveQuerySheet: View {
                     .foregroundStyle(.orange)
             }
 
-            HStack {
-                Spacer()
-
-                DialogActionButton(systemName: "xmark.circle", title: L(.commonCancel)) {
-                    dismiss()
-                }
-
-                DialogActionButton(systemName: "square.and.arrow.down", title: isDuplicate(trimmedName) ? L(.saveQueryOverwrite) : L(.commonSave)) {
-                    onSave(trimmedName)
-                    dismiss()
-                }
-                .keyboardShortcut(.defaultAction)
-                .disabled(trimmedName.isEmpty)
+            DialogActionRow(actions: [
+                DialogActionSpec(id: "cancel", title: L(.commonCancel), systemImage: "xmark.circle", role: .cancel),
+                DialogActionSpec(
+                    id: "save",
+                    title: isDuplicate(trimmedName) ? L(.saveQueryOverwrite) : L(.commonSave),
+                    systemImage: "square.and.arrow.down",
+                    role: .primary,
+                    isEnabled: !trimmedName.isEmpty
+                )
+            ]) { chosen in
+                guard chosen == "save" else { return dismiss() }
+                onSave(trimmedName)
+                dismiss()
             }
         }
         .padding(20)
@@ -86,21 +87,21 @@ struct GoToLineSheet: View {
                     .foregroundStyle(.orange)
             }
 
-            HStack {
-                Spacer()
-
-                DialogActionButton(systemName: "xmark.circle", title: L(.commonCancel)) {
-                    dismiss()
+            DialogActionRow(actions: [
+                DialogActionSpec(id: "cancel", title: L(.commonCancel), systemImage: "xmark.circle", role: .cancel),
+                DialogActionSpec(
+                    id: "go",
+                    title: L(.goToLineConfirm),
+                    systemImage: "checkmark",
+                    role: .primary,
+                    isEnabled: parsedLine != nil
+                )
+            ]) { chosen in
+                guard chosen == "go" else { return dismiss() }
+                if let parsedLine {
+                    onGo(parsedLine, parsedColumn)
                 }
-
-                DialogActionButton(systemName: "checkmark", title: L(.goToLineConfirm)) {
-                    if let parsedLine {
-                        onGo(parsedLine, parsedColumn)
-                    }
-                    dismiss()
-                }
-                .keyboardShortcut(.defaultAction)
-                .disabled(parsedLine == nil)
+                dismiss()
             }
         }
         .padding(20)
