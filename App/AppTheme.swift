@@ -222,6 +222,19 @@ enum Theme {
         let (red, green, blue) = ColorContrast.components(hex)
         return NSColor(srgbRed: red, green: green, blue: blue, alpha: 1)
     }
+
+    /// 令牌色 + 浓度（底色 / 半透明叠加用，如 `FR-STD-WS-EDIT-020` 的括号匹配底色）。
+    ///
+    /// 为什么不能拿 `nsColor(color).withAlphaComponent(a)` 凑：上面那个动态色是靠
+    /// `NSColor(name:dynamicProvider:)` 实现的，`withAlphaComponent` 会把它的动态性丢掉
+    /// （深浅两套只剩一套）。所以这里照同一套写法把 alpha 揉进两套值里。
+    static func nsColor(_ color: ThemeColor, alpha: CGFloat) -> NSColor {
+        let light = Self.nsColor(hex: color.light).withAlphaComponent(alpha)
+        let dark = Self.nsColor(hex: color.dark).withAlphaComponent(alpha)
+        return NSColor(name: nil) { appearance in
+            appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? dark : light
+        }
+    }
 }
 
 /// 发丝线视图：**替代系统 `Divider()`**（名字带 View 是为了不与 `Core.Hairline` 的透明度令牌重名）。

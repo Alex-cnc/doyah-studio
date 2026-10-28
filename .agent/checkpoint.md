@@ -1,18 +1,20 @@
 # 检查点
 
-updated: 2026-10-28T20:52
+updated: 2026-10-28T21:10
 
 ## 现状
 
 - 循环卡 = `.agent/loop-card.md`（**2026-10-28 20:08 主人改成接力制**：一轮收尾即 `cronjob_manage action=run job_id=e98fad41f72d` 点火下一轮；定时器 5 分钟一跳只做兜底；不再按剩余条数自调阶梯）。
 - 队列唯一来源 = `Docs/Doyah产品开发计划任务清单-macOS端.md`（`FR-STD-*` 里实现为 `⬜`／`🟡`）；`.agent/plan.yaml` 已停用。
-- 最近读数（2026-10-28 R35）：`verify-core` **4319 例 / 12 skipped / 0 failures**；五门 rc 全 0；包 `dist/DoyahStudio-beta1.0.app` sha256 前缀 `d7cb69e9` · 97,316 KB。
+- 最近读数（2026-10-28 R36）：`verify-core` **4331 例 / 12 skipped / 0 failures**；五门 rc 全 0；包 `dist/DoyahStudio-beta1.0.app` sha256 前缀 `fe8c6662` · 97,328 KB（2026-10-28 21:04 出）。
 
 ## 下一项
 
 按台账取「优先=高 → 中；同档取判据可机械跑的」：
 
-1. `FR-STD-DB-TASK-002`（**优先=高**，高危任务执行前逐条列出 + 审批；`DataTask*` 已在盘 —— **先核验再翻状态**，别重做）；
+1. `FR-STD-DB-TASK-002`（**优先=高**；需求正文在《需求规格说明书》§「高危任务执行前逐条列出」= 逐条语句 + 目标库 + 预估影响范围，
+   前置审批、未确认不发、拒绝留痕；`Core/AgentApprovalGate` 与审批单「≈N 行」已在盘 —— **先核已有面再定缺口**，别重做）。
+   ⚠️ 台账该行「一句话」是 `—`（占位未填，行在台账 §「补登记」段），正文一律以需求书为准；
 2. `FR-STD-WS-FS-003` 复核（行内悬浮菜单已在盘；**拖拽移动 / 在终端中打开**未核验）；
 3. `FR-STD-WS-EDIT-015` / `FR-STD-WS-AI-002` 剩的一半 —— 界面入口（Core 13 / 19 例已在盘）；
 4. `FR-STD-WS-VCS-001`（Git 只读与差异）/ `FR-STD-WS-TOOL-003`（DAP 调试器）—— 优先=中，纵切较大，排后；
@@ -21,6 +23,12 @@ updated: 2026-10-28T20:52
 
 ## 已完成的片
 
+- **R36（2026-10-28 21:10）· `FR-STD-WS-EDIT-020` 括号匹配高亮** —— 新 `Core/BracketHighlight.swift`
+  （`plan(in:selection:)`：光标紧邻括号 ⇒ 亮那一半 + 配对者两段；三档角色 `matched` / `unmatched` / `truncated`
+  各钉一个主题令牌；有选中不亮；超 `scanLimit` 报「太远」而不是「不匹配」）+ `Theme.nsColor(_:alpha:)` 重载
+  （alpha 揉进深浅两套值 —— `withAlphaComponent` 会把 `NSColor(name:)` 的动态性塌成一套）+ 编辑器接线
+  （`refreshBracketHighlight` 涂/清唯一落点、选区一变重算、整篇重涂后补回）+ `Tests/BracketHighlightTests` 12 例；
+  读数 `verify-core` 4331 / 0 failures，五门全绿，包 `fe8c6662` · 97,328 KB。台账 实现 🟡 / 判据 ✅（差人工点一次）。
 - **R35（2026-10-28 20:52）· `FR-STD-WS-FS-004/005/006` Explorer 文件操作收口** —— 新 `Core/WorkspaceFileUndo.swift`
   （**一次撤销**：撤销新建 → 再移进废纸篓 / 撤销删除 → 从废纸篓搬回 / 撤销改名 → 改回原名；原位置被占、废纸篓副本消失、
   跨工作区都如实拒）+ `WorkspaceFileOperations.restore` 与 `trashCopyMissing` + `WorkspaceTabSet.retargeting`

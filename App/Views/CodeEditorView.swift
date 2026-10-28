@@ -229,6 +229,9 @@ struct CodeEditorView: NSViewRepresentable {
             reportCursorPosition()
             // 光标动 ⇒ 灰字该重算（换行 / 点到别处 / 选中一段，都应立刻改口或消失）。
             textView?.refreshGhost()
+            // 光标动 ⇒ 括号匹配高亮跟着换（`FR-STD-WS-EDIT-020`）：它判的是「光标紧邻哪个括号」，
+            // 不重算就会一直亮着上一个位置的那一对。
+            textView?.refreshBracketHighlight()
         }
 
         func reportCursorLine() {
@@ -709,6 +712,51 @@ final class CodeTextView: NSTextView {
                       caret: plan.caret, selectionLength: plan.selectionLength)
     }
 
+    // MARK: 括号匹配高亮（FR-STD-WS-EDIT-020）
+
+    /// 上一次涂过底色的字符范围（清场用）。**只记范围、不记颜色** ——
+    /// 颜色每次从令牌现取，换主题后下一次刷新拿的就是新值。
+    private var bracketHighlightRanges: [NSRange] = []
+
+    /// 按当前选区重算括号匹配高亮：**涂与清都只有这一处**。
+    ///
+    /// 判定全在 `Core/BracketHighlight`（纯函数，`Tests/BracketHighlightTests.swift`）；
+    /// 这里只做两件事：把上一批底色摘掉、把新一批按令牌色涂上。
+    func refreshBracketHighlight() {
+        guard let storage = textStorage else { return }
+        // 组字期间不动属性（会打断输入法、丢 marked text）—— 与 `apply(tokens:)` 同一条理由。
+        guard !hasMarkedText() else { return }
+        let length = storage.length
+
+        storage.beginEditing()
+        // 清场只摘 `.backgroundColor`，**不重置整段属性**：那个字符可能同时带着语法色
+        // （字符串 / 注释里的括号就是），整段 `setAttributes` 会把它涂回默认色。
+        for range in bracketHighlightRanges
+        where range.location >= 0 && range.location + range.length <= length {
+            storage.removeAttribute(.backgroundColor, range: range)
+        }
+        bracketHighlightRanges = []
+
+        if let plan = BracketHighlight.plan(in: string, selection: selectedRange()) {
+            let color = Theme.nsColor(
+                plan.role.color(in: Theme.designTheme), alpha: plan.role.backgroundOpacity
+            )
+            for range in plan.spans
+            where range.location >= 0 && range.length > 0 && range.location + range.length <= length {
+                storage.addAttribute(.backgroundColor, value: color, range: range)
+                bracketHighlightRanges.append(range)
+            }
+        }
+        storage.endEditing()
+    }
+
+    /// 整篇重涂之后把括号底色补回来（`apply(tokens:)` 会 `setAttributes` 铺满全文，
+    /// 那一下把之前的底色一起抹掉了）。清掉记账再重算，避免拿旧范围去摘已经不存在的东西。
+    func reapplyBracketHighlight() {
+        bracketHighlightRanges = []
+        refreshBracketHighlight()
+    }
+
     /// 注释切换（`FR-EDIT-51`）：**语言从当前文档来、注释符从语言表来** —— 本文件里不出现任何具体注释符
     /// （语言知识只有 `Core/CodeLanguageDefinitions.swift` 一处，新增语言因此不改核心代码）。
     /// 返回 `false` = 这门语言没登记行注释符 / 没什么可动的 ⇒ 按键**不吞**，交还系统。
@@ -810,6 +858,9 @@ final class CodeTextView: NSTextView {
             .font: baseFont,
             .foregroundColor: Theme.nsColor(TextTone.primary)
         ]
+        // 上面那次 `setAttributes` 铺满全文 ⇒ 括号底色被一起抹掉了，这里补回来
+        // （`FR-STD-WS-EDIT-020`：光标不动、只是文本变了时也得继续亮着）。
+        reapplyBracketHighlight()
     }
 
     private static func attributes(
