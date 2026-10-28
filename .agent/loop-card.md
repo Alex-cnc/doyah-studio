@@ -43,6 +43,19 @@
 同标签 06:21:52 那份 `1fc685cd`（含片补本条之前）与 06:04:40 那份 `dafed86a` 作废。明细见 `.agent/evidence/2026-10-29-FS-010.md`。
 **R63（2026-10-29）陈旧标记归正 8 条**（只翻判据列 🟡 → ✅，**零新增用例、Core 总数 4825 不变、零源码改动 ⇒ 未重建，包沿用 `594b301e`**）：
 `FR-STD-WS-NAV-004`（`InlineGhostCompletion` 18 + `InlineGhostSQL` 12 + `InlineGhostPath` 16 = 46 例）· `FS-009`（`WorkspaceChangeScope` 9）· `EDIT-013`（`WorkspaceHeaderSearch` 12）· `UI-003`（`WorkspaceClosePolicy` 10）· `EDIT-006`/`EDIT-007`（同一份 `MarkdownEditing` 18）· `EDIT-019`（`CodeAutoPairing` 21）· `EDIT-008`（`CodeCommentToggle` 12），九个 `--filter` 全 `Executed N … 0 failures`。三处旧数字按实测改登记（30 条 ⇒ 12 例 / 8 例 ⇒ 10 例 / 17 例 ⇒ 18 例）；`FS-009` 实现列 ✅ → 🟡 **如实下调**（备注自己写着「剩：界面点验」）。分族 ⇒ 实现 126/81/6 · 判据 158/48/6/—1（= 213）。明细 `.agent/evidence/2026-10-29-stale-marks-R63.md`。
+**R64（2026-10-29）已把 `FR-STD-WS-NAV-006`（悬停文档 + 跳转到定义，词法级）接通**：`Core/SymbolOutline.swift` 建同文件符号表 ——
+声明扫描按语言的声明关键字表（`SymbolRules.table`，加语言只动一行）· **作用域由内向外**（`{ }` 建作用域森林，兄弟函数里的同名**不许借**，
+走到底没有就明说查不到 —— 需求末栏「不是全文搜一遍同名」）· 字符串 / 注释里的同名不算符号（掩码取 `CodeLexer.protectedSpans`，与折叠 / 片段同一份）·
+SQL 的 `FROM orders o` 记别名 `target`、`o.total` 说得出是哪张表的列。接线 `App/Views/SymbolHover.swift` **一份给两个编辑面**：
+悬停 = 系统 tooltip 动态文案（弹出那一刻按位置解析）、⌘ 点击 = 跳定义（**查不到不吞点击**），`CodeTextView` 按页签语言 / `SQLTextView` 固定 SQL。
+实现 **🟡**（差人工点一次：停在函数调用处应浮出「名字 · 函数 · 行 N · ⌘ 点击跳到定义」/ ⌘ 点它光标落到函数名 / 字符串里的同名不弹 /
+本文件没声明就明说查不到）/ 判据 **✅**（21 + 4 例；反例两段各判红后逐字节还原）；包 `6547b7b9（06:54:32）`，
+同标签 06:54:16 那份 `26e918e8` 作废。**菜单项 / 快捷键入口没做**（需求 ② 的「点或快捷键」已满足其一 —— ⌘ 点击）：
+加菜单项要动 `App/ShortcutCatalog`（快捷键单一事实来源）+ 菜单语言表，属另一片，本轮不顺手扩范围。
+⚠️ 同批补登 `check-language-registry` 的 A 档声明面（含第六十一批漏登记的 `Core/SnippetTemplate.swift`）⇒ 该判据由红转绿（补登记不是放宽）。
+明细见 `.agent/evidence/2026-10-29-NAV-006.md`。
+⚠️ **R64 实测留一条给下一轮**：撤销粒度（`FR-STD-WS-EDIT-014`）用「手工造撤销分组」的探针**量不出真实按键粒度** ——
+无事件流的探针里 `breakUndoCoalescing()` 不起作用（整段打字的撤销全并成一层），探针读数会诱人写出一个错的修法。
 **R61（2026-10-29）已把 `FR-STD-WS-NAV-005`（片段模板 / snippets）接通**：骨架是数据、判定是纯函数 ——
 `Core/SnippetTemplate.swift` 三件纯事：**解析**（`$1` / `${1:默认}` / `$0`；`$$`·`\$` 转义；认不出的 `${…` 原样落字符）·
 **触发**（整词、大小写不敏感、后面还接词字符就拒、**触发词范围**落在字符串 / 注释里就拒 —— 判词不判光标：`'select'` 与 `-- select` 那两种现场光标都可能刚好在掩码外一格）·
@@ -62,7 +75,7 @@
 同标签 05:45:26 那份 `164a7fe0` 作废。明细见 `.agent/evidence/2026-10-29-META-006.md`。
 **R59（2026-10-29）已把 `FR-STD-WS-EDIT-015`（整批撤回）接通**：账仍是唯一前像来源（`agentEditJournal.before`）—— `snapshots(from:)` → `plan`（同一路径合并时**前像取最早、摘要取最新**；原来取最后一次写，一批里改两次就只撤掉一半，与「一次撤回把所有改动还原」相反）→ `inverse(of:reader:)` 出反向批次（冲突步不生成）⇒ 撤回本身可再撤回 → `AgentBatchRevertReceipt` 留痕（计数取自 `apply` 的读数）。接线：`AppState.revertAgentBatch` / `redoAgentBatchRevert`（路径过沙箱、越界抛错不写盘、撤完同步正开着的页签）+ 对话页输入框上方一行「这一轮 Agent 改了 N 个文件 · 整批撤回 / 已撤回 N 个（M 处没动）· 撤销这次撤回」+ 语言表 6 键中英齐。实现 **🟡**（差人工点一次：① 让 Agent 改两个文件点「整批撤回」，两个都应回到改前；② 撤前手工再改其中一个 ⇒ 那个读「没动」且内容一个字不动；③ 点「撤销这次撤回」应回到 Agent 写完那一版）/ 判据 **✅**（`Tests/AgentBatchRevertTests` 9 例 + `Tests/AgentBatchRevertSourceTests` 5 例，反例四段各判红后逐字节还原）；包 `a120a874（05:28:14）`，同标签 05:25:26 那份 `20adc61a` 作废。明细见 `.agent/evidence/2026-10-29-EDIT-015.md`。
 ⚠️ 同批把第五十七批留下的 8 条 `check-format-arguments` 真红修干净：四处回执文案从「模板串交给 Core 去格式化」改成**值格式闭包**（`{ L(.receiptSeconds, $0) }`）—— 模板与实参回到同一句，判 B 不再是假红、A/A′ 开始真的检查这四句；形状台账按实测对齐（+5 形状 / 3 处处数跟版 / 预算 170 → 188，理由写进 note）。
-下一条活（R62 核过：高档与中档都只剩「人工点验 / 陈旧标记归正」）⇒ ✅ **① `FR-STD-WS-NAV-004` 陈旧标记归正已落地（R63：同类 8 条一并归正、只翻判据列不加用例，本条关闭、不得重复执行）**；② 低档里还剩两个真 ⬜：`FR-STD-WS-NAV-006`（悬停文档 + 跳定义，词法级）/ `FR-STD-WS-EDIT-014`（撤销语义粒度）—— 取之前先 `grep` 源码看机械判据差哪一半；备选：`FR-STD-DB-DIAG-006`（台账那一行需求摘要还是「—」，**先要把口径问出来**，别自己编）· `FR-STD-WS-LIC-001`（授权入口，等人工验收）。
+下一条活（R64 核过）⇒ **① `FR-STD-WS-NAV-006` 已落地（R64，本条关闭、不得重复执行）**；② 低档真 ⬜ 只剩 **`FR-STD-WS-EDIT-014`**（撤销语义粒度）—— 取之前先 `grep` 源码看机械判据差哪一半，并先读 R64 那条探针边界（无 GUI 下量不出真实按键粒度）；备用：备选：`FR-STD-DB-DIAG-006`（台账那一行需求摘要还是「—」，**先要把口径问出来**，别自己编）· `FR-STD-WS-LIC-001`（授权入口，等人工验收）。
 ⚠️ `FR-STD-WS-TOOL-003`（DAP 调试器）与 `FR-STD-WS-AI-001`（编辑区 AI 辅助）纵切过大，排后。
 **存量红六条（2026-10-29 在干净工作树 `git worktree add 874a3e48` 里逐条对照过：基线就红、本循环未加重）**：`check-core-portability`（`Core/AgentCodeRunner.swift:57` 硬编码 `/usr/local/`）· `check-core-localization`（`Binary files` 未白名单）· `check-button-icon-only`（11 处，含 R53 `HTMLPreviewView`）· `check-literal-language`（`Core/AgentNotifyChannel.swift:178`）· `check-doc-q-series`（`Docs/通用开发规范.md` 解析不到 §4/§6）· `check-doc-layout`（12 条）。**这六条使 `verify-all.sh` 不可能全绿 —— 别每轮重复当新账报，要清它们得单开一条活。**
 **`verify-all.sh` 全跑（2026-10-29 R58 实测 18 项 rc=1）另有五处红，也都不是功能片的账**：第 4 项 `check-pending-agenda --self-test` 缺本机文件 `Docs/智能体助手-开发规范.md`（.gitignore 内）· 第 9 项 `test-empty-action-buttons` 的负例夹具还找 `.disabled(trimmedName.isEmpty)`（R57 改走 `isEnabled:` 后没跟夹具，基线同样红）与 `check-panel-root-frames` 的 `scannedFiles` 104 vs 实测 105（R57 新增回执页视图后没跟版，基线同样红）· 第 11 项 `check-menu-language` 起不来应用 dump 菜单（**本会话无 GUI**）· 第 16 项 `check-tri-repo-parity`（共享脚本 sha 与三仓台账不符）· 第 18 项 `check-release-version` 缺 `Docs/发布方案.md` / `Docs/发布计划.md`（本机未同步）。⇒ **收尾只报「五门 + check-format-arguments」；`verify-all` 的红逐条对基线，不重复当新账。**
@@ -82,6 +95,7 @@
 **节点级失败重试那一格（R60：造一个连不上的库展开它，红字旁应有「重试」；点了旧红字先消失并重新取一次；在途时入口应消失）**。
 **整批撤回那一格（R59：改两个文件点「整批撤回」应都回改前 / 撤前手工改一个 ⇒ 那个读「没动」且不动 / 点「撤销这次撤回」回到 Agent 版）**。
 **片段模板那一格（R61：打 `select` 按 Tab 出骨架且光标在第一个占位符 / 再按 Tab 依次跳、填完最后一格回到缩进 / 字符串与注释里打 `select` 按 Tab 不该展开 / `selects` 这种带尾巴的词也不展开）**。
+**悬停与跳定义那一格（R64：停在函数调用处应浮出「名字 · 函数 · 行 N · ⌘ 点击跳到定义」/ ⌘ 点它光标应落到函数名上并滚到可见 / 停在字符串里的同名上应**不弹** / 停在本文件没声明的标识符上应明说「本文件里没有它的定义」）**。
 **多工作区切换那一格（R62：再选一个文件夹后标头菜单应两条且新的打勾 / 在菜单里切回旧的，树与页签跟着换且旧的不再是活动 / 把某个工作区的目录删掉，那一条应写「目录不在了」且点不动 / 重启应用停在最后用的那一条）**。
 **接力机制如实记一笔**：本会话没有 `cronjob_manage` 工具 ⇒ 收尾用 `hermes cron run e98fad41f72d`（CLI 等价）点火；
 点不着就靠 5 分钟兜底定时器，别手工改 schedule。

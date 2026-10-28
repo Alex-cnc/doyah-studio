@@ -626,11 +626,32 @@ final class CodeTextView: NSTextView {
     /// 点在行号槽的**标记列**上 = 折 / 展那一块；其余位置的点击原样交还（选词、拖选都不受影响）。
     override func mouseDown(with event: NSEvent) {
         let point = convert(event.locationInWindow, from: nil)
+        // ⌘ 点击 = 跳到定义（`FR-STD-WS-NAV-006` ②）。解析与跳转都在 `SymbolHover.swift` 那一份里
+        // （与 SQL 编辑器**同一份**），这里只递坐标；查不到就**不吞这次点击**，交还系统做选词。
+        if event.modifierFlags.contains(.command), revealDefinition(at: point) { return }
         if let line = gutter.foldMarkerLine(at: point, of: self) {
             onToggleFold?(line)
             return
         }
         super.mouseDown(with: event)
+    }
+
+    // MARK: 悬停文档（`FR-STD-WS-NAV-006` ①）
+
+    /// 几何一变就重登记 tool tip（矩形是**当时的 bounds**，不重登记则新露出的区域不弹）。
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        installSymbolToolTip()
+    }
+
+    /// 系统 tooltip 的**动态**文案：在弹出那一刻按鼠标位置解析
+    /// （静态 `toolTip` 只能写一句固定的话，而这里每一格答案都不同）。
+    /// 判定、句子、跳转全在 `SymbolHover.swift` 那一份 —— 与 SQL 编辑器同一份实现。
+    @objc func view(_ view: NSView,
+                    stringForToolTip tag: NSView.ToolTipTag,
+                    point: NSPoint,
+                    userData data: UnsafeMutableRawPointer?) -> String {
+        symbolToolTipText(at: point) ?? ""
     }
 
     /// 先让 `NSTextView` 画底色与正文，再把行号画上去 —— 顺序反了会被底色盖掉
@@ -1231,4 +1252,12 @@ final class CodeTextView: NSTextView {
             return [:]
         }
     }
+}
+
+// MARK: 悬停文档与跳转到定义（`FR-STD-WS-NAV-006`）
+
+/// 工作区编辑器按**当前页签的语言**建符号表 —— 与着色 / 补全同一个 `completionLanguage`
+/// （另立一个「这份文件是什么语言」的字段，两者迟早分家）。其余全在 `SymbolHover.swift`。
+extension CodeTextView: SymbolHoverHost {
+    var symbolLanguage: TextLanguage { completionLanguage }
 }

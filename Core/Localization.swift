@@ -188,6 +188,18 @@ public enum LKey: String, CaseIterable, Sendable {
     case menuFormat
     /// `FR-EDIT-48` ⑤：Markdown 任务框勾选翻转（菜单项，与 ⌘L 同一入口）。
     case menuToggleTaskCheckbox
+    /// `FR-STD-WS-NAV-006`：悬停文档与跳转到定义。**Core 只给结构**（`SymbolHover`），
+    /// 句子在这里 —— 与其它界面文案同一条口径（`L(...)` 是唯一出口）。
+    case symbolKindFunction
+    case symbolKindType
+    case symbolKindVariable
+    case symbolKindTable
+    case symbolKindAlias
+    case symbolKindColumn
+    case symbolLineLabel
+    case symbolGoToDefinitionHint
+    case symbolNoDefinitionInFile
+    case symbolNoSymbolsForLanguage
     case appearanceTitle
     case appearanceAccentSection
     case appearanceAccentHint
@@ -3379,6 +3391,16 @@ public enum LocalizedStrings {
         .accountRecoveryDeferred: [.simplifiedChinese: "这个入口先留着：找回 / 重置的本体还没做。重置后该账号的既有会话会全部作废。", .english: "This entry point is reserved: the reset flow itself isn't built yet. A reset invalidates every existing session for that account."],
         .menuFormat: [.simplifiedChinese: "格式化代码", .english: "Format Code"],
         .menuToggleTaskCheckbox: [.simplifiedChinese: "翻转任务框勾选", .english: "Toggle Task Checkbox"],
+        .symbolKindFunction: [.simplifiedChinese: "函数", .english: "function"],
+        .symbolKindType: [.simplifiedChinese: "类型", .english: "type"],
+        .symbolKindVariable: [.simplifiedChinese: "变量", .english: "variable"],
+        .symbolKindTable: [.simplifiedChinese: "表", .english: "table"],
+        .symbolKindAlias: [.simplifiedChinese: "别名", .english: "alias"],
+        .symbolKindColumn: [.simplifiedChinese: "列", .english: "column"],
+        .symbolLineLabel: [.simplifiedChinese: "行", .english: "line"],
+        .symbolGoToDefinitionHint: [.simplifiedChinese: "⌘ 点击跳到定义", .english: "⌘-click to jump to definition"],
+        .symbolNoDefinitionInFile: [.simplifiedChinese: "本文件里没有它的定义（跨文件与语言服务器不在本期）", .english: "No definition in this file (cross-file and language servers are out of scope for now)"],
+        .symbolNoSymbolsForLanguage: [.simplifiedChinese: "这个类型不建符号表", .english: "No symbol table for this file type"],
         .menuAppearance: [.simplifiedChinese: "外观…", .english: "Appearance…"],
         .appearanceTitle: [.simplifiedChinese: "外观", .english: "Appearance"],
         .appearanceAccentSection: [.simplifiedChinese: "强调色", .english: "Accent Color"],

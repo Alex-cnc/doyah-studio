@@ -104,6 +104,14 @@ CONSUMER_FILES = (
     "Core/TextLanguage.swift",
     "Core/WorkspaceSession.swift",
     "Core/WorkspaceTab.swift",
+    # 2026-10-29 第六十四批：悬停文档与跳转到定义（`FR-STD-WS-NAV-006`）新增的三处语言消费者 ——
+    # 符号表按语言取声明关键字（`SymbolOutline`）、接线层回答「这份文本按哪种语言建表」（`SymbolHover` /
+    # `SQLEditorView`）。**登记不是放宽**：它们的语言知识仍只在 `SymbolRules.table` 与登记表里，
+    # 引擎里没有一处 `language == .xxx`。
+    "Core/SymbolOutline.swift",
+    "App/Views/SymbolHover.swift",
+    "App/Views/SQLEditorView.swift",
+    "Core/SnippetTemplate.swift",   # 第六十一批（片段模板）新增的消费者漏登记 ⇒ 判据一直红着，本批一并补登
 )
 # 发现面（2026-10-14 修 · 原单 T-20261010-048）：这些目录下**引用语言类型**的生产级 `.swift`
 # 就是「语言消费方」。声明面必须与它**同集合**（多一份 = 新增消费者没人审；少一份 = 死条目）。

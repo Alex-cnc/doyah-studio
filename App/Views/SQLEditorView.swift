@@ -714,6 +714,18 @@ final class SQLTextView: NSTextView {
         )
         addTrackingArea(area)
         hoverTrackingArea = area
+        // 悬停文档（`FR-STD-WS-NAV-006` ①）：几何一变就重登记 —— tool tip 的矩形是**当时的 bounds**，
+        // 换了窗口大小不重登记，右边新露出来的区域不弹提示。
+        installSymbolToolTip()
+    }
+
+    /// 系统 tooltip 的**动态**文案（`FR-STD-WS-NAV-006` ①）：解析与句子都在
+    /// `SymbolHover.swift` 那一份里 —— 与工作区编辑器**同一份实现**，这里只递坐标。
+    @objc func view(_ view: NSView,
+                    stringForToolTip tag: NSView.ToolTipTag,
+                    point: NSPoint,
+                    userData data: UnsafeMutableRawPointer?) -> String {
+        symbolToolTipText(at: point) ?? ""
     }
 
     override func viewDidMoveToWindow() {
@@ -1098,6 +1110,13 @@ final class SQLTextView: NSTextView {
     /// 用 `characterIndexForInsertion(at:)` 把鼠标位置换算成文本偏移，再交给 Core
     /// 逐行取列（短行夹到行尾、绝不跨换行）—— 换算与语义都在 Core 里，这里只搬坐标。
     override func mouseDown(with event: NSEvent) {
+        // ⌘ 点击 = 跳到定义（`FR-STD-WS-NAV-006` ②）：与工作区编辑器**同一份实现**
+        // （`SymbolHover.swift` 的 `revealDefinition(at:)`），这里只递坐标。
+        // 查不到不吞点击 —— 交还系统做选词，别把一次普通 ⌘ 点击变成「什么都没发生」。
+        if event.modifierFlags.contains(.command),
+           revealDefinition(at: convert(event.locationInWindow, from: nil)) {
+            return
+        }
         guard event.modifierFlags.contains(.option) else {
             super.mouseDown(with: event)
             return
@@ -1209,4 +1228,11 @@ final class SQLTextView: NSTextView {
             return [:]
         }
     }
+}
+
+// MARK: 悬停文档与跳转到定义（`FR-STD-WS-NAV-006`）
+
+/// 数据库侧的编辑器固定按 SQL 建符号表（表 / 别名 / 限定列）。
+extension SQLTextView: SymbolHoverHost {
+    var symbolLanguage: TextLanguage { .sql }
 }

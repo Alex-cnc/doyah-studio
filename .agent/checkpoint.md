@@ -1,6 +1,6 @@
 # 检查点
 
-updated: 2026-10-29T06:34
+updated: 2026-10-29T06:58
 
 ## 现状
 
@@ -8,6 +8,21 @@ updated: 2026-10-29T06:34
   点火下一轮；定时器 5 分钟一跳只做兜底；不再按剩余条数自调阶梯）。**本会话无 `cronjob_manage` 工具** ⇒ 接力改用 CLI
   `hermes cron run e98fad41f72d`（同一效果：下一跳调度器拉起），详见 loop-card 的「节奏」段。
 - 队列唯一来源 = `Docs/Doyah产品开发计划任务清单-macOS端.md`（`FR-STD-*` 里实现为 `⬜`／`🟡`）；`.agent/plan.yaml` 已停用。
+- 最近读数（2026-10-29 **R64**）：`verify-core` **4850 项 / 0 failures**（4825 → +25 = `Tests/SymbolOutlineTests` 21 例 +
+  `Tests/SymbolHoverSourceTests` 4 例）；五门 + `check-format-arguments` rc 全 0；**同批把 `check-language-registry` 的
+  A 档声明面补齐**（新增的 `Core/SymbolOutline.swift` / `App/Views/SymbolHover.swift` / `App/Views/SQLEditorView.swift`，
+  以及第六十一批漏登记的 `Core/SnippetTemplate.swift`）⇒ 该判据由红转绿（**补登记不是放宽**：引擎里仍 0 处语言身份分支）。
+  包 `dist/DoyahStudio-beta1.0.app` sha256 **`6547b7b9`**（构建时刻 2026-10-29T06:54:32+0800；二进制 102,278,512 字节；
+  同标签 06:54:16 那份 `26e918e8` 出在发布说明含片补本条之前 ⇒ 作废；06:22:20 那份 `594b301e` 自本批起作废）。
+  台账本条：`FR-STD-WS-NAV-006`（悬停文档与跳转到定义）实现 ⬜ → **🟡**（**界面已接线**：`App/Views/SymbolHover.swift` 一份接线给
+  两个编辑面（tooltip 动态文案 + ⌘ 点击跳定义），差人工点一次 —— 停在函数调用处应浮出「名字 · 函数 · 行 N · ⌘ 点击跳到定义」/
+  ⌘ 点它光标应落到函数名上 / 停在字符串里的同名上应不弹 / 停在本文件没声明的标识符上应明说查不到）、
+  判据 ⬜ → **✅**（21 + 4 例，反例两段各判红后逐字节还原）；分族读数（逐行实数）⇒ 实现 **✅ 126 / 🟡 82 / ⬜ 5 = 213**；
+  判据 **✅ 159 / 🟡 48 / ⬜ 5 / — 1 = 213**。
+  **下一项**：低档真 ⬜ 只剩 `FR-STD-WS-EDIT-014`（撤销语义粒度）。⚠️ R64 已实测过一条**重要的边界**：本机无 GUI，
+  用「手工造撤销分组」的探针量不出真实按键粒度（`breakUndoCoalescing` 在无事件流的探针里不起作用，全部合并成一层）⇒
+  这一条的机械判据要么做成「显式 begin/endUndoGrouping + 分组计数」的 Core 面，要么如实归到「只能人是非判」。
+  取之前先 `grep` 源码看机械判据差哪一半；`FR-STD-WS-TOOL-003`（DAP）与 `FR-STD-WS-AI-001` 纵切过大，排后。
 - 最近读数（2026-10-29 **R63**）：**陈旧标记归正 8 条**（只翻判据列、不加用例）。`verify-core` **4825 项 / 0 failures**
   （与 R62 同值 —— 本轮零新增用例）；五门 + `check-format-arguments` rc 全 0（`check-doc-q-series` 仍为存量红，未加重）；
   零源码改动 ⇒ **未重建**，包沿用 `dist/DoyahStudio-beta1.0.app` sha256 **`594b301e`**（构建时刻 2026-10-29T06:22:20+0800）。
