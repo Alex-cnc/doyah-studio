@@ -39,6 +39,7 @@
 		0857A493800E07E7CE43947A /* CodeEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDA5A3731B9B1EDF993EABA3 /* CodeEditorView.swift */; };
 		0954E1FCCF2684F0D44DEAB5 /* QueryToolbar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 517E7A8BCB5ECB75B6CD4A5A /* QueryToolbar.swift */; };
 		098C835424BB389CB647CAC9 /* AgentSessionLifecycleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6774423825D46A588E4AB11A /* AgentSessionLifecycleTests.swift */; };
+		09C8869B8E43CD472CA78883 /* AutoIndentTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B772E242A93EAE00513F8E97 /* AutoIndentTests.swift */; };
 		0A2174089B9B716212BF7A1F /* NoteSyncTokenRefreshTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88E34D9571E2C8D6CD578DDA /* NoteSyncTokenRefreshTests.swift */; };
 		0A6D787EA5AB9B107F16A95A /* dates1904.xlsx in Resources */ = {isa = PBXBuildFile; fileRef = F3D09F2311E4B89E930FE79A /* dates1904.xlsx */; };
 		0AAAD1C6F34F7D2E0D0BCDE6 /* ReminderPresentationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 92ECE240828C52C9AA4A2C45 /* ReminderPresentationTests.swift */; };
@@ -148,6 +149,7 @@
 		25952B2F2AAD926B341A9323 /* SessionKillTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F67532E09A03909AEE0239D4 /* SessionKillTests.swift */; };
 		25D9D29EE88E19201559F861 /* AgentSlashPendingChange.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C5C4A839E362CCAB41B0006 /* AgentSlashPendingChange.swift */; };
 		25F34670BED1835CF0D0C237 /* NotePresentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5B647505C983FABEB4AB697 /* NotePresentation.swift */; };
+		2691E09D179FC14ADEF5DF3E /* AutoIndent.swift in Sources */ = {isa = PBXBuildFile; fileRef = D226C35181F59EA1945B42B6 /* AutoIndent.swift */; };
 		26E71A6F4C177A4D1B2B5835 /* WebKitBrowserEngineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3706990CE120EAC85F014A6B /* WebKitBrowserEngineTests.swift */; };
 		272A54DEAD24A4C4B91A1D1E /* WallpaperBackground.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0942C617F0A43CF5CFAD0379 /* WallpaperBackground.swift */; };
 		278656636EB6F2AE7726FDD8 /* LocalSecretStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA2FF271DF1C903E814B9111 /* LocalSecretStoreTests.swift */; };
@@ -1577,6 +1579,7 @@
 		B5D1A29013983F0D25EA0474 /* TabNumberGenerator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TabNumberGenerator.swift; sourceTree = "<group>"; };
 		B60DEF55F54D69A9E172D205 /* CodeFormatting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodeFormatting.swift; sourceTree = "<group>"; };
 		B66F088AEF267517C40F8C4A /* AICaptureTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AICaptureTests.swift; sourceTree = "<group>"; };
+		B772E242A93EAE00513F8E97 /* AutoIndentTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoIndentTests.swift; sourceTree = "<group>"; };
 		B7C42FB59DE835B483DA20B8 /* MySQLDialect.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MySQLDialect.swift; sourceTree = "<group>"; };
 		B84BE79998C1F6333DD73C01 /* AgentChatChromeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentChatChromeTests.swift; sourceTree = "<group>"; };
 		B88A1FF76FA46A1F037F38C4 /* TodoQueryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodoQueryTests.swift; sourceTree = "<group>"; };
@@ -1668,6 +1671,7 @@
 		D0A40DDBE7559CE91AF39386 /* LunarCalendarTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LunarCalendarTests.swift; sourceTree = "<group>"; };
 		D0A8AB89FDE2B36A47902273 /* SQLLinter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SQLLinter.swift; sourceTree = "<group>"; };
 		D1C3AE1A444533DB999EDE55 /* AgentInvocationGateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentInvocationGateTests.swift; sourceTree = "<group>"; };
+		D226C35181F59EA1945B42B6 /* AutoIndent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoIndent.swift; sourceTree = "<group>"; };
 		D2445EA872B7A6DCBF7B2250 /* BackupToolCheckTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupToolCheckTests.swift; sourceTree = "<group>"; };
 		D24A7EA14835CF61F6B3AF10 /* CellInspectorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CellInspectorTests.swift; sourceTree = "<group>"; };
 		D2C9287961D51A2CC6598792 /* NebulaBackground.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NebulaBackground.swift; sourceTree = "<group>"; };
@@ -2061,6 +2065,7 @@
 				B66F088AEF267517C40F8C4A /* AICaptureTests.swift */,
 				92D5E6994B47BECB7AA53361 /* AppearanceAxesTests.swift */,
 				538FD957E0C99758FB8D9038 /* ArchiveLocationTests.swift */,
+				B772E242A93EAE00513F8E97 /* AutoIndentTests.swift */,
 				3728DED610AD0195CE34F8BF /* BackupCommandTests.swift */,
 				D01C2FFFA78AC328FB543749 /* BackupExecutionTests.swift */,
 				FEA2459AE29E1071054BB8AC /* BackupSectionTests.swift */,
@@ -2431,6 +2436,7 @@
 				2613A8F6C9A696B79D65D646 /* AppearancePreference.swift */,
 				DCCB8D743E4AC63B8BC49B4D /* AppError.swift */,
 				0DED1D9E78B85B01D68B7A09 /* ArchiveLocation.swift */,
+				D226C35181F59EA1945B42B6 /* AutoIndent.swift */,
 				6F2F90ED96DFCE3C01A7FC09 /* BackupCommand.swift */,
 				80AC5464368C1F00AA095A9A /* BackupExecution.swift */,
 				73A06BFF6500910EC8404200 /* BackupToolCheck.swift */,
@@ -3432,6 +3438,7 @@
 				065FFCCC881B6BD8525DE317 /* AppError.swift in Sources */,
 				404B1AFA8D3ECCED3A73F222 /* AppearancePreference.swift in Sources */,
 				2FD455C66A5576461800EB4E /* ArchiveLocation.swift in Sources */,
+				2691E09D179FC14ADEF5DF3E /* AutoIndent.swift in Sources */,
 				A45D257CC03C89C6B0EB9091 /* BackupCommand.swift in Sources */,
 				E6474CD49B0D600D344BA27B /* BackupExecution.swift in Sources */,
 				D2E86528FF609379BF4AE6DA /* BackupToolCheck.swift in Sources */,
@@ -3784,6 +3791,7 @@
 				36914134FC49A4CB80D413DE /* AgentWriteConcurrencyTests.swift in Sources */,
 				2B0F76FF0B274AB69AC65515 /* AppearanceAxesTests.swift in Sources */,
 				C5E21B256B42E3290C42B50A /* ArchiveLocationTests.swift in Sources */,
+				09C8869B8E43CD472CA78883 /* AutoIndentTests.swift in Sources */,
 				EAC22CF271DFD00B20550D56 /* BackupCommandTests.swift in Sources */,
 				B9057505869B05D09D7E6DC6 /* BackupExecutionTests.swift in Sources */,
 				B7A6563B7C9C98DFC23E8DA0 /* BackupSectionTests.swift in Sources */,

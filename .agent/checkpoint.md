@@ -1,16 +1,18 @@
 # 检查点
 
-updated: 2026-10-28T21:45
+updated: 2026-10-28T21:58
 
 ## 现状
 
 - 循环卡 = `.agent/loop-card.md`（**2026-10-28 20:08 主人改成接力制**：一轮收尾即 `cronjob_manage action=run job_id=e98fad41f72d` 点火下一轮；定时器 5 分钟一跳只做兜底；不再按剩余条数自调阶梯）。
 - 队列唯一来源 = `Docs/Doyah产品开发计划任务清单-macOS端.md`（`FR-STD-*` 里实现为 `⬜`／`🟡`）；`.agent/plan.yaml` 已停用。
-- 最近读数（2026-10-28 R38）：`verify-core` **4371 例 / 12 skipped / 0 failures**；五门 rc 全 0；包 `dist/DoyahStudio-beta1.0.app` sha256 前缀 `503bdf6a` · 97,560 KB（2026-10-28 21:39 出）。
+- 最近读数（2026-10-28 R39）：`verify-core` **4400 例 / 0 failures**（`--filter` 只作过滤读数）；五门 rc 全 0；包 `dist/DoyahStudio-beta1.0.app` sha256 前缀 `38ce7061` · 97,584 KB（2026-10-28 21:54 出）。
 
 ## 下一项
 
-按台账取「优先=高 → 中；同档取判据可机械跑的」：
+**0. `.agent/loop-card.md` 顶部的 `★1 · IM 通道的真配置界面 + 判据收口（FR-AGT-LINK-CHAN-003）`** —— 主人 2026-10-28 当面点出、写进卡里的 ★ 条目，**优先于下面所有常规取活**（不得顺延、不得再问）。真跑通 QQ 网关需主人给 URL / AppID / Secret，那半如实记 blocked。
+
+其余按台账取「优先=高 → 中；同档取判据可机械跑的」：
 
 1. `FR-STD-DB-TASK-001` / `-003`（任务定义的可保存复用 + 执行回执四项读数）—— 与刚做完的 `-002` 同一族，
    `Core/DataTask*` 与 `TaskRunRecord` 已在盘，先核已有面再定缺口（`-003` 的四项读数：成功/失败 · 影响行数 · 耗时 · 错误原文与时刻）；
@@ -22,6 +24,14 @@ updated: 2026-10-28T21:45
 
 ## 已完成的片
 
+- **R39（2026-10-28 21:58）· `FR-STD-WS-EDIT-021` 自动缩进与智能粘贴** —— 新 `Core/AutoIndent.swift`
+  （① 回车继承当前行**实际**缩进（`\t` / 不规则缩进原样带走）② `{` `(` `[` 之后 +一级 ③ `} ) ]` 打头的行 −一级
+  （减到 0 为止；`} else {` 先退再进回到本行那一级）④ 行终止符跟当前行（`\r\n` 文档不插裸 `\n`）
+  ⑤ 夹在**真成对**的括号中间回车 ⇒ 闭合符挪到下一行、新行落内层 ⑥ 四种「不动」⇒ `nil` 交还系统
+  ⑦ 粘贴多行剥外来公共缩进 + 接上下文那一级（**首行不叠加**、空白行不留尾随空格、行尾归一）；单行不重排）
+  + **两个编辑面**接线（`CodeTextView.insertNewline/paste` → `applyEditPlan`；`SQLTextView.insertNewline/paste` → `applyAutoIndentPlan`）
+  + `Tests/AutoIndentTests` **29 例**（反例四段各判红：① 崩溃 rc≠0 / ②③④ 各 3 红）。
+  读数 `verify-core` 4400 / 0 failures，五门全绿，包 `38ce7061` · 97,584 KB。台账 实现 🟡（差人工按一次回车 / 粘一次多行）/ 判据 ✅。
 - **R38（2026-10-28 21:45）· `FR-STD-DB-TASK-002` 高危任务逐条审批** —— 新 `Core/HighRiskTaskApproval.swift`
   （`plan` 用执行侧同一个 `StatementSplitter` 拆成一条语句一行：序号 / 原文 / 首词类别 / 目标库逐条各带；
   `Impact` 三档 `pending` / `rows(N)` / `unavailable(原因码)` —— 缺省 `pending`，**估不出来不冒充 0 行**；
@@ -58,6 +68,7 @@ updated: 2026-10-28T21:45
 
 ## 证据
 
+- `.agent/evidence/2026-10-28-WS-EDIT-021.md`（已有面核查表 + 落法 + 命令原文 + 读数 + 反例四段 + 口径取舍 5 条）
 - `.agent/evidence/2026-10-28-DB-TASK-002.md`（已有面核查表 + 命令原文 + 读数 + 反例四段 + 存量红对照）
 - `.agent/evidence/2026-10-28-WS-EDIT-009.md`（命令原文 + 读数 + 反例三段 + 口径取舍）
 - `.agent/evidence/2026-10-28-WS-FS-004-005-006.md`（缺口表 + 读数 + 反例三段 + 存量红对照）
@@ -67,6 +78,8 @@ updated: 2026-10-28T21:45
 
 ## 未验证项
 
+- `FR-STD-WS-EDIT-021` 的**手感面**只能人判：在编辑器里真按一次回车（缩进行应保持缩进 / `{` 后应多一级 /
+  `}` 行应回退 / `{}` 中间应按出三行）、真粘一次多行（应剥外来缩进、按上下文对齐、空白行不留尾随空格）⇒ 实现 `🟡`。
 - `FR-STD-DB-TASK-002` 的**界面面**已接成逐条呈现但没人手点过（覆盖写入任务应列出 `TRUNCATE` + `INSERT` 两条、
   目标库与各自行数分开、点拒绝后执行历史读作「已拒绝」）⇒ 实现 🟡，等人工点一次。
 - `check-core-localization.py` **存量红**（本批用干净树 `git worktree add /tmp/wt-r38 HEAD` 对照：HEAD 就是 88 文件 / 834 行 vs 基线 74 / 748，

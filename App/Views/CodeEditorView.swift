@@ -651,7 +651,27 @@ final class CodeTextView: NSTextView {
            applyMarkdownPlan(plan) {
             return
         }
+        // 自动缩进（`FR-STD-WS-EDIT-021` ① ② ③）：判定全在 `Core/AutoIndent`（纯函数，
+        // `Tests/AutoIndentTests.swift`），这里只把计划搬过去。`nil` = 交还系统默认回车
+        // （有选区 / 光标后面还有正文 / 顶格且无级可继承）—— **不许吞掉按键什么都不做**。
+        if let plan = AutoIndent.newline(in: string, selection: selectedRange()),
+           applyEditPlan(range: plan.range, replacement: plan.replacement, caret: plan.caret) {
+            return
+        }
         super.insertNewline(sender)
+    }
+
+    /// 粘贴：多行文本按上下文重排缩进（`FR-STD-WS-EDIT-021` ④）。
+    ///
+    /// 只在这四种情况之外动手：单行 / 空块 / 顶格粘到顶格 / 没有公共缩进可剥 —— `AutoIndent`
+    /// 一律给 `nil`，这里就**原样交还系统粘贴**（别把默认粘贴换成自己那一份，尤其别吞掉富文本与文件粘贴）。
+    override func paste(_ sender: Any?) {
+        if let clip = NSPasteboard.general.string(forType: .string),
+           let plan = AutoIndent.paste(clip, into: string, selection: selectedRange()),
+           applyEditPlan(range: plan.range, replacement: plan.replacement, caret: plan.caret) {
+            return
+        }
+        super.paste(sender)
     }
 
     /// 把 Core 算好的「替换哪一段 / 换成什么 / 光标停哪」落到编辑器上。

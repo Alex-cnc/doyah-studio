@@ -845,11 +845,44 @@ final class SQLTextView: NSTextView {
     /// 与打字、退格完全一致。
     override func insertNewline(_ sender: Any?) {
         guard rangeValues.count > 1 else {
+            // 自动缩进（`FR-STD-WS-EDIT-021` ① ② ③）：与工作区编辑器**同一份判定**
+            // （`Core/AutoIndent`），这里只搬计划；`nil` 就交还系统默认回车。
+            if let plan = AutoIndent.newline(in: string, selection: selectedRange()),
+               applyAutoIndentPlan(plan) {
+                return
+            }
             super.insertNewline(sender)
             return
         }
         let cursor = MultiCursor(selections: rangeValues, textLength: string.utf16.count)
         applyMultiCursor { cursor.applying("\n", to: $0) }
+    }
+
+    /// 粘贴：多行文本按上下文重排缩进（`FR-STD-WS-EDIT-021` ④）—— 与工作区编辑器同一份判定。
+    override func paste(_ sender: Any?) {
+        guard rangeValues.count <= 1 else {
+            super.paste(sender)
+            return
+        }
+        if let clip = NSPasteboard.general.string(forType: .string),
+           let plan = AutoIndent.paste(clip, into: string, selection: selectedRange()),
+           applyAutoIndentPlan(plan) {
+            return
+        }
+        super.paste(sender)
+    }
+
+    /// 把 `Core/AutoIndent` 的计划落到 SQL 编辑器上：**一次替换、一步撤销**（与 `applyMultiCursor` 同一条路）。
+    private func applyAutoIndentPlan(_ plan: AutoIndentPlan) -> Bool {
+        guard let storage = textStorage, plan.range.location >= 0,
+              plan.range.location + plan.range.length <= storage.length else { return false }
+        guard shouldChangeText(in: plan.range, replacementString: plan.replacement) else { return false }
+        storage.replaceCharacters(in: plan.range, with: plan.replacement)
+        didChangeText()
+        let caret = min(max(0, plan.caret), storage.length)
+        setSelectedRange(NSRange(location: caret, length: 0))
+        scrollRangeToVisible(NSRange(location: caret, length: 0))
+        return true
     }
 
     /// 多选区退格：每个光标删一个完整字符（emoji 的代理对一起删）。
