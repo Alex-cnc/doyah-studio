@@ -28,6 +28,51 @@ IDENTITY="${DOYAH_CODESIGN_IDENTITY:-DoyahStudio Local Dev}"
 KEYCHAIN="${HOME}/Library/Keychains/login.keychain-db"
 DAYS=3650
 
+# 两种调用（★★00：主人 2026-10-29「每次启动都要输入密码」——**只建身份不够，还要让自签根受信任**）：
+#   · 不带参数     ：建身份（幂等；已存在就不动）
+#   · --trust      ：只做「把自签根设成受信任」这一步（要管理员密码）
+# 为什么信任这一步不能省：证书未受信任时，用户点「始终允许」那一下**记不住**（条目 ACL 里写进去的
+# 授权在验证时过不去）⇒ 下次启动照样弹；`security find-identity -v` 也一直报
+# `CSSMERR_TP_NOT_TRUSTED`，看起来像「身份没装上」，其实是没信任。
+MODE="create"
+case "${1:-}" in
+  --trust) MODE="trust" ;;
+  "") MODE="create" ;;
+  *)
+    echo "用法：$0 [--trust]"
+    echo "  （不带参数）建自签名身份；--trust 把它的自签根设成受信任（要管理员密码）"
+    exit 2
+    ;;
+esac
+
+if [ "${MODE}" = "trust" ]; then
+  CERT_PEM="$(mktemp -t doyah-cert).pem"
+  trap 'rm -f "${CERT_PEM}"' EXIT
+  if ! security find-certificate -c "${IDENTITY}" -p "${KEYCHAIN}" > "${CERT_PEM}" 2>/dev/null \
+    || [ ! -s "${CERT_PEM}" ]; then
+    echo "❌ 钥匙串里找不到证书「${IDENTITY}」—— 先跑一次不带参数的 $0 建它。"
+    exit 1
+  fi
+  if security verify-cert -c "${CERT_PEM}" -p codeSign >/dev/null 2>&1; then
+    echo "✅ 「${IDENTITY}」的证书已经受信任 —— 什么都不做。"
+    security find-identity -v -p codesigning 2>/dev/null | grep -F "${IDENTITY}" | sed 's/^/    /' || true
+    exit 0
+  fi
+  echo "==> 把证书设成受信任（domain 级 root；下面要输管理员密码，不回显、不进历史）"
+  if ! sudo security add-trusted-cert -d -r trustRoot -k "${KEYCHAIN}" "${CERT_PEM}"; then
+    echo "❌ 信任没设上（密码不对或被拒）。退路：钥匙串访问 → 双击该证书 → 信任 → 「使用此证书时」选「始终信任」。"
+    exit 1
+  fi
+  if security verify-cert -c "${CERT_PEM}" -p codeSign >/dev/null 2>&1; then
+    echo "✅ 已受信任。之后点「始终允许」才会被记住，钥匙串不再每次启动都问密码。"
+    security find-identity -v -p codesigning 2>/dev/null | grep -F "${IDENTITY}" | sed 's/^/    /' || true
+  else
+    echo "❌ 命令跑完了但复核仍不受信任（可能被 MDM 策略挡下）。退路同上一句：走钥匙串访问的 GUI。"
+    exit 1
+  fi
+  exit 0
+fi
+
 echo "==> 目标身份：「${IDENTITY}」"
 
 if security find-identity -v -p codesigning 2>/dev/null | grep -qF "${IDENTITY}"; then
@@ -115,14 +160,16 @@ if codesign --force --sign "${IDENTITY}" "${WORK}/signtest" >/dev/null 2>&1; the
   echo "   证书 SHA-1：$(security find-certificate -c "${IDENTITY}" -Z "${KEYCHAIN}" 2>/dev/null | awk '/SHA-1 hash/{print $NF}' | head -1)"
   echo ""
   echo "下一步："
-  echo "    1) ./Scripts/build-app.sh        # 用这个身份签名"
-  echo "    2) 首次启动后，到「系统设置 → 隐私与安全性 → 本地网络」再允许一次"
+  echo "    1) ./Scripts/make-signing-identity.sh --trust   # ← ★00：让自签根受信任（要管理员密码）"
+  echo "       不信任时「始终允许」记不住 ⇒ 每次启动仍会弹钥匙串密码"
+  echo "    2) ./Scripts/build-app.sh        # 用这个身份签名（身份不能用会直接报错，不再回退 ad-hoc）"
+  echo "    3) 首次启动后，到「系统设置 → 隐私与安全性 → 本地网络」再允许一次"
   echo "       （签名换代，旧授权必然对不上；这是唯一一次）"
   echo "    以后重打包：不弹密码、不掉本地网络授权。"
   echo ""
   echo "注意：不要删掉、不要重建、不要让它过期（${DAYS} 天）—— 换了证书，授权会再次对不上。"
   echo "    附：「security find-identity -v -p codesigning」对本身份报 0 是正常的（它只列被信任的），"
-  echo "    不等于身份不可用 —— 以本自检为准。"
+  echo "    不等于身份不可用 —— 以本自检为准；要让那行也出现，就跑上面的 --trust。"
 else
   echo "❌ 自检签名失败：身份没装上，或 codesign 需要授权却拿不到。"
   echo "   退路 1：重跑本脚本（把钥匙串密码输对）。"

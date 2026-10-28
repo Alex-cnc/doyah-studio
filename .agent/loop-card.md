@@ -1,20 +1,19 @@
 ## ★ 顶部条目（优先于常规取活，不得顺延、不得再问）
 
-**★00 · 钥匙串每次启动都弹密码（主人 2026-10-29 当面点出；最高优先）**
+**★00 · 钥匙串每次启动都弹密码 —— ✅ 代码侧已落地（R67，2026-10-29），本条关闭，不得重复执行**
 
 - **症状（原话）**：「keychain 有个问题就是每次启动都要输入密码。」
-- **根因（已核源码，不许再猜）**：
-  ① `Platform/macOS/KeychainAgentKeyStore.swift` / `KeychainAgentIMSecretStore.swift` / `KeychainSecretStore.swift` 三处 `SecItemAdd` **既没带 `kSecAttrAccessible`，也没绑 ACL** ——
-  条目走默认「只有创建它的应用可访问」，而那个「应用」是**代码签名**；签名一变，读就要求授权。
-  ② 构建身份不稳：`security find-identity -v -p codesigning` 里现存的 `Doyah Local Dev` 是 **旧名**且 `CSSMERR_TP_NOT_TRUSTED`（未受信任），
-  脚本用的新名 `DoyahStudio Local Dev` 能签但同样不信任 ⇒ 每次重建相当于换了个「应用」⇒ 每次启动弹密码。
-- **要做**：① `Scripts/make-signing-identity.sh` 补一步（用户手动执行、要管理员密码）：`security add-trusted-cert -d -r trustRoot -k ~/Library/Keychains/login.keychain-db <cer>`，
-  把自签根设成受信任；② `Scripts/build-app.sh` 加**身份自检**：身份不存在或未受信任 ⇒ **不许静默回退 ad-hoc**（回退必然每次弹），要明确报错并打印修法；
-  ③ 三处 keychain 存储的 `add` 补 `kSecAttrAccessible = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly` 并用 `SecAccess` 只信任本应用；
-  ④ 迁移：读出旧条目 → 删除 → 按新属性重写（读旧条目那一步可能还弹一次，如实告知）；与 IM / 数据库口令 / API Key 三处一起迁。
-- **判据**：机械面（可判）——写入属性里确实带 accessible 键、ACL 存在、**重建应用后仍能读到且属主不变**；人工面 —— 「启动不再弹密码」只能本人点验 ⇒ 实现留 🟡 直到他确认。
-- **边界**：Secret 仍只进钥匙串，不许为了不弹窗退回明文文件。
-- **代价**：1 轮 + 主人跑一次信任脚本。
+- **根因两个（已核源码 + 实测）**：① 三处 `SecItemAdd` 不带 `kSecAttrAccessible`、不绑 ACL ⇒ 信任列表由系统按「谁建的」隐式写下；
+  ② 构建侧曾**静默回退 ad-hoc** ⇒ 每次重打包换一个「应用」身份。
+- **已做**：`Core/CredentialItemReconciliation.swift`（按签名记账的**一次性重写**：能读就一个字节都不动 / 旧签名条目「读→删→按当前签名写回」/
+  **读不出来绝不删** / 失败不记账；账本键取**指定要求串**而不是 cdhash）+ `Platform/macOS/KeychainCredentialSlots.swift`
+  （四族条目统一带 accessible 与只信任本应用的 `SecAccess`）+ `AppState.reconcileKeychainCredentials`（启动期一次，在旧文件迁移之后、读 Key 之前）
+  + `Scripts/build-app.sh` **不再静默回退 ad-hoc**（`DOYAH_ALLOW_ADHOC=1` 才回退）+ `Scripts/make-signing-identity.sh --trust`。
+  判据 `Tests/CredentialItemReconciliationTests` 15 例；反例三段各判红后逐字节还原；明细 `.agent/evidence/2026-10-29-keychain-prompt.md`。
+- **仍差（不是本条重复项）**：① 主人手动跑一次 `./Scripts/make-signing-identity.sh --trust`（要管理员密码）——
+  不信任时点「始终允许」记不住，症状仍会复现；② 「启动不再弹密码」只能本人点验一次。
+- **实测边界（别拿属性当证据）**：登录钥匙串**吞掉** `kSecAttrAccessible`（Add 成功、回读 `nil`），数据保护钥匙串要
+  `keychain-access-groups`（自签给不了，`-34018`）⇒ 属性今天不产生行为差别，只为将来留好。
 
 **★0 · IM 通道凭据口径纠正 —— ✅ 已落地（R42，2026-10-28），本条关闭，不得重复执行**
 
@@ -50,7 +49,7 @@
 **★ 区已清空**：下一条活按台账取（`FR-STD-*` 里实现 `⬜`／`🟡`，优先=高 → 中；同档取判据可机械跑的）。
 **R66（2026-10-29）已把 `FR-STD-WS-AI-002`（许愿式编程）的交付面接通**：`Core/WishStaging.swift`（472 行、用例早在跑）此前**零调用方** ⇒ 验收要点 ①「交付前给出改动清单与差异」与 ③「没跑通必须标出来」界面上一个字都没有。落法 = `Core/WishDelivery.swift` 把已落盘的账（`AgentEditJournal.undoable`）投影成**同一份** `WishProposal`（差异仍走 `AgentTextDiff`）：同一路径只出一条（前像取最早、后像取最新）· 净效果为零不进清单 · 删除型改动不在这个账上；判定四档 `noChanges/unverified/passed/failed`（**没记读数一律「未验证」**）。接线 = `AppState.wishDelivery`（与撤账同一把边界）+ 命令批准那档记最后一条真跑起来命令的退出码与输出尾 + 对话页输入框上方一行读数与「看改动清单与差异」逐文件逐行（单文件 40 行上限，超出说「还有 N 行」）+ 语言表 10 键。实现 **🟡**（差人工点一次）/ 判据 **✅**（`Tests/WishDeliveryTests` 10 例；反例三段各判红后逐字节还原）；包 `c109b952（07:32:24）`，07:28:51 那份 `1a6f175f` 作废。明细见 `.agent/evidence/2026-10-29-WS-AI-002.md`。
 **历轮已落地（R59–R65，明细原文见 `.agent/references/loop-card-history.md`）**：R65 撤销语义粒度 · R64 悬停文档与跳定义 · R63 陈旧标记归正 8 条 · R62 多工作区切换 · R61 片段模板 · R60 节点级重试 · R59 整批撤回 —— **均「实现 🟡 / 判据 ✅」，差人工点一次（点验清单见本卡末）**。
-下一条活（R66 核过）⇒ **① `★00 钥匙串每次启动弹密码`（主人 2026-10-29 当面点出，最高优先，卡上 ★ 区已有完整口径）；② 11 条 🟡 的核实已做完并落 `.agent/evidence/2026-10-29-WS-AI-002.md`：环境挡 5 条（`DB-CONN-020` / `DB-DIAG-003` / `DB-DRV-009` / `DB-IO-003` / `DB-META-002`）· 只差人点 2 条（`WS-VCS-001` / `WS-WEB-003`）· 范围 1 条（`WS-NAV-002` Beta 1 全量语种）· **标记陈旧 1 条（`WS-UI-004`：备注写「光标 + 滚动未交付」，源码里 `reportCursor` / 快照 `scrollOffset` / `WorkspaceAreaView:94` 都已接 ⇒ 按 R63 做法逐个 `--filter` 核例数再翻标记）** · 机械缺口 1 条（`DB-IO-002` COPY … TO STDOUT，缺口在 vendored 驱动内，需先评估改动面）；③ 实现列剩的 3 条 ⬜ 仍不是「能自己推」的（`TOOL-003` / `AI-001` 纵切过大，`LIC-001` 等人工验收；`DB-DIAG-006` 需求摘要还是「—」）。**④ `AI-002` 仍差的那一半**：许愿模式「先出改动后生效」= `WishStaging` 暂存面接线，属产品口径 ⇒ 待主人拍板（别自己起）。
+下一条活（R67 核过）⇒ **① 11 条 🟡 里唯一「标记陈旧」那条 `WS-UI-004`：按 R63 做法逐条 `--filter` 核例数再翻标记（最划算，先做）；② 11 条 🟡 的核实已做完并落 `.agent/evidence/2026-10-29-WS-AI-002.md`：环境挡 5 条（`DB-CONN-020` / `DB-DIAG-003` / `DB-DRV-009` / `DB-IO-003` / `DB-META-002`）· 只差人点 2 条（`WS-VCS-001` / `WS-WEB-003`）· 范围 1 条（`WS-NAV-002` Beta 1 全量语种）· **标记陈旧 1 条（`WS-UI-004`：备注写「光标 + 滚动未交付」，源码里 `reportCursor` / 快照 `scrollOffset` / `WorkspaceAreaView:94` 都已接 ⇒ 按 R63 做法逐个 `--filter` 核例数再翻标记）** · 机械缺口 1 条（`DB-IO-002` COPY … TO STDOUT，缺口在 vendored 驱动内，需先评估改动面）；③ 实现列剩的 3 条 ⬜ 仍不是「能自己推」的（`TOOL-003` / `AI-001` 纵切过大，`LIC-001` 等人工验收；`DB-DIAG-006` 需求摘要还是「—」）。**④ `AI-002` 仍差的那一半**：许愿模式「先出改动后生效」= `WishStaging` 暂存面接线，属产品口径 ⇒ 待主人拍板（别自己起）。
 ⚠️ `FR-STD-WS-TOOL-003`（DAP 调试器）与 `FR-STD-WS-AI-001`（编辑区 AI 辅助）纵切过大，排后。
 **存量红六条（2026-10-29 在干净工作树 `git worktree add 874a3e48` 里逐条对照过：基线就红、本循环未加重）**：`check-core-portability`（`Core/AgentCodeRunner.swift:57` 硬编码 `/usr/local/`）· `check-core-localization`（`Binary files` 未白名单）· `check-button-icon-only`（11 处，含 R53 `HTMLPreviewView`）· `check-literal-language`（`Core/AgentNotifyChannel.swift:178`）· `check-doc-q-series`（`Docs/通用开发规范.md` 解析不到 §4/§6）· `check-doc-layout`（12 条）。**这六条使 `verify-all.sh` 不可能全绿 —— 别每轮重复当新账报，要清它们得单开一条活。**
 **`verify-all.sh` 全跑（2026-10-29 R58 实测 18 项 rc=1）另有五处红，也都不是功能片的账**：第 4 项 `check-pending-agenda --self-test` 缺本机文件 `Docs/智能体助手-开发规范.md`（.gitignore 内）· 第 9 项 `test-empty-action-buttons` 的负例夹具还找 `.disabled(trimmedName.isEmpty)`（R57 改走 `isEnabled:` 后没跟夹具，基线同样红）与 `check-panel-root-frames` 的 `scannedFiles` 104 vs 实测 105（R57 新增回执页视图后没跟版，基线同样红）· 第 11 项 `check-menu-language` 起不来应用 dump 菜单（**本会话无 GUI**）· 第 16 项 `check-tri-repo-parity`（共享脚本 sha 与三仓台账不符）· 第 18 项 `check-release-version` 缺 `Docs/发布方案.md` / `Docs/发布计划.md`（本机未同步）。⇒ **收尾只报「五门 + check-format-arguments」；`verify-all` 的红逐条对基线，不重复当新账。**

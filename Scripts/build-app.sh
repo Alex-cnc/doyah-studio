@@ -34,12 +34,15 @@ set -euo pipefail
 # 说明：ad-hoc 签名 + entitlements 足以在本机运行（网络客户端 + 默认不带 App Sandbox）。
 # 如果要分发或使用钥匙串的持久授权，请换用自己的开发者证书签名。
 #
-# **签名身份（Q53，2026-09-30）**：ad-hoc 没有稳定身份 ⇒ **每次重打包都换指纹** ⇒
-# macOS「本地网络」授权对不上新包（症状：应用连不上 217 的库，终端 `psql` 却正常）。
+# **签名身份（Q53，2026-09-30；★00 2026-10-29 改口径）**：ad-hoc 没有稳定身份 ⇒ **每次重打包都换指纹** ⇒
+# macOS「本地网络」授权对不上新包（症状：应用连不上 217 的库，终端 `psql` 却正常），
+# 并且钥匙串条目的 ACL 也对不上 ⇒ **每次启动弹「请输入钥匙串密码」**（主人 2026-10-29 当面点出）。
 # 有了稳定身份，授权只授一次，之后重打包不再掉。用法：
-#   ./Scripts/make-signing-identity.sh                    # 一次性：建自签名身份（要输一次钥匙串密码）
+#   ./Scripts/make-signing-identity.sh                    # 一次性：建自签名身份
+#   ./Scripts/make-signing-identity.sh --trust            # 再一次性：让自签根受信任（要管理员密码）
 #   DOYAH_CODESIGN_IDENTITY="Developer ID Application: …" ./Scripts/build-app.sh   # 用别的身份
-# 找不到身份时**回退 ad-hoc**（构建不因此中断），并在终端写明后果。
+# **找不到身份不再回退 ad-hoc**：直接报错并印修法；确实要接受那个后果才用 `DOYAH_ALLOW_ADHOC=1`。
+# 由头：静默回退把「一个治不好的缺陷」伪装成「构建成功」，而症状要等用户下次启动才出现。
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd -P)"
 CONFIGURATION="${1:-debug}"
@@ -271,26 +274,64 @@ else
   fi
 fi
 
-# Q53：优先用稳定身份签名。有身份 ⇒ 指纹稳定 ⇒ 本地网络授权不会随重打包失效；
-# 没有 ⇒ 回退 ad-hoc（与改动前行为一致），只在终端说明后果，不让构建失败。
+# ---- 签名身份（★00：主人 2026-10-29「每次启动都要输入密码」）----
 #
-# **不用 `security find-identity` 判存在性** —— 它只列「被信任的」身份，自签名证书
+# 口径（改过，旧的作废）：**身份不存在 / 签不动 ⇒ 报错退出，不再静默回退 ad-hoc**。
+# 为什么：ad-hoc 没有证书 ⇒ 每次重打包都换一个「应用」身份 ⇒ 钥匙串条目的 ACL 永远对不上
+# ⇒ 每次启动弹「请输入钥匙串密码」。回退不是「构建更宽容」，是把一个治不好的缺陷伪装成构建成功。
+# 明确要接受这个后果时才用 `DOYAH_ALLOW_ADHOC=1`（会打一整段警告）。
+#
+# **判存在性仍然不用 `security find-identity -v`** —— 它只列「被信任的」身份，自签名证书
 # 未信任时实测恒报 `0 valid identities found`，会把装好的身份误判成没有。
-# 判据改成**真签一次**：签得成就算有，签不成再回退 ad-hoc（失败信息原样打出来）。
+# 判据是**真签一次**（签一个临时二进制，走的就是后面要走的那条路）。
 IDENTITY="${DOYAH_CODESIGN_IDENTITY:-DoyahStudio Local Dev}"
 SIGN_LOG="$(mktemp)"
-if codesign --force --sign "${IDENTITY}" \
-  --entitlements "${ENTITLEMENTS}" --timestamp=none "${APP}" >"${SIGN_LOG}" 2>&1; then
-  echo "==> 签名：${IDENTITY}（指纹稳定 ⇒「本地网络」授权不会随重打包失效）"
-else
-  echo "==> 身份「${IDENTITY}」用不了 ⇒ 回退 ad-hoc"
-  sed 's/^/    /' "${SIGN_LOG}" | head -3
-  echo "    重打包会换指纹，macOS「本地网络」授权可能对不上新包（应用连不上 217、终端却正常）。"
-  echo "    先跑一次：./Scripts/make-signing-identity.sh"
-  codesign --force --sign - \
-    --entitlements "${ENTITLEMENTS}" --timestamp=none "${APP}" 2>&1 | tail -3
+PROBE_DIR="$(mktemp -d)"
+cp /usr/bin/true "${PROBE_DIR}/signtest"
+IDENTITY_USABLE=0
+if codesign --force --sign "${IDENTITY}" --timestamp=none "${PROBE_DIR}/signtest" >"${SIGN_LOG}" 2>&1; then
+  IDENTITY_USABLE=1
 fi
-rm -f "${SIGN_LOG}"
+rm -rf "${PROBE_DIR}"
+
+if [ "${IDENTITY_USABLE}" != "1" ]; then
+  if [ "${DOYAH_ALLOW_ADHOC:-0}" = "1" ]; then
+    echo "⚠ 身份「${IDENTITY}」用不了，但 DOYAH_ALLOW_ADHOC=1 ⇒ 按要求回退 ad-hoc："
+    sed 's/^/    /' "${SIGN_LOG}" | head -3
+    echo "    后果（接受才该用这个开关）：每次重打包换指纹 ⇒「本地网络」授权对不上、"
+    echo "    钥匙串条目的 ACL 也对不上 ⇒ **每次启动都会弹钥匙串密码**。"
+    codesign --force --sign - \
+      --entitlements "${ENTITLEMENTS}" --timestamp=none "${APP}" 2>&1 | tail -3
+    rm -f "${SIGN_LOG}"
+  else
+    echo "❌ 签名身份「${IDENTITY}」用不了 —— **不再静默回退 ad-hoc**（那会让每次启动都弹钥匙串密码）。"
+    sed 's/^/    /' "${SIGN_LOG}" | head -5
+    echo "    修法（任选其一）："
+    echo "      1) ./Scripts/make-signing-identity.sh        # 建一次身份，再跑一次它印的信任步骤"
+    echo "      2) DOYAH_CODESIGN_IDENTITY=\"Developer ID Application: …\" ./Scripts/build-app.sh"
+    echo "      3) DOYAH_ALLOW_ADHOC=1 ./Scripts/build-app.sh # 明确接受上面那段后果"
+    rm -f "${SIGN_LOG}"
+    exit 1
+  fi
+else
+  codesign --force --sign "${IDENTITY}" \
+    --entitlements "${ENTITLEMENTS}" --timestamp=none "${APP}" >"${SIGN_LOG}" 2>&1 || {
+      echo "❌ 签名失败（身份能签临时文件、签不了这个 .app）："
+      sed 's/^/    /' "${SIGN_LOG}" | head -5
+      rm -f "${SIGN_LOG}"
+      exit 1
+    }
+  rm -f "${SIGN_LOG}"
+  # 受信任与否**单独报**：它不影响指纹稳定（那只取决于证书本身），影响的是
+  # 「点过一次『始终允许』能不能记住」与「本地网络」授权 —— 所以是警告，不是构建失败。
+  if security find-identity -v -p codesigning 2>/dev/null | grep -qF "${IDENTITY}"; then
+    echo "==> 签名：${IDENTITY}（已受信任 · 指纹稳定 ⇒「本地网络」与钥匙串授权都只授一次）"
+  else
+    echo "==> 签名：${IDENTITY}（**证书未受信任** ⇒ 指纹虽稳定，但「始终允许」可能记不住）"
+    echo "    修法（要管理员密码，跑一次即可）："
+    echo "      ./Scripts/make-signing-identity.sh --trust"
+  fi
+fi
 echo "    结果：$(codesign -dv "${APP}" 2>&1 | grep -E 'Signature=|Identifier=' | tr '\n' ' ')"
 
 # ---- 别名：不带版本号的 `dist/DoyahStudio.app` 只作**方便入口**（派活单 `T-20261002-028`）----

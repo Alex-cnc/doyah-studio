@@ -237,6 +237,10 @@ struct TodoRescheduleDraft: Identifiable, Equatable {
 final class AppState: ObservableObject {
     @Published var connections: [ConnectionConfig] = []
 
+    /// 启动时凭据条目核对的一行读数（★00；不上面板，只供诊断与日志 —— 用户能感知的结果是
+    /// 「不再弹密码」本身，多造一个面板格反而要多一条只有我们自己看得懂的数字）。
+    private(set) var keychainReconcileSummary: String?
+
     /// 侧边栏里**被折叠**的连接分组（FR-CONN-15）。
     ///
     /// **为什么这个状态归 `AppState`、不归视图**：侧栏内容由 `MainWindow.sidebarContent`
@@ -3025,6 +3029,11 @@ final class AppState: ObservableObject {
 
         // 钥匙串不可用时（未签名 / 无授权）按「没有 Key」处理，不阻断界面。
         migrateLegacySecretsIfNeeded()
+        // ★00（主人 2026-10-29 原话「keychain 有个问题就是每次启动都要输入密码」）：
+        // 把**旧签名留下的**条目按当前这套签名重写一遍并记账（同一签名下只做一次）。
+        // 顺序放在旧文件迁移之后、读 Key 之前：先搬进钥匙串，再由这一步配上当前应用的 ACL，
+        // 之后这次启动的读走的就是新条目 —— 否则搬进来的还是「谁建的谁读」那条老规矩。
+        reconcileKeychainCredentials()
         let key = (try? agentKeyStore.apiKey()) ?? nil
         agentAPIKey = key
         hasAgentAPIKey = !(key?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
@@ -3474,6 +3483,30 @@ final class AppState: ObservableObject {
         if migrated > 0 {
             // 用 os.Logger 会牵进 Core 的日志设施；这里只留一条控制台行，够查
             print("[Doyah] 凭据迁移：\(migrated) 条从文件存储搬进系统钥匙串")
+        }
+    }
+
+    /// 凭据条目按**当前这套签名**核对一次（★00：主人 2026-10-29「每次启动都要输入密码」）。
+    ///
+    /// 三档口径（判定住 `Core/CredentialItemReconciliation.swift`，这里只接线）：
+    ///   · 已经按这套签名重写过的条目 ⇒ **不读内容、不重写**（读内容正是会弹授权的那一下）；
+    ///   · 旧签名留下的条目（含回退 ad-hoc 时建的）⇒ 读 → 删 → 按当前签名写回：
+    ///     这一步之后 ACL 里才有**当前这个应用**，否则永远「谁建的谁读」；
+    ///   · 读不出来 ⇒ **不删**（删了就丢凭据），失败码进读数。
+    ///
+    /// 账本落在应用支持目录（`keychain-rewrite-ledger.json`）：没有它就会每次启动都重读旧条目 ⇒
+    /// 每次弹 —— 治这个症状靠的是**记账**，不是更努力地读写。
+    private func reconcileKeychainCredentials() {
+        let report = KeychainCredentialReconciler.run(
+            connectionIDs: connections.map(\.id),
+            connectionLabel: { id in
+                connections.first { $0.id == id }?.name ?? "连接 \(id.uuidString.prefix(8))"
+            }
+        )
+        keychainReconcileSummary = report.summaryLine()
+        print("[Doyah] \(report.summaryLine())")
+        for entry in report.problems {
+            print("[Doyah] 凭据核对未治好：\(entry.label) · \(entry.outcome)")
         }
     }
 

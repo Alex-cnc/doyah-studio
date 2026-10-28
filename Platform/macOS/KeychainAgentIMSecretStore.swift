@@ -34,8 +34,7 @@ public struct KeychainAgentIMSecretStore: AgentIMSecretStore {
             throw AppError.credentialStore(code: existingStatus)
         }
 
-        var addQuery = query
-        addQuery[kSecValueData as String] = data
+        let addQuery = KeychainItemAccess.addQuery(base: query, data: data)
         let addStatus = SecItemAdd(addQuery as CFDictionary, nil)
         guard addStatus == errSecSuccess else {
             throw AppError.credentialStore(code: addStatus)

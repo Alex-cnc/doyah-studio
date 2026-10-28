@@ -1,8 +1,19 @@
 # 检查点
 
-updated: 2026-10-29T07:20
+updated: 2026-10-29T07:56
 
 ## 现状
+
+- 最近读数（2026-10-29 **R67 · ★00 钥匙串每次启动弹密码**）：`verify-core` **4900 项 / 0 failures**（4885 → +15 =
+  `Tests/CredentialItemReconciliationTests`）；五门（numbers / tables / versions / invariants / version-scope）+ `check-format-arguments`
+  + `check-language-registry` 逐项 rc=0；包 `dist/DoyahStudio-beta1.0.app` sha256 **`ad5ca1ef`**（构建时刻 2026-10-29T07:50:51+0800；
+  二进制 102,610,944 字节；同标签 07:49:40 那份 `2a31a08a` 出在发布说明含片补本条之前 ⇒ 作废）。
+  **落法**：Core 记账式一次性重写（能读不动 / 旧签名读→删→按当前签名写回 / 读不出绝不删 / 失败不记账，账本键取**指定要求串**）+ Platform 四族条目
+  统一装配 accessible 与只信任本应用的 ACL + `AppState` 启动期一次接线 + `build-app.sh` **不再静默回退 ad-hoc** + `make-signing-identity.sh --trust`。
+  台账「实现 🟡（差人工点验「启动不再弹密码」）/ 判据 ✅」；★00 代码侧关闭。
+  **下一项**：`FR-STD-WS-UI-004` 的**陈旧标记归正**（11 条 🟡 里唯一一条「源码里已接、台账仍写未交付」，按 R63 做法逐个 `--filter` 核例数再翻标记）；
+  之后是 `DB-IO-002`（COPY … TO STDOUT，缺口在 vendored 驱动内，先评估改动面）。
+  ⚠️ 待主人：① 跑一次 `./Scripts/make-signing-identity.sh --trust`（要管理员密码）② 点验一次「启动不再弹密码」。
 
 - 循环卡 = `.agent/loop-card.md`（**2026-10-28 20:08 主人改成接力制**：一轮收尾即 `cronjob_manage action=run job_id=e98fad41f72d`
   点火下一轮；定时器 5 分钟一跳只做兜底；不再按剩余条数自调阶梯）。**本会话无 `cronjob_manage` 工具** ⇒ 接力改用 CLI

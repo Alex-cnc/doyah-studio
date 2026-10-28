@@ -38,8 +38,9 @@ public struct KeychainSecretStore: SecretStore {
             throw AppError.credentialStore(code: existingStatus)
         }
 
-        var addQuery = query
-        addQuery[kSecValueData as String] = data
+        // 新建条目走**统一装配**（`KeychainItemAccess`：带 `kSecAttrAccessible` 与显式 ACL）。
+        // 不在这里各写一份 —— 三处各写一份的下场是「一处跟版、两处忘了」，而症状是同一个弹窗。
+        let addQuery = KeychainItemAccess.addQuery(base: query, data: data)
         let addStatus = SecItemAdd(addQuery as CFDictionary, nil)
         guard addStatus == errSecSuccess else {
             throw AppError.credentialStore(code: addStatus)
@@ -128,8 +129,7 @@ public struct KeychainNoteSyncTokenStore: NoteSyncTokenStore {
             throw AppError.credentialStore(code: existingStatus)
         }
 
-        var addQuery = query
-        addQuery[kSecValueData as String] = data
+        var addQuery = KeychainItemAccess.addQuery(base: query, data: data)
         let addStatus = SecItemAdd(addQuery as CFDictionary, nil)
         guard addStatus == errSecSuccess else {
             throw AppError.credentialStore(code: addStatus)
