@@ -1,32 +1,48 @@
 # 检查点
 
-updated: 2026-10-29T00:22
+updated: 2026-10-29T00:46
 
 ## 现状
 
 - 循环卡 = `.agent/loop-card.md`（**2026-10-28 20:08 主人改成接力制**：一轮收尾即 `cronjob_manage action=run job_id=e98fad41f72d` 点火下一轮；定时器 5 分钟一跳只做兜底；不再按剩余条数自调阶梯）。
 - 队列唯一来源 = `Docs/Doyah产品开发计划任务清单-macOS端.md`（`FR-STD-*` 里实现为 `⬜`／`🟡`）；`.agent/plan.yaml` 已停用。
-- 最近读数（2026-10-29 R46）：`verify-core` **4537 例 / 0 failures**（`--filter` 只作过滤读数）；五门 rc 全 0；包 `dist/DoyahStudio-beta1.0.app` sha256 前缀 `1b82fc9b` · 99,840 KB（R46 重出，回执「含片」已写本批；前一版 `2f1dadc9` 因回执没写本批 ⇒ 作废）。
+- 最近读数（2026-10-29 R47）：`verify-core` **4537 例 / 0 failures**（Core 侧未变 —— 本批 7 例在界面探针 target
+  `DoyahUISnapshotTests`，不进 `core-tests` 台账）；五门 rc 全 0；包 `dist/DoyahStudio-beta1.0.app` sha256 前缀
+  `f2b9f6e4` · 99,840 KB（R47 重出，回执「含片」已写本批；同标签前一版 `c74f6093` 回执没写本批 ⇒ 作废）。
 
 ## 下一项
 
-**1. 台账 `FR-STD-WS-UI-010`（页签条高度不由内容与数量决定：空白同高、多了横向滚动）** —— 先核 `App/Views/WorkspaceTabStrip.swift`
-与 `Core/LowerPaneSizing.swift` 已有面（后者已有判据），再定缺口：高度不许由标题长度 / 页签数算出来，页签多了横向滚动而不是压缩。
-做成「可量的口径 + 判据」优先（同一档还有 `WS-UI-011 / 013 / 014` 三条，都是可量出来的界面口径，一轮吃不下就按此顺序做）。
+**1. 台账 `FR-STD-WS-UI-011`（编辑面底色字色只用主题令牌：三处编辑面同底）** —— 先核三处编辑面
+（`CodeEditorView` / `SQLEditorView` / Markdown 预览）现在是不是各自写死了底色 / 字色，再定缺口：
+底色字色只能从 `Theme` 取令牌，三处同底。做成「可量的口径 + 判据」优先（同一档还有 `WS-UI-013 / 014`
+两条可量出来的界面口径，一轮吃不下就按 011 → 013 → 014 的顺序做）。
 
 其余按台账取「优先=高 → 中；同档取判据可机械跑的」（2026-10-28 R44 实测：**台账里已无「高」档的 `⬜`**）：
 
-2. `FR-STD-WS-VCS-001`（Git 只读与差异）—— `App/GitStatusProbe.swift` 已在盘，先核已有面再定缺口；
-3. `FR-STD-WS-UI-010 / 011 / 013 / 014`（页签条高度 / 底色字色只用令牌 / 悬停出动作 / 对话框按钮形态）——
-   四条都是「可量出来的界面口径」，多半只需补判据与少量视图改动，是最便宜的一族（先各核一次再动手）；
-4. `FR-STD-WS-EDIT-015` / `FR-STD-WS-AI-002` 剩的一半 —— 界面入口（Core 13 / 19 例已在盘）；
-5. `FR-STD-WS-TOOL-003`（DAP 调试器）—— 纵切较大，排后；
-6. 人工点验项（`WS-WEB-004` 真站点、`WS-FS-004/005/006` 界面点一次、`DB-TASK-002` 逐条审批界面点一次、
+2. `FR-STD-WS-UI-013 / 014`（行内动作悬停出 / 对话框按钮形态）—— 两条「可量出来的界面口径」，多半只需补判据与少量视图改动；
+   （`FR-STD-WS-VCS-001` 已于 R46 收口、`FR-STD-WS-UI-010` 已于 R47 收口，不再排。）
+3. `FR-STD-WS-EDIT-015` / `FR-STD-WS-AI-002` 剩的一半 —— 界面入口（Core 13 / 19 例已在盘）；
+4. `FR-STD-WS-TOOL-003`（DAP 调试器）—— 纵切较大，排后；
+5. 人工点验项（`WS-WEB-004` 真站点、`WS-FS-004/005/006` 界面点一次、`DB-TASK-002` 逐条审批界面点一次、
    **`DB-TASK-001` 任务定义界面点一次**（存一条 → 换库执行应被拒 → 只读任务里放 `UPDATE` 应被拒）；
    **IM 通道真连一次**：填 AppID + Secret → 手机发一句话 → 桌面出该轮 → 手机会收到结论）；
-7. 存量红（与 HEAD 逐条相同，非任何一片引入；见 `.agent/evidence/2026-10-28-DB-TASK-001.md` §7）。
+6. 存量红（与 HEAD 逐条相同，非任何一片引入；见 `.agent/evidence/2026-10-28-DB-TASK-001.md` §7）。
 
 ## 已完成的片
+
+- **R47（2026-10-29 00:42）· `FR-STD-WS-UI-010` 页签条高度与溢出** —— 先立量法：`WorkspaceTabStrip` 挂进
+  **离屏 `NSWindow`** 走真布局（跑一段 runloop 再读 —— SwiftUI 布局下一跳才落，不跑拿到的是 0×0 退化帧），
+  在 AppKit 视图树里找横向 `NSScrollView` 读 clip 宽 / documentView 宽 / `hasHorizontalScroller`。
+  基线读数顶出两处缺口：① `showsIndicators: false` ⇒ `hasHorizontalScroller == false`，需求 ③「溢出时横向滚动条
+  出现」**根本不成立**；② `Spacer(minLength: Spacing.s)` 与滚动容器同为可伸缩者，白占 12pt（页签区 134 而可用 146）。
+  两处同批改掉；**没写** `.frame(maxWidth: .infinity)`（反例注入证明它是 no-op）。判据
+  `TestsUISnapshot/WorkspaceTabStripOverflowProbeTests` **7 例**：窗口加宽 1020 ⇒ 页签区加宽 1020±1 · 2/5/11 个
+  页签同宽（146）· 行宽 − 页签区 ≤ 276（右侧固定件 274 + 2）· 内容宽与窗口宽度无关（<2%）且随数量增长 ·
+  11 个页签四档宽度都溢出且滚动条开着 · 只有 Home 时**不许**报溢出 · 4 档数量 × 4 档宽度同高 **30pt** ≤48 ·
+  11 个页签内容高 == 1 个 → 不换行 · 三个玩具证明量法不是恒真。反例四段（关指示条 / 塞回 `Spacer(minLength:)` /
+  塞全可伸缩 `Spacer()` / 拿掉 `ScrollView`）逐段判红后逐字节还原（`fbe45a35…`）。
+  读数 `verify-core` **4537 / 0 failures（Core 侧未变，本批 7 例在 `DoyahUISnapshotTests`）**，五门全绿，
+  包 `f2b9f6e4` · 99,840 KB。台账 `FR-STD-WS-UI-010` 实现 **✅** / 判据 **✅**（三条验收全机械可判，无「只能肉眼」的半边）。
 
 - **R46（2026-10-29 00:22）· `FR-STD-WS-VCS-001` Git 只读与差异** —— 新 `Core/GitWorktreeStatus.swift`
   （porcelain 原文 ⇒ 分支 / ahead-behind / 条目：两列状态码分开判 · 冲突七码单列 · 改名带源路径 ·
@@ -137,6 +153,7 @@ updated: 2026-10-29T00:22
 
 ## 证据
 
+- `.agent/evidence/2026-10-29-WS-UI-010.md`（已有面核查表 + 缺口实测读数 + 落法 + 命令原文 + 读数 + 反例四段 + 口径取舍 5 条 + 未覆盖 4 条）
 - `.agent/evidence/2026-10-28-DB-TASK-001.md`（已有面核查表 + 落法 + 命令原文 + 读数 + 反例五段 + 口径取舍 5 条 + 存量红对照 + 未验证项）
 - `.agent/evidence/2026-10-28-WS-EDIT-021.md`（已有面核查表 + 落法 + 命令原文 + 读数 + 反例四段 + 口径取舍 5 条）
 - `.agent/evidence/2026-10-28-DB-TASK-002.md`（已有面核查表 + 命令原文 + 读数 + 反例四段 + 存量红对照）
@@ -147,6 +164,11 @@ updated: 2026-10-29T00:22
 - 更早的片见 `.agent/evidence/2026-10-2*.md`。
 
 ## 未验证项
+
+- `FR-STD-WS-UI-010` 的**观感**没人看过（不在那条验收里，但如实登记）：滚动条出现的位置与外观、页签之间的间距是否好看；
+  另两条未验：macOS「始终显示滚动条」偏好下 `showsIndicators: true` 是否挤压页签区、触控板横滑手势（`NSScrollView` 既有行为）。
+- `FR-STD-WS-UI-010` 的判据里 `maximumTrailingOccupancy = 276` 是「右侧固定件宽度」的实测口径（274 + 2）——
+  **往页签条右侧再加按钮要同批改这个数**，否则那条断言会红（这是有意的：它量的是「页签区是唯一伸缩者」）。
 
 - `FR-STD-DB-TASK-001` 的**界面面**一次都没人手点过（工具栏「任务」菜单 / 保存表单四格 / 换库执行应被拒 /
   只读任务里放 `UPDATE` 应被拒 / 上限 1 行跑 3 行应报超限）⇒ 实现 🟡，等人工点一次。

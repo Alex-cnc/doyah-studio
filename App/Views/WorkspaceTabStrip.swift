@@ -22,6 +22,13 @@ import DoyahCore
 /// 值）与有地址的页签同高、页签数量不影响高度、窗口宽度不影响高度。往这一行里塞一个
 /// **理想高度随宽度变化的东西**（会换行的长文案、空态视图、`WKWebView` 之类）就是
 /// 「标题栏被撑高」这一类病的成因；探针里有对照负例钉住这一点。
+///
+/// 宽度那半边（同一条 `FR-STD-WS-UI-010` 的 ② / ③，`TestsUISnapshot/WorkspaceTabStripOverflowProbeTests`）：
+///
+/// · **页签区宽度** = 行宽 − 右侧固定件，与页签数量、标题长度都无关（中间不许插 `Spacer` ——
+///   它会白占 `Spacing.s`）；
+/// · **溢出**（内容比页签区宽）时横向滚动：内容**保持理想宽度**（不压缩、不换行），
+///   且滚动条**开着**（`showsIndicators: true`）。
 struct WorkspaceTabStrip: View {
     @EnvironmentObject private var appState: AppState
     @EnvironmentObject private var tabs: WorkspaceTabsModel
@@ -31,7 +38,24 @@ struct WorkspaceTabStrip: View {
 
     var body: some View {
         HStack(spacing: Spacing.xs) {
-            ScrollView(.horizontal, showsIndicators: false) {
+            // **页签区吃满可用宽度**（`FR-STD-WS-UI-010` ②「多了横向滚动」）。
+            //
+            // 两条都是**量出来的**（`TestsUISnapshot/WorkspaceTabStripOverflowProbeTests` 用离屏窗口
+            // 走真布局，读 `NSScrollView` 的 clip 宽 / 内容宽）：
+            //
+            // ① 横向 `ScrollView` 在 `HStack` 里已经是那个「吃满剩余宽度」的角色 —— 实测窗口
+            //    420 / 640 / 900 / 1440 四档，页签区宽度 = 行宽 − 右侧固定件（274pt），与页签数量
+            //    （2 / 5 / 11 个）无关；给它再套 `.frame(maxWidth: .infinity)` 量出来**一个像素都不变**
+            //    （反例注入验过）⇒ 这里不写那句多余的话，免得下一个人以为它才是机制。
+            // ② **中间不许留 `Spacer`**：它与滚动容器同为可伸缩者，实测在页签区与右侧固定件之间
+            //    白占 `Spacing.s`（12pt）—— 页签区 134pt 而不是可用的 146pt，等于少露半个页签。
+            //    右侧那几件是固定件，`HStack` 的 `Spacing.xs` 已经是它们之间的间隔。
+            //
+            // `showsIndicators: true`：溢出时**横向滚动条要出现**（需求 ③）。原来关着（实测
+            // `hasHorizontalScroller == false`），等于「只能靠触控板横滑、看不见有得滑」。
+            // 横向 `ScrollView` 天然不压缩子视图（内容保持理想宽度、靠滚动看后面的）——
+            // 11 个页签在 420pt 窗口里内容宽 1625pt 而页签区 146pt，这一条也由上面的探针钉住。
+            ScrollView(.horizontal, showsIndicators: true) {
                 HStack(spacing: Spacing.xs) {
                     // 内置浏览器页签（队列 `L-149`）：与 Home / 文件是**同一类页签**。
                     // 需求提出者 2026-09-30：「浏览器内置到工作区 Tab 页……本质上 html 也是一种文件」；
@@ -45,8 +69,6 @@ struct WorkspaceTabStrip: View {
                 }
                 .padding(.vertical, Spacing.hair)
             }
-
-            Spacer(minLength: Spacing.s)
 
             if let tab = tabs.selectedTab, !tab.isHome {
                 Text(L(.workspaceLanguageLabel, tab.language.displayName))

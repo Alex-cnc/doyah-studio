@@ -32,11 +32,12 @@
   面板与手机的端到端人工点验一次。
 
 **★ 区已清空**：下一条活按台账取（`FR-STD-*` 里实现 `⬜`／`🟡`，优先=高 → 中；同档取判据可机械跑的）。
-**R46（2026-10-29）已把「Git 只读与差异」做完**（`Core/GitWorktreeStatus.swift` + `Core/GitUnifiedDiff.swift`
-两份投影 + `App/GitWorktreeProbe.swift` 取数 + 下方面板**「变更」页** `App/Views/GitChangesPanel.swift`；
-判据 13 + 11 例，反例八段各判红）—— 台账 `FR-STD-WS-VCS-001` 实现 🟡 / 判据 ✅，只剩「选一个有改动的仓库，
-点开一个文件看逐行差异」这一件人工项。下一轮按 `.agent/checkpoint.md` 的「下一项 1」= 台账 `FR-STD-WS-UI-010`
-（页签条高度不由内容与数量决定；同档还有 `WS-UI-011 / 013 / 014` 三条可量出来的界面口径）。
+**R47（2026-10-29）已把「页签条高度与溢出」做完**（`App/Views/WorkspaceTabStrip.swift` 两处改动：
+`showsIndicators` 由关改开（改前需求 ③「溢出时横向滚动条出现」根本不成立）+ 删掉白占 12pt 的 `Spacer`；
+判据 `TestsUISnapshot/WorkspaceTabStripOverflowProbeTests` **7 例** —— 离屏窗口真布局读 `NSScrollView`，
+反例四段各判红）—— 台账 `FR-STD-WS-UI-010` 实现 **✅** / 判据 **✅**（三条验收全机械可判，无人工项）。
+下一轮按 `.agent/checkpoint.md` 的「下一项 1」= 台账 `FR-STD-WS-UI-011`（编辑面底色字色只用主题令牌），
+同档还有 `WS-UI-013 / 014` 两条可量出来的界面口径。
 
 # 每轮卡 · Studio macOS 端自主开发（2026-10-28 起）
 
