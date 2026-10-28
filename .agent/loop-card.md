@@ -32,12 +32,13 @@
   面板与手机的端到端人工点验一次。
 
 **★ 区已清空**：下一条活按台账取（`FR-STD-*` 里实现 `⬜`／`🟡`，优先=高 → 中；同档取判据可机械跑的）。
-**R47（2026-10-29）已把「页签条高度与溢出」做完**（`App/Views/WorkspaceTabStrip.swift` 两处改动：
-`showsIndicators` 由关改开（改前需求 ③「溢出时横向滚动条出现」根本不成立）+ 删掉白占 12pt 的 `Spacer`；
-判据 `TestsUISnapshot/WorkspaceTabStripOverflowProbeTests` **7 例** —— 离屏窗口真布局读 `NSScrollView`，
-反例四段各判红）—— 台账 `FR-STD-WS-UI-010` 实现 **✅** / 判据 **✅**（三条验收全机械可判，无人工项）。
-下一轮按 `.agent/checkpoint.md` 的「下一项 1」= 台账 `FR-STD-WS-UI-011`（编辑面底色字色只用主题令牌），
-同档还有 `WS-UI-013 / 014` 两条可量出来的界面口径。
+**R48（2026-10-29）已把「编辑面底色字色三处同底」做完**（`TestsUISnapshot/EditorSurfaceTokenParityProbeTests` **7 例** ——
+三面各建离屏 `NSWindow` 真渲染、按那块 `NSTextView` 的 frame 算取样框取众数色：5 主题 × 深浅两态三面同值且等于
+`content` 令牌（科技蓝深色 `(11,26,42)`）、切深浅每面差 244、切主题每面差 27、裸 `NSTextView` 对照件差 19；
+反例四段各判红后逐字节还原）—— 台账 `FR-STD-WS-UI-011` 实现 **✅** / 判据 **✅**；**本批未改产品源码**。
+同批把本探针与 R47 漏接的 `WorkspaceTabStripOverflowProbeTests` 接进 `run-manual-verification-probes.sh` 的 `FILTER`（42 → 44）。
+下一轮按 `.agent/checkpoint.md` 的「下一项 1」= 台账 `FR-STD-WS-UI-013`（行内动作悬停出、常驻不占位），
+同档还有 `WS-UI-014`（对话框按钮形态）一条可量出来的界面口径。
 
 # 每轮卡 · Studio macOS 端自主开发（2026-10-28 起）
 
