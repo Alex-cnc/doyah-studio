@@ -154,18 +154,30 @@ final class MarkdownPreviewProbeTests: XCTestCase {
     @MainActor
     func testCursorModelPublishesOnlyOnChange() {
         let model = MarkdownPreviewCursorModel()
+        let tab = UUID()
         var published: [Int] = []
+        // 先激活页签再报数（2026-10-29 `FR-STD-WS-WEB-002` 收口片：报数带页签身份，
+        // 且只有活跃页签的报数才发布 —— 下面那两条「非活跃页签不发布」是同一批口径）。
+        model.activate(tab: tab)
         let token = model.$line.dropFirst().sink { published.append($0) }
         defer { token.cancel() }
 
-        model.report(line: 1)
-        model.report(line: 3)
-        model.report(line: 3)
-        model.report(line: 0)
-        model.report(line: -2)
+        model.report(line: 1, tab: tab)
+        model.report(line: 3, tab: tab)
+        model.report(line: 3, tab: tab)
+        model.report(line: 0, tab: tab)
+        model.report(line: -2, tab: tab)
 
         XCTAssertEqual(model.line, 3, "越界值必须丢掉（宁可不动，也不猜一个位置）")
         XCTAssertEqual(published, [3], "同一行重复上报不许发布：实测 \(published)")
+
+        // 非活跃页签的报数：只记账、不发布、不改当前行。
+        let other = UUID()
+        model.report(line: 77, tab: other)
+        XCTAssertEqual(model.line, 3, "非活跃页签的报数不许改当前预览")
+        XCTAssertEqual(published, [3], "非活跃页签的报数不许发布：实测 \(published)")
+        model.activate(tab: other)
+        XCTAssertEqual(model.line, 77, "切到那个页签要拿到它自己记的那一行")
     }
 
     // MARK: 内容决定高度（证明真的画出来了，不是一张空底）
@@ -270,6 +282,8 @@ final class MarkdownPreviewProbeTests: XCTestCase {
         XCTAssertEqual(before, 0, "清场后该是 0 条 —— 实测 \(before) 条")
 
         let cursor = MarkdownPreviewCursorModel()
+        let cursorTab = UUID()
+        cursor.activate(tab: cursorTab)
         let controller = host(MarkdownPreviewView(text: egressBait, language: .markdown, cursor: cursor))
         settle(controller)
 
@@ -282,7 +296,7 @@ final class MarkdownPreviewProbeTests: XCTestCase {
         )
 
         // 跟随滚动扫全篇（光标行 → 锚点 → 滚动），截断那一档（报数条会被画出来），空文档。
-        for line in 0...(blocks.lineCount + 2) { cursor.report(line: line) }
+        for line in 0...(blocks.lineCount + 2) { cursor.report(line: line, tab: cursorTab) }
         let truncated = MarkdownDocument.parse(
             egressBait + "\n更多正文\n", limits: MarkdownParseLimits(maxLines: 3, maxBlocks: 2)
         )

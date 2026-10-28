@@ -1,21 +1,23 @@
 # 检查点
 
-updated: 2026-10-29T01:47
+updated: 2026-10-29T02:00
 
 ## 现状
 
 - 循环卡 = `.agent/loop-card.md`（**2026-10-28 20:08 主人改成接力制**：一轮收尾即 `cronjob_manage action=run job_id=e98fad41f72d` 点火下一轮；定时器 5 分钟一跳只做兜底；不再按剩余条数自调阶梯）。
 - 队列唯一来源 = `Docs/Doyah产品开发计划任务清单-macOS端.md`（`FR-STD-*` 里实现为 `⬜`／`🟡`）；`.agent/plan.yaml` 已停用。
-- 最近读数（2026-10-29 R50）：`verify-core` **4567 项 / 0 failures**（4547 → +20 = `Tests/DialogButtonPolicyTests` 14 + `Tests/DialogButtonSourceTests` 6）；
-  五门 rc 全 0；包 `dist/DoyahStudio-beta1.0.app` sha256 前缀 **`eb814e76`** · 99,840 KB（构建时刻 2026-10-29T01:36:28+0800；
-  前一次 01:35 的 `afb88dcb` 出在改发布说明之前、回执不含本批 ⇒ 作废）；台账逐行实数 **✅ 127 / 🟡 70 / ⬜ 16**（本批按逐行实数清了一次号）。
+- 最近读数（2026-10-29 R51）：`verify-core` **4581 项 / 0 failures**（4567 → +14 = `Tests/MarkdownPreviewFollowTests` 11 + `Tests/MarkdownPreviewFollowSourceTests` 3）；
+  界面探针 target 同批全绿（`MarkdownPreviewProbeTests` 16 例）；五门 rc 全 0；包 `dist/DoyahStudio-beta1.0.app` sha256 前缀 **`f9e3f40b`** · 99,864 KB
+  （构建时刻 2026-10-29T01:55:09+0800；前一次 01:54 的 `cfe70eea` 出在改发布说明之前、回执不含本批 ⇒ 作废）；台账逐行实数 **✅ 127 / 🟡 71 / ⬜ 15**。
+- 上一轮读数（R50）：4567 / 0 failures · 包 `eb814e76` · ✅ 127 / 🟡 70 / ⬜ 16。
 
 ## 下一项
 
-**1. 台账 `FR-STD-WS-WEB-002`（工作区编辑器的 Markdown 预览）** —— 先核已有面：`Core/MarkdownDocument.swift`（块级模型，
-2026-09-30 第 130 轮的 27 条判据）与 `App/Views/MarkdownPreviewView.swift` **都已在盘**，所以这一条大概率缺的是
-「编辑器里怎么切到预览 / 两者是否同源滚动」那一半 —— 先 `grep` 出这条需求在需求书里的原文与验收要点，再定最小纵切
-（判据可机械跑优先：块模型与预览共享同一份切分 = 结构判据）。
+**1. 台账 `FR-STD-WS-FS-003`（工作区 Explorer 的文件操作）** —— ⚠️ 该行「一句话」列在台账里是**截断的**
+（到「原话：「现在的工作」就断），需求正文去 `Docs/Doyah产品需求规格说明书.md` 取同号行再定纵切；顺手把那一格补全
+（本轮 `WS-WEB-002` 就是这么补的）。已有面先核：`Core/WorkspaceFileOperations.swift`（新建 / 删除 / 改名 / 还原）与
+`Core/WorkspaceFileUndo.swift`（一次撤销）已在盘（`FR-STD-WS-FS-004/005/006` 交付），所以本条大概率缺的是**树上的入口与拖拽**
+（重命名 / 新建 / 删除 / 拖入拖出）—— 先 grep `WorkspaceExplorerView` 现有入口再定。
 
 其余按台账取「优先=高 → 中；同档取判据可机械跑的」（2026-10-28 R44 实测：**台账里已无「高」档的 `⬜`**）：
 
@@ -29,6 +31,15 @@ updated: 2026-10-29T01:47
 6. 存量红（与 HEAD 逐条相同，非任何一片引入；见 `.agent/evidence/2026-10-28-DB-TASK-001.md` §7）。
 
 ## 已完成的片
+
+- **R51（2026-10-29 02:00）· `FR-STD-WS-WEB-002` Markdown 预览的跟随滚动会话面** —— 这条实现列一直停在 `⬜`，
+  但盘上其实早就有预览（块模型 + 只读渲染 + 分屏 + 落点映射 + 截断报数 + 链接交浏览器页签），**缺的是跟随滚动那一半的会话面**：
+  `MarkdownPreviewCursorModel` 只存一个标量 `line`、且跨页签不重建 ⇒ 长文档切到另一篇时预览拿上一份文档的行号去找落点
+  （够长就跳到无关的块），切回来位置又丢。落法：`Core/MarkdownPreviewFollow.swift`（每页签各记一行 / 非活跃页签的报数
+  只记账不发布 / 越界不猜 / 关掉的页签记录清掉）+ 界面三条路 `syncPreviewCursor()` + 报数带页签身份；判据
+  `Tests/MarkdownPreviewFollowTests` 11 例 + `Tests/MarkdownPreviewFollowSourceTests` 3 例，反例五段各判红后逐字节还原；
+  Core **4581**（+14）；包 `f9e3f40b…`。台账实现 ⬜ → 🟡（差人工点一次）、判据 ⬜ → ✅。
+  证据：`.agent/evidence/2026-10-29-FR-STD-WS-WEB-002.md`。
 
 - **R50（2026-10-29 01:47）· `FR-STD-WS-UI-014` 对话框按钮用系统文字按钮** —— 这条需求此前实现 `⬜`、判据 `—`。
   动手前核查：本仓早有「工具条纯图标 / 对话框图标 + 文字」的分工（`DialogActionButton` 文件头，2026-10-18 主人留言），

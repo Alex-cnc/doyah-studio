@@ -25,9 +25,25 @@ struct WorkspaceAreaView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             messageBar
         }
+        .onAppear { syncPreviewCursor() }
+        // 换页签 / 关页签都要过一遍：行号按页签各记一份（`FR-STD-WS-WEB-002` 收口片），
+        // 否则切到另一篇时预览拿着上一份文档的行号去找落点。
+        .onChange(of: tabs.selectedID) { _, _ in syncPreviewCursor() }
+        .onChange(of: tabs.tabs.map(\.id)) { _, _ in syncPreviewCursor() }
         // 底色由父层统一给（`sectionWithLowerPane` 的 `NebulaBackground`）——
     // 这里再铺不透明色会把星云皮肤**整片盖住**（2026-10-01 实测）。
     .background(Color.clear)
+    }
+
+    /// 把预览的跟随输入面对齐到「当前选中的页签 + 还开着的页签集」。
+    ///
+    /// 两件事各有由头：**激活**换的是「跟哪一份文档」；**收**掉的是「已经关了的页签记下的位置」——
+    /// 同一个文件再打开会得到新的页签标识，旧记录留着也没人再按那个号取。
+    private func syncPreviewCursor() {
+        previewCursor.retain(tabs: tabs.tabs.map(\.id))
+        if let id = tabs.selectedID {
+            previewCursor.activate(tab: id)
+        }
     }
 
     // MARK: 内容
@@ -70,7 +86,7 @@ struct WorkspaceAreaView: View {
             onFormat: { tabs.formatSelected() },
             // 行内灰字的路径候选按工作区取表（`FR-EDIT-57` 最后一块）。
             workspaceRoot: workspace.rootURL,
-            onCursorLine: { line in previewCursor.report(line: line) },
+            onCursorLine: { line in previewCursor.report(line: line, tab: tab.id) },
             // 会话恢复（`FR-EDIT-43` 第二片）：这一页上次退出时的插入点与滚动位置（取走即没）。
             takeCursorPlacement: { id in tabs.takeCursorPlacement(for: id) },
             // 现场读数上报 —— 退出时落快照的输入面（选区变化 / 滚动各报一次）。

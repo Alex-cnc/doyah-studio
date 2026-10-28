@@ -32,12 +32,14 @@
   面板与手机的端到端人工点验一次。
 
 **★ 区已清空**：下一条活按台账取（`FR-STD-*` 里实现 `⬜`／`🟡`，优先=高 → 中；同档取判据可机械跑的）。
-**R50（2026-10-29）已把「对话框按钮用系统文字按钮」做完**（`FR-STD-WS-UI-014`；口径 `Core/DialogButtonPolicy.swift`
-+ 动作行 `App/Views/DialogActionRow.swift` + 21 个文件补 `role: .cancel`；判据 `Tests/DialogButtonPolicyTests` **14 例** +
-`Tests/DialogButtonSourceTests` **6 例**（源树扫 25 个 `*Sheet*.swift`），反例四段各判红后逐字节还原）——
-台账实现 **🟡**（差人工点一次：取消按钮上是文字 · Esc 能关 · 悬停提示 = 按钮文字）/ 判据 **✅**。
-下一条活 = 台账 `FR-STD-WS-WEB-002`（工作区编辑器的 Markdown 预览；先核已有面 `Core/MarkdownDocument.swift` +
-`App/Views/MarkdownPreviewView.swift` 已在盘，缺的可能是「编辑器怎么切到预览 / 是否同源滚动」那半）。
+**R51（2026-10-29）已把「Markdown 预览的跟随滚动会话面」做完**（`FR-STD-WS-WEB-002`；核心层
+`Core/MarkdownPreviewFollow.swift` —— 光标行按页签各记一份 / 非活跃页签的报数只记账不发布 / 越界不猜 / 关掉的页签记录清掉；
+界面 `WorkspaceAreaView.syncPreviewCursor()` 在换页签 · 关页签 · 首次出现三条路激活，报数带页签身份；判据
+`Tests/MarkdownPreviewFollowTests` **11 例** + `Tests/MarkdownPreviewFollowSourceTests` **3 例**，反例五段各判红后逐字节还原）——
+台账实现 **🟡**（Alpha 2 范围全部落地，差人工点一次：开两个 `.md` 页签，A 停中段 → 切 B 不跳到 A 的行 → 切回 A 回到原块）/ 判据 **✅**。
+下一条活 = 台账 `FR-STD-WS-FS-003`（工作区 Explorer 的文件操作）—— ⚠️ 该行「一句话」列在台账里是**截断的**，
+先到 `Docs/Doyah产品需求规格说明书.md` 取同号行补全那一格再定纵切；`Core/WorkspaceFileOperations.swift` 与
+`Core/WorkspaceFileUndo.swift` 已在盘（FS-004/005/006 交付），大概率缺的是**树上的入口与拖拽**。
 **有一条待主人拍板**（已登记，别当已决）：命名分组标题上要不要也给「＋」（现在只有「未分组」那段有）。
 
 # 每轮卡 · Studio macOS 端自主开发（2026-10-28 起）

@@ -558,21 +558,40 @@ enum MarkdownPreviewContent {
     }
 }
 
-/// 跟随滚动的**输入面**：编辑区光标所在行。
+/// 跟随滚动的**输入面**：编辑区光标所在行（**按页签各记一份**）。
 ///
 /// 为什么是一件独立对象、而不是 `WorkspaceAreaView` 的 `@State`：光标每换一行
 /// 只该惊动**预览**这一侧。放进视图状态会让 `WorkspaceAreaView.body` 每次移动
 /// 光标都重算，连带编辑器 `updateNSView` 里的全文比较也白跑一遍。
+///
+/// 为什么状态面上要带页签身份（`FR-STD-WS-WEB-002` 收口片）：这件对象活在工作区那一格，
+/// **跨页签不重建** —— 只存一个标量行号时，从光标停在第 800 行的长文档切到另一篇，
+/// 预览会拿 800 去找落点（新文档够长就跳到一个跟当下操作无关的块），切回来时原位置又丢了。
+/// 判定全在 `Core/MarkdownPreviewFollow.swift`（纯值类型、逐条判据），这里只负责三件事：
+/// 把它转成 `ObservableObject` 的发布、`activate`（切页签）、`retain`（关页签）。
 @MainActor
 final class MarkdownPreviewCursorModel: ObservableObject {
 
-    /// 1 起（与 `CodeLines` 的行号同一口径）；初值 1 = 文档开头。
-    @Published private(set) var line: Int = 1
+    /// 当前页签的光标行（1 起，与 `CodeLines` 的行号同一口径）；初值 1 = 文档开头。
+    @Published private(set) var line: Int = MarkdownPreviewFollow.firstLine
 
-    /// 同一行重复上报**不再发布**（连按方向键时预览会反复对齐到同一块）。
-    /// 越界值（≤ 0）直接丢掉 —— 宁可不动，也不猜一个位置。
-    func report(line: Int) {
-        guard line > 0, line != self.line else { return }
-        self.line = line
+    private var follow = MarkdownPreviewFollow()
+
+    /// 切到某个页签（换选中 / 打开文件 / 视图首次出现时调）：回到该页签自己记的位置。
+    func activate(tab: UUID) {
+        let next = follow.activate(tab)
+        if next != line { line = next }
+    }
+
+    /// 编辑器报来一次光标行（带页签身份）。越界、非活跃页签、与现价相同 —— 三档都不发布（口径在核心层）。
+    func report(line reported: Int, tab: UUID) {
+        guard follow.report(line: reported, tab: tab) else { return }
+        line = follow.line
+    }
+
+    /// 对着现存页签集收一遍：关掉的页签的记录丢掉（同一个文件再打开是新的页签标识）。
+    func retain(tabs: [UUID]) {
+        follow.retain(Set(tabs))
+        if follow.line != line { line = follow.line }
     }
 }
