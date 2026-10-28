@@ -1,6 +1,6 @@
 # 检查点
 
-updated: 2026-10-29T06:26
+updated: 2026-10-29T06:34
 
 ## 现状
 
@@ -8,6 +8,16 @@ updated: 2026-10-29T06:26
   点火下一轮；定时器 5 分钟一跳只做兜底；不再按剩余条数自调阶梯）。**本会话无 `cronjob_manage` 工具** ⇒ 接力改用 CLI
   `hermes cron run e98fad41f72d`（同一效果：下一跳调度器拉起），详见 loop-card 的「节奏」段。
 - 队列唯一来源 = `Docs/Doyah产品开发计划任务清单-macOS端.md`（`FR-STD-*` 里实现为 `⬜`／`🟡`）；`.agent/plan.yaml` 已停用。
+- 最近读数（2026-10-29 **R63**）：**陈旧标记归正 8 条**（只翻判据列、不加用例）。`verify-core` **4825 项 / 0 failures**
+  （与 R62 同值 —— 本轮零新增用例）；五门 + `check-format-arguments` rc 全 0（`check-doc-q-series` 仍为存量红，未加重）；
+  零源码改动 ⇒ **未重建**，包沿用 `dist/DoyahStudio-beta1.0.app` sha256 **`594b301e`**（构建时刻 2026-10-29T06:22:20+0800）。
+  台账 8 行判据列 🟡 → ✅（NAV-004 · FS-009 · EDIT-013 · UI-003 · EDIT-006 · EDIT-007 · EDIT-019 · EDIT-008；实测套件与例数见
+  `.agent/evidence/2026-10-29-stale-marks-R63.md`）；三处旧数字按实测改登记（30 条 ⇒ 12 例 / 8 例 ⇒ 10 例 / 17 例 ⇒ 18 例）；
+  `FR-STD-WS-FS-009` 实现列 ✅ → 🟡 如实下调（备注自己写着「剩：界面点验」，与口径 2 相抵）。
+  分族读数（逐行实数）⇒ 实现 **✅ 126 / 🟡 81 / ⬜ 6 = 213**；判据 **✅ 158 / 🟡 48 / ⬜ 6 / — 1 = 213**。
+  **下一项**：低档真 ⬜ 只剩两条 —— `FR-STD-WS-EDIT-014`（撤销语义粒度：连续输入合并成一次撤销 + 行级编辑按组；注意
+  `Core/WorkspaceFileUndo.swift` 是**文件操作**的撤销，不是文本撤销，别接错）与 `FR-STD-WS-NAV-006`（悬停文档 + 跳定义，
+  词法级）。取之前先 `grep` 源码看机械判据差哪一半；`FR-STD-WS-TOOL-003`（DAP）与 `FR-STD-WS-AI-001` 纵切过大，排后。
 - 最近读数（2026-10-29 **R62**）：`verify-core` **4825 项 / 0 failures**（4804 → +21 = `Tests/WorkspaceRegistryTests` 16 例 + `Tests/WorkspaceRegistrySourceTests` 5 例）；五门 + `check-format-arguments` rc 全 0（`check-doc-q-series` 仍为存量红，未加重）；包 `dist/DoyahStudio-beta1.0.app` sha256 **`594b301e`**（构建时刻 2026-10-29T06:22:20+0800；二进制 102,165,920 字节；同标签 06:21:52 那份 `1fc685cd` 出在发布说明含片补本条之前 ⇒ 作废；06:04:40 那份 `dafed86a` 自本批起作废）。
   台账本条：`FR-STD-WS-FS-010`（多工作区切换）实现 ⬜ → **🟡**（**界面已接线**：文件树标头 `WorkspaceSwitchMenu` + 首页 `WorkspaceKnownRow` 共用同一份 `workspace.knownWorkspaces` 与同一个 `switchTo`；差人工点一次 —— 再选一个文件夹后菜单应两条且新的打勾 / 切回旧的那条树与页签跟着换 / 目录删掉后那一条写「目录不在了」且点不动 / 重启停在最后用的那条）、判据 ⬜ → **✅**（16 + 5 例，反例五段各判红后逐字节还原）；分族读数（逐行实数）⇒ ✅ 127 / 🟡 80 / ⬜ 6 = 213。
   **下一项**：低档真 ⬜ 还剩两条 —— `FR-STD-WS-NAV-006`（悬停文档 + 跳定义，词法级）/ `FR-STD-WS-EDIT-014`（撤销语义粒度）；高档与中档仍只剩「人工点验 / 陈旧标记归正」（`FR-STD-WS-NAV-004` 走陈旧标记归正、不加用例）。取之前先 `grep` 源码看机械判据差哪一半。
