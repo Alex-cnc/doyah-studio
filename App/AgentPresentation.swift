@@ -178,6 +178,7 @@ extension TaskRunRecord.Status {
         case .succeeded: return .dataTaskRunStatusSucceeded
         case .failed: return .dataTaskRunStatusFailed
         case .skipped: return .dataTaskRunStatusSkipped
+        case .rejected: return .dataTaskRunStatusRejected
         }
     }
 
@@ -189,6 +190,7 @@ extension TaskRunRecord.Status {
         case .succeeded: return .green
         case .failed: return .red
         case .skipped: return .secondary
+        case .rejected: return .orange
         }
     }
 
@@ -198,6 +200,7 @@ extension TaskRunRecord.Status {
         case .succeeded: return "checkmark.circle.fill"
         case .failed: return "exclamationmark.triangle.fill"
         case .skipped: return "forward.circle"
+        case .rejected: return "hand.raised.fill"
         }
     }
 }

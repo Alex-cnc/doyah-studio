@@ -1,28 +1,35 @@
 # 检查点
 
-updated: 2026-10-28T21:32
+updated: 2026-10-28T21:45
 
 ## 现状
 
 - 循环卡 = `.agent/loop-card.md`（**2026-10-28 20:08 主人改成接力制**：一轮收尾即 `cronjob_manage action=run job_id=e98fad41f72d` 点火下一轮；定时器 5 分钟一跳只做兜底；不再按剩余条数自调阶梯）。
 - 队列唯一来源 = `Docs/Doyah产品开发计划任务清单-macOS端.md`（`FR-STD-*` 里实现为 `⬜`／`🟡`）；`.agent/plan.yaml` 已停用。
-- 最近读数（2026-10-28 R37）：`verify-core` **4353 例 / 12 skipped / 0 failures**；五门 rc 全 0；包 `dist/DoyahStudio-beta1.0.app` sha256 前缀 `92efb40c` · 97,376 KB（2026-10-28 21:20 出）。
+- 最近读数（2026-10-28 R38）：`verify-core` **4371 例 / 12 skipped / 0 failures**；五门 rc 全 0；包 `dist/DoyahStudio-beta1.0.app` sha256 前缀 `503bdf6a` · 97,560 KB（2026-10-28 21:39 出）。
 
 ## 下一项
 
 按台账取「优先=高 → 中；同档取判据可机械跑的」：
 
-1. `FR-STD-DB-TASK-002`（**优先=高**；需求正文在《需求规格说明书》§「高危任务执行前逐条列出」= 逐条语句 + 目标库 + 预估影响范围，
-   前置审批、未确认不发、拒绝留痕；`Core/AgentApprovalGate` 与审批单「≈N 行」已在盘 —— **先核已有面再定缺口**，别重做）。
-   ⚠️ 台账该行「一句话」是 `—`（占位未填，行在台账 §「补登记」段），正文一律以需求书为准；
+1. `FR-STD-DB-TASK-001` / `-003`（任务定义的可保存复用 + 执行回执四项读数）—— 与刚做完的 `-002` 同一族，
+   `Core/DataTask*` 与 `TaskRunRecord` 已在盘，先核已有面再定缺口（`-003` 的四项读数：成功/失败 · 影响行数 · 耗时 · 错误原文与时刻）；
 2. `FR-STD-WS-FS-003` 复核（行内悬浮菜单已在盘；**拖拽移动 / 在终端中打开**未核验）；
 3. `FR-STD-WS-EDIT-015` / `FR-STD-WS-AI-002` 剩的一半 —— 界面入口（Core 13 / 19 例已在盘）；
 4. `FR-STD-WS-VCS-001`（Git 只读与差异）/ `FR-STD-WS-TOOL-003`（DAP 调试器）—— 优先=中，纵切较大，排后；
-5. 人工点验项（`WS-WEB-004` 真站点、`WS-FS-004/005/006` 界面点一次）；
+5. 人工点验项（`WS-WEB-004` 真站点、`WS-FS-004/005/006` 界面点一次、`DB-TASK-002` 逐条审批界面点一次）；
 6. 存量红（非任何一片引入，见「未验证项」），做「清红」片时一并处理。
 
 ## 已完成的片
 
+- **R38（2026-10-28 21:45）· `FR-STD-DB-TASK-002` 高危任务逐条审批** —— 新 `Core/HighRiskTaskApproval.swift`
+  （`plan` 用执行侧同一个 `StatementSplitter` 拆成一条语句一行：序号 / 原文 / 首词类别 / 目标库逐条各带；
+  `Impact` 三档 `pending` / `rows(N)` / `unavailable(原因码)` —— 缺省 `pending`，**估不出来不冒充 0 行**；
+  `outcome(for:decision:)` 唯一决策口：批准 ⇒ 整批原序、拒绝 ⇒ **空表**；指纹 FNV-1a 64 逐处敏感，零中文字面量）
+  + 审批单逐条呈现（`AgentApprovalSheet` 每条一行，多条时不显示整批合计）+ `AppState.estimateHighRiskPlan` 逐条问优化器
+  + 拒绝状态独立（`TaskRunRecord.Status.rejected`「已拒绝」，与「已跳过」分开；`skipDataTaskRun` 删除）
+  + `Tests/HighRiskTaskApprovalTests` **18 例**；读数 `verify-core` 4371 / 0 failures，五门全绿，包 `503bdf6a` · 97,560 KB。
+  台账 实现 🟡（差人工点一次）/ 判据 ✅。
 - **R37（2026-10-28 21:32）· `FR-STD-WS-EDIT-009` 移行与复制行** —— 新 `Core/LineMoveEdit.swift`（行拆「内容 + 终止符」，
   内容按行搬 / 终止符按位置留 ⇒ `\r\n` 与「末行无终止符」都不粘连；光标按「那一行搬到哪」映射；首行上移 / 末行下移 / 空文档 `nil`；
   `⇧⌥↓` 副本紧随原行、选区留在原件）+ `CodeTextView.keyDown` 拦 `⌥↑`/`⌥↓`/`⇧⌥↓` → `applyEditPlan` + `Tests/LineMoveEditTests` 22 例；
@@ -51,6 +58,7 @@ updated: 2026-10-28T21:32
 
 ## 证据
 
+- `.agent/evidence/2026-10-28-DB-TASK-002.md`（已有面核查表 + 命令原文 + 读数 + 反例四段 + 存量红对照）
 - `.agent/evidence/2026-10-28-WS-EDIT-009.md`（命令原文 + 读数 + 反例三段 + 口径取舍）
 - `.agent/evidence/2026-10-28-WS-FS-004-005-006.md`（缺口表 + 读数 + 反例三段 + 存量红对照）
 - `.agent/evidence/2026-10-28-WS-WEB-004.md`（命令原文 + 读数 + 反例三段 + 口径变更由头）
@@ -59,6 +67,10 @@ updated: 2026-10-28T21:32
 
 ## 未验证项
 
+- `FR-STD-DB-TASK-002` 的**界面面**已接成逐条呈现但没人手点过（覆盖写入任务应列出 `TRUNCATE` + `INSERT` 两条、
+  目标库与各自行数分开、点拒绝后执行历史读作「已拒绝」）⇒ 实现 🟡，等人工点一次。
+- `check-core-localization.py` **存量红**（本批用干净树 `git worktree add /tmp/wt-r38 HEAD` 对照：HEAD 就是 88 文件 / 834 行 vs 基线 74 / 748，
+  与本片无关）；本批 +1 行（`Core/DataTask.swift` 的「已拒绝」），基线**未上调** —— 棘轮只许降。
 - `FR-STD-WS-EDIT-009` 的**界面面**已接线但没人手按过（`⌥↑` / `⌥↓` / `⇧⌥↓` 三个键、⌘Z 是否一步回去）⇒ 实现 `🟡`，等人工按一次。
 - 台账第 281 行（`FR-AGT-UX-CONV-012` 备注格）里有一处 `⟪HERMES-CONTEXT-COMPRESSION…⟫` 占位串**已入库**（HEAD 就有，
   上一轮工具调用写坏的），无门禁覆盖 —— 属别人那片的历史缺陷，本片不动，做「清号」片时一并修。

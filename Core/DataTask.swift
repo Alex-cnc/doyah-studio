@@ -572,6 +572,9 @@ public struct TaskRunRecord: Codable, Equatable, Sendable, Identifiable {
         case failed
         /// 因为错过窗口且未被确认，本次跳过。
         case skipped
+        /// 人工在审批单上拒绝 ⇒ 一条语句都没有发送（`FR-STD-DB-TASK-002` 判据③：
+        /// 拒绝是**一种结果**，不是「跳过」—— 历史里必须读得出是有人拒绝了它）。
+        case rejected
 
         public var displayName: String {
             switch self {
@@ -579,6 +582,7 @@ public struct TaskRunRecord: Codable, Equatable, Sendable, Identifiable {
             case .succeeded: return "成功"
             case .failed: return "失败"
             case .skipped: return "已跳过"
+            case .rejected: return "已拒绝"
             }
         }
     }

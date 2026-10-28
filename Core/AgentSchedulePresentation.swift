@@ -53,6 +53,7 @@ public enum AgentSchedulePresentation {
         case .succeeded: return LocalizedStrings.text(.dataTaskRunStatusSucceeded, language: language)
         case .failed: return LocalizedStrings.text(.dataTaskRunStatusFailed, language: language)
         case .skipped: return LocalizedStrings.text(.dataTaskRunStatusSkipped, language: language)
+        case .rejected: return LocalizedStrings.text(.dataTaskRunStatusRejected, language: language)
         }
     }
 

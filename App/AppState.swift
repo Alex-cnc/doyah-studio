@@ -3726,6 +3726,34 @@ final class AppState: ObservableObject {
         return AgentPlanRows.estimate(json: json)
     }
 
+    /// 高危任务的**逐条**影响面（`FR-STD-DB-TASK-002` 判据①「预估影响范围」）。
+    ///
+    /// 为什么逐条各问一次而不是整批一个数：`TRUNCATE` + `INSERT ... SELECT` 这种批量，
+    /// 合计会把「其中一条扫全表」摊平；人能拿来做决定的正是**哪一条**要大动。
+    /// 每一条都走同一条 `EXPLAIN (FORMAT JSON)`（不带 `ANALYZE`，不发语句本身），
+    /// 估不出来就按原因码如实标 —— 不填 0。
+    func estimateHighRiskPlan(_ plan: HighRiskTaskApproval.Plan) async -> HighRiskTaskApproval.Plan {
+        var filled = plan
+        for statement in plan.statements {
+            switch await estimateAgentPlanRows(for: statement.sql) {
+            case .rows(let count):
+                filled.setImpact(.rows(count), forIndex: statement.index)
+            case .unavailable(let code):
+                filled.setImpact(.unavailable(code), forIndex: statement.index)
+            }
+        }
+        return filled
+    }
+
+    /// 给审批单摆出「逐条」形状的计划（没指定库时也照建：目标库那一格如实写「未指定」）。
+    func highRiskPlan(for record: AgentActionRecord) -> HighRiskTaskApproval.Plan? {
+        try? HighRiskTaskApproval.plan(
+            sql: record.sql,
+            targetDatabase: record.database,
+            databaseType: selectedConnection?.dbType ?? .postgresql
+        )
+    }
+
     /// 批准并执行一条待审批动作（审批单上的「批准并执行」）。
     func approveAgentAction(id: UUID, note: String? = nil) async {
         await decideAgentAction(id: id, approve: true, note: note)
@@ -3876,8 +3904,17 @@ final class AppState: ObservableObject {
         let trimmedNote = note?.trimmingCharacters(in: .whitespacesAndNewlines)
         let noteValue = (trimmedNote?.isEmpty ?? true) ? nil : trimmedNote
 
+        // `FR-STD-DB-TASK-002`：**整批一次决定** —— 批准才交出语句、拒绝一条都不交、
+        // 同一批没有「先发前两条试试」这一档。计划建不出来（空白语句等）时退回人点的那个选择，
+        // 不因为构造失败反过来拦住审批。
+        let batchPlan = highRiskPlan(for: approval.record)
+        let batchOutcome = batchPlan.map {
+            HighRiskTaskApproval.outcome(for: $0, decision: approve ? .approve : .reject)
+        }
+        let effectivelyApproved = batchOutcome.map(\.sendsAnything) ?? approve
+
         do {
-            if approve {
+            if effectivelyApproved {
                 try approval.approve(by: NSUserName(), note: noteValue)
             } else {
                 try approval.reject(by: NSUserName(), note: noteValue)
@@ -3891,7 +3928,7 @@ final class AppState: ObservableObject {
         pendingAgentApprovals.remove(at: index)
         if agentApprovalRequest?.id == id { agentApprovalRequest = nil }
 
-        if approve {
+        if effectivelyApproved {
             // R-27（2026-09-23 评审）：**先落审计，再执行**。
             //
             // 执行是不可逆的；原来是先执行、后追加终态记录 —— 进程若在两者之间死掉，
@@ -3958,7 +3995,7 @@ final class AppState: ObservableObject {
             agentAuditError = nil
             agentAuditMessage = L(.agentApprovalRejected)
             if let pending = pendingDataTaskRuns.removeValue(forKey: id) {
-                await skipDataTaskRun(pending, message: L(.dataTaskRunRejected))
+                await rejectDataTaskRun(pending, message: L(.dataTaskRunRejected))
             }
         }
 
@@ -5108,12 +5145,16 @@ final class AppState: ObservableObject {
         )
     }
 
-    private func skipDataTaskRun(_ pending: PendingDataTaskRun, message: String) async {
+    /// 人工在审批单上拒绝的那一次执行（`FR-STD-DB-TASK-002` 判据③）。
+    ///
+    /// 与「跳过」分开记：跳过是「没到点 / 错过了、没人决定」，拒绝是**有人明确说不**。
+    /// 两者混成一条，历史里就读不出「这批高危语句是被否决掉的」。
+    private func rejectDataTaskRun(_ pending: PendingDataTaskRun, message: String) async {
         await recordDataTaskRun(
             task: pending.task,
             plannedAt: pending.plannedAt,
             startedAt: pending.startedAt,
-            status: .skipped,
+            status: .rejected,
             rowsWritten: nil,
             message: message
         )

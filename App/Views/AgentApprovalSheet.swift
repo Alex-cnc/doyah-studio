@@ -21,6 +21,9 @@ struct AgentApprovalSheet: View {
     @State private var isWorking = false
     /// 「预计影响行数」（§9.1.16 A4）：`nil` = 还没算（先显示「估算中…」）。
     @State private var planRows: AgentPlanRows.Estimate?
+    /// 逐条形状的待审计划（`FR-STD-DB-TASK-002` 判据①：每条语句 + 目标库 + 各自影响面）。
+    /// `nil` = 拆不出来（空脚本等）⇒ 退回「整段原文」那一种呈现。
+    @State private var statementsPlan: HighRiskTaskApproval.Plan?
 
     private var record: AgentActionRecord { approval.record }
 
@@ -66,6 +69,14 @@ struct AgentApprovalSheet: View {
         // 估算在**出现时**跑一次：只要这一格给出的是「这一条会改多少行」，
         // 人就能拿它和「我看到的那几条」对一眼再决定。估不出来时这里会如实写原因。
         .task(id: record.id) {
+            // 逐条列出：先把这段脚本拆成「每条语句一行」，再逐条问优化器。
+            // 两条语句（`TRUNCATE` + `INSERT`）合成一坨时，「哪条打哪个库」「每条各影响多少」
+            // 都答不出来 —— 那正是这张单最该说清楚的东西。
+            if let plan = appState.highRiskPlan(for: record) {
+                statementsPlan = await appState.estimateHighRiskPlan(plan)
+            } else {
+                statementsPlan = nil
+            }
             planRows = await appState.estimateAgentPlanRows(for: record.sql)
         }
     }
@@ -77,7 +88,11 @@ struct AgentApprovalSheet: View {
             row(L(.agentAuditColumnConnection), AgentAuditPresentation.connectionText(record))
             row(L(.agentAuditColumnModel), AgentAuditPresentation.modelText(record))
             row(L(.agentAuditColumnStatement), "\(record.statementKind.text) · \(record.risk.text)")
-            row(L(.agentApprovalRowsTitle), planRowsText)
+            // 整批一个「预计影响行数」只在**单条**语句时成立；多条时那是一个合计，
+            // 而合计会把「其中一条扫全表」摊平 —— 那种情况下逐条各自的行数在下面那张单子里。
+            if (statementsPlan?.count ?? 0) <= 1 {
+                row(L(.agentApprovalRowsTitle), planRowsText)
+            }
         }
         .font(.caption)
     }
@@ -144,17 +159,92 @@ struct AgentApprovalSheet: View {
 
     // MARK: - 语句
 
+    /// 逐条列出（`FR-STD-DB-TASK-002` 判据①）：一条语句一行 —— 序号 · 类别、目标库、这条的预计影响行数，
+    /// 下面跟这条的原文。**拆不出来时才退回整段原文**（并且仍然是原文，不是截断版）。
     private var statementSection: some View {
-        ScrollView {
-            Text(record.sql)
-                .font(.system(.caption, design: .monospaced))
+        VStack(alignment: .leading, spacing: 6) {
+            if let plan = statementsPlan {
+                HStack {
+                    Text(L(.agentApprovalStatementsTitle, plan.count))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    if plan.pendingImpactCount > 0 {
+                        Text(L(.agentApprovalRowsEstimating))
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 10) {
+                        ForEach(plan.statements) { statement in
+                            statementRow(statement)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(8)
+                }
+                .frame(height: 170)
+                .background(Theme.surface(.content))
+                .clipShape(RoundedRectangle(cornerRadius: 6))
+            } else {
+                ScrollView {
+                    Text(record.sql)
+                        .font(.system(.caption, design: .monospaced))
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(8)
+                }
+                .frame(height: 150)
+                .background(Theme.surface(.content))
+                .clipShape(RoundedRectangle(cornerRadius: 6))
+            }
+        }
+    }
+
+    /// 一条语句那一行：**目标库与影响面都必须逐条落在它自己身上**（不许共用整批那个数）。
+    private func statementRow(_ statement: HighRiskTaskApproval.Statement) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text("#\(statement.index) · \(statement.kind)")
+                    .font(.system(.caption, design: .monospaced).weight(.semibold))
+
+                Text("\(L(.schemaDiffTarget)): \(statement.targetDatabase ?? L(.agentApprovalDatabaseNotSet))")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+
+                Spacer(minLength: 8)
+
+                Text(impactText(statement.impact))
+                    .font(.caption2)
+                    .foregroundStyle(impactTint(statement.impact))
+            }
+
+            Text(statement.sql)
+                .font(.system(.caption2, design: .monospaced))
                 .textSelection(.enabled)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(8)
         }
-        .frame(height: 150)
-        .background(Theme.surface(.content))
-        .clipShape(RoundedRectangle(cornerRadius: 6))
+    }
+
+    /// 单条的影响面文案（三档都必须**说清楚**：给了数 / 估不出来（原因）/ 还没算完）。
+    private func impactText(_ impact: HighRiskTaskApproval.Impact) -> String {
+        switch impact {
+        case .pending:
+            return L(.agentApprovalRowsEstimating)
+        case .rows(let count):
+            return "≈\(count) " + L(.agentApprovalRowsUnit)
+        case .unavailable(let code):
+            return L(.agentApprovalRowsUnavailablePrefix) + reasonText(code)
+        }
+    }
+
+    private func impactTint(_ impact: HighRiskTaskApproval.Impact) -> Color {
+        switch impact {
+        case .rows: return .primary
+        case .pending, .unavailable: return .secondary
+        }
     }
 
     // MARK: - 决策

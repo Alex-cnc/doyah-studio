@@ -1089,6 +1089,8 @@ public enum LKey: String, CaseIterable, Sendable {
     case agentSessionUnavailable
     // A4：审批单上的「预计影响行数」（§9.1.16）
     case agentApprovalRowsTitle
+    case agentApprovalStatementsTitle
+    case agentApprovalDatabaseNotSet
     case agentApprovalRowsUnit
     case agentApprovalRowsEstimating
     case agentApprovalRowsUnavailablePrefix
@@ -2168,6 +2170,7 @@ public enum LKey: String, CaseIterable, Sendable {
     case dataTaskRunStatusSucceeded
     case dataTaskRunStatusFailed
     case dataTaskRunStatusSkipped
+    case dataTaskRunStatusRejected
     case dataTaskSpecOpen
     case dataTaskSpecTitle
     case dataTaskSpecInput
@@ -3948,6 +3951,8 @@ public enum LocalizedStrings {
         .agentSessionUnavailable: [.simplifiedChinese: "这条会话读不出来（文件可能不在了，或是别的工区的）。", .english: "This session cannot be read (the file may be gone, or it belongs to another workspace)."],
         // A4：审批单上的「预计影响行数」（§9.1.16）—— 数值来源只有一个：数据库优化器的 Plan Rows。
         .agentApprovalRowsTitle: [.simplifiedChinese: "预计影响行数", .english: "Estimated rows"],
+        .agentApprovalStatementsTitle: [.simplifiedChinese: "将要执行的语句（%d 条，逐条列出）", .english: "Statements to be run (%d, listed one by one)"],
+        .agentApprovalDatabaseNotSet: [.simplifiedChinese: "未指定（当前连接的默认库）", .english: "Not set (connection default)"],
         .agentApprovalRowsUnit: [.simplifiedChinese: "行", .english: "rows"],
         .agentApprovalRowsEstimating: [.simplifiedChinese: "估算中…", .english: "Estimating…"],
         .agentApprovalRowsUnavailablePrefix: [.simplifiedChinese: "估不出来：", .english: "Cannot estimate: "],
@@ -5370,6 +5375,7 @@ public enum LocalizedStrings {
         .dataTaskRunStatusSucceeded: [.simplifiedChinese: "成功", .english: "Succeeded"],
         .dataTaskRunStatusFailed: [.simplifiedChinese: "失败", .english: "Failed"],
         .dataTaskRunStatusSkipped: [.simplifiedChinese: "已跳过", .english: "Skipped"],
+        .dataTaskRunStatusRejected: [.simplifiedChinese: "已拒绝", .english: "Rejected"],
         .dataTaskSpecOpen: [.simplifiedChinese: "由规格说明生成…", .english: "Generate from specs…"],
         .dataTaskSpecTitle: [.simplifiedChinese: "由规格说明生成任务定义", .english: "Generate a task definition from specs"],
         .dataTaskSpecInput: [.simplifiedChinese: "规格说明（自然语言）", .english: "Specification (natural language)"],
