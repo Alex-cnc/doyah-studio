@@ -130,6 +130,23 @@ final class WorkspaceStore: ObservableObject {
         apply(status: .notAuthorized, bookmark: nil)
     }
 
+    /// 外部改动后**只重列被改目录**（2026-10-27 人类主人拍板：「只用加载被修的节点就行」）。
+    ///
+    /// 与 `refresh()` 的区别是根本性的：`refresh()` 走 `adopt`，会
+    /// `childrenCache.removeAll()` + `expandedPaths.removeAll()`（树整棵塌、展开状态清零），
+    /// 那是给「换书签 / 目录被移动」用的整体重来；文件变化不该付这个代价。
+    /// 这里只动**可见的**那几个目录的缓存，展开状态一个字都不碰。
+    func reloadDirectories(forChangedPaths paths: [String]) {
+        guard let rootPath else { return }
+        let targets = WorkspaceChangeScope.directoriesToReload(
+            changedPaths: paths, rootPath: rootPath, expandedPaths: expandedPaths)
+        guard !targets.isEmpty else { return }
+        for relative in targets {
+            childrenCache[relative] = listChildren(relativePath: relative)
+        }
+        revision += 1
+    }
+
     /// 重新解析书签并刷新根目录（书签可能被外部改动 / 目录被移动）。
     func refresh() async {
         guard let bookmark else { return }

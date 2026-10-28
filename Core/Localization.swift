@@ -1187,6 +1187,12 @@ public enum LKey: String, CaseIterable, Sendable {
     case agentChatWorkspaceNone
     case workspaceHomeBuildLine
     case workspaceHomeCopyright
+    /// 版权行（2026-10-27 人类主人令）：© 2026 豆丫科技 · Doyah Tech。
+    case appCopyright
+    /// 开发者行的**值**：中文界面给中文名，英文界面给英文名。
+    case appCopyrightHolder
+    /// 开发者行的**标签**（用「开发者 / Developer」，**不用 Owner**）。
+    case licAboutDeveloper
     case workspaceRecentFiles
     case workspaceRecentWorkspaces
     case workspaceConnections
@@ -1754,6 +1760,24 @@ public enum LKey: String, CaseIterable, Sendable {
     case agentAPIKeyConfigured
     case agentAPIKeyMissing
     case agentAPIKeyClear
+    // IM 通道的配置面（`FR-AGT-LINK-CHAN-003`）：凭据放置点只说「放哪、配没配」，
+    // 不承诺能连上 —— 传输层落地前这一格不许画成「已连接」。
+    case agentIMSection
+    case agentIMAppID
+    case agentIMSecret
+    case agentIMSecretConfigured
+    case agentIMSecretMissing
+    case agentIMSecretKeepHint
+    case agentIMClear
+    case agentIMSave
+    case agentIMTransportPending
+    case agentIMAppIDEmpty
+    case agentIMAppIDNotNumeric
+    case agentIMAppIDTooLong
+    case agentIMSecretEmpty
+    case agentIMSecretHasWhitespace
+    case agentIMSaved
+    case agentIMCleared
     case agentLocalEndpointHint
     case agentStatusSection
     case agentSave
@@ -4037,7 +4061,11 @@ public enum LocalizedStrings {
         .agentChatCollapse: [.simplifiedChinese: "收起", .english: "Collapse"],
         .agentChatThinkingTitle: [.simplifiedChinese: "思考", .english: "thinking"],
         .workspaceHomeBuildLine: [.simplifiedChinese: "版本 %@（构建 %@）", .english: "Version %@ (build %@)"],
-        .workspaceHomeCopyright: [.simplifiedChinese: "© 2026 DoyahStudio · 本机优先：数据与文件不出这台机器", .english: "© 2026 DoyahStudio · Local first: your data and files stay on this machine"],
+        .workspaceHomeCopyright: [.simplifiedChinese: "版权所有 © 2026 豆丫科技 · 本机优先：数据与文件不出这台机器", .english: "Copyright © 2026 Doyah Tech · Local first: your data and files stay on this machine"],
+        // 版权行（2026-10-27 人类主人令）：**中英各叫各的名字** —— 中文界面给「豆丫科技」，英文界面给「Doyah Tech」，不混写（英文文案里不夹汉字这条判据照旧适用）。两个名字并列的那一句（`© 2026 豆丫科技 · Doyah Tech`）只出现在不分语言的地方：Info.plist / LICENSE。
+        .appCopyright: [.simplifiedChinese: "© 2026 豆丫科技", .english: "© 2026 Doyah Tech"],
+        .appCopyrightHolder: [.simplifiedChinese: "豆丫科技", .english: "Doyah Tech"],
+        .licAboutDeveloper: [.simplifiedChinese: "开发者：", .english: "Developer:"],
         .workspaceRecentFiles: [.simplifiedChinese: "最近打开的文件", .english: "Recent files"],
         .workspaceRecentWorkspaces: [.simplifiedChinese: "最近打开的工作区", .english: "Recent workspaces"],
         .workspaceConnections: [.simplifiedChinese: "连接", .english: "Connections"],
@@ -4588,6 +4616,22 @@ public enum LocalizedStrings {
         .agentAPIKeyConfigured: [.simplifiedChinese: "已配置（存于系统钥匙串，不写入配置文件）", .english: "Configured (kept in Keychain, never in the config file)"],
         .agentAPIKeyMissing: [.simplifiedChinese: "未配置。远端端点需要 API Key；本地端点不需要。", .english: "Not configured. Remote endpoints need one; local endpoints do not."],
         .agentAPIKeyClear: [.simplifiedChinese: "清除已保存的 Key", .english: "Clear saved key"],
+        .agentIMSection: [.simplifiedChinese: "IM 通道（QQ）", .english: "IM channel (QQ)"],
+        .agentIMAppID: [.simplifiedChinese: "AppID（明文，可读）", .english: "AppID (not a secret)"],
+        .agentIMSecret: [.simplifiedChinese: "App Secret（只进系统钥匙串）", .english: "App Secret (Keychain only)"],
+        .agentIMSecretConfigured: [.simplifiedChinese: "已配置：长度 %d · 尾 %@", .english: "Configured: length %d · ending %@"],
+        .agentIMSecretMissing: [.simplifiedChinese: "未配置密钥", .english: "No secret configured"],
+        .agentIMSecretKeepHint: [.simplifiedChinese: "留空 = 不改动已存的 Secret", .english: "Leave blank to keep the stored secret"],
+        .agentIMClear: [.simplifiedChinese: "清除通道凭据", .english: "Clear channel credentials"],
+        .agentIMSave: [.simplifiedChinese: "保存凭据", .english: "Save credentials"],
+        .agentIMTransportPending: [.simplifiedChinese: "传输层（WebSocket / 心跳 / 重连）尚未实现：这一格只存凭据，不联网，也不假装连过。", .english: "Transport (WebSocket / heartbeat / reconnect) is not implemented yet: this only stores credentials — no network, no pretending it connected."],
+        .agentIMAppIDEmpty: [.simplifiedChinese: "AppID 不能为空", .english: "AppID cannot be empty"],
+        .agentIMAppIDNotNumeric: [.simplifiedChinese: "AppID 必须是纯数字（是不是把 Secret 粘进来了？）", .english: "AppID must be all digits (did the secret get pasted here?)"],
+        .agentIMAppIDTooLong: [.simplifiedChinese: "AppID 过长（上限 64 位）", .english: "AppID is too long (64 characters max)"],
+        .agentIMSecretEmpty: [.simplifiedChinese: "App Secret 不能为空", .english: "App Secret cannot be empty"],
+        .agentIMSecretHasWhitespace: [.simplifiedChinese: "App Secret 里不能有空格或换行（粘贴时带进来的？）", .english: "App Secret cannot contain spaces or line breaks (pasted by accident?)"],
+        .agentIMSaved: [.simplifiedChinese: "通道凭据已写入系统钥匙串", .english: "Channel credentials saved to Keychain"],
+        .agentIMCleared: [.simplifiedChinese: "通道凭据已清除", .english: "Channel credentials cleared"],
         .agentLocalEndpointHint: [.simplifiedChinese: "本地 / 局域网端点无需 API Key（本地模型优先）。", .english: "Local or LAN endpoints need no API key."],
         .agentStatusSection: [.simplifiedChinese: "当前状态", .english: "Status"],
         .agentSave: [.simplifiedChinese: "保存", .english: "Save"],

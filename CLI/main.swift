@@ -134,6 +134,18 @@ struct DoyahCLI {
             exit(await runAgentSQLStreamCommand(arguments: Array(arguments.dropFirst())))
         }
 
+        // agent：智能体的**配置面**（目前只有 `im` 一项：QQ 通道凭据的放置点）。
+        // 为什么与 agent-sql 分开：那一条是「跑一次」，这一条是「改配置」——
+        // 而且凭据只许从 stdin / 文件进，不接受写在命令行参数里。
+        if arguments.first == "agent" {
+            let rest = Array(arguments.dropFirst())
+            guard rest.first == "im" else {
+                FileHandle.standardError.write(Data("用法：DoyahCLI agent im <set|status|clear> …\n".utf8))
+                exit(2)
+            }
+            exit(runAgentIMCommand(arguments: Array(rest.dropFirst())))
+        }
+
         // archive-add：用**产品的归档写入器**追加一条记录（FR-EDIT-31）。
         // 存在的理由：记忆层的验证必须用真归档格式 —— 手编格式验的是"我以为的格式"，
         // 本轮就踩过（手写文件解析出 0 条）。

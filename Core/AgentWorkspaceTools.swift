@@ -26,6 +26,8 @@ public enum AgentToolRefusal: String, Codable, Equatable, Sendable {
     /// **伤害性动作被刹停**（`FR-AI-34`）：不进审批队列、不执行，**立刻停并告诉你**。
     /// 与 `deniedByPolicy` 分开：那条是"此刻策略不许"，这条是"这事本身有害"。
     case harmStopped
+    /// **子代理不许再派子代理**（深度只许 1 层）：否则一路派下去没人收口。
+    case subagentNesting
     /// **同一文件正有另一次写入在进行**（`FR-AI-31` ①）：不排队、不静默覆盖 —— 如实说，让人 / 模型重试。
     /// 与 `staleTarget` 分开：这条是"此刻有人正握着这个文件"，那条是"我拿到的那份基线已经过期"。
     case writeConflict
@@ -320,7 +322,8 @@ public struct AgentWorkspaceTools: Sendable {
     public func writeFile(path: String, content: String, tool: AgentToolDefinition? = nil,
                           guardPolicy: AgentGuardPolicy = AgentGuardPolicy(readOnly: false),
                           fingerprint: String, granted: Set<String>,
-                          baseDigest: String? = nil) -> AgentToolOutcome {
+                          baseDigest: String? = nil,
+                          batch: AgentWriteBatchStore? = nil) -> AgentToolOutcome {
         let prepared = prepareWrite(path: path, content: content, tool: tool, guardPolicy: guardPolicy)
         guard case .needsApproval(let request) = prepared else { return prepared }
         guard request.fingerprint == fingerprint, granted.contains(fingerprint) else {
@@ -338,11 +341,15 @@ public struct AgentWorkspaceTools: Sendable {
         if let baseDigest, AgentWriteTargetState.digest(at: url) != baseDigest {
             return .refused(.staleTarget, detail: relativePath(url))
         }
+        // **前像**在写之前取（`FR-STD-WS-EDIT-015`）：这一轮真写成功了才记，写坏的不记。
+        let existedBefore = FileManager.default.fileExists(atPath: url.path)
+        let previousText = existedBefore ? (try? String(contentsOf: url, encoding: .utf8)) : nil
         do {
             try content.write(to: url, atomically: true, encoding: .utf8)
         } catch {
             return .refused(.unreadable, detail: url.lastPathComponent)
         }
+        batch?.record(path: relativePath(url), previousText: previousText, writtenText: content)
         return .wrote(AgentToolFileOutput(path: relativePath(url), text: content,
                                          truncated: false, totalBytes: content.utf8.count))
     }

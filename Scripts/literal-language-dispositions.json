@@ -33,6 +33,11 @@
       "reason": "**有意为之**：CLI 没有界面语境，语言就该是显式的中文（本轮 L-47 把诊断输出也改成显式传 `AppLanguage.simplifiedChinese`）；另两处是 MCP 审批载荷文案。代价是这两个键的英文译文当前不可达 ⇒ 已登记进 deadKeys，要不要给 CLI 加一个语言开关属新需求（不在本轮）。**L-65 第 2 批补记**：隧道命令那句是 `let language = AppLanguage.simplifiedChinese`（**赋值**，不进本台账的计数 —— 判据量的是 `language: .simplifiedChinese` 这种**传参**形状），随后 `start(language:)` 与 `describe(language:)` 都用它；**别把它当成「没写死」**，命令行说中文是有意的口径，不是遗漏。**L-65 第 5 批补记（5 → 6 处）**：命令行的连库入口 `DatabaseServiceFactory.make(for:password:language:)` 同样显式传 `.simplifiedChinese`（数据库侧那几句失败文案也归命令行）—— 同 `Q43`（2026-09-30 拍板「保持现状」）口径，**不计入清零目标**（清零目标 = 44 处里的 39 处，CLI 那 5 处本就不在内）。 **判定物跟版（2026-10-14 · 原单 `T-20261010-052` · 合册第 39 轮）**：`maxSites` **6 → 10** —— 新增的 4 处不是新写死的代码，是**原来就存在、旧判定物看不见**的赋值形：`:1093` `let sessionLanguage = AppLanguage.simplifiedChinese`、`:1421` / `:1726` `let language = AppLanguage.simplifiedChinese`、`:2165`（隧道那条命令，此前只在本条 reason 里「补记」、明说不进计数）。同 `Q43` 口径（命令行没有界面语境 ⇒ 中文是显式选择），**登记 ≠ 放行**；要不要给 CLI 加语言开关仍是新需求（不在本册）。"
     },
     {
+      "file": "CLI/AgentIMCommand.swift",
+      "maxSites": 2,
+      "reason": "**有意为之（同 `CLI/main.swift` 那条口径）**：`agent im` 是**无界面**的配置入口，没有界面语言语境，两处文案（清除成功的结论、拒绝原因的人话）显式说中文。要给它加语言开关属新需求：等 CLI 有 `--language` 这类上下文时再透传，现在写死是为了不伪造一个不存在的语言来源。"
+    },
+    {
       "file": "Plugins/Notes/Sources/NoteBody.swift",
       "maxSites": 0,
       "reason": "**回归钉（队列 L-65 第 1 批已透传）**：`NoteBodyProjection.toSpans(_:language:)` / `exportMarkdown(_:language:)` 收调用方的语言（降级说明是给人看的话）—— 这里再出现字面语言即红。"

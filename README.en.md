@@ -148,3 +148,7 @@ Released under the [Apache License 2.0](LICENSE).
 Third-party components and their licenses are listed in
 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) (also shipped inside the `.app` under
 `Contents/Resources/`).
+
+---
+
+Copyright © 2026 Doyah Tech. All rights reserved.

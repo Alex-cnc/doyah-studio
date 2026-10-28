@@ -35,6 +35,11 @@ public enum AgentContextReference: Equatable, Sendable {
     /// 只带**摘要**（分支名、改了几个文件、ahead/behind），不带 diff 正文 —— diff 会让上下文
     /// 在开会话的第一秒就爆掉，而模型真正需要的是「我现在站在哪儿、有没有脏东西」。
     case gitState(branch: String, changed: [String], ahead: Int, behind: Int)
+    /// **项目规则文件**（`FR-AGT-KNOW-CTX-003`）：开跑前自动带上，**路径与正文一起**。
+    ///
+    /// 与 `@文件` 分开成一个 case，不是为了长得不一样，是为了让判据能问「这条是规则还是用户点的文件」——
+    /// 两者进上下文的理由不同：一个是项目定死的规矩，一个是这一次要看的料。
+    case projectRule(path: String, text: String)
 }
 
 /// 上限（`FR-AI-22` ③④；沿用既有纪律：schema 摘要 ≤ 60 表 / ≤ 400 列）。
@@ -213,6 +218,9 @@ public enum AgentContextAssembler {
         case .terminalTail(let text):
             // 尾部：**留最后 N 个字符**（终端最有用的就是末尾），并如实标注截断
             return make(title: "terminal", text: text, limit: limits.maxTerminalCharacters, keepTail: true)
+
+        case .projectRule(let path, let text):
+            return make(title: "rule:\(path)", text: text, limit: limits.maxFileCharacters)
 
         case .gitState(let branch, let changed, let ahead, let behind):
             var lines = ["branch:\(branch)", "changed:\(changed.count)"]

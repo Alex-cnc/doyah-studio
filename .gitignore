@@ -142,3 +142,4 @@ __pycache__/
 !/Docs/模块化需求清单说明.md
 !/Docs/changelog/
 !/Docs/changelog/**
+.agent/round.lock

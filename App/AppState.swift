@@ -342,6 +342,14 @@ final class AppState: ObservableObject {
     @Published var agentAPIKey: String?
     /// 钥匙串里是否已有 Key（界面显示「已配置 / 未配置」）。
     @Published var hasAgentAPIKey = false
+
+    /// IM 通道（QQ）的 AppID（明文，非敏感；只有它是可读的）。
+    @Published var agentIMAppID = ""
+    /// 钥匙串里是否已有通道 Secret。
+    @Published var hasAgentIMSecret = false
+    /// 面板只显示「长度 + 尾 4」，不回显本体。
+    @Published var agentIMSecretLength: Int?
+    @Published var agentIMSecretTail: String?
     /// 「智能体设置…」面板的呈现开关（菜单命令驱动）。
     @Published var isAgentSettingsPresented = false
 
@@ -1427,6 +1435,8 @@ final class AppState: ObservableObject {
     private let agentConfigurationStore = AgentConfigurationStore.shared
     /// 模型 API Key 的存储：同样是系统钥匙串（`NFR-ALL-GATE-AI-007`「密钥只进系统凭据存储」）。
     private let agentKeyStore: AgentKeyStore
+    /// IM 通道凭据的落点（AppID 在配置文件、Secret 在系统钥匙串；`FR-AGT-LINK-CHAN-003`）。
+    private let agentIMCredentialStore: AgentIMCredentialStore
     /// 审计日志（追加式 JSONL）；导出前脱敏在 Core 里完成（NFR-AI-03）。
     private let agentAuditLog = AgentAuditLog.shared
     private let egressLog = EgressLog.shared
@@ -1477,12 +1487,15 @@ final class AppState: ObservableObject {
     /// - Parameters:
     ///   - secretStore: 连接口令的存储。默认系统钥匙串；测试 / 开发态可注入 `FileSecretStore()`。
     ///   - agentKeyStore: 模型 API Key 的存储。默认系统钥匙串；同上可注入。
+    ///   - agentIMCredentialStore: IM 通道凭据的存储。默认 = 配置文件（AppID）+ 系统钥匙串（Secret）。
     init(
         secretStore: SecretStore = KeychainSecretStore(),
-        agentKeyStore: AgentKeyStore = KeychainAgentKeyStore()
+        agentKeyStore: AgentKeyStore = KeychainAgentKeyStore(),
+        agentIMCredentialStore: AgentIMCredentialStore = AgentIMCredentialStore(secretStore: KeychainAgentIMSecretStore())
     ) {
         self.secretStore = secretStore
         self.agentKeyStore = agentKeyStore
+        self.agentIMCredentialStore = agentIMCredentialStore
         let firstTab = QueryTab(title: L(.workspaceTabTitle, tabNumbers.next()))
         tabs = [firstTab]
         selectedTabID = firstTab.id
@@ -2866,7 +2879,51 @@ final class AppState: ObservableObject {
         let key = (try? agentKeyStore.apiKey()) ?? nil
         agentAPIKey = key
         hasAgentAPIKey = !(key?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
+
+        // IM 通道凭据：读不到就按「没配」处理（钥匙串不可用不该把设置面板锁死）。
+        refreshAgentIMCredentials()
     }
+
+    /// 把盘上与钥匙串里的通道凭据读进界面状态（AppID 明文 + Secret 只留长度与尾 4）。
+    func refreshAgentIMCredentials() {
+        guard let status = try? agentIMCredentialStore.status(for: .qq) else {
+            agentIMAppID = ""
+            hasAgentIMSecret = false
+            agentIMSecretLength = nil
+            agentIMSecretTail = nil
+            return
+        }
+        agentIMAppID = status.appID ?? ""
+        hasAgentIMSecret = status.secretConfigured
+        agentIMSecretLength = status.secretLength
+        agentIMSecretTail = status.secretTail
+    }
+
+    /// 存通道凭据。`secret` 传 nil（面板留空）⇒ 只改 AppID，不动已存的 Secret。
+    /// - Returns: 是否成功；失败原因落在 `errorMessage`，不吞。
+    @discardableResult
+    func saveAgentIMCredentials(appID: String, secret: String?, clearFirst: Bool = false) -> Bool {
+        do {
+            if clearFirst {
+                try agentIMCredentialStore.clear(for: .qq)
+                refreshAgentIMCredentials()
+                statusMessage = L(.agentIMCleared)
+                return true
+            }
+            _ = try agentIMCredentialStore.save(appID: appID, secret: secret, for: .qq)
+            refreshAgentIMCredentials()
+            statusMessage = L(.agentIMSaved)
+            return true
+        } catch let problem as AgentIMCredentialProblem {
+            errorMessage = AgentIMCredentialRejectionText.line(
+                for: problem, language: LocalizationManager.shared.effectiveLanguage)
+            return false
+        } catch {
+            errorMessage = L(.agentSaveFailed, ErrorPresenter.message(for: error))
+            return false
+        }
+    }
+
 
     /// 一次性迁移：把旧版**文件存储**（`FileAgentKeyStore` / `FileSecretStore`，XOR 混淆）
     /// 里的凭据搬进系统钥匙串，搬完删文件里的明文槽位。
@@ -3127,7 +3184,11 @@ final class AppState: ObservableObject {
         let memoryRead = AgentMemoryStore(directory: AgentMemoryStore.defaultDirectory)
             .entries(workspace: workspacePath, connection: selectedConnection?.name)
         if !memoryRead.entries.isEmpty {
-            references.append(contentsOf: AgentMemoryContext.references(from: memoryRead.entries, now: Date()))
+            // `FR-AGT-KNOW-MEM-007`：**按本次任务挑**，不再「最近八条一律带上」。
+            // 零命中 = 一条都不挂（宁可少给）；命中理由由检索层给，界面不复算。
+            references.append(contentsOf: AgentMemoryRetrieval.references(from: memoryRead.entries,
+                                                                         query: prompt,
+                                                                         now: Date()))
         }
         // `FR-AI-22` ①：**用户点名的东西真的读进来** —— `@a.swift` / `@Sources/` 以前没人解析。
         // 越界（`../`、绝对路径、`~`）与不存在由解析器拒掉并给一句说法，不静默丢。
@@ -3254,7 +3315,11 @@ final class AppState: ObservableObject {
                              // `FR-AI-31` ③ 长跑监控：空转 / 反复重试 / 预算将尽各出一条可读告警；
                              // 「卡住」那一档由界面看门狗按秒判（循环卡在 await 里喊不出来），
                              // 两边共用 `AgentRunMonitor.stallAlert` 这一条判定。
-                             monitor: AgentRunMonitor())
+                             monitor: AgentRunMonitor(),
+                             // `FR-AGT-TOOL-SYS-002` 的**接线面**：给了策略，循环才认领
+                             // `dispatch_subtasks`（并发上限只从这份快照的
+                             // `maxConcurrentSubtasks` 来；每轮开跑重读 ⇒ 面板改完下一轮生效）。
+                             subagentPolicy: AgentSubagentPolicy(snapshot: runtimePolicy))
         let context = AgentLoopContext(systemPrompt: systemPrompt, userPrompt: promptWithNotes,
                                        baseRequest: request, sessionID: sessionID, workspace: workspacePath,
                                        checkpointScopeID: checkpointScopeID)
@@ -6752,13 +6817,26 @@ final class AppState: ObservableObject {
 
     /// 工作区文件监听（FSEvents 挂工作区根；来由见 `WorkspaceFileWatcher` 注释）。
     private var workspaceWatcher: WorkspaceFileWatcher?
+    /// 当前监听挂在哪个根上（换工作区时据此判断要不要重挂）。
+    private var watchedWorkspaceRoot: String?
     /// **磁盘已变、但页签里有未保存改动**的那些页签 —— 界面据此让人决定是否以磁盘为准（**不许悄悄覆盖**）。
     @Published var diskChangedTabIDs: Set<UUID> = []
 
-    /// 开始监听（宿主设好工作区根之后调一次；换工作区再调一次）。
+    /// 开始监听（宿主设好工作区根之后调；**换工作区必须再调一次**）。
+    ///
+    /// 根没变就什么都不做（`FSEvents` 一条流足够）；根变了先把旧流停掉再挂新的 ——
+    /// 否则监听还挂在旧根上：新工作区的外部改动收不到，旧根的改动反而照报。
     func startWorkspaceWatching(root: String) {
-        let watcher = workspaceWatcher ?? WorkspaceFileWatcher()
+        guard watchedWorkspaceRoot != root else { return }
+        if watchedWorkspaceRoot != nil {
+            workspaceWatcher?.stop()
+            workspaceWatcher = nil
+            // 旧工作区的「磁盘已变」标记对新工作区没有意义
+            diskChangedTabIDs.removeAll()
+        }
+        let watcher = WorkspaceFileWatcher()
         workspaceWatcher = watcher
+        watchedWorkspaceRoot = root
         watcher.start(root: root) { [weak self] paths in
             Task { @MainActor in self?.handleDiskChanges(paths) }
         }
@@ -6767,11 +6845,13 @@ final class AppState: ObservableObject {
     func stopWorkspaceWatching() {
         workspaceWatcher?.stop()
         workspaceWatcher = nil
+        watchedWorkspaceRoot = nil
     }
 
     /// 磁盘变了一批路径：文件树刷新 + 开着这些文件的页签重载。
     private func handleDiskChanges(_ paths: [String]) {
-        Task { await WorkspaceStore.shared.refresh() }
+        // 只重列被改目录（不整树重来 —— `refresh()` 会清掉展开状态，见 `reloadDirectories` 注释）
+        WorkspaceStore.shared.reloadDirectories(forChangedPaths: paths)
         let changed = Set(paths)
         for index in tabs.indices {
             guard let url = tabs[index].fileURL, changed.contains(url.path) else { continue }

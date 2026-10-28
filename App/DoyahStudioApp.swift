@@ -188,7 +188,10 @@ struct DoyahStudioApp: App {
                             workspacePath: workspace?.rootPath,
                             // 仓库三样（`FR-AGT-KNOW-CTX-001`）：分支 + 未提交改动 + ahead/behind。
                             // 取数只跑一次只读 `git status`；不是仓库 / 没装 git ⇒ nil，不编。
-                            git: GitStatusProbe.facts(root: workspace?.rootPath)
+                            git: GitStatusProbe.facts(root: workspace?.rootPath),
+                            // 项目规则文件（`FR-AGT-KNOW-CTX-003`）：开跑前读，读到哪几份带哪几份。
+                            // 只读、不新建；找不到就空着（`searchedPaths` 会说明找了哪几处）。
+                            projectRules: AgentProjectRules.load(workspacePath: workspace?.rootPath).sources
                         )
                     }
                 }
@@ -200,6 +203,12 @@ struct DoyahStudioApp: App {
                         workspaceTabs.record(workspace: path)
                         // 归档目录跟随工作区（未单独指定时）—— 变了就重新判定一次状态
                         Task { await appState.refreshSQLArchiveStatus() }
+                        // **文件监听跟着工作区走**：换根不重挂，监听就还挂在旧目录上
+                        if let path, !path.isEmpty {
+                            appState.startWorkspaceWatching(root: path)
+                        } else {
+                            appState.stopWorkspaceWatching()
+                        }
                     }
                     appState.workspacePathProvider = { [workspace] in workspace.rootPath }
                     // **工作区文件监听**（人类主人 2026-10-16 点名「工作区是实时加载或感知文件的修改重载的」）：

@@ -170,8 +170,8 @@ final class MCPClientTests: XCTestCase {
         // 第 2 跳的请求里要带远端正文（回灌），而不是一句"已执行"。
         let second = client.requests[1].userPrompt
         XCTAssertTrue(second.contains("echoed:echo_tool"), "远端结果要原样回灌：\(second)")
-        // 注入的 tools 里也要有它（条数 = 内置 7 + 远端 1）。
-        XCTAssertEqual(client.requests[0].tools?.count, 8)
+        // 注入的 tools 里也要有它（条数 = 内置 8 + 远端 1）。
+        XCTAssertEqual(client.requests[0].tools?.count, 9)
     }
 
     /// 脚本化假模型（与 `AgentLoopTests` 同形，本文件自带一份，避免跨文件耦合）。
@@ -368,8 +368,8 @@ final class MCPClientTests: XCTestCase {
     // MARK: - ⑥ 与 FR-AI-10 的 server 方向分条、互不代偿
 
     func testClientDirectionDoesNotTouchTheServerDirection() {
-        XCTAssertEqual(AgentToolRegistry.standard.enabledDefinitions.count, 7,
-                       "内置七件一条不多、一条不少（远端工具另算）")
+        XCTAssertEqual(AgentToolRegistry.standard.enabledDefinitions.count, 8,
+                       "内置八件一条不多、一条不少（远端工具另算）")
         XCTAssertNil(AgentToolRegistry.standard.definition(named: "echo_tool"))
         XCTAssertEqual(MCPToolCatalog.all.map(\.name).sorted(),
                        ["describe_table", "export_result", "list_objects", "query_sql"],

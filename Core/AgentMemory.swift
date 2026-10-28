@@ -80,6 +80,11 @@ public struct AgentMemoryEntry: Codable, Equatable, Sendable, Identifiable {
     public static let keyWhitelist: Set<String> = [
         "id", "workspace", "connection", "kind", "note", "fingerprint",
         "firstSeenAt", "lastUsedAt", "useCount",
+        // 2026-10-28 `FR-AGT-KNOW-MEM-006`：来源轮次 / 触发方式 / 被取代的旧值（都可空，
+        // 旧文件缺这三键照样读得回来 —— 这就是「加字段不改旧数据」的做法）。
+        "sourceRound", "sourceTrigger", "supersededNotes",
+        // 2026-10-28 `FR-AGT-KNOW-MEM-008`：显式键（同一件事的稳定标识）。空 = 沿用粗指纹。
+        "key",
     ]
 
     /// 稳定 id。
@@ -100,6 +105,15 @@ public struct AgentMemoryEntry: Codable, Equatable, Sendable, Identifiable {
     public var lastUsedAt: Date
     /// 累计用到多少次（重复记同一条 ⇒ 累计，而不是又长一条）。
     public var useCount: Int
+    /// 这条记忆来自第几轮（`FR-AGT-KNOW-MEM-006` ①：来源轮次要能指回去；旧数据为 `nil`）。
+    public var sourceRound: Int?
+    /// 触发方式（`userInstruction` / `userConfirmation`；不记模型自发的，见写入门）。
+    public var sourceTrigger: String?
+    /// 同键被覆盖时，旧值按先后排在这里（`FR-AGT-KNOW-MEM-008`：新者生效、旧值可查）。
+    public var supersededNotes: [String]?
+    /// 显式键（同一件事的稳定标识）。给空 ⇒ 沿用「工作区 + 连接 + 粗指纹」那套。
+    /// 为什么要它：正文一改写指纹就变，没有显式键的话「同一件事改说法」会长成两条。
+    public var key: String?
 
     public init(id: String,
                 workspace: String,
@@ -109,7 +123,11 @@ public struct AgentMemoryEntry: Codable, Equatable, Sendable, Identifiable {
                 fingerprint: String,
                 firstSeenAt: Date,
                 lastUsedAt: Date,
-                useCount: Int) {
+                useCount: Int,
+                sourceRound: Int? = nil,
+                sourceTrigger: String? = nil,
+                supersededNotes: [String]? = nil,
+                key: String? = nil) {
         self.id = id
         self.workspace = workspace
         self.connection = connection
@@ -119,6 +137,10 @@ public struct AgentMemoryEntry: Codable, Equatable, Sendable, Identifiable {
         self.firstSeenAt = firstSeenAt
         self.lastUsedAt = lastUsedAt
         self.useCount = useCount
+        self.sourceRound = sourceRound
+        self.sourceTrigger = sourceTrigger
+        self.supersededNotes = supersededNotes
+        self.key = key
     }
 
     /// 认出来的类别（`nil` = 认不出 ⇒ 该条不进结果，计进 `unknownEntries`）。
@@ -168,11 +190,15 @@ public struct AgentMemoryDraft: Equatable, Sendable {
     public var kind: MemoryKind
     public var note: String
 
-    public init(workspace: String, connection: String, kind: MemoryKind, note: String) {
+    /// 显式键（可选）：同一件事的稳定标识；给空则按「工作区 + 连接 + 粗指纹」判同一性。
+    public var key: String?
+
+    public init(workspace: String, connection: String, kind: MemoryKind, note: String, key: String? = nil) {
         self.workspace = workspace
         self.connection = connection
         self.kind = kind
         self.note = note
+        self.key = key
     }
 }
 
@@ -197,6 +223,8 @@ public enum AgentMemoryIntake {
         /// 目标工作区的事实源坏了（有内容却找不到头一行）⇒ **不覆盖**（那会把读不出来的东西
         /// 悄悄清掉）：如实拒收，让调用方先处置。
         case sourceUnreadable
+        /// 模型自发的写入：**不落库**，转成候选等人确认（`FR-AGT-KNOW-MEM-006` ①）。
+        case needsUserConfirmation
     }
 
     public struct Verdict: Equatable, Sendable {
@@ -473,13 +501,23 @@ public struct AgentMemoryStore: Sendable {
     /// 记一条（过闸 → 合并或新增 → 上限挤出 → **原子落盘**）。
     @discardableResult
     public func record(_ draft: AgentMemoryDraft,
+                       trigger: AgentMemoryTrigger = .userInstruction,
+                       round: Int? = nil,
                        limits: AgentMemoryLimits = .standard,
                        at date: Date = Date(),
                        id: String = UUID().uuidString) throws -> AgentMemoryWriteResult {
+        // 先过写入门（`FR-AGT-KNOW-MEM-006`）：脏内容谁要写都拒；模型自发只转候选，不落盘。
+        let decision = AgentMemoryWriteGate.decide(trigger: trigger, draft: draft, limits: limits)
         let verdict = AgentMemoryIntake.review(draft, limits: limits)
-        guard verdict.isAccepted else {
-            return AgentMemoryWriteResult(accepted: false, rejections: verdict.rejections,
+        switch decision {
+        case .refused(let rejections):
+            return AgentMemoryWriteResult(accepted: false, rejections: rejections,
                                           truncatedCharacters: verdict.truncatedCharacters)
+        case .needsConfirmation:
+            return AgentMemoryWriteResult(accepted: false, rejections: [.needsUserConfirmation],
+                                          truncatedCharacters: verdict.truncatedCharacters)
+        case .record:
+            break
         }
 
         let loaded = entries(workspace: draft.workspace)
@@ -499,12 +537,19 @@ public struct AgentMemoryStore: Sendable {
         var working: AgentMemoryEntry
 
         if let index = entries.firstIndex(where: {
-            $0.fingerprint == verdict.fingerprint && $0.connection == draft.connection
+            // `FR-AGT-KNOW-MEM-008`：两边都有显式 key ⇒ **只认 key**（正文改写也算同一件事）；
+            // 否则沿用粗指纹（不改变既有行为）。
+            if let draftKey = draft.key, let existingKey = $0.key {
+                return draftKey == existingKey && $0.connection == draft.connection
+            }
+            return $0.fingerprint == verdict.fingerprint && $0.connection == draft.connection
         }) {
-            var existing = entries[index]
-            existing.note = verdict.note
-            existing.lastUsedAt = date
-            existing.useCount += 1
+            // 同键覆盖（`FR-AGT-KNOW-MEM-008`）：新值生效，旧值进 `supersededNotes` 可查。
+            let existing = AgentMemoryWriteGate.superseding(entries[index],
+                                                           with: verdict.note,
+                                                           at: date,
+                                                           trigger: trigger,
+                                                           round: round)
             entries[index] = existing
             working = existing
             merged = true
@@ -517,7 +562,10 @@ public struct AgentMemoryStore: Sendable {
                                        fingerprint: verdict.fingerprint,
                                        firstSeenAt: date,
                                        lastUsedAt: date,
-                                       useCount: 1)
+                                       useCount: 1,
+                                       sourceRound: round,
+                                       sourceTrigger: trigger.rawValue,
+                                       key: draft.key)
             entries.append(working)
         }
 

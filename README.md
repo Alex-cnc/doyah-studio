@@ -127,3 +127,7 @@ Vendor/     第三方依赖（PostgresNIO，PostgreSQL 驱动）
 产品包含的第三方开源组件及其许可证见
 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md)（会随 `.app` 一并分发到
 `Contents/Resources/`）。
+
+---
+
+版权所有 © 2026 豆丫科技（Doyah Tech）。保留所有权利。

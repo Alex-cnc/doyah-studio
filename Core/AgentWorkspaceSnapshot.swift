@@ -27,7 +27,8 @@ public enum AgentWorkspaceSnapshot {
                              terminalText: String? = nil,
                              workspacePath: String? = nil,
                              workspaceEntries: [String]? = nil,
-                             git: AgentGitFacts? = nil) -> AgentWorkspaceFacts {
+                             git: AgentGitFacts? = nil,
+                             projectRules: [AgentProjectRuleSource]? = nil) -> AgentWorkspaceFacts {
         let activeFile: (path: String, text: String)? = {
             guard let filePath, let text, !text.isEmpty else { return nil }
             return (path: filePath, text: text)
@@ -37,7 +38,8 @@ public enum AgentWorkspaceSnapshot {
                                    terminalText: terminalText,
                                    workspacePath: workspacePath,
                                    workspaceEntries: workspaceEntries,
-                                   git: git)
+                                   git: git,
+                                   projectRules: projectRules)
     }
 
     /// 选区 → （路径 + 选中的正文 + 起始行）。

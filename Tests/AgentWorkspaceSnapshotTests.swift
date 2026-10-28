@@ -19,6 +19,7 @@ final class AgentWorkspaceSnapshotTests: XCTestCase {
             case .terminalTail: return "terminalTail"
             case .schemaSummary: return "schemaSummary"
             case .gitState: return "gitState"
+            case .projectRule: return "projectRule"
             }
         }
     }

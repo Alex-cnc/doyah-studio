@@ -53,11 +53,34 @@ struct AboutLicenseSheet: View {
     }
 
     private var header: some View {
-        HStack(alignment: .firstTextBaseline) {
-            Text(L(.licAboutTitle))
-                .font(Theme.font(.title))
-            Spacer()
-            DialogActionButton(systemName: "xmark", title: L(.commonClose)) { dismiss() }
+        VStack(alignment: .leading, spacing: Spacing.s) {
+            HStack {
+                Spacer()
+                DialogActionButton(systemName: "xmark", title: L(.commonClose)) { dismiss() }
+            }
+            // 品牌区（2026-10-27 人类主人令）：**左图标 · 右产品名 → 版权 → 版本 / 开发者**。
+            // 版式钉死在这一处：换行位置、谁在上谁在下都不许各页面自己发挥。
+            HStack(alignment: .center, spacing: Spacing.m) {
+                Image(nsImage: NSApplication.shared.applicationIconImage)
+                    .resizable()
+                    .interpolation(.high)
+                    .frame(width: 56, height: 56)
+                    .accessibilityIdentifier("about-app-icon")
+                VStack(alignment: .leading, spacing: Spacing.xs) {
+                    Text(L(.licAboutTitle))
+                        .font(Theme.font(.title))
+                    // 版权行：中英各叫各的名字，并列一句（不翻译、不改写）
+                    Text(L(.appCopyright))
+                        .font(Theme.font(.caption))
+                        .foregroundStyle(Theme.text(.secondary))
+                        .textSelection(.enabled)
+                        .accessibilityIdentifier("app-copyright")
+                    line(L(.licAboutAppVersion), appVersion)
+                    // 人员行用「开发者 / Developer」，**不用 Owner**
+                    line(L(.licAboutDeveloper), L(.appCopyrightHolder))
+                }
+                Spacer(minLength: 0)
+            }
         }
         .padding(Spacing.l)
     }
@@ -67,7 +90,6 @@ struct AboutLicenseSheet: View {
     private var currentSection: some View {
         VStack(alignment: .leading, spacing: Spacing.s) {
             line(L(.licAboutEdition), L(LicensePresentation.displayNameKey(of: entitlements.edition)))
-            line(L(.licAboutAppVersion), appVersion)
             line(L(.licAboutActivityItems), activityItemsText)
 
             // 状态这一行是**为什么**：档位是"结果"，状态是"原因"，两者都要在。

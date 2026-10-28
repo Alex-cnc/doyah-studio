@@ -197,6 +197,8 @@ cat > "${APP}/Contents/Info.plist" <<PLIST
     <true/>
     <key>NSPrincipalClass</key>
     <string>NSApplication</string>
+    <key>NSHumanReadableCopyright</key>
+    <string>© 2026 豆丫科技 · Doyah Tech</string>
 </dict>
 </plist>
 PLIST

@@ -76,7 +76,11 @@ let package = Package(
         ),
         .executableTarget(
             name: "DoyahCLI",
-            dependencies: ["DoyahCore"],
+            // 为什么 CLI 也要平台模块：`agent im` 的 Secret 必须写进**和 App 同一条**
+            // 钥匙串记录（`agent-im-qq`）—— 命令行写一处、界面读另一处，就会变成
+            // 「CLI 说配了、面板说没配」。`DoyahPlatform` 目前只含 macOS 实现，
+            // Linux 侧落地时需给出对应的凭据存储并在 CLI 里换这一处注入。
+            dependencies: ["DoyahCore", "DoyahPlatform"],
             path: "CLI"
         ),
         // 许可签发工具（**发行方侧**，不进 .app 包）：keygen / issue / verify / inspect。

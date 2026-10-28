@@ -130,6 +130,10 @@ targets:
         INFOPLIST_KEY_CFBundleDisplayName: Doyah Studio
         INFOPLIST_KEY_CFBundleIconFile: AppIcon
         INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.developer-tools
+        # 版权所有（2026-10-27 人类主人令）：豆丫科技 / Doyah Tech。
+        # 与 `Scripts/build-app.sh` 的 Info.plist 模板同一句话（发布产物的唯一来源）；
+        # 改一处就要同步另一处，否则 IDE 跑出来的「关于」和发布包说的不是一家。
+        INFOPLIST_KEY_NSHumanReadableCopyright: "© 2026 豆丫科技 · Doyah Tech"
         CODE_SIGN_ENTITLEMENTS: App/DoyahStudio.entitlements
         ENABLE_HARDENED_RUNTIME: YES
 

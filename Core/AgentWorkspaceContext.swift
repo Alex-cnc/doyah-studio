@@ -22,19 +22,23 @@ public struct AgentWorkspaceFacts: Sendable {
     /// **仓库状态三样之二/之三**（`FR-AGT-KNOW-CTX-001`）：分支 + 未提交改动（+ ahead/behind）。
     /// 由 App 用 `AgentGitFacts.parse(porcelain:)` 填；解析在 Core、取数在 App（本处不跑 git）。
     public var git: AgentGitFacts?
+    /// **项目规则文件**（`FR-AGT-KNOW-CTX-003`）：App 负责读盘，这里只负责把它们摆进上下文。
+    public var projectRules: [AgentProjectRuleSource]?
 
     public init(activeFile: (path: String, text: String)? = nil,
                 selection: (path: String, text: String, firstLine: Int?)? = nil,
                 terminalText: String? = nil,
                 workspacePath: String? = nil,
                 workspaceEntries: [String]? = nil,
-                git: AgentGitFacts? = nil) {
+                git: AgentGitFacts? = nil,
+                projectRules: [AgentProjectRuleSource]? = nil) {
         self.activeFile = activeFile
         self.selection = selection
         self.terminalText = terminalText
         self.workspacePath = workspacePath
         self.workspaceEntries = workspaceEntries
         self.git = git
+        self.projectRules = projectRules
     }
 }
 
@@ -55,6 +59,11 @@ public enum AgentWorkspaceContext {
 
     public static func references(from facts: AgentWorkspaceFacts) -> [AgentContextReference] {
         var out: [AgentContextReference] = []
+
+        // ⓪ 项目规则**放最前**：规矩先于内容（同一段预算里，先被裁掉的应该是料，不是规矩）。
+        for rule in facts.projectRules ?? [] {
+            out.append(.projectRule(path: rule.relativePath, text: rule.text))
+        }
 
         // ① 选中 —— 放最前：用户「就这段」的意思最明确
         if let selection = facts.selection,

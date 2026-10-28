@@ -25,6 +25,11 @@ struct AgentSettingsSheet: View {
     @State private var maxTotalTokens = ""
     /// 新输入的 Key；为空表示「不改动已保存的 Key」。
     @State private var apiKeyInput = ""
+    /// IM 通道凭据（`FR-AGT-LINK-CHAN-003`）：AppID 明文 + Secret 草稿。
+    /// Secret 草稿留空 = 不改动已存的那把；**输入框永不回填本体**（只显示长度与尾 4）。
+    @State private var imAppID = ""
+    @State private var imSecretInput = ""
+    @State private var imLine: String?
     /// 连接测试的结果行（`nil` = 还没测过）。
     @State private var testLine: String?
     @State private var isTesting = false
@@ -347,6 +352,34 @@ struct AgentSettingsSheet: View {
                         .font(Theme.font(.caption))
                     }
                 }
+
+                // IM 通道（`FR-AGT-LINK-CHAN-003`）：**只落凭据**。
+                // 传输层（WebSocket / 心跳 / 重连）还没实现，所以这里故意**没有「连接」开关** ——
+                // 画一个明知连不上的开关，比不画更误导。
+                Section(L(.agentIMSection)) {
+                    TextField(L(.agentIMAppID), text: $imAppID)
+                    SecureField(L(.agentIMSecret), text: $imSecretInput)
+                    Text(imSecretStatusLine)
+                        .font(Theme.font(.caption))
+                        .foregroundStyle(Theme.text(.secondary))
+                    Text(L(.agentIMSecretKeepHint))
+                        .font(Theme.font(.caption))
+                        .foregroundStyle(Theme.text(.secondary))
+                    HStack(spacing: Spacing.m) {
+                        Button(L(.agentIMSave)) { saveIMCredentials() }
+                        Button(L(.agentIMClear), role: .destructive) { clearIMCredentials() }
+                    }
+                    if let imLine {
+                        Text(imLine)
+                            .font(Theme.font(.caption))
+                            .foregroundStyle(Theme.text(.secondary))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Text(L(.agentIMTransportPending))
+                        .font(Theme.font(.caption))
+                        .foregroundStyle(Theme.status(.warning))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
             .formStyle(.columns)
             .frame(width: 460)
@@ -420,6 +453,11 @@ struct AgentSettingsSheet: View {
             maxOutputTokens = configuration.quota.maxOutputTokensPerRequest.map(String.init) ?? ""
             maxTotalTokens = configuration.quota.maxTotalTokens.map(String.init) ?? ""
             scopeMode = configuration.scopeMode
+            // IM 通道凭据：回填 AppID（明文）；Secret 草稿留空 —— 输入框里永不出现密钥本体。
+            appState.refreshAgentIMCredentials()
+            imAppID = appState.agentIMAppID
+            imSecretInput = ""
+            imLine = nil
             // 真值源（`FR-AI-25`）：这一档填过的窗口 / 价目要回填 —— 否则重开面板就是空白，
             // 保存一次等于把用户填过的价目**静默清掉**。
             let pricing = configuration.activeProfile?.pricing
@@ -894,6 +932,38 @@ struct AgentSettingsSheet: View {
         switch mode {
         case .interrupt: return L(.agentDisplaySubmitInterrupt)
         case .queue: return L(.agentDisplaySubmitQueue)
+        }
+    }
+
+    /// 面板上的密钥读数：只给长度与尾 4（本体永不出钥匙串）。
+    private var imSecretStatusLine: String {
+        if appState.hasAgentIMSecret {
+            // 显式成 Int / String：`L(...)` 的占位符类型必须能被判据认出（`%d` / `%@`）。
+            let length: Int = appState.agentIMSecretLength ?? 0
+            let tail: String = appState.agentIMSecretTail ?? ""
+            return L(.agentIMSecretConfigured, length, tail)
+        }
+        return L(.agentIMSecretMissing)
+    }
+
+    /// 存通道凭据。空输入 = 「不改动已存的那把」；校验失败时**什么都不落盘**（Core 保证）。
+    private func saveIMCredentials() {
+        let secret: String? = imSecretInput.isEmpty ? nil : imSecretInput
+        if appState.saveAgentIMCredentials(appID: imAppID, secret: secret) {
+            imSecretInput = ""
+            imLine = L(.agentIMSaved)
+        } else {
+            imLine = appState.errorMessage
+        }
+    }
+
+    private func clearIMCredentials() {
+        if appState.saveAgentIMCredentials(appID: imAppID, secret: nil, clearFirst: true) {
+            imAppID = ""
+            imSecretInput = ""
+            imLine = L(.agentIMCleared)
+        } else {
+            imLine = appState.errorMessage
         }
     }
 

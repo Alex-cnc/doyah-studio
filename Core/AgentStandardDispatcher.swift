@@ -146,6 +146,11 @@ public struct AgentStandardDispatcher: AgentToolDispatcher {
             // 第二批：**登记在册但未启用** —— 如实拒，不假装能做。
             return .refused(.unregistered, detail: definition.capability.rawValue)
 
+        case .dispatchSubtasks:
+            // 派子代理是**异步**的（要真起子循环），由 `AgentLoop` 自己认领；
+            // 走到分发器来说明调用方绕过了循环 —— 如实拒，不假装派过。
+            return .refused(.unavailable, detail: "handled-by-loop")
+
         case .mcpTool:
             // **`FR-AI-21`**：用户自配 server 上的工具。三件事按顺序：
             // ① 桥没接 ⇒ 如实说「未配置」（不假回退到内置工具去"顶一下"）；

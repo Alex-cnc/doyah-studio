@@ -29,6 +29,10 @@ public enum AgentToolCapability: String, Codable, Equatable, Sendable, CaseItera
     /// **用户自配 MCP server 上的工具**（`FR-AI-21`）：名字与参数**原样透传**，
     /// 这一侧不解释、不改写、不补全 —— 于是「同一个工具在两个客户端里名字不同」这件事不发生。
     case mcpTool
+    /// **派子代理**（`FR-AGT-TOOL-SYS-002` 的接线面）：一次给几路互不依赖的子任务，
+    /// 由 `AgentSubagentExecutor` 并行跑、主控只收带来源的摘要。
+    /// 等级按**执行**算（子代理会写、会跑命令），审批同样逐次要。
+    case dispatchSubtasks
 }
 
 /// 交付阶段：MVP 六件 / 第二批（`FR-AI-20` ⑥ 要求如实登记，不许写成已做）。
@@ -193,6 +197,17 @@ public struct AgentToolRegistry: Sendable {
                                 required: ["url"],
                                 level: .readOnly, approval: .none,
                                 stage: .secondBatch, enabled: false),
+            // **派子代理**（`FR-AGT-TOOL-SYS-002`）：`tasks` 是一段 JSON 数组字符串，
+            // 每路 `{"id","label","prompt","budgetSeconds"?}` —— 参数类型表只支持标量，
+            // 所以整段 JSON 以字符串传；解析失败如实拒（`badArguments`），不猜。
+            AgentToolDefinition(name: "dispatch_subtasks",
+                                summary: "把几路互不依赖的子任务派给子代理并行做（需审批）；"
+                                    + "参数 tasks 是 JSON 数组字符串，每项 {\"id\",\"label\",\"prompt\",\"budgetSeconds\"?}，"
+                                    + "结果按「标签#子任务ID」标来源汇总回来",
+                                capability: .dispatchSubtasks,
+                                parameters: ["tasks": "string"],
+                                required: ["tasks"],
+                                level: .executable, approval: .required),
         ])
     }
 

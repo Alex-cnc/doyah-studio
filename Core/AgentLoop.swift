@@ -358,6 +358,11 @@ public struct AgentLoop: Sendable {
     /// 不给 = 不产出告警（旧行为逐字不变）。
     public var monitor: AgentRunMonitor?
     public var limits: AgentLoopLimits
+    /// **派子代理的执行面**（`FR-AGT-TOOL-SYS-002` ���接线面）：给了就认领 `dispatch_subtasks` ——
+    /// 并发上限与单路预算都从这一份策略来（`AgentSubagentPolicy(snapshot:)` 是它的唯一来源）；
+    /// 子代理自己也是一次 `AgentLoop`（子会话号 `父#sub-<id>` ⇒ 独立上下文与独立留痕）。
+    /// 不给（`nil`）= 该能力**如实拒** `unavailable`，其余工具行为逐字不变。
+    public var subagentPolicy: AgentSubagentPolicy?
 
     public init(client: any LLMStreamingClient,
                 dispatcher: any AgentToolDispatcher,
@@ -375,7 +380,8 @@ public struct AgentLoop: Sendable {
                 quota: AgentQuota? = nil,
                 quotaLedger: AgentQuotaLedger = .empty,
                 monitor: AgentRunMonitor? = nil,
-                limits: AgentLoopLimits = AgentLoopLimits()) {
+                limits: AgentLoopLimits = AgentLoopLimits(),
+                subagentPolicy: AgentSubagentPolicy? = nil) {
         self.client = client
         self.dispatcher = dispatcher
         self.registry = registry
@@ -393,10 +399,45 @@ public struct AgentLoop: Sendable {
         self.quotaLedger = quotaLedger
         self.monitor = monitor
         self.limits = limits
+        self.subagentPolicy = subagentPolicy
     }
 
     /// - Parameter requestedStep: 调用方**以为自己停在第几跳**（用于「如实报数」：实际回退了几跳）。
     ///   不从检查点续跑时给 0 —— 此时 `skippedSteps` 就是它本身，读数上"从第 0 跳跑"与"续不上只能从头"分得开。
+    /// `dispatch_subtasks` 的落点：**策略 → 深度 → 解析 → 派 → 带来源汇总回灌**。
+    ///
+    /// 三条边界写死在这里：
+    /// ① 宿主没给 `subagentPolicy` ⇒ 如实拒 `unavailable`（不假装能派）；
+    /// ② 深度只许**一层**：子会话号里带 `#sub-` 的再派 ⇒ 拒 `subagentNesting`（否则一路派下去没人收口）；
+    /// ③ 参数解析不出来 / 一路都没有 ⇒ 拒 `badArguments`，**不替模型编提示词**。
+    private func runSubagentDispatch(invocation: AgentToolInvocation,
+                                     context: AgentLoopContext) async -> AgentToolOutcome {
+        guard let policy = subagentPolicy else {
+            return .refused(.unavailable, detail: "subagent-disabled")
+        }
+        guard !context.sessionID.contains("#sub-") else {
+            return .refused(.subagentNesting, detail: context.sessionID)
+        }
+        let specs: [AgentSubtaskSpec]
+        switch AgentSubtaskSpecList.parse(argumentsJSON: invocation.argumentsJSON) {
+        case .success(let parsed):
+            specs = parsed
+        case .failure(let problem):
+            return .refused(.badArguments, detail: problem.rawValue)
+        }
+        guard !specs.isEmpty else {
+            return .refused(.badArguments, detail: "tasks-empty")
+        }
+        let executor = AgentSubagentExecutor(
+            policy: policy,
+            runner: AgentLoopSubtaskRunner(loop: self, template: context))
+        let report = await executor.run(specs)
+        let header = "completed=\(report.completedCount) failed=\(report.failures.count)"
+        let text = header + "\n" + report.mergedSummary
+        return .file(AgentToolFileOutput(path: "dispatch_subtasks", text: text,
+                                         truncated: false, totalBytes: text.utf8.count))
+    }
+
     public func run(context: AgentLoopContext,
                     approvals: Set<String> = [],
                     startedAt: Date = Date(),
@@ -862,9 +903,16 @@ public struct AgentLoop: Sendable {
                     }
                 }
                 let toolStartedAt = Date()
-                let outcome = await Task.detached(priority: .userInitiated) {
-                    dispatcher.dispatch(invocation, approvals: approvals)
-                }.value
+                // `dispatch_subtasks` 是**异步**的（要真起子循环、并行跑），同步的 `AgentToolDispatcher`
+                // 跑不了它 ⇒ 在循环这一层认领；其余工具照旧走分发器（契约不动）。
+                let outcome: AgentToolOutcome
+                if definition.capability == .dispatchSubtasks {
+                    outcome = await runSubagentDispatch(invocation: invocation, context: context)
+                } else {
+                    outcome = await Task.detached(priority: .userInitiated) {
+                        dispatcher.dispatch(invocation, approvals: approvals)
+                    }.value
+                }
                 let toolMillis = Int(Date().timeIntervalSince(toolStartedAt) * 1000)
                 // 工具开跑 = 有进展（看门狗据此判「卡住」）。
                 monitor?.noteProgress()
