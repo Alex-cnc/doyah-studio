@@ -1,17 +1,15 @@
 ## ★ 顶部条目（优先于常规取活，不得顺延、不得再问）
 
-**★0 · IM 通道凭据口径纠正（主人 2026-10-28 当面点出；覆盖 ★1 里「网关端点」那一格，不得再让用户填地址）**
+**★0 · IM 通道凭据口径纠正 —— ✅ 已落地（R42，2026-10-28），本条关闭，不得重复执行**
 
-- **主人的话**：「既然指明了是 QQ 通道，为什么还要用户填 wss 地址？按道理只要 QQ 扫码或者输入机器人 AppID 和 AppSecret 就可以啊。」
-- **口径**：QQ 通道只收机器人凭据 —— **AppID + AppSecret + 环境（正式 / 沙箱）**，三样；**地址由程序自己取**：
-  `POST https://bots.qq.com/app/getAppAccessToken`（appId + clientSecret）→ `access_token`；
-  `GET https://api.sgroup.qq.com/gateway` 取 `wss` 地址（取不到再用生产常量 `wss://api.sgroup.qq.com/websocket/`）；
-  Identify `op=2` 带 `token = "QQBot <access_token>"`，心跳 `op=1`，重连 `op=6`，**token 到期前刷新**。
-- **要做**：① 面板主路径删掉「网关端点」那一格，换成「环境」（正式 / 沙箱）；② 取 token → 取网关 → 连接 → 刷新，全在 `Core/AgentIM*.swift`；
-  ③ 「自建中继地址」降为**高级项**（可折叠、默认空、认不出报错但不挡主路径）；④ **不做运行时扫码**（QQ 平台的扫码是平台登录/绑定，不是机器人鉴权），
-  改成「去 QQ 开放平台创建/绑定机器人」按钮（打开 `q.qq.com`）+ 一行提示「沙箱环境需把机器人拉进沙箱群」；
-  ⑤ 判据补：不填地址也能配齐 / 只改 AppID 不冲掉 AppSecret / token 刷新 / 401 与缺权限给可读原因 / 关掉开关时不收任务。
-- **代价**：1 轮。**不得以「用户自己填地址更灵活」为由保留那一格。**
+- **主人的话**（留档，口径本身有效）：「既然指明了是 QQ 通道，为什么还要用户填 wss 地址？按道理只要 QQ 扫码或者输入机器人 AppID 和 AppSecret 就可以啊。」
+- **已做**：`Core/AgentIMQQProvisioning.swift`（环境两档 · 取 token · 取网关 · 取不到用该环境固定地址 · 到期前刷新 / 单飞 ·
+  401·403·429·5xx·非 JSON·缺 token 分档可读 · 官方 op 码 Identify 2 / 心跳 1 带 seq / 恢复 6 / Hello 10 / dispatch 解帧）·
+  配置面四样 → 三样（环境 / AppID / Secret，`gatewayURL` / `botIdentifier` 作废）· 旧 `gatewayURL` 读成自建中继（迁移）·
+  面板删地址格 / 加环境选择器 / 自建中继降高级项 / 「去 QQ 开放平台」按钮（**不做运行时扫码**）/ 画出程序取到的地址与 token 尾 4 位 ·
+  传输层 `AgentIMGatewayHandshake`（nil = 自建中继原样）· 判据 `Tests/AgentIMQQProvisioningTests` 18 例 + `AgentIMSettingsTests` 27 例。
+- **仍差**（不是本条的重复项）：真 AppID + Secret 与一次端到端点验（记 blocked）；**官方外发**（`POST /v2/users/{openid}/messages`）
+  尚未做 —— 已写进 `.agent/checkpoint.md` 的「下一项 1」。
 
 **★1 · IM 通道的「真配置界面」+ 判据收口（`FR-AGT-LINK-CHAN-003`）—— ✅ 已落地，本条关闭，不得重复执行**
 
@@ -33,6 +31,7 @@
   面板与手机的端到端人工点验一次。
 
 **★ 区已清空**：下一条活按台账取（`FR-STD-*` 里实现 `⬜`／`🟡`，优先=高 → 中；同档取判据可机械跑的）。
+下一轮建议先做 `.agent/checkpoint.md` 里的「下一项 1」= IM 官方外发（判据可机械跑，不需要真凭据），再回台账。
 
 # 每轮卡 · Studio macOS 端自主开发（2026-10-28 起）
 

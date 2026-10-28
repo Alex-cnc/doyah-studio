@@ -67,6 +67,38 @@ public protocol AgentIMSocket: Sendable {
 /// 建连工厂（把 URL 与握手头交出去）。
 public typealias AgentIMSocketFactory = @Sendable (URL, [String: String]) -> any AgentIMSocket
 
+/// 官方网关的**握手口径**（QQ 官方 `op` 码那一套）。
+///
+/// 为什么要有这一层：自建中继与官方网关是**两套口径** ——
+/// 自建中继用本侧约定的 HMAC 头 + `{"op":"ping"}` 心跳；官方网关要 `Authorization: QQBot <token>`、
+/// 连上先发 `op=2` Identify、心跳 `op=1`（带 `seq`）、断线 `op=6` 恢复。
+/// 把它抽成一个结构注入传输层，两条路共用同一套连接状态机 / 退避 / 补发，只在「怎么握手」上分家。
+public struct AgentIMGatewayHandshake: Sendable {
+
+    /// 每次建连要带的头（token 可能刚换过 ⇒ 每次现取，不缓存）。
+    public var authorizationHeaders: @Sendable () async -> [String: String]
+    /// 连上之后第一帧（Identify）；nil = 不发。
+    public var identify: @Sendable () async -> String?
+    /// 心跳帧（参数 = 最后一帧的 `seq`，第一跳没有）。
+    public var heartbeat: @Sendable (Int?) async -> String
+    /// 从一帧里取 `seq`（官方 `s` 字段）；取不到 nil。
+    public var sequence: @Sendable (String) -> Int?
+    /// 帧的解析（官方口径）。
+    public var decode: @Sendable (String, Date) -> AgentIMInboundFrame?
+
+    public init(authorizationHeaders: @escaping @Sendable () async -> [String: String],
+                identify: @escaping @Sendable () async -> String?,
+                heartbeat: @escaping @Sendable (Int?) async -> String,
+                sequence: @escaping @Sendable (String) -> Int?,
+                decode: @escaping @Sendable (String, Date) -> AgentIMInboundFrame?) {
+        self.authorizationHeaders = authorizationHeaders
+        self.identify = identify
+        self.heartbeat = heartbeat
+        self.sequence = sequence
+        self.decode = decode
+    }
+}
+
 /// 网关签名（`appID + timestamp + nonce + body` 的 HMAC-SHA256）。**只算不存**。
 public struct AgentIMGatewaySigner: Sendable {
 
@@ -141,6 +173,8 @@ public actor AgentIMTransport {
     private let makeSocket: AgentIMSocketFactory
     private let nowFn: @Sendable () -> Date
     private let sleepFn: @Sendable (TimeInterval) async -> Void
+    /// 官方握手口径（nil = 自建中继那套：HMAC 头 + `{"op":"ping"}`）。
+    private let handshake: AgentIMGatewayHandshake?
 
     private var loopTask: Task<Void, Never>?
     private var heartbeatTask: Task<Void, Never>?
@@ -152,6 +186,8 @@ public actor AgentIMTransport {
     private var resultQueue: AgentIMResultQueue?
     private var inboundHandler: (@Sendable (AgentIMInboundFrame) async -> Void)?
     private var stateHandler: (@Sendable (AgentIMConnectionState) async -> Void)?
+    /// 官方网关最后一帧的 `seq`（心跳 `op=1` 与恢复 `op=6` 都要带它）。
+    private var lastSequence: Int?
 
     public private(set) var state: AgentIMConnectionState = .idle
     /// 成功建连几次（读数用：重连有没有真的发生过，看它）。
@@ -165,12 +201,14 @@ public actor AgentIMTransport {
                 now: @escaping @Sendable () -> Date = { Date() },
                 sleep: @escaping @Sendable (TimeInterval) async -> Void = { seconds in
                     try? await Task.sleep(nanoseconds: UInt64(max(0, seconds) * 1_000_000_000))
-                }) {
+                },
+                handshake: AgentIMGatewayHandshake? = nil) {
         self.config = config
         self.signer = signer
         self.makeSocket = makeSocket
         self.nowFn = now
         self.sleepFn = sleep
+        self.handshake = handshake
     }
 
     // MARK: - 接线
@@ -257,14 +295,26 @@ public actor AgentIMTransport {
             let attempt = consecutiveFailures
             await publish(.connecting(attempt: attempt))
 
-            let timestamp = Int(nowFn().timeIntervalSince1970)
-            let nonce = UUID().uuidString
-            let headers = signer.headers(timestamp: timestamp, nonce: nonce, body: "")
+            // 官方路径的头每次现取（token 可能刚换过）；自建中继走 HMAC 签名头。
+            let headers: [String: String]
+            if let handshake {
+                headers = await handshake.authorizationHeaders()
+            } else {
+                let timestamp = Int(nowFn().timeIntervalSince1970)
+                let nonce = UUID().uuidString
+                headers = signer.headers(timestamp: timestamp, nonce: nonce, body: "")
+            }
             let sock = makeSocket(config.gatewayURL, headers)
             socket = sock
 
             do {
                 try await sock.open()
+                // 官方网关：连上**先 Identify**（不发这一帧，后面什么事件都收不到）。
+                if let handshake {
+                    if let identify = await handshake.identify() {
+                        try await sock.send(identify)
+                    }
+                }
             } catch {
                 await socket?.close()
                 socket = nil
@@ -289,9 +339,12 @@ public actor AgentIMTransport {
                 }
                 do {
                     let frame = try await sock.receive()
-                    guard let decoded = AgentIMInboundFrame.decode(frame, receivedAt: nowFn()) else {
-                        continue
+                    if let handshake, let sequence = handshake.sequence(frame) {
+                        lastSequence = sequence
                     }
+                    let decoded = handshake?.decode(frame, nowFn())
+                        ?? AgentIMInboundFrame.decode(frame, receivedAt: nowFn())
+                    guard let decoded else { continue }
                     if case .pong = decoded { missedHeartbeats = 0 }
                     if let handler = inboundHandler { await handler(decoded) }
                 } catch {
@@ -331,8 +384,14 @@ public actor AgentIMTransport {
     /// 发一次心跳并记账。连丢到上限就**主动掐掉这条连接**（否则 `receive` 会一直挂着，
     /// 判死永远等不到）；被掐断之后主循环会按 `heartbeatLost` 走退避重连。
     private func ping(_ sock: any AgentIMSocket) async -> Bool {
+        let frame: String
+        if let handshake {
+            frame = await handshake.heartbeat(lastSequence)
+        } else {
+            frame = AgentIMTransport.pingFrame
+        }
         do {
-            try await sock.send(AgentIMTransport.pingFrame)
+            try await sock.send(frame)
         } catch {
             missedHeartbeats = config.maxMissedHeartbeats
             lostHeartbeat = true

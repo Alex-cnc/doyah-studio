@@ -93,68 +93,58 @@ final class AgentIMSettingsTests: XCTestCase {
 
     // MARK: - 地址与标识的校验
 
-    func testGatewayURLRequiresWebSocketScheme() throws {
-        XCTAssertEqual(try AgentIMSettingsValidator.normalizedGatewayURL("wss://gateway.example/ws").absoluteString,
+    func testRelayURLRequiresWebSocketSchemeAndAllowsEmpty() throws {
+        // 空 = 合法的「走官方」（★0 之后地址由程序取），所以空不是缺项、也不报错。
+        XCTAssertNil(try AgentIMSettingsValidator.normalizedRelayURL(""))
+        XCTAssertNil(try AgentIMSettingsValidator.normalizedRelayURL("   "))
+        XCTAssertEqual(try AgentIMSettingsValidator.normalizedRelayURL("wss://gateway.example/ws")?.absoluteString,
                        "wss://gateway.example/ws")
-        XCTAssertEqual(try AgentIMSettingsValidator.normalizedGatewayURL("ws://127.0.0.1:8080").absoluteString,
+        XCTAssertEqual(try AgentIMSettingsValidator.normalizedRelayURL("ws://127.0.0.1:8080")?.absoluteString,
                        "ws://127.0.0.1:8080")
-        XCTAssertThrowsError(try AgentIMSettingsValidator.normalizedGatewayURL("https://gateway.example/ws")) {
-            XCTAssertEqual($0 as? AgentIMSettingsProblem, .gatewayURLNotWebSocket)
+        XCTAssertThrowsError(try AgentIMSettingsValidator.normalizedRelayURL("https://gateway.example/ws")) {
+            XCTAssertEqual($0 as? AgentIMSettingsProblem, .relayURLNotWebSocket)
         }
     }
 
-    func testGatewayURLRejectsEmptyHostAndInnerWhitespace() {
-        XCTAssertThrowsError(try AgentIMSettingsValidator.normalizedGatewayURL("   ")) {
-            XCTAssertEqual($0 as? AgentIMSettingsProblem, .gatewayURLMissing)
+    func testRelayURLRejectsMissingHostAndInnerWhitespace() {
+        XCTAssertThrowsError(try AgentIMSettingsValidator.normalizedRelayURL("ws://")) {
+            XCTAssertEqual($0 as? AgentIMSettingsProblem, .relayURLMissingHost)
         }
-        XCTAssertThrowsError(try AgentIMSettingsValidator.normalizedGatewayURL("ws://")) {
-            XCTAssertEqual($0 as? AgentIMSettingsProblem, .gatewayURLMissingHost)
+        XCTAssertThrowsError(try AgentIMSettingsValidator.normalizedRelayURL("ws://gate way/ws")) {
+            XCTAssertEqual($0 as? AgentIMSettingsProblem, .relayURLHasWhitespace)
         }
-        XCTAssertThrowsError(try AgentIMSettingsValidator.normalizedGatewayURL("ws://gate way/ws")) {
-            XCTAssertEqual($0 as? AgentIMSettingsProblem, .gatewayURLHasWhitespace)
-        }
-        XCTAssertThrowsError(try AgentIMSettingsValidator.normalizedGatewayURL("gateway.example")) {
-            XCTAssertEqual($0 as? AgentIMSettingsProblem, .gatewayURLNotWebSocket)
+        XCTAssertThrowsError(try AgentIMSettingsValidator.normalizedRelayURL("gateway.example")) {
+            XCTAssertEqual($0 as? AgentIMSettingsProblem, .relayURLNotWebSocket)
         }
     }
 
-    func testGatewayURLTrimsSurroundingWhitespace() throws {
-        let url = try AgentIMSettingsValidator.normalizedGatewayURL("  wss://gateway.example/ws \n")
-        XCTAssertEqual(url.absoluteString, "wss://gateway.example/ws")
+    func testRelayURLTrimsSurroundingWhitespace() throws {
+        let url = try AgentIMSettingsValidator.normalizedRelayURL("  wss://gateway.example/ws \n")
+        XCTAssertEqual(url?.absoluteString, "wss://gateway.example/ws")
     }
 
-    func testBotIdentifierRules() throws {
-        XCTAssertEqual(try AgentIMSettingsValidator.normalizedBotIdentifier("  doyah-bot  "), "doyah-bot")
-        XCTAssertThrowsError(try AgentIMSettingsValidator.normalizedBotIdentifier("  ")) {
-            XCTAssertEqual($0 as? AgentIMSettingsProblem, .botIdentifierEmpty)
-        }
-        XCTAssertThrowsError(try AgentIMSettingsValidator.normalizedBotIdentifier("doyah bot")) {
-            XCTAssertEqual($0 as? AgentIMSettingsProblem, .botIdentifierHasWhitespace)
-        }
-        let tooLong = String(repeating: "a", count: AgentIMSettingsValidator.maxBotIdentifierLength + 1)
-        XCTAssertThrowsError(try AgentIMSettingsValidator.normalizedBotIdentifier(tooLong)) {
-            XCTAssertEqual($0 as? AgentIMSettingsProblem, .botIdentifierTooLong)
-        }
-        let atLimit = String(repeating: "a", count: AgentIMSettingsValidator.maxBotIdentifierLength)
-        XCTAssertEqual(try AgentIMSettingsValidator.normalizedBotIdentifier(atLimit), atLimit)
-    }
 
-    func testProblemsListAllInStableOrder() {
-        let settings = AgentIMChannelSettings(gatewayURL: "http://gateway.example", botIdentifier: "", receiveTasks: true)
-        XCTAssertEqual(AgentIMSettingsValidator.problems(in: settings),
-                       [.gatewayURLNotWebSocket, .botIdentifierEmpty])
-        XCTAssertEqual(AgentIMSettingsValidator.problems(in: .empty),
-                       [.gatewayURLMissing, .botIdentifierEmpty])
+    func testProblemsOnlyCoverTheRelayAddress() {
+        // 地址留空 = 合法（走官方）；填错才报，且一次只报第一条。
+        XCTAssertTrue(AgentIMSettingsValidator.problems(in: .empty).isEmpty)
+        XCTAssertEqual(AgentIMSettingsValidator.problems(in: AgentIMChannelSettings(
+            environment: .production, relayURL: "http://gateway.example")),
+                       [.relayURLNotWebSocket])
         XCTAssertTrue(AgentIMSettingsValidator.problems(in: AgentIMChannelSettings(
-            gatewayURL: "wss://gateway.example/ws", botIdentifier: "doyah-bot")).isEmpty)
+            environment: .sandbox, relayURL: "wss://gateway.example/ws")).isEmpty)
     }
 
-    func testNormalizedSettingsTrimsAndKeepsToggle() throws {
+    func testNormalizedSettingsTrimsRelayAndKeepsEnvironment() throws {
         let clean = try AgentIMSettingsValidator.normalized(
-            AgentIMChannelSettings(gatewayURL: " wss://gateway.example/ws ", botIdentifier: " doyah-bot ", receiveTasks: true))
-        XCTAssertEqual(clean, AgentIMChannelSettings(gatewayURL: "wss://gateway.example/ws",
-                                                     botIdentifier: "doyah-bot",
+            AgentIMChannelSettings(environment: .sandbox,
+                                   relayURL: " wss://gateway.example/ws ",
+                                   receiveTasks: true))
+        XCTAssertEqual(clean, AgentIMChannelSettings(environment: .sandbox,
+                                                     relayURL: "wss://gateway.example/ws",
                                                      receiveTasks: true))
+        // 留空的自建中继存成空串（不是 nil、也不是空白串）。
+        XCTAssertEqual(try AgentIMSettingsValidator.normalized(
+            AgentIMChannelSettings(environment: .production, relayURL: "   ")).relayURL, "")
     }
 
     // MARK: - 持久化（非敏感面进配置文件、Secret 不进）
@@ -167,15 +157,15 @@ final class AgentIMSettingsTests: XCTestCase {
         let secrets = MemorySecret()
         let store = makeStore(secrets)
         try store.save(appID: "123456", secret: "qq-secret-value", for: .qq)
-        try store.save(settings: AgentIMChannelSettings(gatewayURL: "wss://gateway.example/ws",
-                                                        botIdentifier: "doyah-bot",
+        try store.save(settings: AgentIMChannelSettings(environment: .sandbox,
+                                                        relayURL: "wss://relay.example/ws",
                                                         receiveTasks: true),
                        for: .qq)
 
         let reopened = makeStore(secrets)
         XCTAssertEqual(reopened.settings(for: .qq),
-                       AgentIMChannelSettings(gatewayURL: "wss://gateway.example/ws",
-                                              botIdentifier: "doyah-bot",
+                       AgentIMChannelSettings(environment: .sandbox,
+                                              relayURL: "wss://relay.example/ws",
                                               receiveTasks: true))
         XCTAssertEqual(reopened.appID(for: .qq), "123456")
         XCTAssertEqual(try reopened.secret(for: .qq), "qq-secret-value")
@@ -184,25 +174,56 @@ final class AgentIMSettingsTests: XCTestCase {
         XCTAssertFalse(bytes.contains("qq-secret-value"), "Secret 不许出现在配置文件里")
         // 按 JSON 取值（不按字面串比 URL：`JSONEncoder` 会把 `/` 转义成 `\/`）
         let object = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(bytes.utf8)) as? [String: Any])
-        XCTAssertEqual(object["gatewayURL"] as? String, "wss://gateway.example/ws")
-        XCTAssertEqual(object["botIdentifier"] as? String, "doyah-bot")
+        XCTAssertEqual(object["environment"] as? String, "sandbox")
+        XCTAssertEqual(object["relayURL"] as? String, "wss://relay.example/ws")
         XCTAssertEqual(object["receiveTasks"] as? Bool, true)
         XCTAssertEqual(object["appID"] as? String, "123456")
+        // ★0 之后这两格作废：再往盘上写就是第二份真相。
+        XCTAssertNil(object["gatewayURL"])
+        XCTAssertNil(object["botIdentifier"])
     }
 
     func testSavingAppIDDoesNotWipeSettings() throws {
         let secrets = MemorySecret()
         let store = makeStore(secrets)
-        try store.save(settings: AgentIMChannelSettings(gatewayURL: "wss://gateway.example/ws",
-                                                        botIdentifier: "doyah-bot",
+        try store.save(settings: AgentIMChannelSettings(environment: .production,
+                                                        relayURL: "wss://relay.example/ws",
                                                         receiveTasks: true),
                        for: .qq)
         // 只改 AppID（面板上「只填了 AppID 就点保存」的那条路）
         try store.save(appID: "654321", secret: nil, for: .qq)
-        XCTAssertEqual(store.settings(for: .qq).gatewayURL, "wss://gateway.example/ws")
-        XCTAssertEqual(store.settings(for: .qq).botIdentifier, "doyah-bot")
+        XCTAssertEqual(store.settings(for: .qq).environment, .production)
+        XCTAssertEqual(store.settings(for: .qq).relayURL, "wss://relay.example/ws")
         XCTAssertTrue(store.settings(for: .qq).receiveTasks)
         XCTAssertEqual(store.appID(for: .qq), "654321")
+    }
+
+    func testSavingSecretDoesNotWipeSettingsOrAppID() throws {
+        // 主人点名的那一条：**只改 AppID 不冲掉 AppSecret**，反过来也一样。
+        let secrets = MemorySecret()
+        let store = makeStore(secrets)
+        try store.save(appID: "123456", secret: "qq-secret-value", for: .qq)
+        try store.save(settings: AgentIMChannelSettings(environment: .sandbox, receiveTasks: true), for: .qq)
+        try store.save(appID: "123456", secret: "rotated-secret", for: .qq)
+        XCTAssertEqual(try store.secret(for: .qq), "rotated-secret")
+        XCTAssertEqual(store.settings(for: .qq).environment, .sandbox)
+        XCTAssertTrue(store.settings(for: .qq).receiveTasks)
+    }
+
+    func testLegacyGatewayURLIsReadAsRelayAddress() throws {
+        // 2026-10-28 之前用户在「网关端点」那一格手填的 wss 地址：读成自建中继（语义正好对上），
+        // 不许升级一次就把人填过的东西吞掉。但**再保存一次**就迁成新形状（旧键从盘上消失）。
+        let secrets = MemorySecret()
+        let store = makeStore(secrets)
+        try Data(#"{"appID":"123456","gatewayURL":"wss://old.example/ws","botIdentifier":"doyah-bot"}"#.utf8)
+            .write(to: store.fileURL(for: .qq))
+        XCTAssertEqual(store.settings(for: .qq).relayURL, "wss://old.example/ws")
+        XCTAssertNil(store.settings(for: .qq).environment, "老文件没有环境 ⇒ 未配置（不默认成正式）")
+
+        try store.save(settings: AgentIMChannelSettings(environment: .production), for: .qq)
+        XCTAssertEqual(store.settings(for: .qq).relayURL, "")
+        let bytes = try String(contentsOf: store.fileURL(for: .qq), encoding: .utf8)
+        XCTAssertFalse(bytes.contains("botIdentifier"))
     }
 
     func testOldFileWithOnlyAppIDStillLoads() throws {
@@ -218,8 +239,8 @@ final class AgentIMSettingsTests: XCTestCase {
         let secrets = MemorySecret()
         let store = makeStore(secrets)
         XCTAssertThrowsError(try store.save(settings: AgentIMChannelSettings(
-            gatewayURL: "http://gateway.example", botIdentifier: "doyah-bot"), for: .qq)) {
-            XCTAssertEqual($0 as? AgentIMSettingsProblem, .gatewayURLNotWebSocket)
+            environment: .production, relayURL: "http://gateway.example"), for: .qq)) {
+            XCTAssertEqual($0 as? AgentIMSettingsProblem, .relayURLNotWebSocket)
         }
         XCTAssertFalse(FileManager.default.fileExists(atPath: store.fileURL(for: .qq).path),
                        "校验失败时配置文件一个字节都不许出现")
@@ -228,24 +249,31 @@ final class AgentIMSettingsTests: XCTestCase {
     // MARK: - 配齐了没 / 状态行
 
     func testReadinessListsMissingFieldsInOrder() {
+        // ★0 之后只要三样：环境 / AppID / Secret（地址由程序取，不是用户填的项）。
         XCTAssertEqual(AgentIMReadiness.evaluate(settings: .empty, appID: nil, secretConfigured: false).missing,
-                       [.gatewayURL, .botIdentifier, .appID, .secret])
+                       [.environment, .appID, .secret])
 
         let ready = AgentIMReadiness.evaluate(
-            settings: AgentIMChannelSettings(gatewayURL: "wss://gateway.example/ws", botIdentifier: "doyah-bot"),
+            settings: AgentIMChannelSettings(environment: .production, relayURL: ""),
             appID: "123456", secretConfigured: true)
         XCTAssertTrue(ready.isReady)
         XCTAssertTrue(ready.isConfigured)
     }
 
-    func testReadinessTreatsUnparseableGatewayAsMissing() {
-        // 非空但写成 http:// ⇒ 仍然算缺（否则面板说「配齐了」，一按连接就静默失败）
+    func testReadinessDoesNotAskForAnAddressAnyMore() {
+        // 反例：把「没填地址」当缺项 = 又回到 ★0 要删掉的那一格。
         let readiness = AgentIMReadiness.evaluate(
-            settings: AgentIMChannelSettings(gatewayURL: "http://gateway.example", botIdentifier: "doyah-bot"),
+            settings: AgentIMChannelSettings(environment: .production),
             appID: "123456", secretConfigured: true)
-        XCTAssertEqual(readiness.missing, [.gatewayURL])
-        XCTAssertFalse(readiness.isReady)
+        XCTAssertTrue(readiness.isReady, "不填任何地址也必须能配齐")
+        XCTAssertFalse(AgentIMConfigField.allCases.contains { $0.rawValue.contains("gateway") },
+                       "配齐判定里不该再有地址这一项")
+        // 环境没选 = 缺项（选错环境消息一条都不来，而面板会显示「已连接」）。
+        XCTAssertEqual(AgentIMReadiness.evaluate(settings: AgentIMChannelSettings(),
+                                                 appID: "123456", secretConfigured: true).missing,
+                       [.environment])
     }
+
 
     func testStatusKindNeverShowsGreenWhileUnconfigured() {
         // 传输层说在线、配置却缺项 ⇒ 面板必须写「未配置」（不许出现「未配置」+「已连接」并存）
@@ -256,13 +284,13 @@ final class AgentIMSettingsTests: XCTestCase {
     }
 
     func testStatusLineNamesMissingFields() {
-        let kind = AgentIMStatusKind.of(readiness: AgentIMReadiness(missing: [.gatewayURL, .secret]),
+        let kind = AgentIMStatusKind.of(readiness: AgentIMReadiness(missing: [.environment, .secret]),
                                         connection: .idle)
         let zh = AgentIMStatusText.line(for: kind, language: .simplifiedChinese)
-        XCTAssertTrue(zh.contains("网关端点"), zh)
+        XCTAssertTrue(zh.contains("环境"), zh)
         XCTAssertTrue(zh.contains("App Secret"), zh)
         let en = AgentIMStatusText.line(for: kind, language: .english)
-        XCTAssertTrue(en.contains("Gateway endpoint"), en)
+        XCTAssertTrue(en.contains("Environment"), en)
         XCTAssertFalse(en.contains(where: { $0.unicodeScalars.contains { $0.value >= 0x4E00 && $0.value <= 0x9FFF } }), en)
     }
 
@@ -392,6 +420,9 @@ final class AgentIMSettingsTests: XCTestCase {
         XCTAssertTrue(sheet.contains("appState.disconnectAgentIM()"), "面板必须有断开入口")
         XCTAssertFalse(sheet.contains("agentIMTransportPending"),
                        "「传输层未实现」那句话必须随本片作废（留着就是假话）")
+        // ★0（2026-10-28）：地址那一格删掉、换成环境；面板要说清程序取到的是哪个地址。
+        XCTAssertTrue(sheet.contains("$imEnvironment"), "面板必须能选环境")
+        XCTAssertTrue(sheet.contains("appState.agentIMGatewayLine"), "必须把程序取到的地址画出来")
     }
 
     func testAppStateWiresProbeInboundPolicyAndRealSocket() throws {
@@ -405,5 +436,8 @@ final class AgentIMSettingsTests: XCTestCase {
         XCTAssertTrue(runner.contains("AgentIMInboundPolicy.decide("), "入站必须先过策略")
         XCTAssertTrue(state.contains("AgentIMSocketFactories.webSocket("), "真通路用 WebSocket 适配层")
         XCTAssertTrue(state.contains("agentIMTransport"), "传输层要由 AppState 持有（连上后不随面板关掉）")
+        // ★0：面板那一层不许自己拼地址，一切经 Core 的取 token / 取网关。
+        XCTAssertTrue(state.contains("provisionAgentIM()"), "连接与测试都只走一条准备链")
+        XCTAssertFalse(state.contains("normalizedGatewayURL"), "旧口径（用户填地址）必须清干净")
     }
 }

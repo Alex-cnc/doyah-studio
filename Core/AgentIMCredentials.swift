@@ -172,9 +172,12 @@ public struct AgentIMCredentialStore: Sendable {
     /// 连带把 AppID 也当没配）。
     private struct ChannelFile: Codable, Equatable {
         var appID: String?
+        var environment: String?
+        var relayURL: String?
+        var receiveTasks: Bool?
+        // 2026-10-28 ★0 之后地址由程序自己取；这两个字段只**读**不写，留给老文件（迁移用）。
         var gatewayURL: String?
         var botIdentifier: String?
-        var receiveTasks: Bool?
     }
 
     private func loadChannelFile(for kind: AgentIMChannelCredentialKind) -> ChannelFile? {
@@ -189,28 +192,34 @@ public struct AgentIMCredentialStore: Sendable {
         return trimmed.isEmpty ? nil : trimmed
     }
 
-    /// 非敏感配置面（网关端点 / 机器人标识 / 接收任务开关）。
+    /// 非敏感配置面（环境 / 自建中继地址 / 接收任务开关）。
     ///
     /// 读的是与 AppID **同一份文件**：两处各存一份 JSON，迟早出现「AppID 与地址来自不同次保存」。
+    /// **迁移**：★0 之前用户填过的 `gatewayURL`（那时是「网关端点」）读成自建中继地址 ——
+    /// 语义正好对上（用户当时手填的就是一个 wss 地址），不至于升级一次就把人填过的东西吞掉。
     public func settings(for kind: AgentIMChannelCredentialKind) -> AgentIMChannelSettings {
         guard let file = loadChannelFile(for: kind) else { return .empty }
+        let relay = (file.relayURL ?? file.gatewayURL ?? "")
         return AgentIMChannelSettings(
-            gatewayURL: file.gatewayURL ?? "",
-            botIdentifier: file.botIdentifier ?? "",
+            environment: AgentIMQQEnvironment.of(raw: file.environment),
+            relayURL: relay,
             receiveTasks: file.receiveTasks ?? false
         )
     }
 
     /// 存配置面：**先校验、再落盘**（不合法时一个字节都不写，判据钉住）。
-    /// AppID 与 Secret 都不在这一步动 —— 这是「只改地址 / 标识 / 开关」的入口。
+    /// AppID 与 Secret 都不在这一步动 —— 这是「只改环境 / 中继 / 开关」的入口。
     @discardableResult
     public func save(settings: AgentIMChannelSettings,
                      for kind: AgentIMChannelCredentialKind) throws -> AgentIMChannelSettings {
         let clean = try AgentIMSettingsValidator.normalized(settings)
-        var file = loadChannelFile(for: kind) ?? ChannelFile(appID: nil, gatewayURL: nil, botIdentifier: nil, receiveTasks: nil)
-        file.gatewayURL = clean.gatewayURL
-        file.botIdentifier = clean.botIdentifier
+        var file = loadChannelFile(for: kind) ?? ChannelFile(appID: nil)
+        file.environment = clean.environment?.rawValue
+        file.relayURL = clean.relayURL
         file.receiveTasks = clean.receiveTasks
+        // 旧的「网关端点」字段随新写法作废：留着它，下次读回来就会被当成中继地址（两处各认一次）。
+        file.gatewayURL = nil
+        file.botIdentifier = nil
         try write(file, for: kind)
         return clean
     }
@@ -226,7 +235,7 @@ public struct AgentIMCredentialStore: Sendable {
     private func writeAppID(_ appID: String, for kind: AgentIMChannelCredentialKind) throws {
         // **保留已存的配置面**：只改 AppID 时把地址 / 标识 / 开关一起写回去（否则保存一次凭据
         // 就等于静默清掉用户填过的地址）。
-        var file = loadChannelFile(for: kind) ?? ChannelFile(appID: nil, gatewayURL: nil, botIdentifier: nil, receiveTasks: nil)
+        var file = loadChannelFile(for: kind) ?? ChannelFile(appID: nil)
         file.appID = appID
         try write(file, for: kind)
     }

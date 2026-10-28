@@ -131,7 +131,8 @@
     {
       "file": "Platform/macOS/WebKitBrowserEngine.swift",
       "tokens": [
-        "URLRequest"
+        "URLRequest",
+        "URLSession"
       ],
       "reason": "第407轮实测的面外活体：内嵌浏览器 `view.load(URLRequest(url:))`（当前 HEAD 的 `:175`）。面外不判，但必须逐条登记并打出读数；待前门定性（原单 T-20261010-040 ④：这两处出网是「合法出口」还是「漏网」由前门裁）",
       "bucket": "production"
@@ -207,6 +208,24 @@
       ],
       "reason": "测试件：断言「模型流式响应的鉴权头拼装」—— 只构造 URLRequest 校验 header，不发真请求（面外不判，但逐条登记并打读数）",
       "bucket": "test"
+    },
+    {
+      "file": "Platform/macOS/URLSessionAgentIMSocket.swift",
+      "tokens": [
+        "URLSession",
+        "URLRequest"
+      ],
+      "bucket": "production",
+      "reason": "2026-10-28 第四十二批补登（第四十批落地时漏登 ⇒ 本轮实测面外 7 处未登记）：`FR-AGT-LINK-CHAN-003` 传输层的**线** —— WebSocket 适配（`URLSessionWebSocketTask`）。面外不判，登记只为不再静默 + 棘轮（只增不减，腾挪要登记）；定性待前门（原单 T-20261010-040 ④ 同类）。"
+    },
+    {
+      "file": "Platform/macOS/URLSessionAgentIMQQClient.swift",
+      "tokens": [
+        "URLSession",
+        "URLRequest"
+      ],
+      "bucket": "production",
+      "reason": "2026-10-28 第四十二批：★0 取 token / 取网关的 REST 出口（`bots.qq.com/app/getAppAccessToken`、`api.sgroup.qq.com/gateway`）—— 地址由程序自己取之后这条面必然存在。面外不判；定性待前门。"
     }
   ],
   "outOfFaceNote": "登记类（只减不增）：`scan.scope = repo` ⇒ 这些文件**已经在扫描面内**，但不在 SRS §6.4 白名单面里 ⇒ 逐条登记（漏登 / 陈旧 / 死登记 / **抹登记**都判红；条数下限 `floors.minRegisteredEgress` = 10）。**登记 ≠ 放行**：`CLI/main.swift` · `Platform/macOS/WebKitBrowserEngine.swift` 两处生产活体的定性由前门裁（原单 `T-20261010-040` ④）。"

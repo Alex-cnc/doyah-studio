@@ -1,31 +1,43 @@
 # 检查点
 
-updated: 2026-10-28T22:35
+updated: 2026-10-28T23:05
 
 ## 现状
 
 - 循环卡 = `.agent/loop-card.md`（**2026-10-28 20:08 主人改成接力制**：一轮收尾即 `cronjob_manage action=run job_id=e98fad41f72d` 点火下一轮；定时器 5 分钟一跳只做兜底；不再按剩余条数自调阶梯）。
 - 队列唯一来源 = `Docs/Doyah产品开发计划任务清单-macOS端.md`（`FR-STD-*` 里实现为 `⬜`／`🟡`）；`.agent/plan.yaml` 已停用。
-- 最近读数（2026-10-28 R41）：`verify-core` **4443 例 / 0 failures**（`--filter` 只作过滤读数）；五门 rc 全 0；包 `dist/DoyahStudio-beta1.0.app` sha256 前缀 `82ef35ce` · 98,016 KB（R41 重出，身份见台账「现行包」行）。
+- 最近读数（2026-10-28 R42）：`verify-core` **4462 例 / 0 failures**（`--filter` 只作过滤读数）；五门 rc 全 0；包 `dist/DoyahStudio-beta1.0.app` sha256 前缀 `cca86c1e` · 98,316 KB（R42 重出，身份见台账「现行包」行）。
 
 ## 下一项
 
-**0. 台账 `FR-STD-DB-TASK-001`（任务定义可保存复用，实现 ⬜ / 判据 ⬜）** —— ★1 / ★2 都已在 R40 / R41 关闭；
-卡上没有未完成的 ★。这一条与刚做完的 `-002`（逐条审批）同一族，`Core/DataTask*` 与 `TaskRunRecord` 已在盘，
-先核已有面再定缺口。**真连 QQ 网关仍需主人给网关 URL / AppID / Secret，那半记 blocked，不占取活顺序。**
+**1. IM 通道的官方外发（`FR-AGT-LINK-CHAN-003` 的收尾片）** —— 本轮把入站与握手都对齐了官方口径，
+但**回话**仍是本侧外发帧 `{"op":"reply",…}`；官方 C2C / 群消息要走
+`POST /v2/users/{openid}/messages` 与 `POST /v2/groups/{group_openid}/messages`（被动回复带 `msg_id` + `msg_seq`）。
+这一片**判据可机械跑**（假 HTTP + `Tests`，不需要真凭据），落 `Core/AgentIMOutboundSend.swift` + `AppState` 接线
+（结果队列的投递改走它），并把「外发未做」这条 blocked 从台账备注里划掉。真端到端点验仍要主人给 AppID + Secret。
+
+**2. 台账 `FR-STD-DB-TASK-001`（任务定义可保存复用，实现 ⬜ / 判据 ⬜）** —— 与本侧 `-002`（逐条审批）同一族，
+`Core/DataTask*` 与 `TaskRunRecord` 已在盘，先核已有面再定缺口。
 
 其余按台账取「优先=高 → 中；同档取判据可机械跑的」：
 
-1. `FR-STD-DB-TASK-001` / `-003`（任务定义的可保存复用 + 执行回执四项读数）—— 与刚做完的 `-002` 同一族，
-   `Core/DataTask*` 与 `TaskRunRecord` 已在盘，先核已有面再定缺口（`-003` 的四项读数：成功/失败 · 影响行数 · 耗时 · 错误原文与时刻）；
-2. `FR-STD-WS-FS-003` 复核（行内悬浮菜单已在盘；**拖拽移动 / 在终端中打开**未核验）；
-3. `FR-STD-WS-EDIT-015` / `FR-STD-WS-AI-002` 剩的一半 —— 界面入口（Core 13 / 19 例已在盘）；
-4. `FR-STD-WS-VCS-001`（Git 只读与差异）/ `FR-STD-WS-TOOL-003`（DAP 调试器）—— 优先=中，纵切较大，排后；
-5. 人工点验项（`WS-WEB-004` 真站点、`WS-FS-004/005/006` 界面点一次、`DB-TASK-002` 逐条审批界面点一次）；
-6. 存量红（非任何一片引入，见「未验证项」），做「清红」片时一并处理。
+3. `FR-STD-WS-FS-003` 复核（行内悬浮菜单已在盘；**拖拽移动 / 在终端中打开**未核验）；
+4. `FR-STD-WS-EDIT-015` / `FR-STD-WS-AI-002` 剩的一半 —— 界面入口（Core 13 / 19 例已在盘）；
+5. `FR-STD-WS-VCS-001`（Git 只读与差异）/ `FR-STD-WS-TOOL-003`（DAP 调试器）—— 纵切较大，排后；
+6. 人工点验项（`WS-WEB-004` 真站点、`WS-FS-004/005/006` 界面点一次、`DB-TASK-002` 逐条审批界面点一次、
+   **IM 通道真连一次**：填 AppID + Secret → 手机发一句话 → 桌面出该轮 → 手机会收到结论）；
+7. 存量红（与 HEAD 逐条相同，非任何一片引入；见 `.agent/evidence/2026-10-28-FR-AGT-LINK-CHAN-003-star0.md` §5）。
 
 ## 已完成的片
 
+- **R42（2026-10-28 23:03）· `FR-AGT-LINK-CHAN-003` ★0 凭据口径纠正** —— 地址不再由用户填：
+  新 `Core/AgentIMQQProvisioning.swift`（环境两档 → 取 token → 取网关 → 取不到用该环境固定地址 → 到期前刷新 / 单飞 /
+  失败 401·403·429·5xx·非 JSON·缺 token 分档可读 → 官方 op 码 Identify 2 / 心跳 1 带 seq / 恢复 6 / Hello 10 /
+  dispatch 解成入站任务）+ `Platform/macOS/URLSessionAgentIMQQClient.swift`（REST 真实现 + `AgentIMQQClients` 工厂）；
+  配置面四样 → **三样**（环境 / AppID / Secret），旧 `gatewayURL` 读成自建中继（迁移）；面板删地址格、加环境选择器、
+  自建中继降为高级项、「去 QQ 开放平台」按钮、画出程序取到的地址；传输层加 `AgentIMGatewayHandshake`（nil = 自建中继原样）。
+  判据新 `Tests/AgentIMQQProvisioningTests` 18 例 + `Tests/AgentIMSettingsTests` 26 → 27 例；反例三处注入各判红后逐字节还原。
+  同批把 `check-network-egress` 从 8 处不合规清到 0（补登两条 IM 出网面 + 修陈旧登记 + 装配缝改走工厂）。
 - **R41（2026-10-28 22:32）· `FR-AGT-LINK-CHAN-003` ★2 入站任务真跑 + 结果推回** —— 新 `Core/AgentIMInboundRun.swift`
   （策略三档 → **去重**（平台消息号落盘，保 500 条；QQ 重投只跑一遍）→ 建任务（同一 chat 同一条会话号）→ 跑（闭包注入，
   接界面 `AgentChatModel` ⇒ 审批照旧）→ 回话入 `AgentIMResultQueue` → 推 → **推成才 ack**；跑抛错也回「没跑成」、

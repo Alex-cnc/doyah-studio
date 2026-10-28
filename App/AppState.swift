@@ -350,8 +350,12 @@ final class AppState: ObservableObject {
     /// 面板只显示「长度 + 尾 4」，不回显本体。
     @Published var agentIMSecretLength: Int?
     @Published var agentIMSecretTail: String?
-    /// 通道的非敏感配置面（网关端点 / 机器人标识 / 接收任务开关）—— 与凭据同一份文件。
+    /// 通道的非敏感配置面（环境 / 自建中继地址 / 接收任务开关）—— 与凭据同一份文件。
     @Published var agentIMSettings: AgentIMChannelSettings = .empty
+    /// 程序**自己取到的**网关地址那一行（★0：地址不再由用户填 ⇒ 至少要说清用的是哪一个）。
+    @Published var agentIMGatewayLine: String?
+    /// 手里那把 token 的尾 4 位（`nil` = 还没取到；本体只在内存里过一手）。
+    @Published var agentIMTokenPreview: String?
     /// 传输层状态：**只有传输层自己发出来的那一档**（界面不许自己猜「大概连上了」）。
     @Published var agentIMConnectionState: AgentIMConnectionState = .idle
     /// 最近一次「测试连接 / 连接」的结论行（面板那一行；`nil` = 还没测过）。
@@ -369,6 +373,10 @@ final class AppState: ObservableObject {
     var agentIMTaskRunner: ((AgentIMTask) async -> AgentIMTaskRunResult)?
     /// 传输层本体：连上后由 AppState 持有（面板关掉不掉线）。
     private var agentIMTransport: AgentIMTransport?
+    /// 取 token / 取网关的那一层（★0）。真实现走 REST；判据在 Core 直测（不碰网络）。
+    private let agentIMProvisioner = AgentIMQQProvisioner(client: AgentIMQQClients.system())
+    /// token 的**唯一持有处**（只在内存：到期前换、同时来的调用共用一次请求；绝不落盘）。
+    private let agentIMTokenVault = AgentIMQQTokenVault()
     /// 结果队列与去重台账（落盘：ack 前的结论重启也还在；重投的同一条消息不跑第二遍）。
     private let agentIMResultQueue = AgentIMResultQueue(directory: AgentIMResultQueue.defaultDirectory)
     private let agentIMInboundLedger = AgentIMInboundLedger(directory: AgentIMResultQueue.defaultDirectory)
@@ -2967,12 +2975,21 @@ final class AppState: ObservableObject {
 
     private var agentIMLanguage: AppLanguage { LocalizationManager.shared.effectiveLanguage }
 
-    /// 存配置面（地址 / 标识 / 开关）。校验失败时**什么都不落盘**，原因写进 `errorMessage`。
+    /// 存配置面（环境 / 自建中继 / 开关）。校验失败时**什么都不落盘**，原因写进 `errorMessage`。
+    ///
+    /// ★0 之后这里不再有「网关端点」与「机器人标识」：地址由程序自己取（`AgentIMQQProvisioner`）。
+    /// 环境或中继地址**变了就断开**：留着连接 = 面板显示「已连接」而实际连的是上一个环境 ——
+    /// 最坏的一种假绿。
     @discardableResult
-    func saveAgentIMSettings(gatewayURL: String, botIdentifier: String, receiveTasks: Bool) -> Bool {
-        let draft = AgentIMChannelSettings(gatewayURL: gatewayURL,
-                                           botIdentifier: botIdentifier,
+    func saveAgentIMSettings(environment: AgentIMQQEnvironment?,
+                             relayURL: String,
+                             receiveTasks: Bool) -> Bool {
+        let draft = AgentIMChannelSettings(environment: environment,
+                                           relayURL: relayURL,
                                            receiveTasks: receiveTasks)
+        let changedGateway = draft.environment != agentIMSettings.environment
+            || draft.relayURL.trimmingCharacters(in: .whitespacesAndNewlines)
+                != agentIMSettings.relayURL.trimmingCharacters(in: .whitespacesAndNewlines)
         do {
             let clean = try agentIMCredentialStore.save(settings: draft, for: .qq)
             agentIMSettings = clean
@@ -2980,6 +2997,9 @@ final class AppState: ObservableObject {
             // 关掉「接收任务」= 真断开：留着连接却一条都不投递，面板上那句「已连接」就是假话。
             if !clean.receiveTasks, agentIMTransport != nil {
                 disconnectAgentIM(reason: "receiveDisabled")
+            } else if changedGateway, agentIMTransport != nil {
+                // 换了环境 / 中继：手里那条连接与那把 token 都不对应现在的配置。
+                disconnectAgentIM(reason: "settingsChanged")
             }
             return true
         } catch let problem as AgentIMSettingsProblem {
@@ -2991,7 +3011,72 @@ final class AppState: ObservableObject {
         }
     }
 
-    /// 建连：配置齐才动手；缺什么**当场说出来**，不静默失败。
+    // MARK: - 凭据 → token → 网关（★0：地址由程序自己取）
+
+    /// 取一把能用的 token：还新鲜就复用，快到期才换，同时来的调用共用一次请求（`AgentIMQQTokenVault`）。
+    private func fetchAgentIMQQToken() async throws -> AgentIMQQToken {
+        guard let environment = agentIMSettings.environment else {
+            throw AgentIMQQProvisionProblem.environmentMissing
+        }
+        let appID = agentIMAppID
+        let secret = (try? agentIMCredentialStore.secret(for: .qq)) ?? nil
+        guard let secret else { throw AgentIMQQProvisionProblem.secretMissing }
+        let provisioner = agentIMProvisioner
+        return try await agentIMTokenVault.current(fetch: {
+            try await provisioner.requestToken(appID: appID, secret: secret, environment: environment)
+        })
+    }
+
+    /// 一次准备齐（token + 网关地址）；**连接与测试都只调这一个**（两处各写一遍就会「测通了、连不上」）。
+    private func provisionAgentIM() async throws -> AgentIMQQProvisioning {
+        guard let environment = agentIMSettings.environment else {
+            throw AgentIMQQProvisionProblem.environmentMissing
+        }
+        let token = try await fetchAgentIMQQToken()
+        let relay = (try? AgentIMSettingsValidator.normalizedRelayURL(agentIMSettings.relayURL)) ?? nil
+        let gateway: AgentIMQQGatewayResolution
+        if let relay {
+            gateway = AgentIMQQGatewayResolution(url: relay, source: .relay)
+        } else {
+            gateway = await agentIMProvisioner.resolveGateway(token: token, environment: environment)
+        }
+        return AgentIMQQProvisioning(token: token, gateway: gateway)
+    }
+
+    /// token 那一行（只有尾 4 位；句子的拼法在 Core，界面不自己拼）。
+    var agentIMTokenLine: String {
+        guard let preview = agentIMTokenPreview else { return "" }
+        return AgentIMQQProvisionText.tokenLine(redacted: preview, language: agentIMLanguage)
+    }
+
+    /// 地址那一行读数落进面板（**取到的 / 兜底的 / 自建中继**说不同的话）。
+    private func recordAgentIMProvisioning(_ provisioning: AgentIMQQProvisioning) {
+        agentIMTokenPreview = provisioning.token.redactedPreview
+        agentIMGatewayLine = AgentIMQQProvisionText.gatewayLine(for: provisioning.gateway,
+                                                               language: agentIMLanguage)
+    }
+
+    /// 官方握手口径：头与 Identify 都**现取** token（到期前换；换不到就用手上那把再试一次）。
+    private func makeAgentIMQQHandshake(fallbackToken: AgentIMQQToken) -> AgentIMGatewayHandshake {
+        AgentIMGatewayHandshake(
+            authorizationHeaders: { [weak self] in
+                guard let self else { return fallbackToken.authorizationHeaders }
+                let token = (try? await self.fetchAgentIMQQToken()) ?? fallbackToken
+                return token.authorizationHeaders
+            },
+            identify: { [weak self] in
+                guard let self else { return AgentIMQQHandshake.identifyFrame(token: fallbackToken) }
+                let token = (try? await self.fetchAgentIMQQToken()) ?? fallbackToken
+                return AgentIMQQHandshake.identifyFrame(token: token)
+            },
+            heartbeat: { sequence in
+                AgentIMQQHandshake.heartbeatFrame(sequence: sequence)
+            },
+            sequence: { text in AgentIMQQHandshake.sequence(of: text) },
+            decode: { text, at in AgentIMQQHandshake.decode(text, receivedAt: at) })
+    }
+
+    /// 建连：配置齐才动手；缺什么 / 取不到 token 都**当场说出来**，不静默失败。
     func connectAgentIM() {
         let readiness = agentIMReadiness
         guard readiness.isReady else {
@@ -3000,19 +3085,34 @@ final class AppState: ObservableObject {
             return
         }
         guard agentIMTransport == nil else { return }
-        let secret = (try? agentIMCredentialStore.secret(for: .qq)) ?? nil
-        guard let url = try? AgentIMSettingsValidator.normalizedGatewayURL(agentIMSettings.gatewayURL),
-              let secret else {
-            agentIMProbeLine = L(.agentIMTestNotReady,
-                                 AgentIMStatusText.fieldList([.gatewayURL, .secret], language: agentIMLanguage))
-            return
-        }
-        let transport = AgentIMTransport(
-            config: AgentIMTransportConfig(gatewayURL: url),
-            signer: AgentIMGatewaySigner(appID: agentIMAppID, secret: secret),
-            makeSocket: AgentIMSocketFactories.webSocket())
-        agentIMTransport = transport
         agentIMConnectionState = .connecting(attempt: 1)
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            do {
+                let provisioning = try await self.provisionAgentIM()
+                self.recordAgentIMProvisioning(provisioning)
+                guard self.agentIMTransport == nil else { return }
+                self.startAgentIMTransport(with: provisioning)
+            } catch let problem as AgentIMQQProvisionProblem {
+                self.agentIMProbeLine = AgentIMQQProvisionText.line(for: problem, language: self.agentIMLanguage)
+                self.agentIMConnectionState = .stopped(reason: "connectFailed")
+            } catch {
+                self.agentIMProbeLine = L(.agentIMTestOpenFailed)
+                self.agentIMConnectionState = .stopped(reason: "connectFailed")
+            }
+        }
+    }
+
+    /// 真正把传输层建起来（**官方路径走 token 头 + Identify；自建中继沿用 HMAC 头 + 本侧 ping**）。
+    private func startAgentIMTransport(with provisioning: AgentIMQQProvisioning) {
+        let usesRelay = !agentIMSettings.relayURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        let secret = ((try? agentIMCredentialStore.secret(for: .qq)) ?? nil) ?? ""
+        let transport = AgentIMTransport(
+            config: AgentIMTransportConfig(gatewayURL: provisioning.gateway.url),
+            signer: AgentIMGatewaySigner(appID: agentIMAppID, secret: secret),
+            makeSocket: AgentIMSocketFactories.webSocket(),
+            handshake: usesRelay ? nil : makeAgentIMQQHandshake(fallbackToken: provisioning.token))
+        agentIMTransport = transport
         // 结果队列**在 start() 之前**接上：连上那一刻的补发走的就是这条真路
         // （连完再接 = 断线期间攒下的结论要等下一次重连才出去）。
         let queue = agentIMResultQueue
@@ -3028,14 +3128,19 @@ final class AppState: ObservableObject {
         }
     }
 
-    /// 断开（`reason` 是机器码：面板会翻成人话，`receiveDisabled` = 用户关掉了接收开关）。
+    /// 断开（`reason` 是机器码：面板会翻成人话，`receiveDisabled` = 用户关掉了接收开关，
+    /// `settingsChanged` = 换了环境 / 中继地址）。
     func disconnectAgentIM(reason: String = "stopped") {
         guard let transport = agentIMTransport else { return }
         agentIMTransport = nil
+        // 断开就把 token 作废：下一次连接必须按**当前**配置重新取（否则会拿着上一个环境的 token 去连）。
+        Task { await agentIMTokenVault.reset() }
         Task { await transport.stop(reason: reason) }
     }
 
-    /// 测试连接：**真发一帧**看网关答不答（只看 `open` 成功就报绿 = 把「握手口径错」画成通）。
+    /// 测试连接：**先取 token 与地址**（取不到就报那一档），再真发一帧看网关答不答。
+    ///
+    /// 只判 `open` 成功 = 把「握手口径错」画成通；官方路径的第一帧是 Identify（不是 ping）。
     func testAgentIMConnection() async -> String {
         let readiness = agentIMReadiness
         guard readiness.isReady else {
@@ -3044,22 +3149,33 @@ final class AppState: ObservableObject {
             agentIMProbeLine = line
             return line
         }
-        let secret = (try? agentIMCredentialStore.secret(for: .qq)) ?? nil
-        guard let url = try? AgentIMSettingsValidator.normalizedGatewayURL(agentIMSettings.gatewayURL),
-              let secret else {
-            let line = L(.agentIMTestNotReady,
-                         AgentIMStatusText.fieldList([.gatewayURL, .secret], language: agentIMLanguage))
+        let provisioning: AgentIMQQProvisioning
+        do {
+            provisioning = try await provisionAgentIM()
+        } catch let problem as AgentIMQQProvisionProblem {
+            let line = AgentIMQQProvisionText.line(for: problem, language: agentIMLanguage)
+            agentIMProbeLine = line
+            return line
+        } catch {
+            let line = L(.agentIMTestOpenFailed)
             agentIMProbeLine = line
             return line
         }
-        let headers = AgentIMGatewaySigner(appID: agentIMAppID, secret: secret)
-            .headers(timestamp: Int(Date().timeIntervalSince1970),
-                     nonce: UUID().uuidString,
-                     body: "")
+        recordAgentIMProvisioning(provisioning)
+        let usesRelay = !agentIMSettings.relayURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        let secret = ((try? agentIMCredentialStore.secret(for: .qq)) ?? nil) ?? ""
+        let headers = usesRelay
+            ? AgentIMGatewaySigner(appID: agentIMAppID, secret: secret)
+                .headers(timestamp: Int(Date().timeIntervalSince1970),
+                         nonce: UUID().uuidString,
+                         body: "")
+            : provisioning.token.authorizationHeaders
+        let frame = usesRelay ? nil : AgentIMQQHandshake.identifyFrame(token: provisioning.token)
         let outcome = await AgentIMConnectivityProbe.run(
             makeSocket: AgentIMSocketFactories.webSocket(),
-            url: url,
-            headers: headers)
+            url: provisioning.gateway.url,
+            headers: headers,
+            frame: frame)
         let line = AgentIMConnectivityProbe.line(for: outcome,
                                                  receiveTimeout: AgentIMConnectivityProbe.defaultReceiveTimeout,
                                                  language: agentIMLanguage)

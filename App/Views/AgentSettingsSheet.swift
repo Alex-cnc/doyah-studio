@@ -31,8 +31,10 @@ struct AgentSettingsSheet: View {
     @State private var imSecretInput = ""
     @State private var imLine: String?
     /// 配置面三格（网关端点 / 机器人标识 / 接收任务开关）—— 与凭据同一份文件。
-    @State private var imGatewayURL = ""
-    @State private var imBotIdentifier = ""
+    /// ★0（2026-10-28 主人拍板）：地址不再由用户填 —— 只选环境，网关地址由程序自己取。
+    @State private var imEnvironment: AgentIMQQEnvironment?
+    /// 高级项：自建中继地址（留空 = 走官方）。
+    @State private var imRelayURL = ""
     @State private var imReceiveTasks = false
     @State private var isTestingIM = false
     /// 连接测试的结果行（`nil` = 还没测过）。
@@ -364,8 +366,13 @@ struct AgentSettingsSheet: View {
                 // 没有任何一处说得清。现在四样配置 + 一行状态（未配置 / 未连接 / 正在连接 /
                 // 已连接 / 未连通+原因）+ 测试连接；状态与「缺什么」全由 Core 合成，界面只搬结论。
                 Section(L(.agentIMSection)) {
-                    TextField(L(.agentIMFieldGatewayURL), text: $imGatewayURL, prompt: Text("wss://"))
-                    TextField(L(.agentIMFieldBotIdentifier), text: $imBotIdentifier)
+                    // ★0（2026-10-28 主人原话「既然是 QQ 通道，为什么还要用户填 wss 地址？」）：
+                    // 地址整格删掉，只留「环境」—— 程序拿 AppID + Secret 换 token、再问官方要网关地址。
+                    Picker(L(.agentIMFieldEnvironment), selection: $imEnvironment) {
+                        Text(L(.agentIMEnvironmentNone)).tag(AgentIMQQEnvironment?.none)
+                        Text(L(.agentIMEnvironmentProduction)).tag(AgentIMQQEnvironment?.some(.production))
+                        Text(L(.agentIMEnvironmentSandbox)).tag(AgentIMQQEnvironment?.some(.sandbox))
+                    }
                     TextField(L(.agentIMAppID), text: $imAppID)
                     SecureField(L(.agentIMSecret), text: $imSecretInput)
                     Text(imSecretStatusLine)
@@ -374,6 +381,26 @@ struct AgentSettingsSheet: View {
                     Text(L(.agentIMSecretKeepHint))
                         .font(Theme.font(.caption))
                         .foregroundStyle(Theme.text(.secondary))
+                    Text(L(.agentIMEnvironmentHint))
+                        .font(Theme.font(.caption))
+                        .foregroundStyle(Theme.text(.secondary))
+                        .fixedSize(horizontal: false, vertical: true)
+                    if imEnvironment == .sandbox {
+                        Text(L(.agentIMSandboxHint))
+                            .font(Theme.font(.caption))
+                            .foregroundStyle(Theme.status(.warning))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    // 不做运行时扫码（扫码是平台登录，不是机器人鉴权）：给一条去开放平台的路。
+                    Button(L(.agentIMOpenPlatform)) {
+                        if let url = URL(string: "https://q.qq.com") {
+                            NSWorkspace.shared.open(url)
+                        }
+                    }
+                    Text(L(.agentIMOpenPlatformHint))
+                        .font(Theme.font(.caption))
+                        .foregroundStyle(Theme.text(.secondary))
+                        .fixedSize(horizontal: false, vertical: true)
 
                     Toggle(isOn: $imReceiveTasks) {
                         Label(L(.agentIMReceiveTasks), systemImage: "tray.and.arrow.down")
@@ -385,6 +412,16 @@ struct AgentSettingsSheet: View {
                         .foregroundStyle(Theme.text(.secondary))
                         .fixedSize(horizontal: false, vertical: true)
 
+                    // 高级项：自建中继地址。默认折叠、默认留空 —— 认不出会报错，但不挡主路径
+                    // （主人 2026-10-28：「自建中继地址」降为高级项）。
+                    DisclosureGroup(L(.agentIMRelayAdvanced)) {
+                        TextField(L(.agentIMFieldRelayURL), text: $imRelayURL, prompt: Text("wss://"))
+                        Text(L(.agentIMRelayHint))
+                            .font(Theme.font(.caption))
+                            .foregroundStyle(Theme.text(.secondary))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
                     // 状态行：**一档**（配置齐不齐与传输层状态在 Core 里合成，界面不再各写一句）。
                     Text(imStatusLine)
                         .font(Theme.font(.caption))
@@ -392,6 +429,18 @@ struct AgentSettingsSheet: View {
                                          ? Theme.status(.success) : Theme.status(.warning))
                         .fixedSize(horizontal: false, vertical: true)
 
+                    // 地址是程序自己取的 ⇒ 至少要说清用的是哪一个（取到的 / 兜底的 / 自建中继）。
+                    if let gatewayLine = appState.agentIMGatewayLine {
+                        Text(gatewayLine)
+                            .font(Theme.font(.caption))
+                            .foregroundStyle(Theme.text(.secondary))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    if appState.agentIMTokenPreview != nil {
+                        Text(appState.agentIMTokenLine)
+                            .font(Theme.font(.caption))
+                            .foregroundStyle(Theme.text(.secondary))
+                    }
                     HStack(spacing: Spacing.m) {
                         Button(L(.agentIMSave)) { saveIMCredentials() }
                         Button(L(.agentIMTest)) { testIMConnection() }
@@ -492,8 +541,8 @@ struct AgentSettingsSheet: View {
             // IM 通道凭据：回填 AppID（明文）；Secret 草稿留空 —— 输入框里永不出现密钥本体。
             appState.refreshAgentIMCredentials()
             imAppID = appState.agentIMAppID
-            imGatewayURL = appState.agentIMSettings.gatewayURL
-            imBotIdentifier = appState.agentIMSettings.botIdentifier
+            imEnvironment = appState.agentIMSettings.environment
+            imRelayURL = appState.agentIMSettings.relayURL
             imReceiveTasks = appState.agentIMSettings.receiveTasks
             imSecretInput = ""
             imLine = nil
@@ -991,11 +1040,11 @@ struct AgentSettingsSheet: View {
                                language: LocalizationManager.shared.effectiveLanguage)
     }
 
-    /// 存通道：**先存配置面（地址 / 标识 / 开关），再存凭据**。
+    /// 存通道：**先存配置面（环境 / 中继 / 开关），再存凭据**。
     /// 两步都走 Core 校验：任何一步不合法，那一步什么都不落盘，原因落在 `imLine`。
     private func saveIMCredentials() {
-        guard appState.saveAgentIMSettings(gatewayURL: imGatewayURL,
-                                           botIdentifier: imBotIdentifier,
+        guard appState.saveAgentIMSettings(environment: imEnvironment,
+                                           relayURL: imRelayURL,
                                            receiveTasks: imReceiveTasks) else {
             imLine = appState.errorMessage
             return
@@ -1042,8 +1091,8 @@ struct AgentSettingsSheet: View {
         if appState.saveAgentIMCredentials(appID: imAppID, secret: nil, clearFirst: true) {
             // 清除是**整条通道**：凭据文件一起没了 ⇒ 面板上那三格也必须跟着空（否则显示的是盘上不存在的配置）。
             imAppID = ""
-            imGatewayURL = ""
-            imBotIdentifier = ""
+            imEnvironment = nil
+            imRelayURL = ""
             imReceiveTasks = false
             imSecretInput = ""
             imLine = L(.agentIMCleared)

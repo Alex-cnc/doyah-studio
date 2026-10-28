@@ -1784,20 +1784,41 @@ public enum LKey: String, CaseIterable, Sendable {
     case agentIMSecretHasWhitespace
     case agentIMSaved
     case agentIMCleared
-    // IM 通道的**配置面**（`FR-AGT-LINK-CHAN-003` 的「能配 / 能看状态 / 能测」那一节）：
-    // 地址与标识的校验、状态行四档、测试连接四档、接收任务开关。
-    case agentIMGatewayURLMissing
-    case agentIMGatewayURLMalformed
-    case agentIMGatewayURLNotWebSocket
-    case agentIMGatewayURLMissingHost
-    case agentIMGatewayURLHasWhitespace
-    case agentIMBotIdentifierEmpty
-    case agentIMBotIdentifierHasWhitespace
-    case agentIMBotIdentifierTooLong
-    case agentIMFieldGatewayURL
-    case agentIMFieldBotIdentifier
+    // IM 通道的**配置面**（`FR-AGT-LINK-CHAN-003` 的「能配 / 能看状态 / 能测」那一节）。
+    // 2026-10-28 ★0：网关端点 / 机器人标识两族键随「地址由程序自己取」作废，
+    // 换成「环境 + 自建中继（高级）」+ 取 token / 取地址失败的那一族。
+    case agentIMRelayURLMalformed
+    case agentIMRelayURLNotWebSocket
+    case agentIMRelayURLMissingHost
+    case agentIMRelayURLHasWhitespace
+    case agentIMFieldRelayURL
+    case agentIMTokenPreview
+    case agentIMFieldEnvironment
     case agentIMFieldAppID
     case agentIMFieldSecret
+    case agentIMEnvironmentNone
+    case agentIMEnvironmentProduction
+    case agentIMEnvironmentSandbox
+    case agentIMEnvironmentHint
+    case agentIMRelayAdvanced
+    case agentIMRelayHint
+    case agentIMOpenPlatform
+    case agentIMOpenPlatformHint
+    case agentIMSandboxHint
+    case agentIMQQEnvironmentMissing
+    case agentIMQQAppIDMissing
+    case agentIMQQSecretMissing
+    case agentIMQQNetworkFailed
+    case agentIMQQResponseNotJSON
+    case agentIMQQCredentialsRejected
+    case agentIMQQPermissionDenied
+    case agentIMQQRateLimited
+    case agentIMQQServerFailed
+    case agentIMQQTokenMissing
+    case agentIMQQRejected
+    case agentIMQQGatewayDiscovered
+    case agentIMQQGatewayFallback
+    case agentIMQQGatewayRelay
     case agentIMStatusUnconfigured
     case agentIMStatusReady
     case agentIMStatusConnecting
@@ -1810,6 +1831,7 @@ public enum LKey: String, CaseIterable, Sendable {
     case agentIMReasonSendFailed
     case agentIMReasonStopped
     case agentIMReasonReceiveDisabled
+    case agentIMReasonSettingsChanged
     case agentIMReasonUnknown
     case agentIMTestReachable
     case agentIMTestOpenFailed
@@ -4711,18 +4733,38 @@ public enum LocalizedStrings {
         .agentIMSecretHasWhitespace: [.simplifiedChinese: "App Secret 里不能有空格或换行（粘贴时带进来的？）", .english: "App Secret cannot contain spaces or line breaks (pasted by accident?)"],
         .agentIMSaved: [.simplifiedChinese: "通道凭据已写入系统钥匙串", .english: "Channel credentials saved to Keychain"],
         .agentIMCleared: [.simplifiedChinese: "通道凭据已清除", .english: "Channel credentials cleared"],
-        .agentIMGatewayURLMissing: [.simplifiedChinese: "网关端点不能为空", .english: "Gateway endpoint cannot be empty"],
-        .agentIMGatewayURLMalformed: [.simplifiedChinese: "网关端点写法认不出（示例：wss://host/path）", .english: "Gateway endpoint is not a valid URL (e.g. wss://host/path)"],
-        .agentIMGatewayURLNotWebSocket: [.simplifiedChinese: "网关端点要用 ws:// 或 wss://（写 http(s) 连的是另一条会话）", .english: "The gateway must use ws:// or wss:// (http(s) opens a different kind of session)"],
-        .agentIMGatewayURLMissingHost: [.simplifiedChinese: "网关端点缺主机名", .english: "Gateway endpoint has no host"],
-        .agentIMGatewayURLHasWhitespace: [.simplifiedChinese: "网关端点里不能有空格或换行（粘贴时带进来的？）", .english: "Gateway endpoint cannot contain spaces or line breaks (pasted by accident?)"],
-        .agentIMBotIdentifierEmpty: [.simplifiedChinese: "机器人标识不能为空", .english: "Bot identifier cannot be empty"],
-        .agentIMBotIdentifierHasWhitespace: [.simplifiedChinese: "机器人标识里不能有空格或换行", .english: "Bot identifier cannot contain spaces or line breaks"],
-        .agentIMBotIdentifierTooLong: [.simplifiedChinese: "机器人标识过长（上限 64 字符）", .english: "Bot identifier is too long (64 characters max)"],
-        .agentIMFieldGatewayURL: [.simplifiedChinese: "网关端点", .english: "Gateway endpoint"],
-        .agentIMFieldBotIdentifier: [.simplifiedChinese: "机器人标识", .english: "Bot identifier"],
+        .agentIMRelayURLMalformed: [.simplifiedChinese: "自建中继地址写法认不出（示例：wss://host/path）", .english: "The relay address is not a valid URL (e.g. wss://host/path)"],
+        .agentIMRelayURLNotWebSocket: [.simplifiedChinese: "自建中继地址要用 ws:// 或 wss://（写 http(s) 连的是另一条会话）", .english: "The relay address must use ws:// or wss:// (http(s) opens a different kind of session)"],
+        .agentIMRelayURLMissingHost: [.simplifiedChinese: "自建中继地址缺主机名", .english: "The relay address has no host"],
+        .agentIMRelayURLHasWhitespace: [.simplifiedChinese: "自建中继地址里不能有空格或换行（粘贴时带进来的？）", .english: "The relay address cannot contain spaces or line breaks (pasted by accident?)"],
+        .agentIMFieldRelayURL: [.simplifiedChinese: "自建中继地址（可留空）", .english: "Relay address (may stay empty)"],
+        .agentIMTokenPreview: [.simplifiedChinese: "已取到 token（尾 %@，只在内存里）", .english: "Token acquired (ending %@, memory only)"],
+        .agentIMFieldEnvironment: [.simplifiedChinese: "环境", .english: "Environment"],
         .agentIMFieldAppID: [.simplifiedChinese: "AppID", .english: "AppID"],
         .agentIMFieldSecret: [.simplifiedChinese: "App Secret", .english: "App Secret"],
+        .agentIMEnvironmentNone: [.simplifiedChinese: "请选择（正式 / 沙箱）", .english: "Choose one (production / sandbox)"],
+        .agentIMEnvironmentProduction: [.simplifiedChinese: "正式（api.sgroup.qq.com）", .english: "Production (api.sgroup.qq.com)"],
+        .agentIMEnvironmentSandbox: [.simplifiedChinese: "沙箱（sandbox.api.sgroup.qq.com）", .english: "Sandbox (sandbox.api.sgroup.qq.com)"],
+        .agentIMEnvironmentHint: [.simplifiedChinese: "选哪个环境的机器人，就连哪个网关。地址不用填：程序拿 AppID 与 Secret 换 token、再问官方要网关地址。", .english: "Whichever environment the bot belongs to is the gateway used. No address to type: the app exchanges AppID and secret for a token and asks QQ for the gateway."],
+        .agentIMRelayAdvanced: [.simplifiedChinese: "高级：自建中继地址", .english: "Advanced: self-hosted relay address"],
+        .agentIMRelayHint: [.simplifiedChinese: "留空 = 走官方（推荐）。填了就连你给的中继，不去问官方网关。", .english: "Leave empty to use the official gateway (recommended). If filled, that relay is used and QQ is not asked."],
+        .agentIMOpenPlatform: [.simplifiedChinese: "去 QQ 开放平台创建 / 绑定机器人", .english: "Open the QQ bot platform to create or bind a bot"],
+        .agentIMOpenPlatformHint: [.simplifiedChinese: "AppID 与 App Secret 在开放平台那个机器人的「开发设置」里；本程序不做运行时扫码（扫码是平台登录，不是机器人鉴权）。", .english: "AppID and App Secret live under the bot's development settings on the platform. This app does not scan QR codes at runtime (that is a platform login, not bot authentication)."],
+        .agentIMSandboxHint: [.simplifiedChinese: "沙箱环境要先把机器人拉进沙箱群 / 沙箱用户列表，否则一条消息都收不到。", .english: "In the sandbox, add the bot to the sandbox group or user list first; otherwise no message will arrive."],
+        .agentIMQQEnvironmentMissing: [.simplifiedChinese: "还没选环境（正式 / 沙箱）：地址按环境取，不选就不知道连哪个网关", .english: "No environment chosen (production / sandbox): the gateway address depends on it"],
+        .agentIMQQAppIDMissing: [.simplifiedChinese: "还不能取 token：先填 AppID", .english: "Cannot fetch a token yet: fill in the AppID first"],
+        .agentIMQQSecretMissing: [.simplifiedChinese: "还不能取 token：先填 App Secret", .english: "Cannot fetch a token yet: fill in the App Secret first"],
+        .agentIMQQNetworkFailed: [.simplifiedChinese: "连不上 QQ 的接口（网络 / 代理 / 防火墙）：这一档不是凭据错", .english: "Cannot reach the QQ endpoint (network, proxy or firewall): this is not a credential problem"],
+        .agentIMQQResponseNotJSON: [.simplifiedChinese: "QQ 的接口回的不是 JSON（多半被代理或门户页拦了），取不到 token", .english: "The QQ endpoint did not answer with JSON (likely intercepted by a proxy or portal page), so no token"],
+        .agentIMQQCredentialsRejected: [.simplifiedChinese: "AppID 或 App Secret 不对（401）：去开放平台核对那个机器人的开发设置", .english: "The AppID or App Secret was rejected (401): check that bot's development settings on the platform"],
+        .agentIMQQPermissionDenied: [.simplifiedChinese: "凭据是对的，但这个机器人没有这项权限（403）：在开放平台开消息权限，或把机器人拉进群里", .english: "The credentials work but this bot lacks the permission (403): enable messaging on the platform, or add the bot to the group"],
+        .agentIMQQRateLimited: [.simplifiedChinese: "被 QQ 限流了（429）：等一会儿再试（本程序会自己按退避重试）", .english: "Rate limited by QQ (429): wait a moment (the app backs off and retries by itself)"],
+        .agentIMQQServerFailed: [.simplifiedChinese: "QQ 侧服务出错（5xx）：不是你这边的配置问题", .english: "The QQ side failed (5xx): not a configuration problem on your side"],
+        .agentIMQQTokenMissing: [.simplifiedChinese: "接口通了但没给 token（响应里没有 access_token）：口径可能变了，把这条报上来", .english: "The endpoint answered but returned no token (no access_token field): the contract may have changed, please report it"],
+        .agentIMQQRejected: [.simplifiedChinese: "QQ 拒了这次请求：HTTP %d（码 %@）", .english: "QQ rejected the request: HTTP %d (code %@)"],
+        .agentIMQQGatewayDiscovered: [.simplifiedChinese: "网关地址由程序取到：%@", .english: "Gateway address fetched by the app: %@"],
+        .agentIMQQGatewayFallback: [.simplifiedChinese: "取网关地址失败（%@），改用固定地址：%@", .english: "Could not fetch the gateway address (%@); using the fixed one: %@"],
+        .agentIMQQGatewayRelay: [.simplifiedChinese: "走自建中继：%@", .english: "Using the self-hosted relay: %@"],
         .agentIMStatusUnconfigured: [.simplifiedChinese: "未配置：还缺 %@", .english: "Not configured; still missing: %@"],
         .agentIMStatusReady: [.simplifiedChinese: "未连接（配置已齐，先点「测试连接」确认网关可达）", .english: "Not connected (configuration is complete; run Test connection first)"],
         .agentIMStatusConnecting: [.simplifiedChinese: "正在连接（第 %d 次尝试）", .english: "Connecting (attempt %d)"],
@@ -4735,6 +4777,7 @@ public enum LocalizedStrings {
         .agentIMReasonSendFailed: [.simplifiedChinese: "发送失败", .english: "Sending failed"],
         .agentIMReasonStopped: [.simplifiedChinese: "已停止", .english: "Stopped"],
         .agentIMReasonReceiveDisabled: [.simplifiedChinese: "已关闭「接收任务」", .english: "Receive tasks is off"],
+        .agentIMReasonSettingsChanged: [.simplifiedChinese: "环境或中继地址改了：按新配置重连", .english: "Environment or relay address changed: reconnect with the new settings"],
         .agentIMReasonUnknown: [.simplifiedChinese: "原因码 %@", .english: "Reason code %@"],
         .agentIMTestReachable: [.simplifiedChinese: "网关已应答（收到一帧）：地址与凭据这一层是通的", .english: "The gateway answered (one frame received): the address and credentials work at this layer"],
         .agentIMTestOpenFailed: [.simplifiedChinese: "连不上网关：检查地址 / 端口 / 代理，以及网关是否要求先握手", .english: "Cannot reach the gateway: check address, port, proxy, and whether it needs a handshake first"],
