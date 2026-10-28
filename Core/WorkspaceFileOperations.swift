@@ -27,6 +27,9 @@ public enum WorkspaceFileOperations {
         case notADirectory(String)
         /// 工作区根自己不能删（结构上挡一层）。
         case rootNotDeletable
+        /// 撤销删除时，废纸篓里那一份已经不在了（用户自己清过废纸篓 / 被别的东西搬走）。
+        /// 这一档**不许**用「附近那个同名文件」顶上 —— 撤销要么真回到原样，要么如实说做不到。
+        case trashCopyMissing(String)
         /// 系统给的真实原因（权限 / 文件系统 / 只读卷…）。
         case system(String)
     }
@@ -157,6 +160,34 @@ public enum WorkspaceFileOperations {
             throw Failure.system(error.localizedDescription)
         }
         return resulting as URL?
+    }
+
+    /// 从废纸篓搬回原处（撤销删除的唯一实现，`FR-STD-WS-FS-006` ③）。
+    ///
+    /// 与 `delete` 的对称关系：那条路**只**进废纸篓、这条路**只**从废纸篓取。
+    /// 三个必须挡住的坑：
+    ///   ① 废纸篓那一份已经没了（用户清过废纸篓）⇒ `trashCopyMissing`，**不许**拿别的文件顶上；
+    ///   ② 原位置已经被占了（删完之后又建了一个同名的）⇒ `alreadyExists`，不覆盖别人的新文件；
+    ///   ③ 搬回去的落点必须仍在工作区内（工作区可能已经被换成另一个目录 ⇒ 旧条目一律失效）。
+    ///
+    /// 废纸篓里的那份**不做** `isContained` 检查 —— 它本来就在工作区外（系统废纸篓），
+    /// 那是这条路径的正常前提，不是越界。
+    @discardableResult
+    public static func restore(_ trashedURL: URL, to destination: URL, in workspaceURL: URL) throws -> URL {
+        guard FileManager.default.fileExists(atPath: trashedURL.path) else {
+            throw Failure.trashCopyMissing(trashedURL.lastPathComponent)
+        }
+        try requireContained(destination, in: workspaceURL)
+        try requireDirectory(destination.deletingLastPathComponent(), in: workspaceURL)
+        if FileManager.default.fileExists(atPath: destination.path) {
+            throw Failure.alreadyExists(destination.lastPathComponent)
+        }
+        do {
+            try FileManager.default.moveItem(at: trashedURL, to: destination)
+        } catch {
+            throw Failure.system(error.localizedDescription)
+        }
+        return destination
     }
 
     /// 「将删几项」：目录 = 自身 + 递归内容（数到 `deletionCountLimit` 就停并标截断）；文件 = 1。

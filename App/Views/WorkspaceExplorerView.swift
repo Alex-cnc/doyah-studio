@@ -264,8 +264,8 @@ struct WorkspaceExplorerView: View {
         HStack(spacing: Spacing.hair) {
             if entry.isDirectory {
                 Menu {
-                    Button(L(.workspaceNewFile)) { workspace.createEntry(in: entry, asFile: true) }
-                    Button(L(.workspaceNewFolder)) { workspace.createEntry(in: entry, asFile: false) }
+                    Button(L(.workspaceNewFile)) { createEntry(in: entry, asFile: true) }
+                    Button(L(.workspaceNewFolder)) { createEntry(in: entry, asFile: false) }
                 } label: {
                     rowActionIcon("plus", help: "\(L(.workspaceNewFile)) / \(L(.workspaceNewFolder))")
                 }
@@ -300,6 +300,39 @@ struct WorkspaceExplorerView: View {
             .help(help)
     }
 
+    /// 新建（文件 / 文件夹）：建完**直接进改名态**（需求提出者 2026-09-30 定的形态）。
+    ///
+    /// 文件额外做一件事（`FR-STD-WS-FS-004` ③「新建后自动打开且光标在首行」）：
+    /// 建出来就**开进页签并落在第 1 行** —— 用户点「新建文件」的意图是「我现在要写东西」，
+    /// 让他再回到树上双击一次是把同一件事做两遍。文件夹没有「内容」可开，只进改名态。
+    private func createEntry(in directory: WorkspaceEntry, asFile: Bool) {
+        guard let created = workspace.createEntry(in: directory, asFile: asFile) else { return }
+        guard asFile else { return }
+        workspaceTabs.openFile(at: created, line: 1)
+        // 新建的那一行是改名态（路径会跟着改），页签要跟着它走：
+        // `commitRename` 里做同一步 —— 两处都做才不会出现「改了名，页签还叫未命名」。
+    }
+
+    /// 撤销按钮：撤完把页签也跟着收／跟着改（`FR-STD-WS-FS-005` ③ / `FS-006` ③）。
+    private func undoLastFileOperation() {
+        guard let undone = workspace.undoLastFileOperation() else { return }
+        switch undone.kind {
+        case .creation:
+            // 新建的那份已进废纸篓 ⇒ 指向它的页签收掉（改过的页签留着，那是用户敲的字）。
+            workspaceTabs.closeTabs(atPath: undone.currentURL.path)
+            selectedPath = nil
+        case .rename:
+            // 改回原名 ⇒ 页签的路径与标题跟着回去。
+            if let original = undone.originalURL {
+                workspaceTabs.retarget(from: undone.currentURL.path, to: original.path)
+            }
+            selectedPath = nil
+        case .deletion:
+            // 页签本来就指着原路径，文件回到原处之后它自然又有效 —— 不需要搬任何东西。
+            break
+        }
+    }
+
     private func beginRename(_ entry: WorkspaceEntry) {
         selectedPath = entry.relativePath
         renameTargetPath = entry.relativePath
@@ -317,8 +350,13 @@ struct WorkspaceExplorerView: View {
     /// 回车提交。**失败就留在改名态**（输入框收掉等于把用户敲的字扔了）。
     private func commitRename(_ entry: WorkspaceEntry) {
         let trimmed = renamingText.trimmingCharacters(in: .whitespaces)
-        if workspace.rename(entry, to: trimmed) {
+        let source = workspace.url(for: entry)
+        if let renamed = workspace.rename(entry, to: trimmed) {
             if selectedPath == entry.relativePath { selectedPath = nil }  // 路径变了，选中态放掉
+            // `FR-STD-WS-FS-005` ①：已打开的页签标题跟着改（目录改名时它整棵子树都跟）。
+            if let source, source.standardizedFileURL != renamed.standardizedFileURL {
+                workspaceTabs.retarget(from: source.path, to: renamed.path)
+            }
             renameTargetPath = nil
             isRenameFieldFocused = false
         }
@@ -336,6 +374,9 @@ struct WorkspaceExplorerView: View {
     }
 
     /// 操作结果那一行（在底部状态之上）。
+    ///
+    /// 「撤销」就长在**这一行**上（`FR-STD-WS-FS-005` ③ / `FS-006` ③）：文件操作的结果句
+    /// 出现的那一刻，用户最后悔 —— 把撤销放在别处（菜单 / 空白处右键）等于让他先找一遍。
     private func noticeLine(_ text: String) -> some View {
         HStack(spacing: Spacing.xs) {
             Image(systemName: "info.circle")
@@ -347,6 +388,12 @@ struct WorkspaceExplorerView: View {
                 .lineLimit(2)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 0)
+            if workspace.canUndoFileOperation {
+                ToolbarIconButton(systemName: "arrow.uturn.backward", help: L(.workspaceUndo)) {
+                    undoLastFileOperation()
+                }
+                .accessibilityIdentifier("workspace-undo")
+            }
         }
         .padding(.horizontal, Spacing.m)
         .padding(.bottom, Spacing.s)

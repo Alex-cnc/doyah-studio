@@ -405,6 +405,28 @@ final class WorkspaceTabsModel: ObservableObject {
         revealDelivery = RevealDelivery(id: UUID(), tabID: tab.id, line: line)
     }
 
+    // MARK: 文件改名 / 撤销之后页签跟着走（`FR-STD-WS-FS-005` ①）
+
+    /// 改名之后把落在旧路径下的页签**就地改写**（路径 + 标题），内容 / 脏标记 / 标识一个不动。
+    ///
+    /// 判据在 Core（`WorkspaceTabSet.retargeting`）—— 这里只做「把结果装回去」，
+    /// 免得同一套前缀规则在视图与模型里各写一份（各写一份的那天，两边会给出不同答案）。
+    func retarget(from oldPath: String, to newPath: String) {
+        let retargeted = WorkspaceTabSet.retargeting(tabs: tabs, from: oldPath, to: newPath)
+        guard retargeted != tabs else { return }
+        tabs = retargeted
+    }
+
+    /// 撤销「新建」之后：把指向那个已进废纸篓的文件的页签收掉。
+    ///
+    /// 只收**没改过**的（`isDirty` 为假）。改过的页签留着 —— 那里面有用户敲的字，
+    /// 悄悄关掉等于把字扔了；保存时它会如实报「文件不在了」。
+    func closeTabs(atPath path: String) {
+        for tab in tabs where tab.path == path && !tab.isDirty {
+            close(tab.id)
+        }
+    }
+
     // MARK: 代码格式化（FR-EDIT-39，形态 = ③ 混合）
 
     /// 格式化结果的一次性投递：模型算好文本，**由编辑器视图自己**做那一次替换。

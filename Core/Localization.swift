@@ -76,6 +76,11 @@ public enum LKey: String, CaseIterable, Sendable {
     case workspaceFileOpNotADirectory
     case workspaceFileOpRoot
     case workspaceFileOpFailed
+    case workspaceUndo
+    case workspaceUndoCreation
+    case workspaceUndoRename
+    case workspaceUndoDeletion
+    case workspaceUndoTrashMissing
     case workspaceLoading
     case workspaceSearchTruncated
     case workspaceSearchEmpty
@@ -3031,6 +3036,23 @@ public enum LocalizedStrings {
         ],
         .workspaceFileOpFailed: [
             .simplifiedChinese: "操作失败：%@", .english: "The operation failed: %@",
+        ],
+        .workspaceUndo: [.simplifiedChinese: "撤销", .english: "Undo"],
+        .workspaceUndoCreation: [
+            .simplifiedChinese: "已撤销新建：「%@」已移到废纸篓。",
+            .english: "Undone: “%@” was moved to the Trash.",
+        ],
+        .workspaceUndoRename: [
+            .simplifiedChinese: "已撤销改名：「%@」改回「%@」。",
+            .english: "Undone: “%@” renamed back to “%@”.",
+        ],
+        .workspaceUndoDeletion: [
+            .simplifiedChinese: "已撤销删除：「%@」已放回原处。",
+            .english: "Undone: “%@” is back where it was.",
+        ],
+        .workspaceUndoTrashMissing: [
+            .simplifiedChinese: "「%@」在废纸篓里已经找不到了，撤不回来。",
+            .english: "“%@” is no longer in the Trash — it can’t be restored.",
         ],
         .workspaceTreeEmpty: [.simplifiedChinese: "这个目录里没有可显示的条目。", .english: "Nothing to show in this folder."],
         .workspaceLoading: [.simplifiedChinese: "正在读取…", .english: "Loading…"],

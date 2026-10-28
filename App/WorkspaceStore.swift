@@ -30,6 +30,12 @@ final class WorkspaceStore: ObservableObject {
     /// 正在**行内改名**的那个条目（相对路径）—— 新建之后直接进这一态（需求提出者原话）。
     @Published var renamingPath: String?
 
+    /// 文件操作的**一次撤销**（`FR-STD-WS-FS-005` ③ / `FS-006` ③）。只有一层，撤销完就没了。
+    @Published private(set) var undoLog = WorkspaceUndoLog()
+
+    /// 界面据此决定要不要出「撤销」那一枚。
+    var canUndoFileOperation: Bool { undoLog.canUndo }
+
     /// 工作区变化时通知外部（终端启动目录要跟着走）。
     var onWorkspaceChanged: ((String?) -> Void)?
 
@@ -126,6 +132,7 @@ final class WorkspaceStore: ObservableObject {
         loadError = nil
         noticeText = nil
         renamingPath = nil
+        undoLog.clear()
         try? await store.removeAll()
         apply(status: .notAuthorized, bookmark: nil)
     }
@@ -208,8 +215,13 @@ final class WorkspaceStore: ObservableObject {
     // 这里只管**动作与状态**；按钮长什么样、悬浮怎么出现，都在 `WorkspaceExplorerView`。
 
     /// 新建（文件 / 文件夹）：建完**直接进入改名态** —— 所以顺手把 `renamingPath` 置成新条目。
-    func createEntry(in directory: WorkspaceEntry?, asFile: Bool) {
-        guard let rootURL else { return }
+    ///
+    /// 返回**建出来的那个 URL**（`nil` = 失败，失败原因已进 `noticeText`）——
+    /// `FR-STD-WS-FS-004` ③「新建后自动打开且光标在首行」要靠它：store 管文件，页签归
+    /// `WorkspaceTabsModel`，所以打开这一步由调用点拿这个 URL 去做（这里不越界去开页签）。
+    @discardableResult
+    func createEntry(in directory: WorkspaceEntry?, asFile: Bool) -> URL? {
+        guard let rootURL else { return nil }
         let parent = directory.flatMap { url(for: $0) } ?? rootURL
         do {
             let created: URL
@@ -229,44 +241,101 @@ final class WorkspaceStore: ObservableObject {
             }
             // 建在已展开的目录里：父目录不展开，新行根本看不见（用户会以为「点了没反应」）。
             if let directory { expandedPaths.insert(directory.relativePath) }
-            guard let relative = WorkspaceTree.relativePath(of: created, in: rootURL) else { return }
+            guard let relative = WorkspaceTree.relativePath(of: created, in: rootURL) else { return created }
             reload(parentOf: relative)
             noticeText = nil
             renamingPath = relative
+            undoLog.record(.creation(created: created, workspace: rootURL))
+            return created
         } catch {
             noticeText = Self.operationMessage(for: error)
+            return nil
         }
     }
 
-    /// 改名。返回**成没成** —— 失败要留在改名态里，别把输入框收掉（收掉等于把用户敲的字扔了）。
+    /// 改名。返回**改出来的新 URL**（`nil` = 没成）—— 失败要留在改名态里，别把输入框收掉
+    /// （收掉等于把用户敲的字扔了）。
+    ///
+    /// 返回新 URL 而不是 `Bool` 的理由（`FR-STD-WS-FS-005` ①）：改名之后**已打开的页签要跟着走**，
+    /// 那一步在页签模型里，调用点必须知道「从哪改到哪」。
     @discardableResult
-    func rename(_ entry: WorkspaceEntry, to newName: String) -> Bool {
-        guard let rootURL, let source = url(for: entry) else { return false }
+    func rename(_ entry: WorkspaceEntry, to newName: String) -> URL? {
+        guard let rootURL, let source = url(for: entry) else { return nil }
         do {
-            _ = try WorkspaceFileOperations.rename(source, to: newName, in: rootURL)
+            let renamed = try WorkspaceFileOperations.rename(source, to: newName, in: rootURL)
             reload(parentOf: entry.relativePath)
             noticeText = nil
             renamingPath = nil
-            return true
+            // 同名提交（`rename` 返回原 URL）不算一次改动 ⇒ 记 `nil`，顺手清掉上一条撤销。
+            if renamed.standardizedFileURL == source.standardizedFileURL {
+                undoLog.record(nil)
+            } else {
+                undoLog.record(.rename(from: source, to: renamed, workspace: rootURL))
+            }
+            return renamed
         } catch {
             noticeText = Self.operationMessage(for: error)
-            return false
+            return nil
         }
     }
 
     /// 删除（**走废纸篓**）：确认框在界面上，这里只管做与说。
+    ///
+    /// 撤回来的凭据 = `trashItem` 给的废纸篓位置，一路记进 `undoLog`（`FR-STD-WS-FS-006` ③）。
     @discardableResult
     func delete(_ entry: WorkspaceEntry) -> Bool {
         guard let rootURL, let target = url(for: entry) else { return false }
         do {
-            _ = try WorkspaceFileOperations.delete(target, in: rootURL)
+            let trashed = try WorkspaceFileOperations.delete(target, in: rootURL)
             reload(parentOf: entry.relativePath)
             noticeText = L(.workspaceFileTrashed, entry.name)
+            undoLog.record(.deletion(original: target, trashedTo: trashed, workspace: rootURL))
             return true
         } catch {
             noticeText = Self.operationMessage(for: error)
             return false
         }
+    }
+
+    /// 撤销最近一次文件操作（`FR-STD-WS-FS-005` ③ / `FS-006` ③）。返回**被撤销的那一条**。
+    ///
+    /// 三条纪律：
+    ///   ① **撤不回来就不算撤销** —— 失败时条目留在账上（用户还能再试），只把原因说出来；
+    ///   ② 成功后**只刷新受影响的那些目录**（与新建 / 改名 / 删除同一条路，`reload(parentOf:)`）；
+    ///   ③ 页签跟不跟随由调用点做（页签不归 store）—— 所以把那条记录原样返回。
+    @discardableResult
+    func undoLastFileOperation() -> WorkspaceFileUndo? {
+        guard let rootURL, let entry = undoLog.pending else { return nil }
+        do {
+            _ = try WorkspaceUndoLog.revert(entry)
+            undoLog.consume()
+            switch entry.kind {
+            case .creation:
+                reload(parentOf: relativePath(of: entry.currentURL, in: rootURL) ?? "")
+                noticeText = L(.workspaceUndoCreation, entry.currentURL.lastPathComponent)
+            case .rename:
+                let back = relativePath(of: entry.originalURL ?? entry.currentURL, in: rootURL) ?? ""
+                reload(parentOf: back)
+                noticeText = L(
+                    .workspaceUndoRename,
+                    entry.currentURL.lastPathComponent,
+                    entry.originalURL?.lastPathComponent ?? ""
+                )
+            case .deletion:
+                let back = relativePath(of: entry.currentURL, in: rootURL) ?? ""
+                reload(parentOf: back)
+                noticeText = L(.workspaceUndoDeletion, entry.currentURL.lastPathComponent)
+            }
+            renamingPath = nil
+            return entry
+        } catch {
+            noticeText = Self.operationMessage(for: error)
+            return nil
+        }
+    }
+
+    private func relativePath(of url: URL, in rootURL: URL) -> String? {
+        WorkspaceTree.relativePath(of: url, in: rootURL)
     }
 
     /// 删之前那句「将删几项」（非空文件夹必须让用户先看见数字）。
@@ -289,6 +358,7 @@ final class WorkspaceStore: ObservableObject {
         case .notContained: return L(.workspaceFileOpNotContained)
         case .notADirectory(let name): return L(.workspaceFileOpNotADirectory, name)
         case .rootNotDeletable: return L(.workspaceFileOpRoot)
+        case .trashCopyMissing(let name): return L(.workspaceUndoTrashMissing, name)
         case .system(let reason): return L(.workspaceFileOpFailed, reason)
         }
     }

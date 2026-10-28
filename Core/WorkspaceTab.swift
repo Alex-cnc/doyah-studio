@@ -129,4 +129,37 @@ public enum WorkspaceTabSet {
         let fallback = min(index, remaining.count - 1)
         return remaining[fallback].id
     }
+
+    // MARK: 改名之后页签跟着走（`FR-STD-WS-FS-005` ①）
+
+    /// 把落在 `oldPath` 底下（含整棵子树）的路径改写成 `newPath` 底下；不在其中回 `nil`。
+    ///
+    /// 两条必须是纯字符串判断、且**带分隔符**：
+    ///   - `newPath` 原样给出（不改大小写、不标准化 —— 那是文件系统的事，Core 不猜）；
+    ///   - 前缀比较必须带上 `/`，否则改名 `a.txt` 会把 `a.txt2` 那条页签一起搬走
+    ///     （这类「差一个字符」的误伤在页签上是静默的：标题变了、路径指向一个不存在的文件）。
+    public static func retargetedPath(_ path: String, from oldPath: String, to newPath: String) -> String? {
+        if path == oldPath { return newPath }
+        let prefix = oldPath.hasSuffix("/") ? oldPath : oldPath + "/"
+        guard path.hasPrefix(prefix) else { return nil }
+        let tail = String(path.dropFirst(prefix.count))
+        guard !tail.isEmpty else { return newPath }
+        return newPath.hasSuffix("/") ? newPath + tail : newPath + "/" + tail
+    }
+
+    /// 改名之后页签要跟着走：**路径与标题一起换**，而内容 / 脏标记 / 标识一个都不动。
+    ///
+    /// 为什么标识不能重发（`WorkspaceTab` 的 `id` 保持原样）：重发一个新 `id` 等于「关掉旧的再开新的」，
+    /// 选中项、滚动位置、撤销栈全断 —— 而用户只是改了个文件名。
+    public static func retargeting(tabs: [WorkspaceTab], from oldPath: String, to newPath: String) -> [WorkspaceTab] {
+        tabs.map { tab in
+            guard let path = tab.path,
+                  let updated = retargetedPath(path, from: oldPath, to: newPath)
+            else { return tab }
+            var copy = tab
+            copy.path = updated
+            copy.title = title(for: updated)
+            return copy
+        }
+    }
 }
