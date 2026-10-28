@@ -1,6 +1,6 @@
 # 检查点
 
-updated: 2026-10-29T06:12
+updated: 2026-10-29T06:26
 
 ## 现状
 
@@ -8,6 +8,9 @@ updated: 2026-10-29T06:12
   点火下一轮；定时器 5 分钟一跳只做兜底；不再按剩余条数自调阶梯）。**本会话无 `cronjob_manage` 工具** ⇒ 接力改用 CLI
   `hermes cron run e98fad41f72d`（同一效果：下一跳调度器拉起），详见 loop-card 的「节奏」段。
 - 队列唯一来源 = `Docs/Doyah产品开发计划任务清单-macOS端.md`（`FR-STD-*` 里实现为 `⬜`／`🟡`）；`.agent/plan.yaml` 已停用。
+- 最近读数（2026-10-29 **R62**）：`verify-core` **4825 项 / 0 failures**（4804 → +21 = `Tests/WorkspaceRegistryTests` 16 例 + `Tests/WorkspaceRegistrySourceTests` 5 例）；五门 + `check-format-arguments` rc 全 0（`check-doc-q-series` 仍为存量红，未加重）；包 `dist/DoyahStudio-beta1.0.app` sha256 **`594b301e`**（构建时刻 2026-10-29T06:22:20+0800；二进制 102,165,920 字节；同标签 06:21:52 那份 `1fc685cd` 出在发布说明含片补本条之前 ⇒ 作废；06:04:40 那份 `dafed86a` 自本批起作废）。
+  台账本条：`FR-STD-WS-FS-010`（多工作区切换）实现 ⬜ → **🟡**（**界面已接线**：文件树标头 `WorkspaceSwitchMenu` + 首页 `WorkspaceKnownRow` 共用同一份 `workspace.knownWorkspaces` 与同一个 `switchTo`；差人工点一次 —— 再选一个文件夹后菜单应两条且新的打勾 / 切回旧的那条树与页签跟着换 / 目录删掉后那一条写「目录不在了」且点不动 / 重启停在最后用的那条）、判据 ⬜ → **✅**（16 + 5 例，反例五段各判红后逐字节还原）；分族读数（逐行实数）⇒ ✅ 127 / 🟡 80 / ⬜ 6 = 213。
+  **下一项**：低档真 ⬜ 还剩两条 —— `FR-STD-WS-NAV-006`（悬停文档 + 跳定义，词法级）/ `FR-STD-WS-EDIT-014`（撤销语义粒度）；高档与中档仍只剩「人工点验 / 陈旧标记归正」（`FR-STD-WS-NAV-004` 走陈旧标记归正、不加用例）。取之前先 `grep` 源码看机械判据差哪一半。
 - 最近读数（2026-10-29 **R61**）：`verify-core` **4804 项 / 0 failures**（4776 → +28 = `Tests/SnippetTemplateTests` 23 例 + `Tests/SnippetTemplateSourceTests` 5 例）；五门 + `check-format-arguments` rc 全 0；包 `dist/DoyahStudio-beta1.0.app` sha256 **`dafed86a`**（构建时刻 2026-10-29T06:04:40+0800；二进制 101,996,672 字节；同标签 05:45:45 那份 `50553049` 出在发布说明含片补本条之前 ⇒ 作废）。
   台账本条：`FR-STD-WS-NAV-005`（片段模板）实现 ⬜ → **🟡**（**界面已接线**：两个编辑器的 `insertTab` 次序 会话 → 灰字 → 片段 → 缩进；差人工点一次 —— 打 `select` 按 Tab 出骨架且光标在第一个占位符 / 再按 Tab 依次跳、填完回缩进 / 字符串与注释里不展开 / `selects` 不展开）、判据 ⬜ → **✅**（23 + 5 例，反例六段各判红后逐字节还原）；分族读数（逐行实数）⇒ ✅ 127 / 🟡 79 / ⬜ 7 = 213。
   **下一项**：高档与中档都只剩「人工点验 / 陈旧标记归正」⇒ ① `FR-STD-WS-NAV-004` 走陈旧标记归正（不加用例）；② 或低档三个真 ⬜：`FR-STD-WS-FS-010`（多工作区切换）/ `FR-STD-WS-NAV-006`（悬停 + 跳定义）/ `FR-STD-WS-EDIT-014`（撤销粒度）。

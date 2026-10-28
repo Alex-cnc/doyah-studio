@@ -415,10 +415,26 @@ struct WorkspaceHomeView: View {
     }
 
     private var recentWorkspaces: some View {
-        homeSection(title: L(.workspaceRecentWorkspaces), empty: L(.workspaceRecentWorkspacesEmpty), rows: tabs.history.workspaces) { entry in
-            // 最近工作区**只展示**：重新切换要走目录授权（书签），不能拿一条历史路径冒充授权。
-            homeRow(title: entry.displayName, detail: entry.path, symbol: "folder")
+        // 来源与动作都与文件树标头那一枚**同一份**（`FR-STD-WS-FS-010`）：
+        // 原来这里只展示、点不动 —— 首页看得见却用不上，而「切换」正是从这条清单出发的动作。
+        // 也不再用页签历史里的工作区路径：那是「打开过哪些」的流水，不是「还能切到哪些」的授权表
+        // （拿一条历史路径冒充授权，是沙箱下唯一会失败的那条路）。
+        VStack(alignment: .leading, spacing: Spacing.xs) {
+            Text(L(.workspaceRecentWorkspaces))
+                .font(Theme.font(.bodyStrong))
+                .foregroundStyle(Theme.text(.primary))
+
+            if workspace.knownWorkspaces.isEmpty {
+                Text(L(.workspaceRecentWorkspacesEmpty))
+                    .font(Theme.font(.caption))
+                    .foregroundStyle(Theme.text(.tertiary))
+            } else {
+                ForEach(workspace.knownWorkspaces.prefix(8)) { item in
+                    WorkspaceKnownRow(item: item)
+                }
+            }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var connections: some View {

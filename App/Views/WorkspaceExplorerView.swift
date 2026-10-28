@@ -76,9 +76,9 @@ struct WorkspaceExplorerView: View {
             iconButton("arrow.clockwise", help: L(.workspaceRefresh)) {
                 Task { await workspace.refresh() }
             }
-            iconButton("folder.badge.gearshape", help: L(.workspaceSwitch)) {
-                Task { await workspace.pickAndChoose() }
-            }
+            // 切换工作区：已知的那几个直接在这里（列表与动作都在 `WorkspaceSwitchMenu` 里，
+            // 与首页「最近打开的工作区」共用同一份 —— `FR-STD-WS-FS-010`）。
+            WorkspaceSwitchMenu()
         }
         .padding(.horizontal, Spacing.m)
         .padding(.top, Spacing.m)

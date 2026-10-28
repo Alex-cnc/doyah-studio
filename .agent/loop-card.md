@@ -32,6 +32,15 @@
   面板与手机的端到端人工点验一次。
 
 **★ 区已清空**：下一条活按台账取（`FR-STD-*` 里实现 `⬜`／`🟡`，优先=高 → 中；同档取判据可机械跑的）。
+**R62（2026-10-29）已把 `FR-STD-WS-FS-010`（多工作区切换）接通**：此前工作区**同时只有一个**（`choose()` 先 `store.removeAll()` 再存一条，
+换文件夹 = 把上一个从授权表删掉；首页「最近打开的工作区」只展示、点不动）。`Core/WorkspaceRegistry.swift` 一张表收四条口径：
+**同一目录只登记一条**（去重按解析出的路径，活动那条优先留下 —— 否则重选一次当前目录会把活动状态随去重丢掉）· **同一时刻只有一个活动**
+（`activeID` 一格，`Entry` 不许自带 `isActive`）· **不可用 ≠ 不可见**（目录没了 / 没权限的仍留在表里并写明理由，但 `decision(for:)` 拒绝切过去；
+`alreadyActive` 是**什么都不做**，重取一次授权 = 树整棵塌一次）· **容量 8、永不淘汰活动那条**。接线：`WorkspaceStore` 持表 + `switchTo`
+（**先确认真能取用再动活动**，失败就留在原工作区只说理由）+ 活动 id 落盘（老版本无记录 ⇒ 第一条当活动）；`choose()` 改成按表算出的 id 落盘。
+界面两处**同一份列表、同一个动作**：文件树标头 `WorkspaceSwitchMenu` + 首页 `WorkspaceKnownRow`（原来那三行读的是 `tabs.history.workspaces` ——
+流水不是授权表，已换掉）。实现 **🟡**（差人工点一次）/ 判据 **✅**（16 + 5 例；反例五段各判红后逐字节还原）；包 `594b301e（06:22:20）`，
+同标签 06:21:52 那份 `1fc685cd`（含片补本条之前）与 06:04:40 那份 `dafed86a` 作废。明细见 `.agent/evidence/2026-10-29-FS-010.md`。
 **R61（2026-10-29）已把 `FR-STD-WS-NAV-005`（片段模板 / snippets）接通**：骨架是数据、判定是纯函数 ——
 `Core/SnippetTemplate.swift` 三件纯事：**解析**（`$1` / `${1:默认}` / `$0`；`$$`·`\$` 转义；认不出的 `${…` 原样落字符）·
 **触发**（整词、大小写不敏感、后面还接词字符就拒、**触发词范围**落在字符串 / 注释里就拒 —— 判词不判光标：`'select'` 与 `-- select` 那两种现场光标都可能刚好在掩码外一格）·
@@ -51,7 +60,7 @@
 同标签 05:45:26 那份 `164a7fe0` 作废。明细见 `.agent/evidence/2026-10-29-META-006.md`。
 **R59（2026-10-29）已把 `FR-STD-WS-EDIT-015`（整批撤回）接通**：账仍是唯一前像来源（`agentEditJournal.before`）—— `snapshots(from:)` → `plan`（同一路径合并时**前像取最早、摘要取最新**；原来取最后一次写，一批里改两次就只撤掉一半，与「一次撤回把所有改动还原」相反）→ `inverse(of:reader:)` 出反向批次（冲突步不生成）⇒ 撤回本身可再撤回 → `AgentBatchRevertReceipt` 留痕（计数取自 `apply` 的读数）。接线：`AppState.revertAgentBatch` / `redoAgentBatchRevert`（路径过沙箱、越界抛错不写盘、撤完同步正开着的页签）+ 对话页输入框上方一行「这一轮 Agent 改了 N 个文件 · 整批撤回 / 已撤回 N 个（M 处没动）· 撤销这次撤回」+ 语言表 6 键中英齐。实现 **🟡**（差人工点一次：① 让 Agent 改两个文件点「整批撤回」，两个都应回到改前；② 撤前手工再改其中一个 ⇒ 那个读「没动」且内容一个字不动；③ 点「撤销这次撤回」应回到 Agent 写完那一版）/ 判据 **✅**（`Tests/AgentBatchRevertTests` 9 例 + `Tests/AgentBatchRevertSourceTests` 5 例，反例四段各判红后逐字节还原）；包 `a120a874（05:28:14）`，同标签 05:25:26 那份 `20adc61a` 作废。明细见 `.agent/evidence/2026-10-29-EDIT-015.md`。
 ⚠️ 同批把第五十七批留下的 8 条 `check-format-arguments` 真红修干净：四处回执文案从「模板串交给 Core 去格式化」改成**值格式闭包**（`{ L(.receiptSeconds, $0) }`）—— 模板与实参回到同一句，判 B 不再是假红、A/A′ 开始真的检查这四句；形状台账按实测对齐（+5 形状 / 3 处处数跟版 / 预算 170 → 188，理由写进 note）。
-下一条活（R61 核过：高档与中档都只剩「人工点验 / 陈旧标记归正」，没有一个能机械推进的 ⬜）⇒ ① `FR-STD-WS-NAV-004` 走**陈旧标记归正**（只翻判据列 + 补登记用例数与文件名，**不加用例**、总数不变）；② 或低档里还剩的三个真 ⬜：`FR-STD-WS-FS-010`（多工作区切换）/ `FR-STD-WS-NAV-006`（悬停文档 + 跳定义，词法级）/ `FR-STD-WS-EDIT-014`（撤销语义粒度）—— 取之前先 `grep` 源码看机械判据差哪一半；备选：`FR-STD-DB-DIAG-006`（台账那一行需求摘要还是「—」，**先要把口径问出来**，别自己编）· `FR-STD-WS-LIC-001`（授权入口，等人工验收）。
+下一条活（R62 核过：高档与中档都只剩「人工点验 / 陈旧标记归正」）⇒ ① `FR-STD-WS-NAV-004` 走**陈旧标记归正**（只翻判据列 + 补登记用例数与文件名，**不加用例**、总数不变）；② 低档里还剩两个真 ⬜：`FR-STD-WS-NAV-006`（悬停文档 + 跳定义，词法级）/ `FR-STD-WS-EDIT-014`（撤销语义粒度）—— 取之前先 `grep` 源码看机械判据差哪一半；备选：`FR-STD-DB-DIAG-006`（台账那一行需求摘要还是「—」，**先要把口径问出来**，别自己编）· `FR-STD-WS-LIC-001`（授权入口，等人工验收）。
 ⚠️ `FR-STD-WS-TOOL-003`（DAP 调试器）与 `FR-STD-WS-AI-001`（编辑区 AI 辅助）纵切过大，排后。
 **存量红六条（2026-10-29 在干净工作树 `git worktree add 874a3e48` 里逐条对照过：基线就红、本循环未加重）**：`check-core-portability`（`Core/AgentCodeRunner.swift:57` 硬编码 `/usr/local/`）· `check-core-localization`（`Binary files` 未白名单）· `check-button-icon-only`（11 处，含 R53 `HTMLPreviewView`）· `check-literal-language`（`Core/AgentNotifyChannel.swift:178`）· `check-doc-q-series`（`Docs/通用开发规范.md` 解析不到 §4/§6）· `check-doc-layout`（12 条）。**这六条使 `verify-all.sh` 不可能全绿 —— 别每轮重复当新账报，要清它们得单开一条活。**
 **`verify-all.sh` 全跑（2026-10-29 R58 实测 18 项 rc=1）另有五处红，也都不是功能片的账**：第 4 项 `check-pending-agenda --self-test` 缺本机文件 `Docs/智能体助手-开发规范.md`（.gitignore 内）· 第 9 项 `test-empty-action-buttons` 的负例夹具还找 `.disabled(trimmedName.isEmpty)`（R57 改走 `isEnabled:` 后没跟夹具，基线同样红）与 `check-panel-root-frames` 的 `scannedFiles` 104 vs 实测 105（R57 新增回执页视图后没跟版，基线同样红）· 第 11 项 `check-menu-language` 起不来应用 dump 菜单（**本会话无 GUI**）· 第 16 项 `check-tri-repo-parity`（共享脚本 sha 与三仓台账不符）· 第 18 项 `check-release-version` 缺 `Docs/发布方案.md` / `Docs/发布计划.md`（本机未同步）。⇒ **收尾只报「五门 + check-format-arguments」；`verify-all` 的红逐条对基线，不重复当新账。**
@@ -71,6 +80,7 @@
 **节点级失败重试那一格（R60：造一个连不上的库展开它，红字旁应有「重试」；点了旧红字先消失并重新取一次；在途时入口应消失）**。
 **整批撤回那一格（R59：改两个文件点「整批撤回」应都回改前 / 撤前手工改一个 ⇒ 那个读「没动」且不动 / 点「撤销这次撤回」回到 Agent 版）**。
 **片段模板那一格（R61：打 `select` 按 Tab 出骨架且光标在第一个占位符 / 再按 Tab 依次跳、填完最后一格回到缩进 / 字符串与注释里打 `select` 按 Tab 不该展开 / `selects` 这种带尾巴的词也不展开）**。
+**多工作区切换那一格（R62：再选一个文件夹后标头菜单应两条且新的打勾 / 在菜单里切回旧的，树与页签跟着换且旧的不再是活动 / 把某个工作区的目录删掉，那一条应写「目录不在了」且点不动 / 重启应用停在最后用的那一条）**。
 **接力机制如实记一笔**：本会话没有 `cronjob_manage` 工具 ⇒ 收尾用 `hermes cron run e98fad41f72d`（CLI 等价）点火；
 点不着就靠 5 分钟兜底定时器，别手工改 schedule。
 

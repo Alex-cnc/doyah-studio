@@ -52,6 +52,15 @@ public enum LKey: String, CaseIterable, Sendable {
     case activitySettings
     case workspaceChoose
     case workspaceSwitch
+    /// 已知工作区切换（`FR-STD-WS-FS-010`）：不可用的三档理由 + 活动标记。
+    case workspaceUnavailableMissing
+    case workspaceUnavailableDenied
+    case workspaceUnavailableUnresolved
+    /// 同一档理由在**一行里**用的短句（菜单 / 首页的列表行；长句留给提示条）。
+    case workspaceUnavailableShortMissing
+    case workspaceUnavailableShortDenied
+    case workspaceUnavailableShortUnresolved
+    case workspaceSwitchActive
     case workspaceEmptyTitle
     case workspaceEmptyHint
     case workspaceRefresh
@@ -3205,6 +3214,13 @@ public enum LocalizedStrings {
         .activitySettings: [.simplifiedChinese: "设置", .english: "Settings"],
         .workspaceChoose: [.simplifiedChinese: "选择文件夹…", .english: "Choose Folder…"],
         .workspaceSwitch: [.simplifiedChinese: "切换工作区…", .english: "Switch Workspace…"],
+        .workspaceUnavailableMissing: [.simplifiedChinese: "那个工作区的文件夹不在了（被删除或被移动），请重新选择一次。", .english: "That workspace folder is gone (deleted or moved). Choose it again."],
+        .workspaceUnavailableDenied: [.simplifiedChinese: "那个工作区的文件夹没有访问权限，请重新选择一次。", .english: "No permission to read that workspace folder. Choose it again."],
+        .workspaceUnavailableUnresolved: [.simplifiedChinese: "那个工作区的授权已失效，请重新选择一次。", .english: "The access grant for that workspace is no longer valid. Choose it again."],
+        .workspaceUnavailableShortMissing: [.simplifiedChinese: "目录不在了", .english: "folder is gone"],
+        .workspaceUnavailableShortDenied: [.simplifiedChinese: "没有访问权限", .english: "no permission"],
+        .workspaceUnavailableShortUnresolved: [.simplifiedChinese: "授权已失效", .english: "grant expired"],
+        .workspaceSwitchActive: [.simplifiedChinese: "当前", .english: "Current"],
         .workspaceEmptyTitle: [.simplifiedChinese: "还没有选择工作区", .english: "No workspace yet"],
         .workspaceEmptyHint: [.simplifiedChinese: "选一个本地目录作为工作区：终端会在那里启动，查询归档与智能体的文件读写也都以它为准。", .english: "Pick a local folder as your workspace: the terminal starts there, and query archiving plus the agent's file access follow it."],
         .workspaceRefresh: [.simplifiedChinese: "刷新", .english: "Refresh"],

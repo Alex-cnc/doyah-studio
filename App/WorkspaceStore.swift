@@ -36,6 +36,50 @@ final class WorkspaceStore: ObservableObject {
     /// 界面据此决定要不要出「撤销」那一枚。
     var canUndoFileOperation: Bool { undoLog.canUndo }
 
+    // MARK: 已知工作区（`FR-STD-WS-FS-010`）
+
+    /// 已知工作区表 + 当前活动的那一条。**这张表是切换的唯一来源**：界面按 `knownWorkspaces`
+    /// 画列表，点哪一条都走 `switchTo(_:)`，裁决由 `WorkspaceRegistry` 给（Core 侧逐条判过：
+    /// 同一目录只一条 / 只有一个活动 / 不可用的切不过去 / 容量不淘汰活动那条）。
+    @Published private(set) var registry = WorkspaceRegistry()
+
+    /// 界面用的那一份（把 `activeID` 折成每一行的 `isActive`）。
+    var knownWorkspaces: [KnownWorkspace] { registry.candidates }
+
+    /// 活动书签 id 的落点：书签表只记「有哪些」，不记「在用哪个」。
+    private static let activeDefaultsKey = "workspace.activeBookmarkID"
+
+    private var storedActiveID: UUID? {
+        UserDefaults.standard.string(forKey: Self.activeDefaultsKey).flatMap(UUID.init(uuidString:))
+    }
+
+    private func rememberActive(_ id: UUID?) {
+        if let id {
+            UserDefaults.standard.set(id.uuidString, forKey: Self.activeDefaultsKey)
+        } else {
+            UserDefaults.standard.removeObject(forKey: Self.activeDefaultsKey)
+        }
+    }
+
+    /// 书签 → 可用性（Core 那档机器口径；人话在语言表里）。
+    static func availability(of bookmark: DirectoryBookmark) -> WorkspaceAvailability {
+        WorkspaceAvailability(MacDirectoryAccess.status(for: bookmark))
+    }
+
+    /// 切不过去时界面上那一句。`nil` = 这一档不该出现在界面上（表与裁决不一致，不编句子）。
+    static func refusalText(_ refusal: WorkspaceSwitchDecision.Refusal) -> String? {
+        switch refusal {
+        case .unknownWorkspace, .unavailable(.notAuthorized), .unavailable(.unresolved):
+            return L(.workspaceUnavailableUnresolved)
+        case .unavailable(.missing):
+            return L(.workspaceUnavailableMissing)
+        case .unavailable(.denied):
+            return L(.workspaceUnavailableDenied)
+        case .unavailable(.available):
+            return nil
+        }
+    }
+
     /// 工作区变化时通知外部（终端启动目录要跟着走）。
     var onWorkspaceChanged: ((String?) -> Void)?
 
@@ -76,37 +120,108 @@ final class WorkspaceStore: ObservableObject {
 
     // MARK: 生命周期
 
-    /// 启动时调用：读回书签 → 判定可用性 → 取用授权 → 读根目录。
+    /// 启动时调用：读回书签 → 重建已知工作区表 → 判定可用性 → 取用授权 → 读根目录。
     func load() async {
         isBusy = true
         defer { isBusy = false }
         do {
             let bookmarks = try await store.all()
-            guard let first = bookmarks.first else {
+            // 活动那条：**落盘的 id 优先**；老版本只存过一条书签、从没记过活动 id
+            // ⇒ 把第一条当活动（与升级前的行为一致，不让人一升级就「没打开工作区」）。
+            registry = WorkspaceRegistry.reconciled(
+                bookmarks: bookmarks,
+                activeID: storedActiveID ?? bookmarks.first?.id,
+                availability: Self.availability(of:)
+            )
+            guard let activeID = registry.activeID,
+                  let activeBookmark = bookmarks.first(where: { $0.id == activeID })
+            else {
                 apply(status: .notAuthorized, bookmark: nil)
                 return
             }
-            bookmark = first
-            adopt(first)
+            bookmark = activeBookmark
+            adopt(activeBookmark)
+            rememberActive(activeID)
         } catch {
             loadError = error.localizedDescription
             apply(status: nil, bookmark: nil)
         }
     }
 
-    /// 用户刚在面板里选好一个目录。
+    /// 用户刚在面板里选好一个目录（**追加**到已知工作区表，并切过去）。
+    ///
+    /// 不再「先清空再存」：`FR-STD-WS-FS-010` 要求「可在多个已知工作区之间切换」，
+    /// 清空等于把上一轮的选择删掉。落盘用的是表算出来的 id —— 同一目录已登记过时
+    /// 复用的是**旧 id**，否则磁盘上会同时留着两条指向同一目录的书签。
     func choose(_ url: URL) async {
         isBusy = true
         defer { isBusy = false }
         do {
             let created = try MacDirectoryAccess.makeBookmark(for: url)
-            // 工作区只保留一个：先清空再存，免得「已授权目录」列表越滚越长。
-            try await store.removeAll()
-            let saved = try await store.save(created)
+            let resolved = registry.add(
+                WorkspaceRegistry.Entry(bookmark: created, availability: .available)
+            )
+            let saved = try await store.save(
+                DirectoryBookmark(
+                    id: resolved,
+                    displayName: created.displayName,
+                    bookmarkData: created.bookmarkData,
+                    createdAt: created.createdAt,
+                    lastKnownPath: created.lastKnownPath
+                )
+            )
+            rememberActive(saved.id)
             bookmark = saved
             adopt(saved)
         } catch {
             loadError = ErrorPresenter.message(for: error)
+        }
+    }
+
+    /// 切到另一个**已知**工作区（`FR-STD-WS-FS-010`）。
+    ///
+    /// 三条纪律：
+    ///   ① 裁决只认 `WorkspaceRegistry`（Core 判过），这里不再自己判一遍；
+    ///   ② **先确认真能取用、再动活动** —— 切不过去时用户留在原来的工作区里，
+    ///      界面只说一句为什么（`noticeText`），不把人扔进一个画不出内容的空工作区；
+    ///   ③ 切完把活动 id 落盘（下次启动就停在这一条）。
+    func switchTo(_ id: UUID) async {
+        switch registry.decision(for: id) {
+        case .alreadyActive:
+            return
+        case .refuse(let refusal):
+            noticeText = Self.refusalText(refusal)
+        case .switchTo:
+            do {
+                let bookmarks = try await store.all()
+                guard let target = bookmarks.first(where: { $0.id == id }) else {
+                    // 表里有、盘上没有（书签文件被外部改了）⇒ 重算一次表，并且如实说一句。
+                    registry = WorkspaceRegistry.reconciled(
+                        bookmarks: bookmarks,
+                        activeID: registry.activeID,
+                        availability: Self.availability(of:)
+                    )
+                    noticeText = Self.refusalText(.unknownWorkspace)
+                    return
+                }
+                let resolved = MacDirectoryAccess.status(for: target)
+                guard case .granted = resolved else {
+                    // 上次重建之后目录没了 / 权限变了：刷新表（让那一行如实显示不可用）并拒绝切换。
+                    registry = WorkspaceRegistry.reconciled(
+                        bookmarks: bookmarks,
+                        activeID: registry.activeID,
+                        availability: Self.availability(of:)
+                    )
+                    noticeText = Self.refusalText(.unavailable(WorkspaceAvailability(resolved)))
+                    return
+                }
+                adopt(target)
+                bookmark = target
+                registry.activate(id)
+                rememberActive(id)
+            } catch {
+                loadError = ErrorPresenter.message(for: error)
+            }
         }
     }
 
@@ -133,6 +248,10 @@ final class WorkspaceStore: ObservableObject {
         noticeText = nil
         renamingPath = nil
         undoLog.clear()
+        // 表也一起清空：`clear()` 已经把书签文件删了（`store.removeAll()`），
+        // 表里那些条目此刻在盘上都不存在 —— 留着会让界面列出点不动的行。
+        registry = WorkspaceRegistry()
+        rememberActive(nil)
         try? await store.removeAll()
         apply(status: .notAuthorized, bookmark: nil)
     }
