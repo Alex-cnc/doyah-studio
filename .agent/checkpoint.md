@@ -1,39 +1,35 @@
 # 检查点
 
-updated: 2026-10-24T22:20
+updated: 2026-10-28T20:15
 
 ## 现状
 
-- 计划已落 `.agent/plan.yaml`：13 项任务，4 个里程碑（M1 待写用例 5 项 / M2 未实现位点 5 项 / M3 六态 / M4 收口 3 项）。
-- 基线读数：核心用例 **3632**（`.build/core-test-count.txt`）；`verify-all.sh` 与 `build-app.sh` 本次尚未跑，读数待 T4.2 / T4.3 回填。
-- 详设来源：`Docs/Doyah产品详细设计说明书-macOS.md` v1.1 —— §9.2 列 5 条待写用例、§6 列 21 码里 5 族「未实现」、§10.1 同五族、§5.3 六态表。
-
-## 进度（21 项任务）
-
-- **done 12**：`T0.1` `T1.1` `T1.2` `T1.3` `T1.4` `T2.1` `T2.2` `T2.3` `T2.4` `T2.5` `T3.1` `T5.2` `T4.1`
-- **blocked 6**：`T5.1`（行编辑功能本端不存在）· `T5.3`（导入功能本端不存在）· `T5.4`（缺 backend pid 通道）· `T5.5`（无「需能力位」入口）· `T3.2`（六态需人工点验）· `T4.2`（全仓门禁 8 红：2 项本片已修，6 项存量）· `T4.3`（出包等 T4.2 转绿）
-- **todo 1**：`T6.1` 存量红清零（文档锚点 + 工程过期 + 三仓指纹，约 6h）
+- 循环卡 = `.agent/loop-card.md`（**2026-10-28 20:08 主人改成接力制**：一轮收尾即 `cronjob_manage action=run job_id=e98fad41f72d` 点火下一轮；定时器 5 分钟一跳只做兜底；不再按剩余条数自调阶梯）。
+- 队列唯一来源 = `Docs/Doyah产品开发计划任务清单-macOS端.md`（`FR-STD-*` 里实现为 `⬜`／`🟡`）；`.agent/plan.yaml` 已停用。
+- 最近读数（2026-10-28 R1）：`verify-core` **4295 例 / 12 skipped / 0 failures**；五门 rc 全 0；包 `dist/DoyahStudio-beta1.0.app` sha256 前缀 `c37fdab902bccd20` · 97,156 KB。
 
 ## 下一项
 
-台账 `FR-STD-*` 里优先=高的未开发项，按此顺序：`WS-AI-002`（许愿式编程，产品入口待开）→ `WS-EDIT-015` 剩的一半（撤回按钮接线）→ `WS-FS-003`（Explorer 文件操作）→ `WS-FS-004/005/006` → `WS-WEB-004` / `DB-TASK-002`。
-**本轮卡 = `.agent/loop-card.md`**（含取活顺序、口径、出口、自调速、汇报格式）；`plan.yaml` 已停用。
+按台账取「优先=高 → 中；同档取判据可机械跑的」：
+
+1. `FR-STD-WS-EDIT-015` 剩的一半 —— 撤回按钮接上 `AgentWriteBatchStore` / `AgentWriteBatchRevert`（Core 13 例已在盘，差界面）；
+2. `FR-STD-WS-AI-002` 剩的一半 —— 工作区「许愿」入口 + 差异视图（Core 19 例已在盘，差界面）；
+3. `FR-STD-WS-FS-003`（Explorer 文件操作）→ `WS-FS-004/005/006` → `WS-WEB-004` / `DB-TASK-002`。
+4. 存量红 3 处（非任何一片引入，见「未验证项」），做「清红」片时一并处理。
 
 ## 已完成的片
 
-- `T0.1`（2026-10-24 20:20）—— 棘轮 B 存量红清零：`No commits yet on` 登记为 `parseToken`（git 输出前缀，非展示文案）。读数：两档均 ✅（73 文件 / 747 行；白名单外 0、陈旧 0）。
-- `T1.1`（2026-10-24 20:05）—— `AppError.emptySQL` + `ExecutionScope.preflightError` + `ErrorPresenter` 接线 + 用例 `testEmptySQLMapsToEmptySQLError`。
-  读数：`swift test --filter ExecutionScopeTests` = **11 tests / 0 failures**；反例注入后 = **4 failures**（判据成对成立）；`swift build --target DoyahStudioApp` = Build complete (15.57s)。
+- **R1（2026-10-28 20:15）· 在途件收尾** —— 前一会话 10-27 06:58 ~ 10-28 18:59 落盘未提交的 42 改 + 26 新文件，复核（verify-core 4276/0 failures + 五门全绿）后补提交 `893cc774`，未改其一字。
+- **R1（2026-10-28 20:13）· `FR-STD-WS-AI-002` Core 面** —— `Core/WishStaging.swift`（暂存面：只动内存 / 清单 + 差异 / 验证没跑通标「没跑通」且默认不许验收 / 验收才写盘一次）+ `Tests/WishStagingTests.swift` **19 例**；同批给 `AgentWriteBatchRevert` 补 `record(_ snapshot:)` 与「自己删的能还原」分支。读数：`verify-core` 4295 / 0 failures，反例两次各判红（4 红 / 1 红）。台账 `FR-STD-WS-AI-002` 判据 `✅`、实现 `🟡`（差界面入口）。
+- `T0.1`~`T5.2`（2026-10-24/25，plan.yaml 时代，历史见 `.agent/evidence/`）。
 
 ## 证据
 
-（尚无；落 `.agent/evidence/<日期>-<task-id>.md`）
+- `.agent/evidence/2026-10-28-WS-AI-002.md`（命令原文 + 读数 + 反例三段）
+- 更早的片见 `.agent/evidence/2026-10-2*.md`。
 
 ## 未验证项
 
-- 核心总数仍以 3632 为基线（新增 1 条用例后应为 3633，待 T4.1 `verify-core.sh` 复读）。
-- ~~存量红：本地化棘轮 B~~ ⇒ 已由 `T0.1` 清零。
-- 本地化棘轮 A 已显式上调 730 → 747（+1 本片文案，+16 存量漂移），理由已写进台账 `comment`。
-- `verify-all.sh` 当前 rc 未知（59 个 check 脚本，耗时未测）。
-- `build-app.sh` 是否能出包未知（依赖 Xcode 工程与签名）。
-- 六态（§5.3）中「权限不足 / 提交中 / 部分失败」三态是否有现成落点未核对。
+- `FR-STD-WS-AI-002` 的界面面（许愿输入框 + 差异视图 + 验收按钮）未做 ⇒ 实现 `🟡`，等下一片。
+- 存量红 3 处（本轮未动）：`check-core-localization`（`Core/AgentSQLStatementJudge.swift:90` 的 `you are now` 未登记）· `check-literal-language`（`Core/AgentNotifyChannel.swift` 2 处写死语言）· `check-core-portability`（`Core/AgentCodeRunner.swift:57` 硬编码 `/usr/local/…`）。
+- `verify-all.sh`（十八项）本轮未跑：上述三处存量红会挡它，需先清红再整跑。

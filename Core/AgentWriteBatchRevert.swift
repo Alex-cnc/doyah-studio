@@ -77,7 +77,11 @@ public enum AgentWriteBatchRevert {
                 }
                 return .delete(path: snapshot.path)
             case (.some(let previous), nil):
-                // 原来有、现在没了：只可能是别处删的 —— 不许凭空造回来。
+                // 原来有、现在没了：两种可能 —— ① **这次任务自己删的**（快照里「写完之后」是空正文，
+                // 许愿式编程的删除走这条路）⇒ 撤回 = 把前像还原；② 别处删的 ⇒ 不许凭空造回来。
+                if snapshot.writtenDigest == AgentWriteSnapshot.digest("") {
+                    return .restore(path: snapshot.path, text: previous)
+                }
                 return .conflict(path: snapshot.path, reason: .reappeared)
             case (.some(let previous), .some(let text)):
                 guard AgentWriteSnapshot.digest(text) == snapshot.writtenDigest else {
@@ -128,6 +132,13 @@ public final class AgentWriteBatchStore: @unchecked Sendable {
         snapshots.append(AgentWriteSnapshot(path: path,
                                             previousText: previousText,
                                             writtenDigest: AgentWriteSnapshot.digest(writtenText)))
+    }
+
+    /// 直接记一条现成的快照（`FR-STD-WS-AI-002` 验收时用：那时前像与「写完之后」的摘要
+    /// 都已在暂存面里，再让调用方反推正文只会多一处拼错的机会）。
+    public func record(_ snapshot: AgentWriteSnapshot) {
+        lock.lock(); defer { lock.unlock() }
+        snapshots.append(snapshot)
     }
 
     public var all: [AgentWriteSnapshot] {

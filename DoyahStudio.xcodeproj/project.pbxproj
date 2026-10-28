@@ -258,6 +258,7 @@
 		477FF7D75A89E224DF70EE62 /* LockMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = C096A676E469ADF5297AE00A /* LockMonitor.swift */; };
 		47D6C6B3BB52E8165F34A914 /* ConnectionURLTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7EAF548D2461EF6ACE72C0A /* ConnectionURLTests.swift */; };
 		47F5735FA40DF49BE5A045FE /* DesignThemeManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 081F22A13D34FFDFE0A77383 /* DesignThemeManager.swift */; };
+		48097A84C492B8A550BEC979 /* WishStaging.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A7806FBD8C38C578AE2F3CF /* WishStaging.swift */; };
 		48239DAB5811CEDADE29E7FD /* WorkspacePathIndex.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB907F3BA5FAC3561158EF0B /* WorkspacePathIndex.swift */; };
 		4826956BCF6850AB9D586F91 /* ResultView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 242D1F80CF80EC31AE7E1F47 /* ResultView.swift */; };
 		4826ED87B59CC2AF2601DE91 /* TerminalPaletteTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB831B773F36BDAE39A9CCD1 /* TerminalPaletteTests.swift */; };
@@ -315,6 +316,7 @@
 		55C0AC2F7A29C1DC68E65B35 /* DoyahPlatform.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 104D2C16A7A77A93CCF270D9 /* DoyahPlatform.framework */; };
 		55CC7A81EFD4AAEC725E3157 /* InflateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7655EC1824BE636291008C9 /* InflateTests.swift */; };
 		55EBE957E86DBF4DFB70FF6E /* TextLanguage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45B99C971DED47BB56A504E0 /* TextLanguage.swift */; };
+		5618513E2E99563A6F955395 /* WishStagingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29C8FA9FDEAB70D61A97B32E /* WishStagingTests.swift */; };
 		5669F9E5BCC4D04B8CCC20DF /* ConnectionListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC7FA41D01ABFD587BF546BA /* ConnectionListView.swift */; };
 		5696AC4507878061263F4C10 /* AgentCommandExecutorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7DD6EA1AAA321DBBE922B836 /* AgentCommandExecutorTests.swift */; };
 		56B2E78E2189164D7499D820 /* AgentChatTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 819B44625FDC3DF21782E4F7 /* AgentChatTests.swift */; };
@@ -1003,6 +1005,7 @@
 		0942C617F0A43CF5CFAD0379 /* WallpaperBackground.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WallpaperBackground.swift; sourceTree = "<group>"; };
 		0A46FD5DA022044ADDE1528E /* WorkspaceSessionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceSessionTests.swift; sourceTree = "<group>"; };
 		0A4BA9716159FE2972ACBC24 /* DataTaskPresentation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DataTaskPresentation.swift; sourceTree = "<group>"; };
+		0A7806FBD8C38C578AE2F3CF /* WishStaging.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WishStaging.swift; sourceTree = "<group>"; };
 		0A997C62697FF3134A0BFAC4 /* EgressLogSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EgressLogSheet.swift; sourceTree = "<group>"; };
 		0A9AC5E117EDADD5F26CFD51 /* LocalSecretStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalSecretStore.swift; sourceTree = "<group>"; };
 		0ABB99DBB9D53D5DA0E80809 /* IntegrationAgentPlanRowsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IntegrationAgentPlanRowsTests.swift; sourceTree = "<group>"; };
@@ -1112,6 +1115,7 @@
 		281C9A9E01EDB96DBCF9756F /* TitleBarSearchField.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TitleBarSearchField.swift; sourceTree = "<group>"; };
 		291B34BCBD3A29B08FB7A73A /* MaintenancePlan.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MaintenancePlan.swift; sourceTree = "<group>"; };
 		29299272E44118F792B07BDC /* AgentIMCredentials.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentIMCredentials.swift; sourceTree = "<group>"; };
+		29C8FA9FDEAB70D61A97B32E /* WishStagingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WishStagingTests.swift; sourceTree = "<group>"; };
 		29E26E5EB1EDA11309428D17 /* AgentCheckpoint.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentCheckpoint.swift; sourceTree = "<group>"; };
 		2AF9769FFDC3FFF1F630BABA /* AgentPromptQueue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentPromptQueue.swift; sourceTree = "<group>"; };
 		2B1ADC9BE7BBC812214A1F42 /* AgentWriteBatchStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentWriteBatchStoreTests.swift; sourceTree = "<group>"; };
@@ -2239,6 +2243,7 @@
 				D6BECEF718279DBD2CE05F2B /* TreeActionProvenanceConventionTests.swift */,
 				091D80EBF04009D0929EA712 /* UnsavedCloseTests.swift */,
 				FB9236D6B49C8F80F40158F9 /* WallpaperSkinTests.swift */,
+				29C8FA9FDEAB70D61A97B32E /* WishStagingTests.swift */,
 				A8DB682F971E4939D5FE25DE /* WorkspaceChangeScopeTests.swift */,
 				77253EB84CA2FF56A9180D88 /* WorkspaceClosePolicyTests.swift */,
 				78D054047B42AF0EA1AAD3D8 /* WorkspaceFileOperationsTests.swift */,
@@ -2586,6 +2591,7 @@
 				10420ADC72B871F8350340C7 /* TransactionSession.swift */,
 				DF0061BC767D5FF2888665B9 /* ViewState.swift */,
 				979638F03C4D77D900D0E483 /* WallpaperSkin.swift */,
+				0A7806FBD8C38C578AE2F3CF /* WishStaging.swift */,
 				59F630FB62211B2C13FABDE6 /* WorkspaceChangeScope.swift */,
 				FA2A34980A8902578DCF9EED /* WorkspaceClose.swift */,
 				BD907E052C0790DC02A09520 /* WorkspaceFileOperations.swift */,
@@ -3607,6 +3613,7 @@
 				4DDA0D5D24ABA438A1731782 /* TransactionSession.swift in Sources */,
 				A2C5AC6CAB6D5F43EF695DA5 /* ViewState.swift in Sources */,
 				D32C6F712BB4D9A10DF0EF96 /* WallpaperSkin.swift in Sources */,
+				48097A84C492B8A550BEC979 /* WishStaging.swift in Sources */,
 				182711E9173EB907F478E008 /* WorkspaceChangeScope.swift in Sources */,
 				466DCA7E55E1AFDF477D4D82 /* WorkspaceClose.swift in Sources */,
 				BDB1A4B25840ADA54F47A579 /* WorkspaceFileOperations.swift in Sources */,
@@ -3944,6 +3951,7 @@
 				DB9F944F9219BC2A34B0664A /* TreeActionProvenanceConventionTests.swift in Sources */,
 				0C1D89E446A5EA870F621F42 /* UnsavedCloseTests.swift in Sources */,
 				22D91D4E10BD45F9C85F8ED3 /* WallpaperSkinTests.swift in Sources */,
+				5618513E2E99563A6F955395 /* WishStagingTests.swift in Sources */,
 				1AF62C31F11C351EAD7C9259 /* WorkspaceChangeScopeTests.swift in Sources */,
 				16BB86976060FA3499D3C233 /* WorkspaceClosePolicyTests.swift in Sources */,
 				2A597DA1C155A580EA6B6E80 /* WorkspaceFileOperationsTests.swift in Sources */,
