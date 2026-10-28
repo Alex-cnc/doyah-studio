@@ -41,6 +41,7 @@ struct AgentChatView: View {
             taskList
             currentActionRow
             batchRevertRow
+            wishDeliveryRow
             agentAlerts
             hairline
             composer
@@ -906,6 +907,160 @@ struct AgentChatView: View {
     private func runBatchRedo() async {
         guard let root = agentBatchRoot else { return }
         _ = await appState.redoAgentBatchRevert(workspacePath: root)
+    }
+
+    // MARK: - 交付面（`FR-STD-WS-AI-002` ①③）
+
+    /// 差异清单是否展开（默认收起：这一行只回答「交付了什么、跑没跑通」）。
+    @State private var wishDiffExpanded = false
+
+    /// 这一批交付了什么：改了哪些文件（新建 / 修改 / 增删行数）+ **跑没跑通** + 逐行差异。
+    ///
+    /// 读数全部来自 `AppState.wishDelivery`（Core 的 `WishDelivery` 从账反推，
+    /// 差异切分与审批单同一份）—— 视图不自己数文件、不自己算行数，也不自己判「算不算成功」。
+    /// 只在**有事**时出现（有改动 / 跑过命令），没有的轮次不占位置。
+    @ViewBuilder
+    private var wishDeliveryRow: some View {
+        if let proposal = appState.wishDelivery {
+            VStack(alignment: .leading, spacing: Spacing.xs) {
+                HStack(spacing: Spacing.s) {
+                    if proposal.changes.isEmpty {
+                        Text(L(.wishDeliveryNoChanges))
+                            .font(Self.transcriptFont)
+                            .foregroundStyle(Theme.text(.secondary))
+                    } else {
+                        Text(L(.wishDeliveryTitle, proposal.changes.count))
+                            .font(Self.transcriptFont)
+                            .foregroundStyle(Theme.text(.secondary))
+                        if proposal.createdCount > 0 {
+                            Text(L(.wishDeliveryCreated, proposal.createdCount))
+                                .font(Self.transcriptFont)
+                                .foregroundStyle(Theme.text(.tertiary))
+                        }
+                        if proposal.modifiedCount > 0 {
+                            Text(L(.wishDeliveryModified, proposal.modifiedCount))
+                                .font(Self.transcriptFont)
+                                .foregroundStyle(Theme.text(.tertiary))
+                        }
+                        Text(L(.wishDeliveryLines, proposal.addedTotal, proposal.removedTotal))
+                            .font(Self.transcriptFont)
+                            .foregroundStyle(Theme.text(.tertiary))
+                    }
+                    Spacer(minLength: 0)
+                }
+                HStack(spacing: Spacing.s) {
+                    if let verdict = verdictText(for: proposal) {
+                        Text(verdict)
+                            .font(Self.transcriptFont)
+                            .foregroundStyle(verdictTint(for: proposal))
+                    }
+                    if !proposal.changes.isEmpty {
+                        DialogActionButton(systemName: wishDiffExpanded ? "chevron.up" : "list.bullet.rectangle",
+                                           title: L(.wishDeliveryShowDiff)) {
+                            wishDiffExpanded.toggle()
+                        }
+                    }
+                    Spacer(minLength: 0)
+                }
+                if wishDiffExpanded {
+                    deliveryDiff(proposal)
+                }
+            }
+            .padding(.horizontal, Spacing.m)
+        }
+    }
+
+    /// 判定那一行的一句话。**没改动时不说话**（上一行已经说了「没有改动任何文件」）。
+    private func verdictText(for proposal: WishProposal) -> String? {
+        switch WishDelivery.verdict(of: proposal) {
+        case .noChanges:
+            return nil
+        case .unverified:
+            return L(.wishDeliveryUnverified)
+        case .passed:
+            return L(.wishDeliveryPassed)
+        case .failed:
+            return L(.wishDeliveryFailed, proposal.validation?.exitCode ?? 0)
+        }
+    }
+
+    /// 判定那一行的颜色：没跑通必是告警色（不许和「通过」一个颜色），未验证走次要色。
+    private func verdictTint(for proposal: WishProposal) -> Color {
+        switch WishDelivery.verdict(of: proposal) {
+        case .noChanges, .unverified:
+            return Theme.text(.secondary)
+        case .passed:
+            return Theme.status(.success)
+        case .failed:
+            return Theme.status(.danger)
+        }
+    }
+
+    /// 逐文件差异（每行带 `+` / `-` / 空格前缀，与审批单同一套写法）。
+    ///
+    /// 单文件最多显示 `deliveryDiffLineLimit` 行：一屏塞不下的差异会把人劝退，
+    /// 而「还有几行没显示」这句话必须留着 —— 静默截断会让人以为差异就这么点。
+    private func deliveryDiff(_ proposal: WishProposal) -> some View {
+        VStack(alignment: .leading, spacing: Spacing.xs) {
+            ForEach(proposal.changes, id: \.path) { change in
+                HStack(spacing: Spacing.s) {
+                    Text(change.path)
+                        .font(Self.transcriptFont)
+                        .foregroundStyle(Theme.text(.secondary))
+                    Text(L(.wishDeliveryLines, change.addedLines, change.removedLines))
+                        .font(Self.transcriptFont)
+                        .foregroundStyle(Theme.text(.tertiary))
+                    Spacer(minLength: 0)
+                }
+                let shown = change.diff.prefix(Self.deliveryDiffLineLimit)
+                ForEach(Array(shown.enumerated()), id: \.offset) { _, line in
+                    Text(Self.diffPrefix(line.kind) + line.text)
+                        .font(Self.transcriptFont)
+                        .foregroundStyle(diffTint(line.kind))
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
+                if change.diff.count > Self.deliveryDiffLineLimit {
+                    Text(L(.wishDeliveryDiffTruncated, Int(change.diff.count - Self.deliveryDiffLineLimit)))
+                        .font(Self.transcriptFont)
+                        .foregroundStyle(Theme.text(.tertiary))
+                }
+            }
+            // 没跑通时把命令与输出尾一并亮出来：只说「没跑通」而不给读数，人还得自己再跑一遍。
+            if let validation = proposal.validation, !validation.passed {
+                Text(validation.command)
+                    .font(Self.transcriptFont)
+                    .foregroundStyle(Theme.text(.secondary))
+                    .lineLimit(2)
+                ForEach(Array(validation.outputTail.split(separator: "\n", omittingEmptySubsequences: false)
+                    .prefix(Self.deliveryDiffLineLimit).enumerated()), id: \.offset) { _, line in
+                    Text(String(line))
+                        .font(Self.transcriptFont)
+                        .foregroundStyle(Theme.status(.danger))
+                        .lineLimit(1)
+                }
+            }
+        }
+        .padding(.top, Spacing.xs)
+    }
+
+    /// 单个文件在交付面里最多显示多少行差异。
+    private static let deliveryDiffLineLimit = 40
+
+    private static func diffPrefix(_ kind: AgentTextDiff.Line.Kind) -> String {
+        switch kind {
+        case .context: return " "
+        case .added: return "+"
+        case .removed: return "-"
+        }
+    }
+
+    private func diffTint(_ kind: AgentTextDiff.Line.Kind) -> Color {
+        switch kind {
+        case .context: return Theme.text(.tertiary)
+        case .added: return Theme.status(.success)
+        case .removed: return Theme.status(.danger)
+        }
     }
 
     // MARK: - 主动通知 / 求助卡 / 门控重发（`FR-AGT-UX-CONV-008` · `-009` · `FR-AGT-GUARD-COST-001`）

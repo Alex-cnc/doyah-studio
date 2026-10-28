@@ -102,7 +102,10 @@ public enum AgentWorkspaceContext {
     }
 
     /// 取最后 `keeping` 行；末尾的空行去掉（终端底部常是空白行）。
-    static func tailLines(of text: String, keeping: Int) -> String {
+    ///
+    /// `public`：交付面（`FR-STD-WS-AI-002` ③ 命令输出尾）也用这一份 —— 再写一份
+    /// 「取尾部」的实现就会有两套截断口径。
+    public static func tailLines(of text: String, keeping: Int) -> String {
         guard keeping > 0 else { return "" }
         var lines = text.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
         while let last = lines.last, last.trimmingCharacters(in: .whitespaces).isEmpty {

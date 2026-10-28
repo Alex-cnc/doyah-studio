@@ -1093,6 +1093,17 @@ public enum LKey: String, CaseIterable, Sendable {
     case agentBatchRevertUnmoved
     case agentBatchRevertRedo
     case agentBatchRevertFailed
+    // 交付面（`FR-STD-WS-AI-002` ①③）：这一批改了哪些文件 / 逐行差异 / 跑没跑通。
+    case wishDeliveryTitle
+    case wishDeliveryCreated
+    case wishDeliveryModified
+    case wishDeliveryLines
+    case wishDeliveryUnverified
+    case wishDeliveryPassed
+    case wishDeliveryFailed
+    case wishDeliveryNoChanges
+    case wishDeliveryShowDiff
+    case wishDeliveryDiffTruncated
     case agentChatEndpointNotConfigured
     case agentChatEndpointUnreachable
     case agentChatDone
@@ -4243,6 +4254,16 @@ public enum LocalizedStrings {
         .agentBatchRevertUnmoved: [.simplifiedChinese: "%d 处没动（之后被人改过）", .english: "%d left alone (changed afterwards)"],
         .agentBatchRevertRedo: [.simplifiedChinese: "撤销这次撤回", .english: "Undo this revert"],
         .agentBatchRevertFailed: [.simplifiedChinese: "整批撤回没成 —— 写盘出错，可以再点一次。", .english: "Batch revert failed — the write errored. You can try again."],
+        .wishDeliveryTitle: [.simplifiedChinese: "这一批交付 %d 个文件", .english: "%d file(s) delivered in this batch"],
+        .wishDeliveryCreated: [.simplifiedChinese: "新建 %d", .english: "%d new"],
+        .wishDeliveryModified: [.simplifiedChinese: "修改 %d", .english: "%d modified"],
+        .wishDeliveryLines: [.simplifiedChinese: "＋%d / −%d 行", .english: "+%d / −%d lines"],
+        .wishDeliveryUnverified: [.simplifiedChinese: "验证：未验证（这一批没跑过命令）", .english: "Verification: not run (no command in this batch)"],
+        .wishDeliveryPassed: [.simplifiedChinese: "验证：最后一条命令通过", .english: "Verification: last command passed"],
+        .wishDeliveryFailed: [.simplifiedChinese: "没跑通（退出码 %d）", .english: "Did not pass (exit %d)"],
+        .wishDeliveryNoChanges: [.simplifiedChinese: "这一批没有改动任何文件", .english: "No files changed in this batch"],
+        .wishDeliveryShowDiff: [.simplifiedChinese: "看改动清单与差异", .english: "Show changed files and diffs"],
+        .wishDeliveryDiffTruncated: [.simplifiedChinese: "还有 %d 行没显示", .english: "%d more line(s) not shown"],
         .agentChatEndpointNotConfigured: [.simplifiedChinese: "还没配模型端点 —— 先在「智能体设置」里配好再聊。", .english: "No model endpoint configured yet — set it up in Agent Settings first."],
         .agentChatEndpointUnreachable: [.simplifiedChinese: "端点连不上 —— 检查地址 / 网络，或先在设置里试一次连接。", .english: "Endpoint unreachable — check the address / network, or test the connection in settings."],
         .agentChatDone: [.simplifiedChinese: "这一轮说完了。", .english: "That's a wrap for this round."],

@@ -3903,6 +3903,21 @@ final class AppState: ObservableObject {
     /// 这一批还能撤几个文件（按路径去重：同一文件被改两次只算一个）。
     var agentBatchRevertPending: Int { Set(agentEditJournal.undoable.map(\.path)).count }
 
+    /// 许愿式编程（`FR-STD-WS-AI-002`）的**交付面**：这一批改了哪些文件 + 逐行差异 + 跑没跑通。
+    ///
+    /// 清单不另存一份：账还是 `agentEditJournal` 那一本，这里只是把它投影成
+    /// `WishProposal`（`WishDelivery`，与暂存面同一份类型 —— 差异切分与审批单同源）。
+    /// 「这一批」的口径与整批撤回**同一个边界**：自上次整批撤回以来还能撤的那些改动。
+    /// `nil` = 这一批还没有任何改动（界面据此不占位置）。
+    @Published private(set) var wishDelivery: WishProposal?
+
+    /// 这一批的验证读数（最后一条**真跑起来**的命令的退出码 + 输出尾）。
+    ///
+    /// 为什么要记：验收要点 ③ 是「未通过验证的产出必须标明没跑通」。没有这份读数时
+    /// 交付面必须写「未验证」，**不许默认成功** —— 所以 `nil` 与「rc=0」是两件事，
+    /// 压成一个布尔就会对用户说错话。
+    private var wishDeliveryValidation: WishValidation?
+
     /// 兑现一次已批准的写（`FR-AI-23` ④：批准之后才应用）。
     ///
     /// `FR-AI-25` ⑤ 的两半都在这一段里：
@@ -4007,7 +4022,15 @@ final class AppState: ObservableObject {
                                               granted: [fingerprint],
                                               runner: AgentLocalCommandRunner())
         switch commandOutcome {
-        case .command:
+        case .command(let result):
+            // 交付面（`FR-STD-WS-AI-002` ③）：这一批**最后一条真跑起来的命令**的读数。
+            // 非零退出必须留下来 —— 交付面据此写「没跑通」，而不是默认「跑通了」。
+            // 输出尾只取末 12 行（界面折叠看，不参与判定）。
+            wishDeliveryValidation = WishValidation(command: arguments["command"] ?? "",
+                                                    exitCode: Int(result.exitCode),
+                                                    outputTail: AgentWorkspaceContext.tailLines(of: result.combined,
+                                                                                                keeping: 12))
+            syncAgentBatchRevertState()
             return .success
         case .refused(let code, _):
             return .failure(code.rawValue)
@@ -4113,6 +4136,25 @@ final class AppState: ObservableObject {
                                                  receipt: agentBatchRevert.receipt,
                                                  redoPending: agentBatchRedo?.all.count ?? 0,
                                                  lastFailure: lastFailure)
+        // 交付面（`FR-STD-WS-AI-002` ①）与撤账同一把边界：账变一次，清单跟着变一次。
+        syncWishDelivery()
+    }
+
+    /// 交付面跟着「账 + 验证读数」走（`FR-STD-WS-AI-002` ①③）。
+    ///
+    /// · 账空、也没有验证读数 ⇒ `nil`：这一批什么都没发生，界面上不留空壳清单；
+    /// · 账空但跑过命令 ⇒ 照样出清单，判定落 `.noChanges`（**没改就是没改**，不编工作量）；
+    /// · 清单本身由 `WishDelivery` 从账反推 —— 这里不另存前像、也不自己数行数。
+    private func syncWishDelivery() {
+        let edits = agentEditJournal.undoable
+        guard !edits.isEmpty || wishDeliveryValidation != nil else {
+            wishDelivery = nil
+            return
+        }
+        wishDelivery = WishDelivery.proposal(runID: "delivery-batch",
+                                             root: WorkspaceStore.shared.rootPath ?? "",
+                                             edits: edits,
+                                             validation: wishDeliveryValidation)
     }
 
     /// 一批快照 → 计划 → 落盘。**反向批次在落盘之前算**（落盘后盘上已是撤后的样子，前像就没了）。
