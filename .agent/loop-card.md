@@ -31,7 +31,7 @@
   面板与手机的端到端人工点验一次。
 
 **★ 区已清空**：下一条活按台账取（`FR-STD-*` 里实现 `⬜`／`🟡`，优先=高 → 中；同档取判据可机械跑的）。
-**R44（2026-10-28）已把任务定义可保存复用做完**（`Core/SQLTaskDefinition.swift` + 工具栏「任务」菜单 + `SQLTaskSheet`，判据 21 例）—— 台账 `FR-STD-DB-TASK-001` 实现 🟡 / 判据 ✅，只剩「界面点一次」这一件人工项。下一轮按 `.agent/checkpoint.md` 的「下一项 1」= 台账 `FR-STD-WS-NAV-012`（静态检查结果上屏，先核 `NAV-007` 的产物）。
+**R45（2026-10-28）已把静态检查结果上屏做完**（`Core/DiagnosticMarks.swift` 投影 + 画线与命中同源 + `SQLTextView` 即时悬浮说明 + 修好 `Tests/SQLLinterTests` 花括号错位，判据 `Tests/DiagnosticMarksTests` 9 例）—— 台账 `FR-STD-WS-NAV-012` 实现 🟡 / 判据 ✅，只剩「鼠标停到虚线上看一眼」这一件人工项。下一轮按 `.agent/checkpoint.md` 的「下一项 1」= 台账 `FR-STD-WS-VCS-001`（Git 只读与差异；先核 `App/GitStatusProbe.swift`（40 行，只给 Agent 用的 `facts`）已有的面再定缺口）。
 
 # 每轮卡 · Studio macOS 端自主开发（2026-10-28 起）
 

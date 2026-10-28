@@ -615,6 +615,136 @@ final class SQLTextView: NSTextView {
         gutter.draw(in: dirtyRect, of: self)
         // 行内灰字补全：正文画完之后叠一层（它不在文本存储里，`super.draw` 不会画它）
         ghostOverlay.draw(in: dirtyRect)
+        // 诊断的悬浮说明同理：不在文本存储里，只能在正文之后补一块（`FR-STD-WS-NAV-012` ②）
+        drawDiagnosticTip()
+    }
+
+    // MARK: 诊断悬浮（`FR-STD-WS-NAV-012` ②「悬浮给一句可读说明」）
+    //
+    // 下划线早就有（`apply(...)` 里画），可说明没有 —— 用户只看得到一条虚线，不知道是什么问题。
+    // 为什么不用系统 tooltip（`addToolTip` / `.help`）：它的首次延迟是**秒级**，本仓已经为此栽过一次
+    // （`HoverHint` 的文档里记着需求提出者的原话「等了好几秒还以为没反应」）。这里用 `NSTrackingArea`
+    // + 在 `draw` 里补一块：移上去立刻有、移开立刻没。
+    //
+    // **命中判定不在这里算**：`DiagnosticMarks.mark(at:in:)`（Core，有单测）与画线吃同一份投影，
+    // 于是「有虚线必能悬浮、能悬浮必有虚线」是结构性的，不是靠两处写得一样。
+    /// 当前这一篇文本的诊断标记（`apply(...)` 每次重着色时整体换掉）。
+    private(set) var diagnosticMarks: [DiagnosticMark] = []
+    private var hoveredMark: DiagnosticMark?
+    private var hoverTrackingArea: NSTrackingArea?
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let hoverTrackingArea {
+            removeTrackingArea(hoverTrackingArea)
+        }
+        let area = NSTrackingArea(
+            rect: .zero,
+            options: [.mouseMoved, .mouseEnteredAndExited, .activeInKeyWindow, .inVisibleRect],
+            owner: self,
+            userInfo: nil
+        )
+        addTrackingArea(area)
+        hoverTrackingArea = area
+    }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        // `mouseMoved` 只有在窗口收了 `acceptsMouseMovedEvents` 时才会派到视图上。
+        window?.acceptsMouseMovedEvents = true
+    }
+
+    override func mouseMoved(with event: NSEvent) {
+        super.mouseMoved(with: event)
+        setHoveredMark(hoveredMark(at: convert(event.locationInWindow, from: nil)))
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        super.mouseExited(with: event)
+        setHoveredMark(nil)
+    }
+
+    /// 某个视图坐标落在哪条诊断上（空白处 / 没检查出问题 ⇒ `nil`）。
+    private func hoveredMark(at point: NSPoint) -> DiagnosticMark? {
+        guard !diagnosticMarks.isEmpty else { return nil }
+        // 与列选择、光标定位用同一个换算（`characterIndexForInsertion` 吃的是**视图坐标**）。
+        let offset = characterIndexForInsertion(at: point)
+        return DiagnosticMarks.mark(at: offset, in: diagnosticMarks)
+    }
+
+    private func setHoveredMark(_ mark: DiagnosticMark?) {
+        guard mark?.id != hoveredMark?.id else { return }
+        hoveredMark = mark
+        needsDisplay = true
+    }
+
+    /// 标记被换掉（用户改了 SQL）后，旧悬浮说明若已无对应标记就撤掉 —— 不留残影。
+    private func dropStaleHover() {
+        guard let hoveredMark else { return }
+        if !diagnosticMarks.contains(where: { $0.id == hoveredMark.id }) {
+            self.hoveredMark = nil
+        }
+    }
+
+    /// 贴着那条虚线画一句说明；下方放不下就翻到线的上方，再夹进可视区。
+    private func drawDiagnosticTip() {
+        guard let mark = hoveredMark,
+              let layoutManager,
+              let container = textContainer,
+              let storage = textStorage
+        else { return }
+
+        let textLength = storage.length
+        guard mark.location < textLength else { return }
+
+        let characterRange = NSRange(
+            location: mark.location,
+            length: min(mark.length, textLength - mark.location)
+        )
+        let glyphRange = layoutManager.glyphRange(forCharacterRange: characterRange, actualCharacterRange: nil)
+        let anchor = layoutManager.boundingRect(forGlyphRange: glyphRange, in: container)
+            .offsetBy(dx: textContainerInset.width, dy: textContainerInset.height)
+
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: Theme.nsFont(.caption),
+            .foregroundColor: Theme.nsColor(TextTone.primary)
+        ]
+        let text = mark.hoverText as NSString
+        let textSize = text.size(withAttributes: attributes)
+        let padding = NSSize(width: 8, height: 5)
+        let size = NSSize(
+            width: textSize.width + padding.width * 2,
+            height: textSize.height + padding.height * 2
+        )
+        let visible = visibleRect
+        var box = NSRect(
+            x: min(anchor.minX, max(visible.minX, visible.maxX - size.width - 2)),
+            y: anchor.maxY + 4,
+            width: size.width,
+            height: size.height
+        )
+        if box.maxY > visible.maxY {
+            box.origin.y = anchor.minY - box.height - 4
+        }
+        box.origin.y = min(
+            max(box.origin.y, visible.minY + 2),
+            max(visible.minY + 2, visible.maxY - box.height - 2)
+        )
+
+        let accent = mark.severity == .error
+            ? Theme.nsColor(StatusTone.danger)
+            : Theme.nsColor(StatusTone.warning)
+        let path = NSBezierPath(roundedRect: box, xRadius: 5, yRadius: 5)
+        Theme.nsColor(Surface.raised).setFill()
+        path.fill()
+        accent.withAlphaComponent(0.6).setStroke()
+        path.lineWidth = 1
+        path.stroke()
+
+        text.draw(
+            at: NSPoint(x: box.minX + padding.width, y: box.minY + padding.height),
+            withAttributes: attributes
+        )
     }
 
     private(set) var isApplyingAttributes = false
@@ -957,17 +1087,20 @@ final class SQLTextView: NSTextView {
             }
         }
 
-        for diagnostic in diagnostics {
-            let range = NSRange(location: diagnostic.utf16Location, length: max(diagnostic.utf16Length, 1))
-            guard isValid(range, in: length) else { continue }
+        // 下划线范围**只认投影**（`DiagnosticMarks.project`）：画线与「鼠标停在哪条上」共用同一份判定，
+        // 否则会出现「画了线的地方悬浮不出说明」这类两套判定才有的不一致（`FR-STD-WS-NAV-012` ③）。
+        let marks = DiagnosticMarks.project(diagnostics, textLength: length)
+        diagnosticMarks = marks
+        dropStaleHover()
+        for mark in marks {
             storage.addAttributes(
                 [
                     .underlineStyle: NSUnderlineStyle.single.rawValue | NSUnderlineStyle.patternDot.rawValue,
-                    .underlineColor: diagnostic.severity == .error
+                    .underlineColor: mark.severity == .error
                         ? Theme.nsColor(StatusTone.danger)
                         : Theme.nsColor(StatusTone.warning)
                 ],
-                range: range
+                range: mark.range
             )
         }
 

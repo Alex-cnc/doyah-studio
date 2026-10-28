@@ -1,18 +1,16 @@
 # 检查点
 
-updated: 2026-10-28T23:20
+updated: 2026-10-28T23:58
 
 ## 现状
 
 - 循环卡 = `.agent/loop-card.md`（**2026-10-28 20:08 主人改成接力制**：一轮收尾即 `cronjob_manage action=run job_id=e98fad41f72d` 点火下一轮；定时器 5 分钟一跳只做兜底；不再按剩余条数自调阶梯）。
 - 队列唯一来源 = `Docs/Doyah产品开发计划任务清单-macOS端.md`（`FR-STD-*` 里实现为 `⬜`／`🟡`）；`.agent/plan.yaml` 已停用。
-- 最近读数（2026-10-28 R44）：`verify-core` **4503 例 / 0 failures**（`--filter` 只作过滤读数）；五门 rc 全 0；包 `dist/DoyahStudio-beta1.0.app` sha256 前缀 `9968e9e8` · 98,996 KB（R44 重出，身份见台账「现行包」行）。
+- 最近读数（2026-10-28 R45）：`verify-core` **4513 例 / 0 failures**（`--filter` 只作过滤读数）；五门 rc 全 0；包 `dist/DoyahStudio-beta1.0.app` sha256 前缀 `512a2873` · 99,072 KB（R45 重出，身份见台账「现行包」行；前一版 `d1ec6587` 的回执「含片」没写本批 ⇒ 作废）。
 
 ## 下一项
 
-**1. 台账 `FR-STD-WS-NAV-012`（静态检查结果上屏）** —— 它挂在「`FR-STD-WS-NAV-007` 已实现的检查」上：
-先核 007 的产物（`Core/` 里那套未闭合字符串 / 括号等检查）在哪里、输出什么形状，再把结果接成可显示的投影 + 面板；
-判据可机械跑（投影是纯函数）。
+**1. 台账 `FR-STD-WS-VCS-001`（Git 只读与差异：分支 / 改动文件清单 / 逐行差异，不做提交与推送）** —— 盘上已有 `App/GitStatusProbe.swift`（40 行，只服务 Agent 的 `facts`，不是界面面）：先核它取什么、再定「Git 面板」缺哪几块（分支行 / 改动清单 / 逐行 diff 投影 / 无仓库与无 git 的如实说法）；投影做成 Core 纯函数即可机械判红。
 
 其余按台账取「优先=高 → 中；同档取判据可机械跑的」（2026-10-28 R44 实测：**台账里已无「高」档的 `⬜`**）：
 
@@ -27,6 +25,15 @@ updated: 2026-10-28T23:20
 7. 存量红（与 HEAD 逐条相同，非任何一片引入；见 `.agent/evidence/2026-10-28-DB-TASK-001.md` §7）。
 
 ## 已完成的片
+
+- **R45（2026-10-28 23:58）· `FR-STD-WS-NAV-012` 静态检查结果上屏** —— 新 `Core/DiagnosticMarks.swift`
+  （投影：越界丢弃 / 零长按 1 / 跨文末截断 / 同范围同文案去重 / 顺序确定；命中取最窄、同窄错误优先；`hoverText` = 检查器
+  message + 位置）+ `SQLEditorView.apply` 的下划线改由投影画（画线与命中同一份）+ `SQLTextView` 即时悬浮说明
+  （`NSTrackingArea` + `draw` 补一块，弃系统 tooltip 的秒级延迟）+ 标记换掉即撤旧说明；
+  **同批修好存量**：`Tests/SQLLinterTests` 花括号错位使 `testRealtimeScanLimitBoundary` 变成另一个用例里的局部函数
+  （从未执行）⇒ 恢复。判据 `Tests/DiagnosticMarksTests` **9 例**，反例七段各判红后逐字节还原。
+  读数 `verify-core` **4513** / 0 failures（4503 → +10），五门全绿，包 `512a2873` · 99,072 KB。
+  台账 实现 🟡（差人工把鼠标停到虚线上看一眼）/ 判据 ✅。
 
 - **R44（2026-10-28 23:35）· `FR-STD-DB-TASK-001` 任务定义可保存复用** —— 新 `Core/SQLTaskDefinition.swift`
   （① 定义实体：连接 / 目标库 / 读写模式（缺省只读）/ 影响行数上限（选填 >0）/ 是否需审批（缺省真）+ `issues()` 一次列全；

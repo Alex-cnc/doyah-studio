@@ -10,7 +10,8 @@ final class SQLLinterTests: XCTestCase {
         WHERE name = 'O''Brien' AND id IN (1, 2, 3);
         """
         XCTAssertTrue(linter.analyze(sql).isEmpty)
-    
+    }
+
     /// 实时扫描的长度边界（NFR-PERF-05 的阻塞条件之一是"超限要给可读提示"）。
     ///
     /// 这条判据放进 Core 就是为了能单测：阈值是 20_000 **字符**，
@@ -21,7 +22,6 @@ final class SQLLinterTests: XCTestCase {
         XCTAssertTrue(sqlExceedsRealtimeScanLimit(String(repeating: "a", count: sqlRealtimeScanLimit + 1)))
         XCTAssertFalse(sqlExceedsRealtimeScanLimit("SELECT 1"))
     }
-}
 
     func testUnterminatedString() {
         let linter = SQLLinter(databaseType: .postgresql)
