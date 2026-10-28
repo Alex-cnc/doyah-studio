@@ -528,6 +528,31 @@ final class CodeTextView: NSTextView {
         scrollRangeToVisible(NSRange(location: caret, length: 0))
     }
 
+    /// `⌥↑` / `⌥↓` / `⇧⌥↓`：移行与复制行（`FR-STD-WS-EDIT-009`）。
+    ///
+    /// **为什么在 `keyDown` 而不在 `performKeyEquivalent`**：`performKeyEquivalent` 主要收「带 ⌘」的键；
+    /// `⌥` 方向键是普通按键事件，走的是 `keyDown`。放在 `performKeyEquivalent` 里会「按了没反应」——
+    /// 这类静默失效最难查（与 `⌘L` 那条掩码判据同一个教训：先确认这条路真的被调用）。
+    ///
+    /// 判定全在 `Core/LineMoveEdit`（纯函数，`Tests/LineMoveEditTests.swift`）；`nil` = 无操作（首行上移 /
+    /// 末行下移）⇒ **交还系统**，不把这个按键吞掉（否则首行按 ⌥↑ 会变成「什么都没发生且没提示」）。
+    override func keyDown(with event: NSEvent) {
+        var modifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        // 大写锁 / Fn / 小键盘标志不是用户按下的修饰键，不参与「恰好 ⌥」的判决（同 `⌘L` 的掩码口径）。
+        modifiers.subtract([.capsLock, .numericPad, .function])
+        if modifiers == [.option] || modifiers == [.option, .shift] {
+            let key = event.specialKey
+            if key == .upArrow, modifiers == [.option] {
+                if moveLines(.up) { return }
+            } else if key == .downArrow, modifiers == [.option] {
+                if moveLines(.down) { return }
+            } else if key == .downArrow, modifiers == [.option, .shift] {
+                if duplicateLines() { return }
+            }
+        }
+        super.keyDown(with: event)
+    }
+
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
         if event.modifierFlags.contains(.command),
            event.charactersIgnoringModifiers?.lowercased() == "s" {
@@ -764,6 +789,30 @@ final class CodeTextView: NSTextView {
     func toggleLineComment() -> Bool {
         let syntax = CodeLanguageRegistry.definition(of: completionLanguage).syntax
         guard let plan = CodeCommentToggling.plan(in: string, selection: selectedRange(), syntax: syntax)
+        else { return false }
+        return applyEditPlan(range: plan.range, replacement: plan.replacement,
+                             caret: plan.caret, selectionLength: plan.selectionLength)
+    }
+
+    /// 整行 / 整段上移、下移（`FR-STD-WS-EDIT-009`）：`⌥↑` / `⌥↓` 的落点。
+    ///
+    /// 判定全在 `Core/LineMoveEdit`（纯函数）—— 这里只把计划搬到编辑器上：
+    /// 走 `applyEditPlan` 那条唯一落点（`shouldChangeText → replaceCharacters → didChangeText`），
+    /// 所以 ⌘Z 一步回得到移动之前，模型 / 行号列 / 着色也跟着刷新。
+    /// 返回 `false` = 无操作（首行上移 / 末行下移）⇒ 调用方把按键交还系统。
+    @discardableResult
+    func moveLines(_ direction: LineMoveDirection) -> Bool {
+        guard let plan = LineMoveEdit.move(in: string, selection: selectedRange(),
+                                           direction: direction)
+        else { return false }
+        return applyEditPlan(range: plan.range, replacement: plan.replacement,
+                             caret: plan.caret, selectionLength: plan.selectionLength)
+    }
+
+    /// 向下复制当前行 / 选中整段（`FR-STD-WS-EDIT-009` ③）：`⇧⌥↓` 的落点。副本紧随原行、选区留在原件上。
+    @discardableResult
+    func duplicateLines() -> Bool {
+        guard let plan = LineMoveEdit.duplicate(in: string, selection: selectedRange())
         else { return false }
         return applyEditPlan(range: plan.range, replacement: plan.replacement,
                              caret: plan.caret, selectionLength: plan.selectionLength)

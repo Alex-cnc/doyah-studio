@@ -1,12 +1,12 @@
 # 检查点
 
-updated: 2026-10-28T21:10
+updated: 2026-10-28T21:32
 
 ## 现状
 
 - 循环卡 = `.agent/loop-card.md`（**2026-10-28 20:08 主人改成接力制**：一轮收尾即 `cronjob_manage action=run job_id=e98fad41f72d` 点火下一轮；定时器 5 分钟一跳只做兜底；不再按剩余条数自调阶梯）。
 - 队列唯一来源 = `Docs/Doyah产品开发计划任务清单-macOS端.md`（`FR-STD-*` 里实现为 `⬜`／`🟡`）；`.agent/plan.yaml` 已停用。
-- 最近读数（2026-10-28 R36）：`verify-core` **4331 例 / 12 skipped / 0 failures**；五门 rc 全 0；包 `dist/DoyahStudio-beta1.0.app` sha256 前缀 `fe8c6662` · 97,328 KB（2026-10-28 21:04 出）。
+- 最近读数（2026-10-28 R37）：`verify-core` **4353 例 / 12 skipped / 0 failures**；五门 rc 全 0；包 `dist/DoyahStudio-beta1.0.app` sha256 前缀 `92efb40c` · 97,376 KB（2026-10-28 21:20 出）。
 
 ## 下一项
 
@@ -23,6 +23,10 @@ updated: 2026-10-28T21:10
 
 ## 已完成的片
 
+- **R37（2026-10-28 21:32）· `FR-STD-WS-EDIT-009` 移行与复制行** —— 新 `Core/LineMoveEdit.swift`（行拆「内容 + 终止符」，
+  内容按行搬 / 终止符按位置留 ⇒ `\r\n` 与「末行无终止符」都不粘连；光标按「那一行搬到哪」映射；首行上移 / 末行下移 / 空文档 `nil`；
+  `⇧⌥↓` 副本紧随原行、选区留在原件）+ `CodeTextView.keyDown` 拦 `⌥↑`/`⌥↓`/`⇧⌥↓` → `applyEditPlan` + `Tests/LineMoveEditTests` 22 例；
+  读数 `verify-core` 4353 / 0 failures，五门全绿，包 `92efb40c` · 97,376 KB。台账 实现 🟡 / 判据 ✅（差人工按一次）。
 - **R36（2026-10-28 21:10）· `FR-STD-WS-EDIT-020` 括号匹配高亮** —— 新 `Core/BracketHighlight.swift`
   （`plan(in:selection:)`：光标紧邻括号 ⇒ 亮那一半 + 配对者两段；三档角色 `matched` / `unmatched` / `truncated`
   各钉一个主题令牌；有选中不亮；超 `scanLimit` 报「太远」而不是「不匹配」）+ `Theme.nsColor(_:alpha:)` 重载
@@ -47,6 +51,7 @@ updated: 2026-10-28T21:10
 
 ## 证据
 
+- `.agent/evidence/2026-10-28-WS-EDIT-009.md`（命令原文 + 读数 + 反例三段 + 口径取舍）
 - `.agent/evidence/2026-10-28-WS-FS-004-005-006.md`（缺口表 + 读数 + 反例三段 + 存量红对照）
 - `.agent/evidence/2026-10-28-WS-WEB-004.md`（命令原文 + 读数 + 反例三段 + 口径变更由头）
 - `.agent/evidence/2026-10-28-WS-AI-002.md`（命令原文 + 读数 + 反例三段）
@@ -54,6 +59,9 @@ updated: 2026-10-28T21:10
 
 ## 未验证项
 
+- `FR-STD-WS-EDIT-009` 的**界面面**已接线但没人手按过（`⌥↑` / `⌥↓` / `⇧⌥↓` 三个键、⌘Z 是否一步回去）⇒ 实现 `🟡`，等人工按一次。
+- 台账第 281 行（`FR-AGT-UX-CONV-012` 备注格）里有一处 `⟪HERMES-CONTEXT-COMPRESSION…⟫` 占位串**已入库**（HEAD 就有，
+  上一轮工具调用写坏的），无门禁覆盖 —— 属别人那片的历史缺陷，本片不动，做「清号」片时一并修。
 - `FR-STD-WS-FS-004/005/006` 的**界面面**已接线但没人手点过（悬浮菜单三枚 / 新建后自动打开到第 1 行 / 改名后页签标题 / 结果行撤销按钮）⇒ 实现 `🟡`，等人工点一次。
 - `FR-STD-WS-AI-002` 的界面面（许愿输入框 + 差异视图 + 验收按钮）未做 ⇒ 实现 `🟡`，等下一片。
 - 存量红（R35 用 `git worktree add /tmp/wt-r35 HEAD` 干净树对照过，**原因与条数相同** ⇒ 与本片无关）：
