@@ -388,8 +388,15 @@ SANDBOX_MARK="com.doyah.manual-verification-probe"
 #   与成对截图。判据 ①② 的读数在**真笔记区**（`NotesAreaView`）上量；④⑤ 另配**改前复刻件**
 #   （13pt 图标 + 28 × 22 命中区）当反例 —— 它必须判红，否则这一族断言是恒真的。
 #   跑法：`DOYAH_UI_SNAPSHOT=1 DOYAH_NOTES_DIR=<临时目录> swift test --filter NotesCrudIconSpacingProbeTests`。
+# + `RowActionRevealProbeTests`（`FR-STD-WS-UI-013` 行内动作悬停出、常驻不占位）：需求三条验收里
+#   ①「未悬停时该行动作数为 0 且行宽不因它变化」/ ②「悬停即出、移开即收」/ ③「同一条动作在工具条与行内
+#   不得并存」此前**一条读数都没有**。量法 = 把 `WorkspaceTreeRow` / `ConnectionGroupHeader` 摆进离屏
+#   `NSWindow`（悬停态改成**输入**，产线仍只有父视图那条 `.onHover` 一个写入口）→ `cacheDisplay` 落 PNG →
+#   按**列**数「与底色不同的像素」并把连续列并成簇（一枚图标 = 一簇）。读数：目录行未悬停 0 簇 / 悬停 3 簇、
+#   文件行悬停 2 簇、移开 0 簇、行宽 496 像素两档逐点相同、分组标题未悬停 0 簇 / 悬停 1 簇；
+#   反例三段（`isVisible` 恒真 / 文件行也三枚 / 行按内容收紧）各判红后逐字节还原。
 # `--filter` 传的是**正则**，所以这里用 `|` 连接。
-FILTER="ManualVerificationProbeTests|PaletteWiringProbeTests|AppearanceFontProbeTests|TerminalInterruptProbeTests|TerminalTabsProbeTests|TerminalSubToolbarProbeTests|LargeResultScrollProbeTests|CrossDatabaseBrowseProbeTests|GroupedViewProbeTests|NoteSearchProbeTests|BrowserTabDownloadProbeTests|MySQLFormProbeTests|ObjectTreeRefreshProbeTests|TerminalInteractionProbeTests|MultiCursorProbeTests|ObjectTreeContextMenuProbeTests|NotesEditorSaveProbeTests|SQLLineNumberProbeTests|PerfTypingProbeTests|WorkspaceChromeHeightProbeTests|MarkdownPreviewProbeTests|TitleBarSearchProbeTests|WorkspaceFileRoutingProbeTests|NebulaSkinProbeTests|TitleBarSearchClickProbeTests|FormatMenuWiringProbeTests|NotesLayoutProbeTests|QueryHistoryPaneProbeTests|TodoCalendarEntriesProbeTests|TodoDetailSearchProbeTests|LunarSubtitleProbeTests|NotesEditorFormatProbeTests|RetroHostProbeTests|WorkspaceSessionCursorProbeTests|AccountSyncSheetProbeTests|NotesSearchRevealProbeTests|NotesCrudIconSpacingProbeTests|NotesShelfProbeTests|NotesTitleAreaProbeTests|AgentChatTUILookProbeTests|AutoPairingKeyProbeTests|MarkdownEditingKeyProbeTests|WorkspaceTabStripOverflowProbeTests|EditorSurfaceTokenParityProbeTests"
+FILTER="ManualVerificationProbeTests|PaletteWiringProbeTests|AppearanceFontProbeTests|TerminalInterruptProbeTests|TerminalTabsProbeTests|TerminalSubToolbarProbeTests|LargeResultScrollProbeTests|CrossDatabaseBrowseProbeTests|GroupedViewProbeTests|NoteSearchProbeTests|BrowserTabDownloadProbeTests|MySQLFormProbeTests|ObjectTreeRefreshProbeTests|TerminalInteractionProbeTests|MultiCursorProbeTests|ObjectTreeContextMenuProbeTests|NotesEditorSaveProbeTests|SQLLineNumberProbeTests|PerfTypingProbeTests|WorkspaceChromeHeightProbeTests|MarkdownPreviewProbeTests|TitleBarSearchProbeTests|WorkspaceFileRoutingProbeTests|NebulaSkinProbeTests|TitleBarSearchClickProbeTests|FormatMenuWiringProbeTests|NotesLayoutProbeTests|QueryHistoryPaneProbeTests|TodoCalendarEntriesProbeTests|TodoDetailSearchProbeTests|LunarSubtitleProbeTests|NotesEditorFormatProbeTests|RetroHostProbeTests|WorkspaceSessionCursorProbeTests|AccountSyncSheetProbeTests|NotesSearchRevealProbeTests|NotesCrudIconSpacingProbeTests|NotesShelfProbeTests|NotesTitleAreaProbeTests|AgentChatTUILookProbeTests|AutoPairingKeyProbeTests|MarkdownEditingKeyProbeTests|WorkspaceTabStripOverflowProbeTests|EditorSurfaceTokenParityProbeTests|RowActionRevealProbeTests"
 while [ $# -gt 0 ]; do
     case "$1" in
         --filter) FILTER="${2:-}"; shift 2 ;;

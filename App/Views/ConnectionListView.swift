@@ -44,25 +44,17 @@ struct ConnectionListView: View {
     ///
     /// 与 `WorkspaceExplorerView` 的行内操作同一套：常驻不占位、悬停浮出、点一下就是
     /// 「新建连接」（`onAdd`，与原来工具条上那枚同一个入口）。
+    /// 形态搬进 `ConnectionGroupHeader`（同文件底部）：悬停态是**输入**，探针才能把同一行
+    /// 摆到两档各量一次（`FR-STD-WS-UI-013`）。
     private func groupHeader(title: String, count: Int?, id: String) -> some View {
-        HStack(spacing: Spacing.xs) {
-            Text(count.map { "\(title)（\($0)）" } ?? title)
-                .font(Theme.font(.caption))
-                .foregroundStyle(Theme.text(.secondary))
-            Spacer(minLength: 0)
-            if hoveredGroupID == id {
-                Button(action: onAdd) {
-                    Image(systemName: "plus")
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(Theme.text(.secondary))
-                }
-                .buttonStyle(.borderless)
-                .help(L(.connectionNew))
-                .accessibilityIdentifier("connection-group-plus-\(id)")
-            }
-        }
-        .contentShape(Rectangle())
-        .onHover { hoveredGroupID = $0 ? id : nil }
+        ConnectionGroupHeader(
+            title: title,
+            count: count,
+            groupID: id,
+            isHovered: hoveredGroupID == id,
+            onAdd: onAdd,
+            onHoverChange: { hoveredGroupID = $0 ? id : nil }
+        )
     }
 
     @ViewBuilder
@@ -233,5 +225,44 @@ private struct ConnectionRow: View {
             }
         }
         .padding(.vertical, 2)
+    }
+}
+
+// MARK: - 分组标题（`FR-STD-WS-UI-013`：动作悬停出、常驻不占位）
+
+/// 分组标题一行：名称（带条数）+ **悬停才出现的「＋」**。
+///
+/// 为什么把形态抽出来：悬停态本来是这个视图的 `@State`，离屏宿主里合成悬停不响应
+/// （边界见 `NotesLayoutProbeTests` 头注释）⇒ 判据只能量到「未悬停」那一档。
+/// 抽成「`isHovered` 是输入」之后探针能两档各量一次；产线仍只有一个写入口（父视图那条 `.onHover`）。
+struct ConnectionGroupHeader: View {
+
+    let title: String
+    /// 组内连接条数（「未分组」那段没有条数可数 ⇒ nil）。
+    let count: Int?
+    let groupID: String
+    let isHovered: Bool
+    let onAdd: () -> Void
+    let onHoverChange: (Bool) -> Void
+
+    var body: some View {
+        HStack(spacing: Spacing.xs) {
+            Text(count.map { "\(title)（\($0)）" } ?? title)
+                .font(Theme.font(.caption))
+                .foregroundStyle(Theme.text(.secondary))
+            Spacer(minLength: 0)
+            if isHovered {
+                Button(action: onAdd) {
+                    Image(systemName: "plus")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(Theme.text(.secondary))
+                }
+                .buttonStyle(.borderless)
+                .help(L(.connectionNew))
+                .accessibilityIdentifier(RowActionPolicy.groupAddAccessibilityIdentifier(groupID))
+            }
+        }
+        .contentShape(Rectangle())
+        .onHover { onHoverChange($0) }
     }
 }

@@ -60,7 +60,10 @@ final class WorkspaceRowAffordanceTests: XCTestCase {
     /// ③ 需要完整路径的地方仍在：右键「在访达中显示」不受影响（去掉悬停 tip 不等于去掉这个能力）。
     func testRevealContextMenuStillPresent() throws {
         let view = try source("App/Views/WorkspaceExplorerView.swift")
-        XCTAssertTrue(view.contains("Button(L(.workspaceReveal)) { workspace.reveal(entry) }"),
+        // 2026-10-29（`FR-STD-WS-UI-013`）：行视图抽成 `WorkspaceTreeRow`，「在访达中显示」那一项
+        // 长在行视图里、动作由父视图注入（`onReveal`）⇒ 锚点跟着形状走，**不变式不降**：
+        // 仍然要求「右键里有一项『在访达中显示』」，只是回调从直接调 store 换成注入的那一个。
+        XCTAssertTrue(view.contains("Button(L(.workspaceReveal)) { onReveal() }"),
                       "右键「在访达中显示」不在了 —— 去掉悬停 tip 时别把它一起删了")
     }
 }

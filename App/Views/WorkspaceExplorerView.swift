@@ -21,9 +21,6 @@ struct WorkspaceExplorerView: View {
     // MARK: 文件操作的行内状态（FR-EDIT-41 · 队列 L-114）
     /// 行内改名框里的字。
     @State private var renamingText = ""
-    /// 这个字是给哪一行准备的（新建之后 store 直接置 `renamingPath`，靠它对上号）。
-    @State private var renameTargetPath: String?
-    @FocusState private var isRenameFieldFocused: Bool
     /// 待确认的删除（确认框里要写清「将删几项」）。
     @State private var pendingDeletion: WorkspaceEntry?
 
@@ -142,162 +139,39 @@ struct WorkspaceExplorerView: View {
 
     private func treeRow(_ row: WorkspaceRow) -> some View {
         let entry = row.entry
-        let isSelected = selectedPath == entry.relativePath
-        let isHovered = hoveredPath == entry.relativePath
-
-        return HStack(spacing: Spacing.xs) {
-            // 展开箭头只给目录：符号链接不给（它不跟随，见 WorkspaceTree 的说明）
-            if entry.isExpandable {
-                Image(systemName: workspace.isExpanded(entry) ? "chevron.down" : "chevron.right")
-                    .imageScale(.small)          // 用 imageScale 而不是裸字号：SF Symbol 的惯用做法
-                    .foregroundStyle(Theme.text(.tertiary))
-                    .frame(width: 10)
-            } else {
-                Spacer().frame(width: 10)
-            }
-
-            Image(systemName: symbol(for: entry))
-                .font(Theme.font(.caption))
-                .foregroundStyle(isSelected ? accent.accentColor : Theme.text(.tertiary))
-                .frame(width: 14)
-
-            if workspace.renamingPath == entry.relativePath {
-                TextField(L(.workspaceRename), text: $renamingText)
-                    .textFieldStyle(.plain)
-                    .font(Theme.font(.body))
-                    .foregroundStyle(Theme.text(.primary))
-                    .focused($isRenameFieldFocused)
-                    .onSubmit { commitRename(entry) }
-                    .onExitCommand { cancelRename() }
-                    .onAppear {
-                        // 新建那条路是 store 直接置的 `renamingPath`：这里的字要从这一行取。
-                        if renameTargetPath != entry.relativePath {
-                            renameTargetPath = entry.relativePath
-                            renamingText = entry.name
-                        }
-                        isRenameFieldFocused = true
-                    }
-                    .accessibilityIdentifier("workspace-rename-field-\(entry.relativePath)")
-            } else {
-                Text(entry.name)
-                    .font(Theme.font(.body))
-                    .foregroundStyle(isSelected ? Theme.text(.primary) : Theme.text(.secondary))
-                    .lineLimit(1)
-            }
-
-            Spacer(minLength: 0)
-
-            // 悬浮才出现（不占常驻行宽 —— 常驻会把文件名挤成一截）；
-            // 正在改名的这一行**始终**显示，免得鼠标一移开按钮就没了。
-            if isHovered || workspace.renamingPath == entry.relativePath {
-                rowActions(entry)
-            }
-        }
-        .padding(.leading, Spacing.s + CGFloat(row.depth) * 14)
-        .padding(.trailing, Spacing.m)
-        .frame(height: Metrics.listRowHeight)
-        .background(rowBackground(isSelected: isSelected, isHovered: isHovered))
-        .contentShape(Rectangle())
-        .onHover { hovering in
-            hoveredPath = hovering ? entry.relativePath : (hoveredPath == entry.relativePath ? nil : hoveredPath)
-        }
-        .onTapGesture(count: 2) {
-            // 双击：目录展开 / 收起；文件开进工作区页签（FR-EDIT-36）
-            if entry.isExpandable {
-                workspace.toggle(entry)
-            } else if let url = workspace.url(for: entry) {
-                workspaceTabs.openFile(at: url)
-            }
-        }
-        .onTapGesture {
-            selectedPath = entry.relativePath
-            if entry.isExpandable { workspace.toggle(entry) }
-        }
-        .contextMenu {
-            Button(L(.workspaceReveal)) { workspace.reveal(entry) }
-        }
-        // **整行不再挂 tip**（2026-10-02 需求提出者原话：「鼠标悬停到目录上的自带文件名 tip 取消，
-        // 因为没用，且遮住了增删改工具条按钮」）：行的 tip 会盖住行内三枚图标的 tip ——
-        // AppKit 只给光标下**最近的一层**提示，父层挂了，子层那三枚就永远看不到自己的名字。
-        // 需要完整路径的地方仍有右键「在访达中显示」，不靠悬停。
-        .accessibilityIdentifier("workspace-row-\(entry.relativePath)")
-    }
-
-    private func symbol(for entry: WorkspaceEntry) -> String {
-        switch entry.kind {
-        case .directory: return workspace.isExpanded(entry) ? "folder.fill" : "folder"
-        case .symlink: return "arrowshape.turn.up.right"
-        case .file:
-            switch (entry.name as NSString).pathExtension.lowercased() {
-            case "swift": return "swift"
-            case "sql": return "cylinder"
-            case "md": return "doc.text"
-            case "json", "yml", "yaml", "toml": return "curlybraces"
-            case "png", "jpg", "jpeg", "gif", "webp": return "photo"
-            default: return "doc"
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func rowBackground(isSelected: Bool, isHovered: Bool) -> some View {
-        if isSelected {
-            ZStack(alignment: .leading) {
-                accent.tint(scheme).opacity(0.9)
-                Rectangle()
-                    .fill(accent.accentColor)
-                    .frame(width: Spacing.hair)
-            }
-        } else if isHovered {
-            Theme.text(.primary).opacity(0.05)
-        } else {
-            Color.clear
-        }
-    }
-
-    // MARK: 行内文件操作（FR-EDIT-41 · 队列 L-114）
-
-    /// 行的右侧三枚（文件夹）/ 两枚（文件）：加号 = 新建（点开出两项菜单）、减号 = 删到废纸篓、铅笔 = 改名。
-    /// 每枚都带即时名称提示（`.help`）—— 只有图标时「按名字找不到入口」，这正是内测清单 `#2` 的那条。
-    @ViewBuilder
-    private func rowActions(_ entry: WorkspaceEntry) -> some View {
-        HStack(spacing: Spacing.hair) {
-            if entry.isDirectory {
-                Menu {
-                    Button(L(.workspaceNewFile)) { createEntry(in: entry, asFile: true) }
-                    Button(L(.workspaceNewFolder)) { createEntry(in: entry, asFile: false) }
-                } label: {
-                    rowActionIcon("plus", help: "\(L(.workspaceNewFile)) / \(L(.workspaceNewFolder))")
+        return WorkspaceTreeRow(
+            entry: entry,
+            depth: row.depth,
+            isSelected: selectedPath == entry.relativePath,
+            isHovered: hoveredPath == entry.relativePath,
+            isRenaming: workspace.renamingPath == entry.relativePath,
+            expanded: workspace.isExpanded(entry),
+            renamingText: $renamingText,
+            tint: accent.tint(scheme),
+            accentColor: accent.accentColor,
+            onOpen: {
+                // 双击：目录展开 / 收起；文件开进工作区页签（FR-EDIT-36）
+                if entry.isExpandable {
+                    workspace.toggle(entry)
+                } else if let url = workspace.url(for: entry) {
+                    workspaceTabs.openFile(at: url)
                 }
-                .menuStyle(.borderlessButton)
-                .menuIndicator(.hidden)
-                .fixedSize()
-                // tip 也挂在 `Menu` 本体上：`.borderlessButton` 的 menu 只把 label 当绘制内容，
-                // 挂在内层 label 上实测不一定起效（三枚里就这枚是 Menu 不是 Button）。
-                .help("\(L(.workspaceNewFile)) / \(L(.workspaceNewFolder))")
-                .accessibilityLabel(L(.workspaceNewFile))
-                .accessibilityIdentifier("workspace-action-plus-\(entry.relativePath)")
-            }
-
-            ToolbarIconButton(systemName: "minus", help: L(.workspaceDeleteToTrash)) {
-                pendingDeletion = entry
-            }
-            .accessibilityIdentifier("workspace-action-minus-\(entry.relativePath)")
-
-            ToolbarIconButton(systemName: "pencil", help: L(.workspaceRename)) {
-                beginRename(entry)
-            }
-            .accessibilityIdentifier("workspace-action-pencil-\(entry.relativePath)")
-        }
-    }
-
-    private func rowActionIcon(_ symbol: String, help: String) -> some View {
-        Image(systemName: symbol)
-            .font(Theme.font(.caption))
-            .foregroundStyle(Theme.text(.tertiary))
-            .frame(width: 16, height: 16)
-            .contentShape(Rectangle())
-            .help(help)
+            },
+            onSelect: {
+                selectedPath = entry.relativePath
+                if entry.isExpandable { workspace.toggle(entry) }
+            },
+            onHoverChange: { hovering in
+                hoveredPath = hovering ? entry.relativePath : (hoveredPath == entry.relativePath ? nil : hoveredPath)
+            },
+            onCreate: { asFile in createEntry(in: entry, asFile: asFile) },
+            onDelete: { pendingDeletion = entry },
+            onBeginRename: { beginRename(entry) },
+            onCommitRename: { commitRename(entry) },
+            onCancelRename: { cancelRename() },
+            onReveal: { workspace.reveal(entry) }
+        )
+        .accessibilityIdentifier("workspace-row-\(entry.relativePath)")
     }
 
     /// 新建（文件 / 文件夹）：建完**直接进改名态**（需求提出者 2026-09-30 定的形态）。
@@ -335,16 +209,12 @@ struct WorkspaceExplorerView: View {
 
     private func beginRename(_ entry: WorkspaceEntry) {
         selectedPath = entry.relativePath
-        renameTargetPath = entry.relativePath
         renamingText = entry.name
         workspace.renamingPath = entry.relativePath
-        isRenameFieldFocused = true
     }
 
     private func cancelRename() {
         workspace.renamingPath = nil
-        renameTargetPath = nil
-        isRenameFieldFocused = false
     }
 
     /// 回车提交。**失败就留在改名态**（输入框收掉等于把用户敲的字扔了）。
@@ -357,8 +227,6 @@ struct WorkspaceExplorerView: View {
             if let source, source.standardizedFileURL != renamed.standardizedFileURL {
                 workspaceTabs.retarget(from: source.path, to: renamed.path)
             }
-            renameTargetPath = nil
-            isRenameFieldFocused = false
         }
     }
 
@@ -474,5 +342,193 @@ struct WorkspaceExplorerView: View {
         .buttonStyle(.plain)
         .help(help)
         .accessibilityLabel(help)
+    }
+}
+
+// MARK: - 文件树的一行（`FR-STD-WS-UI-013`：行内动作悬停出、常驻不占位）
+
+/// 工作区文件树的**一行**。
+///
+/// 从 `WorkspaceExplorerView` 里抽出来的理由不是「拆小一点」，是**判据**：
+/// 悬停状态本来住在父视图的 `@State` 里，而离屏宿主里**合成悬停不响应**
+/// （SwiftUI 手势不吃 `window.sendEvent`，边界见 `NotesLayoutProbeTests` 头注释那三条）⇒
+/// 凡按「整块面板 + 真鼠标」做的探针，只能量到「未悬停」那一档 —— 需求 ② 就永远没有读数。
+/// 抽成「`isHovered` 是**输入**」的纯视图之后，探针能把**同一行**摆到两档各量一次像素，
+/// 而产线仍只有**一个**写入口（父视图那一条 `.onHover`，见 `treeRow`）。
+///
+/// 哪几枚动作 / 画不画，唯一出处是 `RowActionPolicy`（Core）—— 视图不再自己写
+/// `if entry.isDirectory` 与标识字符串：探针按同一份口径数簇。
+struct WorkspaceTreeRow: View {
+
+    let entry: WorkspaceEntry
+    let depth: Int
+    let isSelected: Bool
+    let isHovered: Bool
+    /// 正在行内改名（改名框长在这一行里）。
+    let isRenaming: Bool
+    /// 目录是否展开（父视图的 store 说了算；文件行传什么都不会画箭头）。
+    let expanded: Bool
+    @Binding var renamingText: String
+    /// 选中行那一块底与左那一道竖线（由父视图从 `AccentManager` 取）。
+    let tint: Color
+    let accentColor: Color
+
+    let onOpen: () -> Void
+    let onSelect: () -> Void
+    let onHoverChange: (Bool) -> Void
+    /// 参数 = 是否建文件（false ⇒ 建目录）。
+    let onCreate: (Bool) -> Void
+    let onDelete: () -> Void
+    let onBeginRename: () -> Void
+    let onCommitRename: () -> Void
+    let onCancelRename: () -> Void
+    let onReveal: () -> Void
+
+    @FocusState private var isRenameFieldFocused: Bool
+    /// 这个字是给哪一行准备的（父视图把 `renamingPath` 一置，下一跳这一行就成了改名态；
+    /// 靠它对上号才把 `entry.name` 填进框里，否则每次重算都会把用户敲的字冲掉）。
+    @State private var renameSeedPath: String?
+
+    var body: some View {
+        HStack(spacing: Spacing.xs) {
+            // 展开箭头只给目录：符号链接不给（它不跟随，见 WorkspaceTree 的说明）
+            if entry.isExpandable {
+                Image(systemName: expanded ? "chevron.down" : "chevron.right")
+                    .imageScale(.small)          // 用 imageScale 而不是裸字号：SF Symbol 的惯用做法
+                    .foregroundStyle(Theme.text(.tertiary))
+                    .frame(width: 10)
+            } else {
+                Spacer().frame(width: 10)
+            }
+
+            Image(systemName: symbol)
+                .font(Theme.font(.caption))
+                .foregroundStyle(isSelected ? accentColor : Theme.text(.tertiary))
+                .frame(width: 14)
+
+            if isRenaming {
+                TextField(L(.workspaceRename), text: $renamingText)
+                    .textFieldStyle(.plain)
+                    .font(Theme.font(.body))
+                    .foregroundStyle(Theme.text(.primary))
+                    .focused($isRenameFieldFocused)
+                    .onSubmit { onCommitRename() }
+                    .onExitCommand { onCancelRename() }
+                    .onAppear {
+                        // 新建那条路是 store 直接置的 `renamingPath`：这里的字要从这一行取。
+                        if renameSeedPath != entry.relativePath {
+                            renameSeedPath = entry.relativePath
+                            renamingText = entry.name
+                        }
+                        isRenameFieldFocused = true
+                    }
+                    .accessibilityIdentifier("workspace-rename-field-\(entry.relativePath)")
+            } else {
+                Text(entry.name)
+                    .font(Theme.font(.body))
+                    .foregroundStyle(isSelected ? Theme.text(.primary) : Theme.text(.secondary))
+                    .lineLimit(1)
+            }
+
+            Spacer(minLength: 0)
+
+            // **悬停才出现**（常驻会把文件名挤成一截）。哪几枚、画不画都在 `RowActionPolicy` 里。
+            if RowActionPolicy.isVisible(isHovered: isHovered, isRenaming: isRenaming) {
+                HStack(spacing: Spacing.hair) {
+                    ForEach(RowActionPolicy.actions(isDirectory: entry.isDirectory), id: \.self) { action in
+                        actionControl(action)
+                            .accessibilityIdentifier(
+                                RowActionPolicy.accessibilityIdentifier(action, path: entry.relativePath)
+                            )
+                    }
+                }
+            }
+        }
+        .padding(.leading, Spacing.s + CGFloat(depth) * 14)
+        .padding(.trailing, Spacing.m)
+        .frame(height: Metrics.listRowHeight)
+        .background(rowBackground)
+        .contentShape(Rectangle())
+        .onHover { onHoverChange($0) }
+        .onTapGesture(count: 2) { onOpen() }
+        .onTapGesture { onSelect() }
+        .contextMenu {
+            Button(L(.workspaceReveal)) { onReveal() }
+        }
+        // **整行不挂 tip**（2026-10-02 需求提出者原话：「鼠标悬停到目录上的自带文件名 tip 取消，
+        // 因为没用，且遮住了增删改工具条按钮」）：行的 tip 会盖住行内三枚图标的 tip ——
+        // AppKit 只给光标下**最近的一层**提示，父层挂了，子层那三枚就永远看不到自己的名字。
+        // 需要完整路径的地方仍有右键「在访达中显示」，不靠悬停。
+    }
+
+    private var symbol: String {
+        switch entry.kind {
+        case .directory: return expanded ? "folder.fill" : "folder"
+        case .symlink: return "arrowshape.turn.up.right"
+        case .file:
+            switch (entry.name as NSString).pathExtension.lowercased() {
+            case "swift": return "swift"
+            case "sql": return "cylinder"
+            case "md": return "doc.text"
+            case "json", "yml", "yaml", "toml": return "curlybraces"
+            case "png", "jpg", "jpeg", "gif", "webp": return "photo"
+            default: return "doc"
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var rowBackground: some View {
+        if isSelected {
+            ZStack(alignment: .leading) {
+                tint.opacity(0.9)
+                Rectangle()
+                    .fill(accentColor)
+                    .frame(width: Spacing.hair)
+            }
+        } else if isHovered {
+            Theme.text(.primary).opacity(0.05)
+        } else {
+            Color.clear
+        }
+    }
+
+    /// 一枚动作。形态照旧：加号 = 新建（点开出两项菜单）、减号 = 删到废纸篓、铅笔 = 改名；
+    /// 每枚都带即时名称提示（`.help`）—— 只有图标时「按名字找不到入口」，这正是内测清单 `#2` 的那条。
+    @ViewBuilder
+    private func actionControl(_ action: RowAction) -> some View {
+        switch action {
+        case .create:
+            Menu {
+                Button(L(.workspaceNewFile)) { onCreate(true) }
+                Button(L(.workspaceNewFolder)) { onCreate(false) }
+            } label: {
+                rowActionIcon(action.symbolName, help: "\(L(.workspaceNewFile)) / \(L(.workspaceNewFolder))")
+            }
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .fixedSize()
+            // tip 也挂在 `Menu` 本体上：`.borderlessButton` 的 menu 只把 label 当绘制内容，
+            // 挂在内层 label 上实测不一定起效（三枚里就这枚是 Menu 不是 Button）。
+            .help("\(L(.workspaceNewFile)) / \(L(.workspaceNewFolder))")
+            .accessibilityLabel(L(.workspaceNewFile))
+        case .delete:
+            ToolbarIconButton(systemName: action.symbolName, help: L(.workspaceDeleteToTrash)) {
+                onDelete()
+            }
+        case .rename:
+            ToolbarIconButton(systemName: action.symbolName, help: L(.workspaceRename)) {
+                onBeginRename()
+            }
+        }
+    }
+
+    private func rowActionIcon(_ symbol: String, help: String) -> some View {
+        Image(systemName: symbol)
+            .font(Theme.font(.caption))
+            .foregroundStyle(Theme.text(.tertiary))
+            .frame(width: 16, height: 16)
+            .contentShape(Rectangle())
+            .help(help)
     }
 }

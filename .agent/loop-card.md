@@ -32,13 +32,12 @@
   面板与手机的端到端人工点验一次。
 
 **★ 区已清空**：下一条活按台账取（`FR-STD-*` 里实现 `⬜`／`🟡`，优先=高 → 中；同档取判据可机械跑的）。
-**R48（2026-10-29）已把「编辑面底色字色三处同底」做完**（`TestsUISnapshot/EditorSurfaceTokenParityProbeTests` **7 例** ——
-三面各建离屏 `NSWindow` 真渲染、按那块 `NSTextView` 的 frame 算取样框取众数色：5 主题 × 深浅两态三面同值且等于
-`content` 令牌（科技蓝深色 `(11,26,42)`）、切深浅每面差 244、切主题每面差 27、裸 `NSTextView` 对照件差 19；
-反例四段各判红后逐字节还原）—— 台账 `FR-STD-WS-UI-011` 实现 **✅** / 判据 **✅**；**本批未改产品源码**。
-同批把本探针与 R47 漏接的 `WorkspaceTabStripOverflowProbeTests` 接进 `run-manual-verification-probes.sh` 的 `FILTER`（42 → 44）。
-下一轮按 `.agent/checkpoint.md` 的「下一项 1」= 台账 `FR-STD-WS-UI-013`（行内动作悬停出、常驻不占位），
-同档还有 `WS-UI-014`（对话框按钮形态）一条可量出来的界面口径。
+**R49（2026-10-29）已把「行内动作悬停出、常驻不占位」做完**（`FR-STD-WS-UI-013`；判据
+`TestsUISnapshot/RowActionRevealProbeTests` **11 例** —— 一行摆进离屏 `NSWindow`（悬停态是**输入**）、
+`cacheDisplay` 落 PNG、按列数「与底色差 > 6 的像素」并成簇：未悬停 0 簇 / 悬停 3 簇（目录）· 2 簇（文件）/
+移开 0 簇 / 行宽两档逐点相同 / 分组标题 0 → 1 簇；反例三段各判红后逐字节还原）—— 台账实现 **✅** / 判据 **✅**。
+下一条活 = 台账 `FR-STD-WS-UI-014`（对话框按钮用系统文字按钮、取消 `role: .cancel`）。
+**有一条待主人拍板**（已登记，别当已决）：命名分组标题上要不要也给「＋」（现在只有「未分组」那段有）。
 
 # 每轮卡 · Studio macOS 端自主开发（2026-10-28 起）
 
