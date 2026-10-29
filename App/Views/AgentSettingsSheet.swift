@@ -29,6 +29,8 @@ struct AgentSettingsSheet: View {
     /// Secret 草稿留空 = 不改动已存的那把；**输入框永不回填本体**（只显示长度与尾 4）。
     @State private var imAppID = ""
     @State private var imSecretInput = ""
+    /// 扫码接入（`FR-AGT-LINK-CHAN-003`）：一条正规路径，和手填 AppID/Secret 并列。
+    @State private var isQQScanPresented = false
     @State private var imLine: String?
     /// 配置面三格（网关端点 / 机器人标识 / 接收任务开关）—— 与凭据同一份文件。
     /// ★0（2026-10-28 主人拍板）：地址不再由用户填 —— 只选环境，网关地址由程序自己取。
@@ -394,7 +396,9 @@ struct AgentSettingsSheet: View {
                             .foregroundStyle(Theme.status(.warning))
                             .fixedSize(horizontal: false, vertical: true)
                     }
-                    // 不做运行时扫码（扫码是平台登录，不是机器人鉴权）：给一条去开放平台的路。
+                    // 扫码接入（2026-10-29 主人两次点出后的口径）：QQ 官方连接器扫码后**直接返回**
+                    // AppID / AppSecret / 主人 openid ⇒ 扫码是一条正规路径，不是「平台登录」。
+                    // 手填 AppID/Secret 保留作备用（离线 / 没装 Node 时）。
                     Button(L(.agentIMOpenPlatform)) {
                         if let url = URL(string: "https://q.qq.com") {
                             NSWorkspace.shared.open(url)
@@ -450,6 +454,7 @@ struct AgentSettingsSheet: View {
                             .disabled(isTestingIM)
                         Button(L(.agentIMConnect)) { connectIMChannel() }
                         Button(L(.agentIMDisconnect)) { disconnectIMChannel() }
+                        Button(L(.agentIMQRButton)) { isQQScanPresented = true }
                         Button(L(.agentIMClear), role: .destructive) { clearIMCredentials() }
                     }
                     if let imLine {
@@ -478,6 +483,19 @@ struct AgentSettingsSheet: View {
             }
             .formStyle(.columns)
             .frame(width: 460)
+            .sheet(isPresented: $isQQScanPresented) {
+                QQQRLoginSheet { appID, secret in
+                    // 扫码的产出与手填同一套落库（Secret 仍只进钥匙串）。
+                    if appState.saveAgentIMCredentials(appID: appID, secret: secret) {
+                        imAppID = appID
+                        imSecretInput = ""
+                        imLine = L(.agentIMSaved)
+                    } else {
+                        imLine = appState.errorMessage
+                    }
+                }
+                .environmentObject(appState)
+            }
             // **表单吃剩余高度、自己内部滚动**：对话框高度必须封顶（见 `sheetHeight`），
             // 否则表单把整块撑到屏幕外 —— 底栏的「测试连接 / 取消 / 保存」会被 Dock 盖住
             // （人类主人 2026-10-18 实测：「对话框太高了，连最底下的测试按钮都被任务栏遮住了」）。

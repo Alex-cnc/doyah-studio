@@ -284,6 +284,11 @@ fi
 # **判存在性仍然不用 `security find-identity -v`** —— 它只列「被信任的」身份，自签名证书
 # 未信任时实测恒报 `0 valid identities found`，会把装好的身份误判成没有。
 # 判据是**真签一次**（签一个临时二进制，走的就是后面要走的那条路）。
+# 扫码桥（`FR-AGT-LINK-CHAN-003`）：打进包里的 Resources，安装后也能用（不依赖仓库路径）。
+if [[ -f "Scripts/qq-qr-bridge.mjs" ]]; then
+  cp "Scripts/qq-qr-bridge.mjs" "${APP}/Contents/Resources/qq-qr-bridge.mjs"
+fi
+
 IDENTITY="${DOYAH_CODESIGN_IDENTITY:-DoyahStudio Local Dev}"
 SIGN_LOG="$(mktemp)"
 PROBE_DIR="$(mktemp -d)"

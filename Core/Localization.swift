@@ -2020,6 +2020,17 @@ public enum LKey: String, CaseIterable, Sendable {
     case agentIMSendNotJSON
     case agentIMSendRejected
     case agentIMSendNetworkFailed
+    case agentIMQRButton
+    case agentIMQRTitle
+    case agentIMQRHint
+    case agentIMQRStarting
+    case agentIMQRWaiting
+    case agentIMQRExpired
+    case agentIMQRDone
+    case agentIMQRRestart
+    case agentIMQRNoNode
+    case agentIMQRNoBridge
+    case agentIMQRExited
     case agentLocalEndpointHint
     case agentStatusSection
     case agentSave
@@ -5227,6 +5238,17 @@ public enum LocalizedStrings {
         .agentIMSendNotJSON: [.simplifiedChinese: "发不出去：对方回的不是能认的答复（多半被代理或网关拦了）。", .english: "Could not send: the reply was not something we can read (usually a proxy or gateway intercepting it)."],
         .agentIMSendRejected: [.simplifiedChinese: "发不出去：QQ 拒了这个请求，HTTP %d（码 %@）。", .english: "Could not send: QQ rejected the request, HTTP %d (code %@)."],
         .agentIMSendNetworkFailed: [.simplifiedChinese: "发不出去：连不上 QQ 的接口（网络 / 代理）。结论留在队列里，等下次连上再发。", .english: "Could not send: cannot reach the QQ API (network or proxy). The result stays queued and goes out on the next connection."],
+        .agentIMQRButton: [.simplifiedChinese: "用 QQ 扫码接入", .english: "Connect with QQ scan"],
+        .agentIMQRTitle: [.simplifiedChinese: "用手机 QQ 扫一扫", .english: "Scan with QQ on your phone"],
+        .agentIMQRHint: [.simplifiedChinese: "扫码后会自动拿到机器人的 AppID 与 AppSecret，你不用去开放平台抄。扫完这一页会自己关。", .english: "Scanning hands back the bot's AppID and AppSecret for you — no copying from the console. This sheet closes itself when done."],
+        .agentIMQRStarting: [.simplifiedChinese: "正在生成二维码…", .english: "Generating the QR code…"],
+        .agentIMQRWaiting: [.simplifiedChinese: "等待扫码：用手机 QQ 扫上面这张码。", .english: "Waiting for the scan — use QQ on your phone."],
+        .agentIMQRExpired: [.simplifiedChinese: "这张码过期了，正在换一张；也可以点「换一张」。", .english: "This code expired. A new one is on the way — or tap Refresh."],
+        .agentIMQRDone: [.simplifiedChinese: "扫码成功，正在保存。", .english: "Scanned. Saving…"],
+        .agentIMQRRestart: [.simplifiedChinese: "换一张", .english: "Refresh"],
+        .agentIMQRNoNode: [.simplifiedChinese: "这台机器上没有 Node.js（QQ 官方扫码连接器只有 Node 版）。装好 Node 再打开这一页。", .english: "Node.js is not installed on this Mac (Tencent ships the QR connector for Node only). Install Node, then reopen this sheet."],
+        .agentIMQRNoBridge: [.simplifiedChinese: "找不到扫码桥脚本（Scripts/qq-qr-bridge.mjs）：安装包不完整，请重新安装。", .english: "The scan bridge (Scripts/qq-qr-bridge.mjs) is missing — the install looks incomplete."],
+        .agentIMQRExited: [.simplifiedChinese: "扫码服务退出了（退出码 %lld），请重试。", .english: "The scan service exited (code %lld). Please try again."],
         .agentLocalEndpointHint: [.simplifiedChinese: "本地 / 局域网端点无需 API Key（本地模型优先）。", .english: "Local or LAN endpoints need no API key."],
         .agentStatusSection: [.simplifiedChinese: "当前状态", .english: "Status"],
         .agentSave: [.simplifiedChinese: "保存", .english: "Save"],
