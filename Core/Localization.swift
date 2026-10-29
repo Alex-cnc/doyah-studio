@@ -2835,6 +2835,13 @@ public enum LKey: String, CaseIterable, Sendable {
     case tableExportOrderNote
     case tableExportEmpty
     case tableExportClose
+    // 整库导出（FR-STD-DB-IO-002 的整库那一半，2026-10-29 第七十一批）
+    case treeActionExportDatabase
+    case tableExportDatabaseTitle
+    case tableExportDatabaseRunning
+    case tableExportChooseFolder
+    case tableExportNoTables
+    case tableExportSkipped
     // 结果集内联编辑（FR-DATA-04）
     case inlineEditNoSourceTable
     case inlineEditActive
@@ -5752,6 +5759,12 @@ public enum LocalizedStrings {
         .tableExportOrderNote: [.simplifiedChinese: "顺序约定：这条查询没有 ORDER BY，导出文件里的行序与界面网格不保证一致 —— 为了顺序而排序要把全量读进内存，正好毁掉流式。要固定顺序请自己写带 ORDER BY 的查询。", .english: "Row order: this query has no ORDER BY, so the order in the exported file is not guaranteed to match the grid. Sorting for order would read the whole table into memory and defeat streaming. Use your own ordered query if you need a fixed order."],
         .tableExportEmpty: [.simplifiedChinese: "表里没有行：一页都取不到，连列定义都拿不到，因此没有生成文件（不造一个空文件冒充导出成功）。", .english: "The table has no rows: not even one page came back, so no column definitions were available and no file was created (an empty file would pretend to be a successful export)."],
         .tableExportClose: [.simplifiedChinese: "关闭", .english: "Close"],
+        .treeActionExportDatabase: [.simplifiedChinese: "导出整库…", .english: "Export Database…"],
+        .tableExportDatabaseTitle: [.simplifiedChinese: "导出整库", .english: "Export Database"],
+        .tableExportDatabaseRunning: [.simplifiedChinese: "正在整库导出：第 %d / %d 张 · %@（这张已取 %d 行）", .english: "Exporting database: %d of %d · %@ (%d row(s) so far in this table)"],
+        .tableExportChooseFolder: [.simplifiedChinese: "导出到这里", .english: "Export Here"],
+        .tableExportNoTables: [.simplifiedChinese: "这里没有可导出的表：%@ 下面一层没有任何表或视图（子 schema 会先展开再取，因此不会漏）。", .english: "Nothing to export here: there are no tables or views directly under %@ (nested schemas are expanded first, so nothing is skipped silently)."],
+        .tableExportSkipped: [.simplifiedChinese: "另有 %d 个非表对象（序列 / 函数 / 列 / 没展开的 schema）不在整库导出的范围内。", .english: "%d non-table object(s) (sequences, functions, columns, schemas that were not expanded) are outside a whole-database export."],
         .inlineEditNoSourceTable: [.simplifiedChinese: "这个结果来自手写 SQL，无法确定来源表；改 / 删 / 加行都需要知道是哪张表。请用对象树里的「浏览数据」打开表，或在 SQL 里显式写出表名后重跑。", .english: "This result came from hand-written SQL, so its source table is unknown; editing, deleting and inserting all need to know the table. Open the table via Browse rows in the object tree, or re-run a query that names the table explicitly."],
         .inlineEditActive: [.simplifiedChinese: "编辑中：%d 处改动未提交", .english: "Editing: %d uncommitted change(s)"],
         .inlineEditAppendRow: [.simplifiedChinese: "追加一行…", .english: "Append row…"],

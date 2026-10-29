@@ -282,6 +282,63 @@ final class ObjectTreeContextMenuProbeTests: XCTestCase {
         return resolved
     }
 
+    // MARK: - 生产右键菜单里的导出入口（`FR-STD-DB-IO-002`）
+
+    /// 导出入口必须出现在**生产右键菜单**里，而且只在表 / 视图与数据库 / schema 上。
+    ///
+    /// 这条判据的由来是一次真实缺陷（R70 实测）：第七十批把「导出整表…」只加进了 SwiftUI 那份渲染
+    /// （`ObjectTreeContextMenu`），而生产右键走的是 `ObjectTreeAppKitMenu` ⇒ 功能对用户等于不存在，
+    /// 而当时的探针只拿「动作项」集合对账（导出不在 `ObjectTreeAction` 里）⇒ 两套菜单各缺一项也不红。
+    /// 所以这一条**直接构造生产那份 `NSMenu`**（离屏、不要授权、不渲染、不需要快照模式）并判三面：
+    /// ① 表 / 视图有「导出整表…」，子菜单是那五档**文本**格式（xlsx 不许出现 —— 二进制工作簿不能流式）；
+    /// ② 数据库 / schema 有「导出整库…」，同样五档；
+    /// ③ 其余节点（服务器 / 函数 / 列）**一个导出入口都不许有**（不是数据表就别摆导出）。
+    @MainActor
+    func testProductionMenuCarriesExportEntries() throws {
+        let host = makeHost()
+        let tableTitle = Self.text(.simplifiedChinese) { L(.treeActionExportTable) }
+        let databaseTitle = Self.text(.simplifiedChinese) { L(.treeActionExportDatabase) }
+        let expectedFormats = Self.inHostLanguage(.simplifiedChinese) {
+            ObjectTreeAppKitMenu.exportFormats.map { ObjectTreeAppKitMenu.exportFormatTitle($0) }
+        }
+        XCTAssertEqual(expectedFormats.count, 5, "导出格式清单只该有那五档文本格式")
+
+        for kind in Self.menuKinds {
+            guard let object = Self.menuObjects.first(where: { $0.kind == kind }) else {
+                return XCTFail("夹具里没有 \(kind.rawValue) 那一行")
+            }
+            let items = Self.productionMenuItems(object, host: host)
+            let byTitle = items.filter { !$0.isSeparatorItem }
+            let exportItems = byTitle.filter { $0.title == tableTitle || $0.title == databaseTitle }
+
+            switch kind {
+            case .table, .view:
+                XCTAssertEqual(
+                    exportItems.map(\.title), [tableTitle],
+                    "「\(kind.rawValue)」那一行必须恰好有「导出整表…」（生产菜单里少一项 = 用户点不到）"
+                )
+            case .database, .schema:
+                XCTAssertEqual(
+                    exportItems.map(\.title), [databaseTitle],
+                    "「\(kind.rawValue)」那一行必须恰好有「导出整库…」（生产菜单里少一项 = 用户点不到）"
+                )
+            case .server, .column, .function, .sequence:
+                XCTAssertTrue(
+                    exportItems.isEmpty,
+                    "「\(kind.rawValue)」那一行不该有导出入口，实际有：\(exportItems.map(\.title))"
+                )
+            }
+
+            for item in exportItems {
+                let titles = (item.submenu?.items ?? []).filter { !$0.isSeparatorItem }.map(\.title)
+                XCTAssertEqual(
+                    titles, expectedFormats,
+                    "「\(kind.rawValue)」→「\(item.title)」的子菜单必须是那五档文本格式（xlsx 不进这一档：它不能流式）"
+                )
+            }
+        }
+    }
+
     // MARK: - ① 每一行都是它自己的菜单（七类各一张图）+ 动作项与 Core 双向对账
 
     @MainActor

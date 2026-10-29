@@ -123,6 +123,14 @@ enum ObjectTreeContextMenu {
                 appState.createTableTarget = object
             }
 
+            // 整库导出（`FR-STD-DB-IO-002` 的整库那一半）：与整表导出同一个格式清单、同一块小结面板。
+            // 数据库 / schema 节点就是「整库」的粒度。
+            Menu(L(.treeActionExportDatabase)) {
+                exportFormatButtons { format in
+                    Task { await appState.exportDatabase(object, format: format) }
+                }
+            }
+
             Divider()
         }
 
@@ -178,20 +186,8 @@ enum ObjectTreeContextMenu {
         // 视图同表一样可以导（它就是一条 SELECT），所以这一项对 `.view` 也给。
         if object.kind == .table || object.kind == .view {
             Menu(L(.treeActionExportTable)) {
-                Button(L(.exportCSV)) {
-                    Task { await appState.exportTable(object, format: .csv) }
-                }
-                Button(L(.exportTSV)) {
-                    Task { await appState.exportTable(object, format: .tsv) }
-                }
-                Button(L(.exportJSON)) {
-                    Task { await appState.exportTable(object, format: .json) }
-                }
-                Button(L(.exportMarkdown)) {
-                    Task { await appState.exportTable(object, format: .markdown) }
-                }
-                Button(L(.exportSQLInsert)) {
-                    Task { await appState.exportTable(object, format: .sqlInsert) }
+                exportFormatButtons { format in
+                    Task { await appState.exportTable(object, format: format) }
                 }
             }
         }
@@ -233,6 +229,23 @@ enum ObjectTreeContextMenu {
         appState: AppState
     ) {
         Task { await appState.performTreeAction(action, on: object) }
+    }
+
+    /// 导出格式那五个按钮（整表 / 整库共用一份）。
+    ///
+    /// 清单与文案都从 `ObjectTreeAppKitMenu.exportFormats` / `exportFormatTitle` 取 ——
+    /// **生产右键走的是 AppKit 那一份**，这里只是同一套内容的 SwiftUI 渲染。
+    /// 两处各写一份清单的话，一处加了一种格式另一处没加，同一次导出在两套渲染里能力不同；
+    /// 更糟的是第七十批踩过的那种：只加进了这一份，而用户点的是另一份（详见
+    /// `ObjectTreeAppKitMenu` 里那段注记）。
+    @MainActor
+    @ViewBuilder
+    private static func exportFormatButtons(_ action: @escaping (ResultExportFormat) -> Void) -> some View {
+        ForEach(ObjectTreeAppKitMenu.exportFormats, id: \.self) { format in
+            Button(ObjectTreeAppKitMenu.exportFormatTitle(format)) {
+                action(format)
+            }
+        }
     }
 
     /// 服务器节点的右键菜单（FR-META-11）。

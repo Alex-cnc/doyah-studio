@@ -67,6 +67,12 @@ enum ObjectTreeAppKitMenu {
             menu.addItem(ClosureMenuItem(title: L(.tableDesignTitle)) {
                 appState.createTableTarget = object
             })
+            // 整库导出（`FR-STD-DB-IO-002` 的整库那一半）：与整表导出**同一份格式清单**、
+            // **同一条取数路**、**同一块小结面板**。挂在数据库 / schema 上 —— 那就是「整库」的粒度。
+            menu.addItem(exportMenuItem(
+                title: L(.treeActionExportDatabase),
+                action: { format in Task { await appState.exportDatabase(object, format: format) } }
+            ))
             menu.addItem(.separator())
         }
 
@@ -111,6 +117,18 @@ enum ObjectTreeAppKitMenu {
                 appState.selectTreeObject(object)
                 appState.isSyntheticCommandPresented = true
             })
+        }
+
+        // 整表导出（`FR-STD-DB-IO-002`）：走服务端游标逐页取、流式写盘，与 CLI 同一条路。
+        // **这条曾经只加进了 SwiftUI 那份渲染**（`ObjectTreeContextMenu`），而生产右键走的是本文件
+        // ⇒ 第七十批的入口对用户等于不存在（第七十一批 R70 实测补上，并加了判据钉住两套都在）。
+        // 只给文本格式：xlsx 是二进制工作簿（ZIP 的中央目录要等所有行写完才能落），天生不能流式。
+        // 视图同表一样可以导（它就是一条 SELECT）。
+        if kind == .table || kind == .view {
+            menu.addItem(exportMenuItem(
+                title: L(.treeActionExportTable),
+                action: { format in Task { await appState.exportTable(object, format: format) } }
+            ))
         }
 
         if ObjectTreeActions.isAvailable(.viewDDL, for: kind) {
@@ -220,4 +238,41 @@ enum ObjectTreeAppKitMenu {
     private static func run(_ action: ObjectTreeAction, on object: DatabaseObject, appState: AppState) {
         Task { await appState.performTreeAction(action, on: object) }
     }
+
+    // MARK: - 导出入口（整表 / 整库，`FR-STD-DB-IO-002`）
+
+    /// 导出格式清单的**唯一**出处：整表导出与整库导出共用一个子菜单。
+    ///
+    /// 为什么抽出来：两处各写一份的话，一处加了 Markdown 另一处没加，同一个功能在两张表上
+    /// 表现出的能力就不一样；而 xlsx 是二进制工作簿（ZIP 的中央目录要等所有行写完才能落），
+    /// 天生不能流式 —— 摆一个「导出 xlsx」等于承诺一件做不到的事，所以它不在这一份清单里。
+    static let exportFormats: [ResultExportFormat] = [.csv, .tsv, .json, .markdown, .sqlInsert]
+
+    /// 格式清单 → 子菜单。AppKit 的子菜单必须自己建一个 `NSMenu` 挂到 `submenu` 上。
+    static func exportMenuItem(
+        title: String,
+        action: @escaping (ResultExportFormat) -> Void
+    ) -> NSMenuItem {
+        let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
+        let submenu = NSMenu()
+        for format in exportFormats {
+            submenu.addItem(ClosureMenuItem(title: exportFormatTitle(format)) { action(format) })
+        }
+        item.submenu = submenu
+        return item
+    }
+
+    /// 格式 → 菜单文案。与结果集导出面板读同一批语言键（`exportCSV` / `exportTSV` / …），
+    /// 不另起一套「整表专用」的文案。
+    static func exportFormatTitle(_ format: ResultExportFormat) -> String {
+        switch format {
+        case .csv: return L(.exportCSV)
+        case .tsv: return L(.exportTSV)
+        case .json: return L(.exportJSON)
+        case .markdown: return L(.exportMarkdown)
+        case .sqlInsert: return L(.exportSQLInsert)
+        case .xlsx: return L(.exportXLSX)
+        }
+    }
 }
+

@@ -116,18 +116,29 @@ public enum TableExport {
         var used: Set<String> = []
         var result: [Entry] = []
         for table in tables {
-            let base = safeBaseName(table)
-            var candidate = "\(base).\(ext)"
-            var suffix = 2
-            while used.contains(candidate.lowercased()) {
-                candidate = "\(base)-\(suffix).\(ext)"
-                suffix += 1
-            }
-            used.insert(candidate.lowercased())
-            result.append(Entry(table: table, schema: schema, fileName: candidate))
+            let fileName = uniqueFileName(base: safeBaseName(table), ext: ext, used: &used)
+            result.append(Entry(table: table, schema: schema, fileName: fileName))
         }
         return result
     }
+
+    /// 「同一个目录里不重名」的唯一算法：撞了就 `-2`、`-3` 顺延。
+    ///
+    /// 抽成一处是因为整表（`entries`）与整库（`databasePlan`）两条路都要它 ——
+    /// 两边各写一份的话，一处改成加随机后缀、另一处忘了改，同一次整库导出里就会出现两种命名。
+    /// `used` 用**小写**比较：macOS 默认文件系统不分大小写，`Orders.csv` 与 `orders.csv`
+    /// 在那里是同一个文件，静默覆盖就是这么来的。
+    private static func uniqueFileName(base: String, ext: String, used: inout Set<String>) -> String {
+        var candidate = "\(base).\(ext)"
+        var suffix = 2
+        while used.contains(candidate.lowercased()) {
+            candidate = "\(base)-\(suffix).\(ext)"
+            suffix += 1
+        }
+        used.insert(candidate.lowercased())
+        return candidate
+    }
+
 
     /// 表格名 → 可落盘的文件名主体（不含扩展名）。
     ///
@@ -152,6 +163,133 @@ public enum TableExport {
         if name.hasPrefix(".") { name = "_" + name }
         if name.count > 120 { name = String(name.prefix(120)) }
         return name
+    }
+
+    // MARK: - 整库导出（第七十一批）
+
+    /// 整库导出的候选：对象树里**一层子节点**的那三项。
+    ///
+    /// 为什么不让 Core 自己去树里取：取数要连接、要元数据服务，那些都不在这里。
+    /// 这里只回答三件事 —— 导哪些、落哪个文件名、账里怎么称呼它。
+    public struct Candidate: Equatable, Sendable {
+        public var kind: DatabaseObject.Kind
+        public var name: String
+        public var schema: String?
+
+        public init(kind: DatabaseObject.Kind, name: String, schema: String? = nil) {
+            self.kind = kind
+            self.name = name
+            self.schema = schema
+        }
+
+        /// 从对象树节点直接构造；节点自己没带 schema 时用调用方给的（从 schema 节点展开时会用到）。
+        public init(_ object: DatabaseObject, fallbackSchema: String? = nil) {
+            self.init(
+                kind: object.kind,
+                name: object.name,
+                schema: object.schema ?? fallbackSchema
+            )
+        }
+    }
+
+    /// 整库导出的一项：一张表（或视图）→ 一个文件名，以及账里的称呼。
+    public struct Job: Equatable, Sendable {
+        public var table: String
+        public var schema: String?
+        public var fileName: String
+        /// 账 / 小结里怎么称呼它。**跨 schema 时带前缀**（`public.orders`）——
+        /// 只写表名的话，两个 schema 里同名的表在报告里长得一模一样，用户没法判断哪个没成。
+        public var label: String
+        public var isView: Bool
+    }
+
+    /// 被跳过的非表对象（序列 / 函数 / 列 / 没展开的 schema）。
+    /// 留着 `kind` 是为了让小结能说清「跳过的是什么」，而不是只给一个数。
+    public struct Skipped: Equatable, Sendable {
+        public var name: String
+        public var kind: DatabaseObject.Kind
+    }
+
+    /// 整库导出的计划：要导的落点 + 跳过的对象。
+    public struct DatabasePlan: Equatable, Sendable {
+        public var jobs: [Job]
+        public var skipped: [Skipped]
+        /// 这一批是否跨了多个 schema（跨了就带前缀，见 `Job.label`）。
+        public var multiSchema: Bool
+
+        public var isEmpty: Bool { jobs.isEmpty }
+        public var skippedCount: Int { skipped.count }
+
+        public init(jobs: [Job], skipped: [Skipped], multiSchema: Bool) {
+            self.jobs = jobs
+            self.skipped = skipped
+            self.multiSchema = multiSchema
+        }
+    }
+
+    /// 把「这个库 / 这个 schema 下面有哪些对象」投成一次整库导出。
+    ///
+    /// 口径（写死在这里，调用方不许各写一份）：
+    /// * **导表和视图**：两者都是「一条 `SELECT` 就能取」的对象，整表导出对视图也给入口
+    ///   ⇒ 整库导出不给的话，同一个库的两条路对视图的说法就不一致了；
+    /// * **其余节点跳过**（序列 / 函数 / 列 / 没展开的 schema）—— 它们不是数据表，
+    ///   跳过**要报数量**，不许静默少导；
+    /// * **同一个 `(schema, table)` 只导一次**：调用方可能因为树的两层展开把同一张表喂进来两次，
+    ///   照单全收会导两遍（第二遍还占一个 `-2` 文件名，用户以为多了一张表）；
+    /// * **跨 schema 时文件名带前缀**（`public.orders.csv`）：不带的话两个 schema 里同名的表
+    ///   会靠 `-2` 后缀区分，用户根本看不出哪个文件是哪张表；
+    /// * 文件名净化与撞名顺延走与整表导出**同一条**算法（`safeBaseName` + `uniqueFileName`）。
+    public static func databasePlan(
+        _ candidates: [Candidate],
+        format: ResultExportFormat
+    ) -> DatabasePlan {
+        var exportable: [Candidate] = []
+        var skipped: [Skipped] = []
+        var seen: Set<String> = []
+        for candidate in candidates {
+            let name = candidate.name.trimmingCharacters(in: .whitespacesAndNewlines)
+            let isExportable = (candidate.kind == .table || candidate.kind == .view) && !name.isEmpty
+            guard isExportable else {
+                skipped.append(Skipped(name: candidate.name, kind: candidate.kind))
+                continue
+            }
+            let key = "\(candidate.schema ?? "")\u{1F}\(name)"
+            guard !seen.contains(key) else { continue }
+            seen.insert(key)
+            exportable.append(candidate)
+        }
+
+        let schemas = Set(exportable.compactMap { candidate -> String? in
+            guard let schema = candidate.schema?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  !schema.isEmpty else { return nil }
+            return schema
+        })
+        let multiSchema = schemas.count > 1
+
+        let ext = format.fileExtension
+        var used: Set<String> = []
+        var jobs: [Job] = []
+        for candidate in exportable {
+            let name = candidate.name.trimmingCharacters(in: .whitespacesAndNewlines)
+            let schema = candidate.schema?.trimmingCharacters(in: .whitespacesAndNewlines)
+            let schemaName = (schema?.isEmpty == false) ? schema : nil
+            var base = safeBaseName(name)
+            if multiSchema, let schemaName {
+                base = "\(safeBaseName(schemaName)).\(base)"
+            }
+            let fileName = uniqueFileName(base: base, ext: ext, used: &used)
+            let label = (multiSchema ? schemaName.map { "\($0).\(name)" } : nil) ?? name
+            jobs.append(
+                Job(
+                    table: name,
+                    schema: schemaName,
+                    fileName: fileName,
+                    label: label,
+                    isView: candidate.kind == .view
+                )
+            )
+        }
+        return DatabasePlan(jobs: jobs, skipped: skipped, multiSchema: multiSchema)
     }
 
     // MARK: - 账

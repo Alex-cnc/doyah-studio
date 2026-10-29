@@ -101,6 +101,110 @@ final class TableExportTests: XCTestCase {
         XCTAssertEqual(TableExport.safeBaseName("My Table"), "My_Table")
     }
 
+    // MARK: - 整库：名单（第七十一批）
+
+    /// 表与视图都要导，其余节点跳过 —— 且**跳过的要能数出来**（不许静默少导）。
+    func testDatabasePlanExportsTablesAndViewsAndSkipsOtherKinds() {
+        let plan = TableExport.databasePlan(
+            [
+                .init(kind: .table, name: "orders", schema: "public"),
+                .init(kind: .view, name: "v_orders", schema: "public"),
+                .init(kind: .sequence, name: "orders_id_seq", schema: "public"),
+                .init(kind: .function, name: "f_total", schema: "public"),
+            ],
+            format: .csv
+        )
+        XCTAssertEqual(plan.jobs.map(\.table), ["orders", "v_orders"])
+        XCTAssertEqual(plan.jobs.map(\.isView), [false, true])
+        XCTAssertEqual(plan.skipped.map(\.name), ["orders_id_seq", "f_total"])
+        XCTAssertEqual(plan.skipped.map(\.kind), [.sequence, .function])
+        XCTAssertEqual(plan.skippedCount, 2)
+    }
+
+    /// 同一个 schema 内不带前缀：文件名就是表名（用户按名字找文件，别加噪声）。
+    func testDatabasePlanSingleSchemaKeepsPlainNames() {
+        let plan = TableExport.databasePlan(
+            [
+                .init(kind: .table, name: "orders", schema: "public"),
+                .init(kind: .table, name: "订单", schema: "public"),
+            ],
+            format: .json
+        )
+        XCTAssertFalse(plan.multiSchema)
+        XCTAssertEqual(plan.jobs.map(\.fileName), ["orders.json", "订单.json"])
+        XCTAssertEqual(plan.jobs.map(\.label), ["orders", "订单"])
+    }
+
+    /// 跨 schema 时必须带前缀：两个 `orders` 只靠 `-2` 后缀区分的话，
+    /// 用户看不出哪个文件是哪张表。
+    func testDatabasePlanMultiSchemaPrefixesFileNamesAndLabels() {
+        let plan = TableExport.databasePlan(
+            [
+                .init(kind: .table, name: "orders", schema: "public"),
+                .init(kind: .table, name: "orders", schema: "sales"),
+            ],
+            format: .tsv
+        )
+        XCTAssertTrue(plan.multiSchema)
+        XCTAssertEqual(plan.jobs.map(\.fileName), ["public.orders.tsv", "sales.orders.tsv"])
+        XCTAssertEqual(plan.jobs.map(\.label), ["public.orders", "sales.orders"])
+        XCTAssertEqual(plan.jobs.map(\.schema), ["public", "sales"])
+    }
+
+    /// 树的两层展开可能把同一张表喂进来两次 ⇒ 只导一次（否则第二遍会占一个 `-2` 文件名，
+    /// 用户以为库里多了一张表）。
+    func testDatabasePlanDeduplicatesSameSchemaAndTable() {
+        let plan = TableExport.databasePlan(
+            [
+                .init(kind: .table, name: "orders", schema: "public"),
+                .init(kind: .table, name: "orders", schema: "public"),
+            ],
+            format: .csv
+        )
+        XCTAssertEqual(plan.jobs.count, 1)
+        XCTAssertEqual(plan.jobs.map(\.fileName), ["orders.csv"])
+        // 同名不同 schema 不是重复。
+        let both = TableExport.databasePlan(
+            [
+                .init(kind: .table, name: "orders", schema: "public"),
+                .init(kind: .table, name: "orders"),
+            ],
+            format: .csv
+        )
+        XCTAssertEqual(both.jobs.count, 2, "没有 schema 的那个是另一张表，不许被当成重复吃掉")
+    }
+
+    /// 表格名为空 ⇒ 跳过（记进 `skipped`），不许落出一个叫 `.csv` 的文件。
+    func testDatabasePlanSkipsEmptyTableName() {
+        let plan = TableExport.databasePlan(
+            [.init(kind: .table, name: "   ", schema: "public")],
+            format: .csv
+        )
+        XCTAssertTrue(plan.isEmpty)
+        XCTAssertEqual(plan.skipped.count, 1)
+        XCTAssertEqual(plan.skipped.first?.kind, .table)
+    }
+
+    /// 同一 schema 里净化后撞名 ⇒ 顺延，走与整表导出**同一条**算法。
+    func testDatabasePlanSuffixesCollisionsWithinSchema() {
+        let plan = TableExport.databasePlan(
+            [
+                .init(kind: .table, name: "a/b", schema: "public"),
+                .init(kind: .table, name: "a:b", schema: "public"),
+            ],
+            format: .csv
+        )
+        XCTAssertEqual(plan.jobs.map(\.fileName), ["a_b.csv", "a_b-2.csv"])
+    }
+
+    /// 空清单不许被当成「导出成功」：`isEmpty` 必须为真，界面据此说「这里没有可导出的表」。
+    func testDatabasePlanEmptyWhenNoCandidates() {
+        let plan = TableExport.databasePlan([], format: .csv)
+        XCTAssertTrue(plan.isEmpty)
+        XCTAssertEqual(plan.skippedCount, 0)
+        XCTAssertFalse(plan.multiSchema)
+    }
+
     // MARK: - 账
 
     private func labels(orderNote: String = "顺序说明") -> TableExport.Labels {
