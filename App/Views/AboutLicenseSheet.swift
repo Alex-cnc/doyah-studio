@@ -139,25 +139,38 @@ struct AboutLicenseSheet: View {
             Text(L(.licDoSectionTitle))
                 .font(Theme.font(.bodyStrong))
                 .accessibilityIdentifier("about-capabilities-title")
+
+            // 定位句（App Store 商品页第一句的写法）：一句话说清「这东西替我干什么」。
+            Text(L(.licDoIntro))
+                .font(Theme.font(.body))
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityIdentifier("about-capabilities-intro")
+
+            // 每条一个自然段：**名字 —— 一句收益**（破折号后讲效果，不讲实现）。
             ForEach(Array(LicenseHighlights.all.enumerated()), id: \.offset) { _, highlight in
                 VStack(alignment: .leading, spacing: Spacing.xs) {
-                    HStack(alignment: .firstTextBaseline, spacing: Spacing.s) {
-                        Text(L(highlight.titleKey))
-                            .font(Theme.font(.body))
-                        Spacer(minLength: Spacing.s)
-                        Text(tagText(for: highlight))
-                            .font(Theme.font(.caption))
-                            .foregroundStyle(LicenseHighlights.isIncluded(highlight, in: entitlements.capabilities)
-                                             ? Theme.text(.secondary)
-                                             : Theme.status(.warning))
-                    }
-                    Text(L(highlight.lineKey))
+                    (
+                        Text(L(highlight.titleKey)).font(Theme.font(.body)).bold()
+                        + Text(" — ").font(Theme.font(.body)).foregroundColor(Theme.text(.secondary))
+                        + Text(L(highlight.lineKey)).font(Theme.font(.body))
+                    )
+                    .fixedSize(horizontal: false, vertical: true)
+                    .textSelection(.enabled)
+                    Text(tagText(for: highlight))
                         .font(Theme.font(.caption))
-                        .foregroundStyle(Theme.text(.secondary))
-                        .fixedSize(horizontal: false, vertical: true)
+                        .foregroundStyle(LicenseHighlights.isIncluded(highlight, in: entitlements.capabilities)
+                                         ? Theme.text(.secondary)
+                                         : Theme.status(.warning))
+                        .accessibilityIdentifier("about-capability-\(highlight.edition.rawValue)-\(highlight.titleKey)")
                 }
-                .accessibilityIdentifier("about-capability-\(highlight.edition.rawValue)-\(highlight.titleKey)")
             }
+
+            // 收尾信任句（同类商品页的固定收束）：说清数据在哪，不喊口号。
+            Text(L(.licDoTrust))
+                .font(Theme.font(.caption))
+                .foregroundStyle(Theme.text(.secondary))
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityIdentifier("about-capabilities-trust")
         }
     }
 

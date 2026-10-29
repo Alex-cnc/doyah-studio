@@ -470,6 +470,8 @@ public enum LKey: String, CaseIterable, Sendable {
     case licDoLinkLine
     case licDoIncluded
     case licDoNeedsEdition
+    case licDoIntro
+    case licDoTrust
     // 「版本与许可证」页（FR-LIC-02 界面侧）：把"现在是什么版、许可证在哪、设备几台、
     // 别的版能做什么"四件事都说清楚 —— 少一件，用户就得去猜为什么某个区不见了。
     case menuAboutLicense
@@ -3713,16 +3715,18 @@ public enum LocalizedStrings {
         .licFeatureAllPro: [.simplifiedChinese: "Pro 的全部功能", .english: "Everything in Pro"],
         .licFeatureLink: [.simplifiedChinese: "数据库与笔记联动（SQL / 表结构 / 诊断结论入笔记）", .english: "Database-to-notes links (SQL, schema, diagnosis findings)"],
         .licDoSectionTitle: [.simplifiedChinese: "这个应用能帮你做什么", .english: "What this app does for you"],
-        .licDoDatabaseTitle: [.simplifiedChinese: "连上数据库，直接查", .english: "Query your database directly"],
-        .licDoDatabaseLine: [.simplifiedChinese: "连上你的库，写一句 SQL 就看到表格；整张表一键导出成 CSV。", .english: "Connect, run a query, see the table; export a whole table to CSV in one click."],
-        .licDoCodeTitle: [.simplifiedChinese: "打开文件夹就能写代码", .english: "Open a folder and start coding"],
-        .licDoCodeLine: [.simplifiedChinese: "文件树、多页签、终端都在一起；这次改了哪几行，一眼看清。", .english: "File tree, tabs and terminal in one place; see at a glance which lines changed."],
-        .licDoAgentTitle: [.simplifiedChinese: "让 AI 替你干一整件事", .english: "Let the AI finish the whole job"],
-        .licDoAgentLine: [.simplifiedChinese: "说一句要做什么，它自己读文件、改代码、跑命令；改完给你清单和差异，不满意一次全撤回。", .english: "Say what you want: it reads files, edits code and runs commands, then shows the file list and diff — undo the whole batch if you don't like it."],
-        .licDoNotesTitle: [.simplifiedChinese: "随手记，记得住", .english: "Keep notes you can find again"],
-        .licDoNotesLine: [.simplifiedChinese: "想到就记、打上标签、搜得到，到点还会提醒你。", .english: "Jot it down, tag it, search it later, and get reminded when it matters."],
-        .licDoLinkTitle: [.simplifiedChinese: "查完就存成笔记", .english: "Turn findings into notes"],
-        .licDoLinkLine: [.simplifiedChinese: "查完数据库，把结论连同 SQL 一起存进笔记，下次直接翻。", .english: "Save what you found — with the SQL — into your notes, ready for next time."],
+        .licDoDatabaseTitle: [.simplifiedChinese: "连库就查", .english: "Query it directly"],
+        .licDoDatabaseLine: [.simplifiedChinese: "连上 MySQL / PostgreSQL，写一句 SQL 就看到表格；整张表一句话导成 CSV。", .english: "Connect to MySQL or PostgreSQL, run a query, see the table — and export a whole table to CSV in one click."],
+        .licDoCodeTitle: [.simplifiedChinese: "打开就能写", .english: "Open and start coding"],
+        .licDoCodeLine: [.simplifiedChinese: "文件树、多页签、终端在同一屏；这次改过哪几行，一眼看清。", .english: "File tree, tabs and terminal on one screen; see at a glance which lines you changed."],
+        .licDoAgentTitle: [.simplifiedChinese: "说一句就干完", .english: "Say it and it is done"],
+        .licDoAgentLine: [.simplifiedChinese: "它自己读文件、改代码、跑命令，做完给你清单和差异；不满意，一次全撤回。", .english: "It reads files, edits code and runs commands, then shows you the file list and the diff — undo the whole batch if you do not like it."],
+        .licDoNotesTitle: [.simplifiedChinese: "想到就记", .english: "Jot it down"],
+        .licDoNotesLine: [.simplifiedChinese: "打上标签、搜得到，到点提醒你。", .english: "Tag it, find it later, get reminded when it matters."],
+        .licDoLinkTitle: [.simplifiedChinese: "查完就存", .english: "Save what you found"],
+        .licDoLinkLine: [.simplifiedChinese: "把结论连同 SQL 一起存进笔记，下次翻出来接着用。", .english: "Save the finding — SQL included — into your notes, ready for next time."],
+        .licDoIntro: [.simplifiedChinese: "一个窗口里：连库查数、写代码、让 AI 干活、随手记。", .english: "Query your databases, edit code, let the AI do the work, and keep notes — in one window."],
+        .licDoTrust: [.simplifiedChinese: "全部在本机运行：你的库、你的代码、你的笔记，不经过我们的服务器。", .english: "Everything runs on your Mac: your databases, your code and your notes never pass through our servers."],
         .licDoIncluded: [.simplifiedChinese: "当前版本已含", .english: "Included"],
         .licDoNeedsEdition: [.simplifiedChinese: "需 %@", .english: "Needs %@"],
         .menuAboutLicense: [.simplifiedChinese: "版本与许可证…", .english: "Version and License…"],

@@ -106,4 +106,35 @@ final class LicenseHighlightsTests: XCTestCase {
         XCTAssertTrue(source.contains("LicenseHighlights.all"), "条目只从 Core 那份数据来，界面不自写第二份")
         XCTAssertTrue(source.contains("about-capabilities-title"), "要有可定位的锚（判据与读屏共用）")
     }
+
+    // MARK: - 照 App Store 商品页的写法（2026-10-29 主人让我去对照真实商品页）
+
+    func testIntroAndTrustLineExistInBothLanguages() {
+        for key in [LKey.licDoIntro, LKey.licDoTrust] {
+            let zh = LocalizedStrings.text(key, language: .simplifiedChinese)
+            let en = LocalizedStrings.text(key, language: .english)
+            XCTAssertFalse(zh.isEmpty)
+            XCTAssertFalse(en.isEmpty)
+            XCTAssertNotEqual(zh, en)
+        }
+    }
+
+    func testIntroIsOneShortSentence() {
+        let zh = LocalizedStrings.text(.licDoIntro, language: .simplifiedChinese)
+        XCTAssertLessThanOrEqual(zh.count, 40, "定位句要短：一句话说清替你干什么")
+        XCTAssertLessThanOrEqual(zh.filter { $0 == "。" }.count, 1, "定位句只留一句，不堆句号")
+    }
+
+    func testTitlesAreShortNamesNotSentences() {
+        for highlight in LicenseHighlights.all {
+            let zh = LocalizedStrings.text(highlight.titleKey, language: .simplifiedChinese)
+            XCTAssertLessThanOrEqual(zh.count, 10, "名字要短到能当小标题：\(zh)")
+            XCTAssertFalse(zh.contains("，"), "名字里不要逗号（那是句子不是名字）")
+        }
+    }
+
+    func testTrustLineSaysWhereDataGoes() {
+        let zh = LocalizedStrings.text(.licDoTrust, language: .simplifiedChinese)
+        XCTAssertTrue(zh.contains("本机") || zh.contains("服务器"), "收尾句要说清数据在哪，不喊口号")
+    }
 }
