@@ -39,11 +39,15 @@ struct AgentSettingsSheet: View {
     @State private var imRelayURL = ""
     @State private var imReceiveTasks = false
     @State private var isTestingIM = false
+    /// 自检结论（「配置了不起作用」时先看这一行，不猜）。
+    @State private var imSelfCheckLine: String?
     /// 连接测试的结果行（`nil` = 还没测过）。
     @State private var testLine: String?
     @State private var isTesting = false
     @State private var clearAPIKey = false
     @State private var isLoaded = false
+    /// 当前页签（分页只影响呈现；保存仍是一处保存全部）。
+    @State private var selectedTab: AgentSettingsTab = .model
     /// 授权粒度（`FR-AI-34`）：任务范围内代签 = 少问；每个动作都问 = 老行为。
     @State private var scopeMode: AgentTaskScope.Mode = .taskScope
     /// **真值源**（`FR-AI-25` 信息面三格）：上下文窗口 + 每百万 token 价目。
@@ -63,15 +67,120 @@ struct AgentSettingsSheet: View {
     /// 显示开关那一下的结论（改了立刻落盘，被拒时在这里说一句；`nil` = 没话要说）。
     @State private var displayLine: String?
 
+    /// 设置面板的页签（主人 2026-10-30 令：「配置框太乱了，应该分成几个 Tab 页」）。
+    /// 分页按**用户要做的事**切；底栏的「测试连接 / 取消 / 保存」留在页签外，翻到哪页都按得到。
+    private enum AgentSettingsTab: Hashable { case model, runtime, im, extensions, display }
+
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.m) {
             Text(L(.agentSettingsTitle))
                 .font(Theme.font(.title))
 
-            // **可滚动**：内容一多（信息面三格 + MCP + 授权粒度…）不能把底栏挤出去。
-            // 底栏（测试连接 / 取消 / 保存）在 ScrollView 外、固定在对话框底部。
-            ScrollView {
-            Form {
+            TabView(selection: $selectedTab) {
+                modelTab
+                    .tabItem { Label(L(.agentTabModel), systemImage: "cpu") }
+                    .tag(AgentSettingsTab.model)
+                runtimeTab
+                    .tabItem { Label(L(.agentTabRuntime), systemImage: "gauge.with.dots.needle.50percent") }
+                    .tag(AgentSettingsTab.runtime)
+                imTab
+                    .tabItem { Label(L(.agentTabIM), systemImage: "bubble.left.and.bubble.right") }
+                    .tag(AgentSettingsTab.im)
+                extensionsTab
+                    .tabItem { Label(L(.agentTabExtensions), systemImage: "puzzlepiece") }
+                    .tag(AgentSettingsTab.extensions)
+                displayTab
+                    .tabItem { Label(L(.agentTabDisplay), systemImage: "paintbrush") }
+                    .tag(AgentSettingsTab.display)
+            }
+            .frame(minHeight: 380, maxHeight: .infinity)
+
+            statusSection
+
+            footerRow
+        }
+        .padding(Spacing.l)
+        .frame(width: 560, height: min(sheetHeight, AgentSettingsSheet.maxSheetHeight))
+        // 换提供商 ⇒ 自动填端点与模型；手改端点 ⇒ 重认一次「这是谁」。
+        // 两条都不自己判，只读契约层（`AgentProviderCatalog`）给的答案。
+        .onChange(of: providerID) { _, newValue in applyProvider(newValue) }
+        .onChange(of: endpoint) { _, newValue in syncProvider(with: newValue) }
+        .task {
+            guard !isLoaded else { return }
+            isLoaded = true
+            let configuration = appState.agentConfiguration
+            isEnabled = configuration.isEnabled
+            endpoint = configuration.endpoint
+            model = configuration.model
+            // 按端点认回「上次选的是谁」（认不出 = 自定义）——重开面板不许落回自定义。
+            providerID = AgentProviderCatalog.resolved(endpoint: configuration.endpoint).id
+            timeoutSeconds = String(Int(configuration.timeoutSeconds))
+            maxRequests = configuration.quota.maxRequestsPerSession.map(String.init) ?? ""
+            maxOutputTokens = configuration.quota.maxOutputTokensPerRequest.map(String.init) ?? ""
+            maxTotalTokens = configuration.quota.maxTotalTokens.map(String.init) ?? ""
+            scopeMode = configuration.scopeMode
+            // IM 通道凭据：回填 AppID（明文）；Secret 草稿留空 —— 输入框里永不出现密钥本体。
+            appState.refreshAgentIMCredentials()
+            imAppID = appState.agentIMAppID
+            imEnvironment = appState.agentIMSettings.environment
+            imRelayURL = appState.agentIMSettings.relayURL
+            imReceiveTasks = appState.agentIMSettings.receiveTasks
+            imSecretInput = ""
+            imLine = nil
+            // 真值源（`FR-AI-25`）：这一档填过的窗口 / 价目要回填 —— 否则重开面板就是空白，
+            // 保存一次等于把用户填过的价目**静默清掉**。
+            let pricing = configuration.activeProfile?.pricing
+            contextWindowText = pricing?.contextWindow.map { String($0) } ?? ""
+            // 价目字段不再展示（同上令）——旧配置里存过的价格不读、也不再写回。
+            // MCP 那一行的读数（「还没配置 / 已连上 n / m 条」）需要配置与这一轮的发现结果；
+            // 配置读一次就够（`loadAgentMCPConfiguration` 幂等），发现结果由对话那条路填。
+            appState.loadAgentMCPConfiguration()
+            // 运行策略（`FR-AGT-OPS-OBS-002`）：读盘一次并回填草稿 —— 重开面板显示的是
+            // **当前生效的那份**，不是空白（空白保存一次就等于把用户设过的全清掉）。
+            appState.loadAgentRuntimeConfigIfNeeded()
+            runtimeDraft = AgentRuntimeConfigDraft(snapshot: appState.agentRuntimeConfig.snapshot)
+            runtimeReason = ""
+            runtimeLine = AgentConfigRejectionText.degradedLine(for: appState.agentRuntimeConfigState)
+            // 显示开关（`FR-AGT-UX-CONV-012`）：读盘一次并回填 —— 重开面板显示的是
+            // **盘上生效的那份**，不是契约默认值（否则用户一开面板就以为自己设的被清了）。
+            appState.loadAgentDisplayPreferencesIfNeeded()
+            // 插件目录（`FR-AGT-LINK-EXT-003`）：开面板就扫一次 —— 显示的是**此刻盘上的事实**，
+            // 不是上一次关闭时留下的旧读数（用户可能刚把插件文件夹拖进去）。
+            appState.rescanAgentExtensions()
+            pendingExtensionUninstallID = nil
+        }
+        .sheet(isPresented: $showsMCPServers) {
+            MCPServersSheet()
+                .environmentObject(appState)
+        }
+        // 卸载要二次确认（`FR-AGT-LINK-EXT-003`）：它删的是**他自己放进目录的东西**。
+        // 确认后走 `AppState.uninstallAgentExtension`（真删自有路径、交回要停的进程），
+        // 结论照收据写，不在这句话里替它下「干净了」的判断。
+        .confirmationDialog(
+            L(.agentExtensionUninstallConfirmTitle),
+            isPresented: Binding(
+                get: { pendingExtensionUninstallID != nil },
+                set: { if !$0 { pendingExtensionUninstallID = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            if let id = pendingExtensionUninstallID {
+                Button(L(.agentExtensionUninstallAction), role: .destructive) {
+                    appState.uninstallAgentExtension(pluginID: id)
+                    pendingExtensionUninstallID = nil
+                }
+            }
+            Button(L(.commonCancel), role: .cancel) {
+                pendingExtensionUninstallID = nil
+            }
+        } message: {
+            Text(L(.agentExtensionUninstallConfirmBody))
+        }
+    }
+
+    // MARK: - 五页（内容与改动前的 Form 逐字一致，只是搬进各自的滚动区）
+
+    private var modelTab: some View { tabScroll {
                 Toggle(isOn: $isEnabled) {
                     Label(L(.agentEnabled), systemImage: "cpu")
                 }
@@ -143,6 +252,30 @@ struct AgentSettingsSheet: View {
 
                 // **MCP 服务器**（`FR-AI-21` 界面片）：这里是入口 + 一行读数，
                 // 真正的加 / 删 / 开关与「连不上」的原因在弹层里（`MCPServersSheet`）。
+                Section(L(.agentAPIKey)) {
+                    SecureField(L(.agentAPIKey), text: $apiKeyInput)
+                    Text(appState.hasAgentAPIKey ? L(.agentAPIKeyConfigured) : L(.agentAPIKeyMissing))
+                        .font(Theme.font(.caption))
+                        .foregroundStyle(Theme.text(.secondary))
+
+                    if appState.hasAgentAPIKey {
+                        Toggle(isOn: $clearAPIKey) {
+                            Label(L(.agentAPIKeyClear), systemImage: "key.slash")
+                        }
+                        .help(L(.agentAPIKeyClear))
+                        .accessibilityLabel(Text(L(.agentAPIKeyClear)))
+                        .font(Theme.font(.caption))
+                    }
+                }
+
+                // IM 通道（`FR-AGT-LINK-CHAN-003`）：**能配、能看状态、能测**。
+                // 2026-10-28 主人原话：「怎么连配置IM通道的界面都没有呢？」—— 此前这一节只有
+                // AppID / Secret 两格 + 一句「传输层未实现」，于是「配齐了没」「连没连上」
+                // 没有任何一处说得清。现在四样配置 + 一行状态（未配置 / 未连接 / 正在连接 /
+                // 已连接 / 未连通+原因）+ 测试连接；状态与「缺什么」全由 Core 合成，界面只搬结论。
+    } }
+
+    private var runtimeTab: some View { tabScroll {
                 Section(L(.agentMCPSection)) {
                     HStack(spacing: Spacing.s) {
                         Button(L(.agentMCPConfigure)) { showsMCPServers = true }
@@ -257,119 +390,9 @@ struct AgentSettingsSheet: View {
                 // 装了哪些、每个真授权了什么、没装上的为什么、卸完还剩什么 —— 四件都在这一节。
                 // 「装」这件事本身 = 把插件文件夹放进目录（面板不假装能凭空拉一个插件下来），
                 // 所以这里给的是**目录入口 + 重扫 + 卸载**，不是「安装」按钮。
-                Section(L(.agentExtensionSection)) {
-                    extensionDirectorySection
-                    extensionInstalledSection
-                    extensionProblemsSection
-                }
-                // **显示开关**（`FR-AGT-UX-CONV-012` 九个，跨端同名同默认）：
-                // 每一项**改完立刻生效并落盘**（与运行策略不同 —— 那边要理由、要批量原子校验）。
-                // 这里不收理由：观感开关塞进审计会把真正的审计淹掉。
-                Section(L(.agentDisplaySection)) {
-                    Text(L(.agentDisplayHint))
-                        .font(Theme.font(.caption))
-                        .foregroundStyle(Theme.text(.secondary))
+    } }
 
-                    Toggle(isOn: displayToggle(.streaming)) {
-                        Label(L(.agentDisplayStreaming), systemImage: "text.line.last.and.arrowtriangle.forward")
-                    }
-                    .help(L(.agentDisplayStreaming))
-                    .accessibilityLabel(Text(L(.agentDisplayStreaming)))
-
-                    Toggle(isOn: displayToggle(.compact)) {
-                        Label(L(.agentDisplayCompact), systemImage: "rectangle.compress.vertical")
-                    }
-                    .help(L(.agentDisplayCompact))
-                    .accessibilityLabel(Text(L(.agentDisplayCompact)))
-
-                    Toggle(isOn: displayToggle(.thinking)) {
-                        Label(L(.agentDisplayThinking), systemImage: "brain")
-                    }
-                    .help(L(.agentDisplayThinking))
-                    .accessibilityLabel(Text(L(.agentDisplayThinking)))
-
-                    Toggle(isOn: displayToggle(.timestamps)) {
-                        Label(L(.agentDisplayTimestamps), systemImage: "clock")
-                    }
-                    .help(L(.agentDisplayTimestamps))
-                    .accessibilityLabel(Text(L(.agentDisplayTimestamps)))
-
-                    Picker(L(.agentDisplayToolProgress), selection: displayToolProgress) {
-                        ForEach(AgentToolProgressMode.allCases, id: \.self) { mode in
-                            Text(toolProgressLabel(mode)).tag(mode)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-
-                    Picker(L(.agentDisplayIndicatorGlyph), selection: displayGlyph) {
-                        ForEach(AgentIndicatorGlyph.allCases, id: \.self) { style in
-                            Text(glyphLabel(style)).tag(style)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-
-                    Picker(L(.agentDisplayLongPreview), selection: displayLongPreview) {
-                        Text(L(.agentDisplayPreviewOff)).tag(AgentLongMessagePreview.off)
-                        ForEach(Self.previewChoices, id: \.self) { choice in
-                            Text(L(.agentDisplayPreviewHeadTail,
-                                   Int64(choice.edges?.head ?? 0),
-                                   Int64(choice.edges?.tail ?? 0))).tag(choice)
-                        }
-                    }
-
-                    Toggle(isOn: displayToggle(.bottomBarMeta)) {
-                        Label(L(.agentDisplayBottomBarMeta), systemImage: "rectangle.bottomthird.inset.filled")
-                    }
-                    .help(L(.agentDisplayBottomBarMeta))
-                    .accessibilityLabel(Text(L(.agentDisplayBottomBarMeta)))
-
-                    Picker(L(.agentDisplaySubmitWhileRunning), selection: displaySubmitWhileRunning) {
-                        ForEach(AgentSubmitWhileRunning.allCases, id: \.self) { mode in
-                            Text(submitLabel(mode)).tag(mode)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-
-                    HStack(spacing: Spacing.s) {
-                        Button(L(.agentDisplayResetDefaults)) { resetAgentDisplay() }
-                            .buttonStyle(.bordered)
-                        if let displayLine {
-                            Text(displayLine)
-                                .font(Theme.font(.caption))
-                                .foregroundStyle(Theme.text(.secondary))
-                                .fixedSize(horizontal: false, vertical: true)
-                        } else if case let .degraded(reason) = appState.agentDisplayPreferencesState {
-                            Text(AgentDisplayRejectionText.degradedLine(
-                                reason: reason,
-                                language: LocalizationManager.shared.effectiveLanguage))
-                                .font(Theme.font(.caption))
-                                .foregroundStyle(Theme.status(.warning))
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                    }
-                }
-
-                Section(L(.agentAPIKey)) {
-                    SecureField(L(.agentAPIKey), text: $apiKeyInput)
-                    Text(appState.hasAgentAPIKey ? L(.agentAPIKeyConfigured) : L(.agentAPIKeyMissing))
-                        .font(Theme.font(.caption))
-                        .foregroundStyle(Theme.text(.secondary))
-
-                    if appState.hasAgentAPIKey {
-                        Toggle(isOn: $clearAPIKey) {
-                            Label(L(.agentAPIKeyClear), systemImage: "key.slash")
-                        }
-                        .help(L(.agentAPIKeyClear))
-                        .accessibilityLabel(Text(L(.agentAPIKeyClear)))
-                        .font(Theme.font(.caption))
-                    }
-                }
-
-                // IM 通道（`FR-AGT-LINK-CHAN-003`）：**能配、能看状态、能测**。
-                // 2026-10-28 主人原话：「怎么连配置IM通道的界面都没有呢？」—— 此前这一节只有
-                // AppID / Secret 两格 + 一句「传输层未实现」，于是「配齐了没」「连没连上」
-                // 没有任何一处说得清。现在四样配置 + 一行状态（未配置 / 未连接 / 正在连接 /
-                // 已连接 / 未连通+原因）+ 测试连接；状态与「缺什么」全由 Core 合成，界面只搬结论。
+    private var imTab: some View { tabScroll {
                 Section(L(.agentIMSection)) {
                     // ★0（2026-10-28 主人原话「既然是 QQ 通道，为什么还要用户填 wss 地址？」）：
                     // 地址整格删掉，只留「环境」—— 程序拿 AppID + Secret 换 token、再问官方要网关地址。
@@ -457,6 +480,18 @@ struct AgentSettingsSheet: View {
                         Button(L(.agentIMQRButton)) { isQQScanPresented = true }
                         Button(L(.agentIMClear), role: .destructive) { clearIMCredentials() }
                     }
+                    HStack(spacing: Spacing.m) {
+                        Button(L(.agentIMSelfCheck)) { runIMSelfCheck() }
+                            .accessibilityIdentifier("agent-im-selfcheck")
+                        if let imSelfCheckLine {
+                            Text(imSelfCheckLine)
+                                .font(Theme.font(.caption))
+                                .foregroundStyle(Theme.text(.secondary))
+                                .fixedSize(horizontal: false, vertical: true)
+                                .accessibilityIdentifier("agent-im-selfcheck-line")
+                        }
+                        Spacer()
+                    }
                     if let imLine {
                         Text(imLine)
                             .font(Theme.font(.caption))
@@ -480,34 +515,117 @@ struct AgentSettingsSheet: View {
                             .foregroundStyle(Theme.text(.secondary))
                     }
                 }
-            }
-            .formStyle(.columns)
-            .frame(width: 460)
-            .sheet(isPresented: $isQQScanPresented) {
-                QQQRLoginSheet { appID, secret in
-                    // 扫码的产出与手填同一套落库（Secret 仍只进钥匙串）。
-                    if appState.saveAgentIMCredentials(appID: appID, secret: secret) {
-                        imAppID = appID
-                        imSecretInput = ""
-                        imLine = L(.agentIMSaved)
-                    } else {
-                        imLine = appState.errorMessage
+    } }
+
+    private var extensionsTab: some View { tabScroll {
+                Section(L(.agentExtensionSection)) {
+                    extensionDirectorySection
+                    extensionInstalledSection
+                    extensionProblemsSection
+                }
+                // **显示开关**（`FR-AGT-UX-CONV-012` 九个，跨端同名同默认）：
+                // 每一项**改完立刻生效并落盘**（与运行策略不同 —— 那边要理由、要批量原子校验）。
+                // 这里不收理由：观感开关塞进审计会把真正的审计淹掉。
+    } }
+
+    private var displayTab: some View { tabScroll {
+                Section(L(.agentDisplaySection)) {
+                    Text(L(.agentDisplayHint))
+                        .font(Theme.font(.caption))
+                        .foregroundStyle(Theme.text(.secondary))
+
+                    Toggle(isOn: displayToggle(.streaming)) {
+                        Label(L(.agentDisplayStreaming), systemImage: "text.line.last.and.arrowtriangle.forward")
+                    }
+                    .help(L(.agentDisplayStreaming))
+                    .accessibilityLabel(Text(L(.agentDisplayStreaming)))
+
+                    Toggle(isOn: displayToggle(.compact)) {
+                        Label(L(.agentDisplayCompact), systemImage: "rectangle.compress.vertical")
+                    }
+                    .help(L(.agentDisplayCompact))
+                    .accessibilityLabel(Text(L(.agentDisplayCompact)))
+
+                    Toggle(isOn: displayToggle(.thinking)) {
+                        Label(L(.agentDisplayThinking), systemImage: "brain")
+                    }
+                    .help(L(.agentDisplayThinking))
+                    .accessibilityLabel(Text(L(.agentDisplayThinking)))
+
+                    Toggle(isOn: displayToggle(.timestamps)) {
+                        Label(L(.agentDisplayTimestamps), systemImage: "clock")
+                    }
+                    .help(L(.agentDisplayTimestamps))
+                    .accessibilityLabel(Text(L(.agentDisplayTimestamps)))
+
+                    Picker(L(.agentDisplayToolProgress), selection: displayToolProgress) {
+                        ForEach(AgentToolProgressMode.allCases, id: \.self) { mode in
+                            Text(toolProgressLabel(mode)).tag(mode)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+
+                    Picker(L(.agentDisplayIndicatorGlyph), selection: displayGlyph) {
+                        ForEach(AgentIndicatorGlyph.allCases, id: \.self) { style in
+                            Text(glyphLabel(style)).tag(style)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+
+                    Picker(L(.agentDisplayLongPreview), selection: displayLongPreview) {
+                        Text(L(.agentDisplayPreviewOff)).tag(AgentLongMessagePreview.off)
+                        ForEach(Self.previewChoices, id: \.self) { choice in
+                            Text(L(.agentDisplayPreviewHeadTail,
+                                   Int64(choice.edges?.head ?? 0),
+                                   Int64(choice.edges?.tail ?? 0))).tag(choice)
+                        }
+                    }
+
+                    Toggle(isOn: displayToggle(.bottomBarMeta)) {
+                        Label(L(.agentDisplayBottomBarMeta), systemImage: "rectangle.bottomthird.inset.filled")
+                    }
+                    .help(L(.agentDisplayBottomBarMeta))
+                    .accessibilityLabel(Text(L(.agentDisplayBottomBarMeta)))
+
+                    Picker(L(.agentDisplaySubmitWhileRunning), selection: displaySubmitWhileRunning) {
+                        ForEach(AgentSubmitWhileRunning.allCases, id: \.self) { mode in
+                            Text(submitLabel(mode)).tag(mode)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+
+                    HStack(spacing: Spacing.s) {
+                        Button(L(.agentDisplayResetDefaults)) { resetAgentDisplay() }
+                            .buttonStyle(.bordered)
+                        if let displayLine {
+                            Text(displayLine)
+                                .font(Theme.font(.caption))
+                                .foregroundStyle(Theme.text(.secondary))
+                                .fixedSize(horizontal: false, vertical: true)
+                        } else if case let .degraded(reason) = appState.agentDisplayPreferencesState {
+                            Text(AgentDisplayRejectionText.degradedLine(
+                                reason: reason,
+                                language: LocalizationManager.shared.effectiveLanguage))
+                                .font(Theme.font(.caption))
+                                .foregroundStyle(Theme.status(.warning))
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
                     }
                 }
-                .environmentObject(appState)
-            }
-            // **表单吃剩余高度、自己内部滚动**：对话框高度必须封顶（见 `sheetHeight`），
-            // 否则表单把整块撑到屏幕外 —— 底栏的「测试连接 / 取消 / 保存」会被 Dock 盖住
-            // （人类主人 2026-10-18 实测：「对话框太高了，连最底下的测试按钮都被任务栏遮住了」）。
-            .frame(maxHeight: .infinity)
-            }
-            .frame(maxHeight: .infinity)
 
-            statusSection
+    } }
 
-            // **这一块是"二次配置界面"，一律走 macOS 标准按钮**（人类主人 2026-10-16 订正：
-            // 「这些弹出对话框、二次配置界面还是标准的系统按钮和风格，主界面的工具条这些直接面对使用者的界面，
-            // 才考虑图标化」）—— 原先这里两枚纯图标按钮（叉 / 下载箭头）是理解偏差，已改回文字按钮。
+    /// 每页同一副壳：自己滚动、`Form` 系统样式、吃满剩余高度。
+    private func tabScroll<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
+        ScrollView {
+            Form { content() }
+                .formStyle(.columns)
+                .frame(maxWidth: .infinity)
+        }
+        .frame(maxHeight: .infinity)
+    }
+
+    private var footerRow: some View {
             HStack(spacing: Spacing.m) {
                 Button(L(.agentTestConnection)) {
                     isTesting = true
@@ -545,84 +663,6 @@ struct AgentSettingsSheet: View {
                     .buttonStyle(.borderedProminent)
                     .keyboardShortcut(.defaultAction)
             }
-        }
-        .padding(Spacing.l)
-        .frame(width: 560, height: min(sheetHeight, AgentSettingsSheet.maxSheetHeight))
-        // 换提供商 ⇒ 自动填端点与模型；手改端点 ⇒ 重认一次「这是谁」。
-        // 两条都不自己判，只读契约层（`AgentProviderCatalog`）给的答案。
-        .onChange(of: providerID) { _, newValue in applyProvider(newValue) }
-        .onChange(of: endpoint) { _, newValue in syncProvider(with: newValue) }
-        .task {
-            guard !isLoaded else { return }
-            isLoaded = true
-            let configuration = appState.agentConfiguration
-            isEnabled = configuration.isEnabled
-            endpoint = configuration.endpoint
-            model = configuration.model
-            // 按端点认回「上次选的是谁」（认不出 = 自定义）——重开面板不许落回自定义。
-            providerID = AgentProviderCatalog.resolved(endpoint: configuration.endpoint).id
-            timeoutSeconds = String(Int(configuration.timeoutSeconds))
-            maxRequests = configuration.quota.maxRequestsPerSession.map(String.init) ?? ""
-            maxOutputTokens = configuration.quota.maxOutputTokensPerRequest.map(String.init) ?? ""
-            maxTotalTokens = configuration.quota.maxTotalTokens.map(String.init) ?? ""
-            scopeMode = configuration.scopeMode
-            // IM 通道凭据：回填 AppID（明文）；Secret 草稿留空 —— 输入框里永不出现密钥本体。
-            appState.refreshAgentIMCredentials()
-            imAppID = appState.agentIMAppID
-            imEnvironment = appState.agentIMSettings.environment
-            imRelayURL = appState.agentIMSettings.relayURL
-            imReceiveTasks = appState.agentIMSettings.receiveTasks
-            imSecretInput = ""
-            imLine = nil
-            // 真值源（`FR-AI-25`）：这一档填过的窗口 / 价目要回填 —— 否则重开面板就是空白，
-            // 保存一次等于把用户填过的价目**静默清掉**。
-            let pricing = configuration.activeProfile?.pricing
-            contextWindowText = pricing?.contextWindow.map { String($0) } ?? ""
-            // 价目字段不再展示（同上令）——旧配置里存过的价格不读、也不再写回。
-            // MCP 那一行的读数（「还没配置 / 已连上 n / m 条」）需要配置与这一轮的发现结果；
-            // 配置读一次就够（`loadAgentMCPConfiguration` 幂等），发现结果由对话那条路填。
-            appState.loadAgentMCPConfiguration()
-            // 运行策略（`FR-AGT-OPS-OBS-002`）：读盘一次并回填草稿 —— 重开面板显示的是
-            // **当前生效的那份**，不是空白（空白保存一次就等于把用户设过的全清掉）。
-            appState.loadAgentRuntimeConfigIfNeeded()
-            runtimeDraft = AgentRuntimeConfigDraft(snapshot: appState.agentRuntimeConfig.snapshot)
-            runtimeReason = ""
-            runtimeLine = AgentConfigRejectionText.degradedLine(for: appState.agentRuntimeConfigState)
-            // 显示开关（`FR-AGT-UX-CONV-012`）：读盘一次并回填 —— 重开面板显示的是
-            // **盘上生效的那份**，不是契约默认值（否则用户一开面板就以为自己设的被清了）。
-            appState.loadAgentDisplayPreferencesIfNeeded()
-            // 插件目录（`FR-AGT-LINK-EXT-003`）：开面板就扫一次 —— 显示的是**此刻盘上的事实**，
-            // 不是上一次关闭时留下的旧读数（用户可能刚把插件文件夹拖进去）。
-            appState.rescanAgentExtensions()
-            pendingExtensionUninstallID = nil
-        }
-        .sheet(isPresented: $showsMCPServers) {
-            MCPServersSheet()
-                .environmentObject(appState)
-        }
-        // 卸载要二次确认（`FR-AGT-LINK-EXT-003`）：它删的是**他自己放进目录的东西**。
-        // 确认后走 `AppState.uninstallAgentExtension`（真删自有路径、交回要停的进程），
-        // 结论照收据写，不在这句话里替它下「干净了」的判断。
-        .confirmationDialog(
-            L(.agentExtensionUninstallConfirmTitle),
-            isPresented: Binding(
-                get: { pendingExtensionUninstallID != nil },
-                set: { if !$0 { pendingExtensionUninstallID = nil } }
-            ),
-            titleVisibility: .visible
-        ) {
-            if let id = pendingExtensionUninstallID {
-                Button(L(.agentExtensionUninstallAction), role: .destructive) {
-                    appState.uninstallAgentExtension(pluginID: id)
-                    pendingExtensionUninstallID = nil
-                }
-            }
-            Button(L(.commonCancel), role: .cancel) {
-                pendingExtensionUninstallID = nil
-            }
-        } message: {
-            Text(L(.agentExtensionUninstallConfirmBody))
-        }
     }
 
     // MARK: - MCP 读数
@@ -1070,6 +1110,33 @@ struct AgentSettingsSheet: View {
 
     /// 存通道：**先存配置面（环境 / 中继 / 开关），再存凭据**。
     /// 两步都走 Core 校验：任何一步不合法，那一步什么都不落盘，原因落在 `imLine`。
+    /// 自检：把「盘上有没有配置 / 有没有 AppID / 钥匙串有没有 Secret / 选没选环境」念出来。
+    private func runIMSelfCheck() {
+        let directory = AgentIMCredentialStore.defaultDirectory()
+        let file = directory.appendingPathComponent(AgentIMChannelCredentialKind.qq.configFileName)
+        let facts = AgentIMSelfCheckFacts(
+            appID: imAppID,
+            hasSecret: appState.hasAgentIMSecret,
+            environment: imEnvironment,
+            receiveTasks: imReceiveTasks,
+            configFileExists: FileManager.default.fileExists(atPath: file.path)
+        )
+        let problems = AgentIMSelfCheck.problems(facts)
+        if problems.isEmpty {
+            imSelfCheckLine = L(.agentIMSelfCheckReady)
+        } else {
+            imSelfCheckLine = problems.map { problem in
+                switch problem {
+                case .configFileMissing: return L(.agentIMSelfCheckNoConfig)
+                case .appIDMissing: return L(.agentIMSelfCheckNoAppID)
+                case .appIDNotNumeric: return L(.agentIMSelfCheckBadAppID)
+                case .secretMissing: return L(.agentIMSelfCheckNoSecret)
+                case .environmentMissing: return L(.agentIMSelfCheckNoEnvironment)
+                }
+            }.joined(separator: LocalizationManager.shared.effectiveLanguage == .english ? "; " : "；")
+        }
+    }
+
     private func saveIMCredentials() {
         guard appState.saveAgentIMSettings(environment: imEnvironment,
                                            relayURL: imRelayURL,

@@ -2020,6 +2020,18 @@ public enum LKey: String, CaseIterable, Sendable {
     case agentIMSendNotJSON
     case agentIMSendRejected
     case agentIMSendNetworkFailed
+    case agentIMSelfCheck
+    case agentIMSelfCheckReady
+    case agentIMSelfCheckNoConfig
+    case agentIMSelfCheckNoAppID
+    case agentIMSelfCheckBadAppID
+    case agentIMSelfCheckNoSecret
+    case agentIMSelfCheckNoEnvironment
+    case agentTabModel
+    case agentTabRuntime
+    case agentTabIM
+    case agentTabExtensions
+    case agentTabDisplay
     case agentIMQRButton
     case agentIMQRTitle
     case agentIMQRHint
@@ -5238,6 +5250,18 @@ public enum LocalizedStrings {
         .agentIMSendNotJSON: [.simplifiedChinese: "发不出去：对方回的不是能认的答复（多半被代理或网关拦了）。", .english: "Could not send: the reply was not something we can read (usually a proxy or gateway intercepting it)."],
         .agentIMSendRejected: [.simplifiedChinese: "发不出去：QQ 拒了这个请求，HTTP %d（码 %@）。", .english: "Could not send: QQ rejected the request, HTTP %d (code %@)."],
         .agentIMSendNetworkFailed: [.simplifiedChinese: "发不出去：连不上 QQ 的接口（网络 / 代理）。结论留在队列里，等下次连上再发。", .english: "Could not send: cannot reach the QQ API (network or proxy). The result stays queued and goes out on the next connection."],
+        .agentIMSelfCheck: [.simplifiedChinese: "自检", .english: "Self-check"],
+        .agentIMSelfCheckReady: [.simplifiedChinese: "四项都齐（配置 / AppID / Secret / 环境），可以点「测试连接」了。", .english: "All four are in place (config, AppID, secret, environment) — try Test connection."],
+        .agentIMSelfCheckNoConfig: [.simplifiedChinese: "配置没落盘：点了保存但盘上没有这个文件，保存那一步没成", .english: "Config not on disk: Save did not write the file"],
+        .agentIMSelfCheckNoAppID: [.simplifiedChinese: "没有 AppID", .english: "No AppID"],
+        .agentIMSelfCheckBadAppID: [.simplifiedChinese: "AppID 必须是纯数字", .english: "AppID must be digits only"],
+        .agentIMSelfCheckNoSecret: [.simplifiedChinese: "钥匙串里没有 App Secret", .english: "No App Secret in the keychain"],
+        .agentIMSelfCheckNoEnvironment: [.simplifiedChinese: "没选环境（正式 / 沙箱）", .english: "No environment chosen"],
+        .agentTabModel: [.simplifiedChinese: "模型", .english: "Model"],
+        .agentTabRuntime: [.simplifiedChinese: "运行", .english: "Runtime"],
+        .agentTabIM: [.simplifiedChinese: "IM 通道", .english: "IM channel"],
+        .agentTabExtensions: [.simplifiedChinese: "扩展", .english: "Extensions"],
+        .agentTabDisplay: [.simplifiedChinese: "外观", .english: "Appearance"],
         .agentIMQRButton: [.simplifiedChinese: "用 QQ 扫码接入", .english: "Connect with QQ scan"],
         .agentIMQRTitle: [.simplifiedChinese: "用手机 QQ 扫一扫", .english: "Scan with QQ on your phone"],
         .agentIMQRHint: [.simplifiedChinese: "扫码后会自动拿到机器人的 AppID 与 AppSecret，你不用去开放平台抄。扫完这一页会自己关。", .english: "Scanning hands back the bot's AppID and AppSecret for you — no copying from the console. This sheet closes itself when done."],
