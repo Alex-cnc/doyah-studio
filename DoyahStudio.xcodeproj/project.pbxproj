@@ -214,6 +214,7 @@
 		314528E658AFD0B008CF077B /* TerminalTextWrap.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02D9E3678A42F61F45DB652A /* TerminalTextWrap.swift */; };
 		317AB9598032C2191713BEAF /* TodoCalendarTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FAF006B1D5CA5A686FD6CFE /* TodoCalendarTests.swift */; };
 		31E6CAAF05BFD5B602DE6B86 /* LicensePresentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7AD0B7353ADAAB4A7427E1A5 /* LicensePresentation.swift */; };
+		32980D28D3CBCF29732A026B /* LicenseHighlights.swift in Sources */ = {isa = PBXBuildFile; fileRef = 842B3D4DA77FC4D3148A0BB2 /* LicenseHighlights.swift */; };
 		32DCD76AB87CB37E41DFF6FE /* ConnectionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66F0A06A4CC779CE258A5B86 /* ConnectionStore.swift */; };
 		32F04D2492A70D8FB3A6A29E /* AgentDecisionAudit.swift in Sources */ = {isa = PBXBuildFile; fileRef = C046809FFE3B9D7721E26E65 /* AgentDecisionAudit.swift */; };
 		32F70A82D45C27C4D016C777 /* PrivilegeProbe.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1053065542E38D0A6B38E9BE /* PrivilegeProbe.swift */; };
@@ -768,6 +769,7 @@
 		CACFEE8494B65B1F10220EC7 /* LowerPaneSizingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF344515E026353ABD62BEA7 /* LowerPaneSizingTests.swift */; };
 		CAEECB45886E3837C88485F4 /* MultiCursorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 351BA5281B85C8B96236BA42 /* MultiCursorTests.swift */; };
 		CB15DE3B75FE7B0315E44CA5 /* AgentContextCompressionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC9039CEA99B1E9F195828B5 /* AgentContextCompressionTests.swift */; };
+		CB215CA3FC4C95E5A2AB4A8C /* LicenseHighlightsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81DCF7E22733AD97870FDDD8 /* LicenseHighlightsTests.swift */; };
 		CBAA0DA5B11E4A416000EAF1 /* AgentStandardDispatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3748518A54E8411DA38CBDD /* AgentStandardDispatcher.swift */; };
 		CC144CE0A92F8B45DDC5FF16 /* DoyahCore.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = AE8BE22E68AD7A621E98BDCC /* DoyahCore.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		CC320734748C7E37F6112EA2 /* AgentObservationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC8CA7A52D3005A19644DA32 /* AgentObservationTests.swift */; };
@@ -1541,11 +1543,13 @@
 		80AC5464368C1F00AA095A9A /* BackupExecution.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupExecution.swift; sourceTree = "<group>"; };
 		80AFDBF937A6105266028A60 /* AgentApprovalSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentApprovalSheet.swift; sourceTree = "<group>"; };
 		819B44625FDC3DF21782E4F7 /* AgentChatTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentChatTests.swift; sourceTree = "<group>"; };
+		81DCF7E22733AD97870FDDD8 /* LicenseHighlightsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LicenseHighlightsTests.swift; sourceTree = "<group>"; };
 		827BFBC75132F11765F97263 /* LicensePublicKey.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LicensePublicKey.swift; sourceTree = "<group>"; };
 		8286453AD87DA8EEBE3C7D7E /* AgentScheduleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentScheduleTests.swift; sourceTree = "<group>"; };
 		82DF35806715FCEDFFB47102 /* TerminalWorkingDirectory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalWorkingDirectory.swift; sourceTree = "<group>"; };
 		838A5752B2C493D28B14E904 /* TodoCalendarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodoCalendarView.swift; sourceTree = "<group>"; };
 		83E280BEEAB326D2D809430A /* AppRelauncher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppRelauncher.swift; sourceTree = "<group>"; };
+		842B3D4DA77FC4D3148A0BB2 /* LicenseHighlights.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LicenseHighlights.swift; sourceTree = "<group>"; };
 		84539073A62DA663B9181305 /* ResultStreamWriterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResultStreamWriterTests.swift; sourceTree = "<group>"; };
 		846E4416A87B1769B4C29856 /* TerminalPane.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalPane.swift; sourceTree = "<group>"; };
 		84964F124D2EDE5A6775778E /* ERDiagram.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ERDiagram.swift; sourceTree = "<group>"; };
@@ -2331,6 +2335,7 @@
 				ADC0DB91CA9EB732464BB5AF /* IntegrationPGTests.swift */,
 				DB00B9FB2D8ED6E1E439AB79 /* KeepAliveTests.swift */,
 				0DFB81067252ABC6E75E09B6 /* LicenseCapabilityTests.swift */,
+				81DCF7E22733AD97870FDDD8 /* LicenseHighlightsTests.swift */,
 				08E4AA740F6D33622D2A8409 /* LicenseSignatureTests.swift */,
 				39A0245B127C403AD51CFC87 /* LicenseTests.swift */,
 				34771CB31CB89170AF2B0501 /* LineMoveEditTests.swift */,
@@ -2736,6 +2741,7 @@
 				6880545C789A90D395DFF84B /* InlineGhostPathCompletion.swift */,
 				98D4DCE8C67A46FE2A2A1B16 /* KeepAlive.swift */,
 				322D102A1B0F58B0C6DDC3E3 /* License.swift */,
+				842B3D4DA77FC4D3148A0BB2 /* LicenseHighlights.swift */,
 				9BA67005C82C749296CD86A9 /* LicenseLoader.swift */,
 				7AD0B7353ADAAB4A7427E1A5 /* LicensePresentation.swift */,
 				827BFBC75132F11765F97263 /* LicensePublicKey.swift */,
@@ -3797,6 +3803,7 @@
 				8B30790DE1F2762899075495 /* LLMStreaming.swift in Sources */,
 				467F0A30BA74495AF26F62FC /* LLMTool.swift in Sources */,
 				17DBB0069FF36EB0A7AE21AF /* License.swift in Sources */,
+				32980D28D3CBCF29732A026B /* LicenseHighlights.swift in Sources */,
 				3E4F00883FD1B5B726AD267C /* LicenseLoader.swift in Sources */,
 				31E6CAAF05BFD5B602DE6B86 /* LicensePresentation.swift in Sources */,
 				12E88071D96D1E1D162293C5 /* LicensePublicKey.swift in Sources */,
@@ -4184,6 +4191,7 @@
 				48C4E790CF5AD3BE4FC61D3F /* LLMStreamingAuthTests.swift in Sources */,
 				AFF859146FDFD6622D8D9B03 /* LLMStreamingClientTests.swift in Sources */,
 				65579CB41F74811455FA9DCF /* LicenseCapabilityTests.swift in Sources */,
+				CB215CA3FC4C95E5A2AB4A8C /* LicenseHighlightsTests.swift in Sources */,
 				1B887C8D6C3D18AFE59D7D72 /* LicenseSignatureTests.swift in Sources */,
 				046550E887B527CD672B4E8B /* LicenseTests.swift in Sources */,
 				0FADC04C761594298C13DCCD /* LineMoveEditTests.swift in Sources */,

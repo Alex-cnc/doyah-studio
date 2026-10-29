@@ -456,6 +456,20 @@ public enum LKey: String, CaseIterable, Sendable {
     case licFeatureAllStandard
     case licFeatureAllPro
     case licFeatureLink
+    // 「关于」页的能力描述（主人 2026-10-29 令：只写最亮点的主要功能，用普通用户看得懂的语言）
+    case licDoSectionTitle
+    case licDoDatabaseTitle
+    case licDoDatabaseLine
+    case licDoCodeTitle
+    case licDoCodeLine
+    case licDoAgentTitle
+    case licDoAgentLine
+    case licDoNotesTitle
+    case licDoNotesLine
+    case licDoLinkTitle
+    case licDoLinkLine
+    case licDoIncluded
+    case licDoNeedsEdition
     // 「版本与许可证」页（FR-LIC-02 界面侧）：把"现在是什么版、许可证在哪、设备几台、
     // 别的版能做什么"四件事都说清楚 —— 少一件，用户就得去猜为什么某个区不见了。
     case menuAboutLicense
@@ -3698,6 +3712,19 @@ public enum LocalizedStrings {
         .licFeatureAllStandard: [.simplifiedChinese: "Standard 的全部功能", .english: "Everything in Standard"],
         .licFeatureAllPro: [.simplifiedChinese: "Pro 的全部功能", .english: "Everything in Pro"],
         .licFeatureLink: [.simplifiedChinese: "数据库与笔记联动（SQL / 表结构 / 诊断结论入笔记）", .english: "Database-to-notes links (SQL, schema, diagnosis findings)"],
+        .licDoSectionTitle: [.simplifiedChinese: "这个应用能帮你做什么", .english: "What this app does for you"],
+        .licDoDatabaseTitle: [.simplifiedChinese: "连上数据库，直接查", .english: "Query your database directly"],
+        .licDoDatabaseLine: [.simplifiedChinese: "连上你的库，写一句 SQL 就看到表格；整张表一键导出成 CSV。", .english: "Connect, run a query, see the table; export a whole table to CSV in one click."],
+        .licDoCodeTitle: [.simplifiedChinese: "打开文件夹就能写代码", .english: "Open a folder and start coding"],
+        .licDoCodeLine: [.simplifiedChinese: "文件树、多页签、终端都在一起；这次改了哪几行，一眼看清。", .english: "File tree, tabs and terminal in one place; see at a glance which lines changed."],
+        .licDoAgentTitle: [.simplifiedChinese: "让 AI 替你干一整件事", .english: "Let the AI finish the whole job"],
+        .licDoAgentLine: [.simplifiedChinese: "说一句要做什么，它自己读文件、改代码、跑命令；改完给你清单和差异，不满意一次全撤回。", .english: "Say what you want: it reads files, edits code and runs commands, then shows the file list and diff — undo the whole batch if you don't like it."],
+        .licDoNotesTitle: [.simplifiedChinese: "随手记，记得住", .english: "Keep notes you can find again"],
+        .licDoNotesLine: [.simplifiedChinese: "想到就记、打上标签、搜得到，到点还会提醒你。", .english: "Jot it down, tag it, search it later, and get reminded when it matters."],
+        .licDoLinkTitle: [.simplifiedChinese: "查完就存成笔记", .english: "Turn findings into notes"],
+        .licDoLinkLine: [.simplifiedChinese: "查完数据库，把结论连同 SQL 一起存进笔记，下次直接翻。", .english: "Save what you found — with the SQL — into your notes, ready for next time."],
+        .licDoIncluded: [.simplifiedChinese: "当前版本已含", .english: "Included"],
+        .licDoNeedsEdition: [.simplifiedChinese: "需 %@", .english: "Needs %@"],
         .menuAboutLicense: [.simplifiedChinese: "版本与许可证…", .english: "Version and License…"],
         .licAboutTitle: [.simplifiedChinese: "版本与许可证", .english: "Version and License"],
         .licAboutEdition: [.simplifiedChinese: "当前版本：", .english: "Current edition:"],

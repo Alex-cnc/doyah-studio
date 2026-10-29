@@ -41,6 +41,8 @@ struct AboutLicenseSheet: View {
                 VStack(alignment: .leading, spacing: Spacing.l) {
                     currentSection
                     Divider()
+                    capabilitySection
+                    Divider()
                     upgradeSection
                 }
                 .padding(Spacing.l)
@@ -125,6 +127,47 @@ struct AboutLicenseSheet: View {
                 .textSelection(.enabled)
                 .accessibilityIdentifier("license-devices")
         }
+    }
+
+    // MARK: 能做什么（主人 2026-10-29 令）
+
+    /// 只列**最亮点的主要功能**，一句一条，用普通用户的话说 —— 不写内部编号、不写「能力位」。
+    /// 每条右边挂当前版是否已含：**已含就写「当前版本已含」，没含就写「需 X 版」**，
+    /// 两句话比一句「解锁更多」有用（Q11 的口径同样是不许糊）。
+    private var capabilitySection: some View {
+        VStack(alignment: .leading, spacing: Spacing.m) {
+            Text(L(.licDoSectionTitle))
+                .font(Theme.font(.bodyStrong))
+                .accessibilityIdentifier("about-capabilities-title")
+            ForEach(Array(LicenseHighlights.all.enumerated()), id: \.offset) { _, highlight in
+                VStack(alignment: .leading, spacing: Spacing.xs) {
+                    HStack(alignment: .firstTextBaseline, spacing: Spacing.s) {
+                        Text(L(highlight.titleKey))
+                            .font(Theme.font(.body))
+                        Spacer(minLength: Spacing.s)
+                        Text(tagText(for: highlight))
+                            .font(Theme.font(.caption))
+                            .foregroundStyle(LicenseHighlights.isIncluded(highlight, in: entitlements.capabilities)
+                                             ? Theme.text(.secondary)
+                                             : Theme.status(.warning))
+                    }
+                    Text(L(highlight.lineKey))
+                        .font(Theme.font(.caption))
+                        .foregroundStyle(Theme.text(.secondary))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .accessibilityIdentifier("about-capability-\(highlight.edition.rawValue)-\(highlight.titleKey)")
+            }
+        }
+    }
+
+    private func tagText(for highlight: LicenseHighlight) -> String {
+        if LicenseHighlights.isIncluded(highlight, in: entitlements.capabilities) {
+            return L(.licDoIncluded)
+        }
+        let edition = LicenseHighlights.upgradeTarget(for: highlight, in: entitlements.capabilities)
+            ?? highlight.edition
+        return L(.licDoNeedsEdition, L(LicensePresentation.displayNameKey(of: edition)))
     }
 
     // MARK: 其它版本
