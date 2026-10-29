@@ -47,13 +47,33 @@ public enum TableExport {
 
     // MARK: - 取数能力
 
-    /// 这个连接能不能走服务端游标（= 能不能真的流式导出）。
+    /// 导出这条路对某个连接类型的**裁定**（唯一一处，GUI 与 CLI 都读它）。
     ///
-    /// 判据只有一条：`CursorPaging` 生成的语句是 PostgreSQL 语义。查表放在 Core 而不是界面，
-    /// 是为了让「菜单给不给这一项」与「执行时拦不拦」读同一处 —— 两处各写一份的话，
-    /// 菜单会给出一个点了必然报错的按钮。
+    /// 为什么要有「裁定」而不只是一个布尔：CLI 需要拿到**拒绝的理由本身**
+    /// （`Issue.streamingUnsupported` 带着认出来的类型），才能把「这个连接是 MySQL、
+    /// 所以没有服务端游标」说清楚；只给一个 `false`，调用方只能自己再编一句话 ——
+    /// 两处各编一句，迟早一处说「暂不支持」另一处说「连接失败」。
+    public enum StreamingDecision: Equatable, Sendable {
+        case streaming
+        case rejected(Issue)
+
+        public var isStreaming: Bool {
+            if case .streaming = self { return true }
+            return false
+        }
+    }
+
+    /// 这个连接走不走服务端游标（= 能不能真的流式导出）。
+    ///
+    /// 判据只有一条：`CursorPaging` 生成的语句是 PostgreSQL 语义。查表放在 Core 而不是界面 /
+    /// CLI，是为了让「菜单给不给这一项」「执行时拦不拦」「命令行怎么说」读同一处 ——
+    /// 各写一份的话，菜单会给出一个点了必然报错的按钮，命令行会拼出一条对面听不懂的语句。
+    public static func decision(for dbType: DatabaseType) -> StreamingDecision {
+        dbType == .postgresql ? .streaming : .rejected(.streamingUnsupported(dbType))
+    }
+
     public static func streamingSupported(_ dbType: DatabaseType) -> Bool {
-        dbType == .postgresql
+        decision(for: dbType).isStreaming
     }
 
     // MARK: - 整表导出

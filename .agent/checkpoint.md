@@ -97,17 +97,14 @@ updated: 2026-10-29T08:52
 - ⚠️ 口径不一（R53 记下的）：R52 记的「✅ 127 / 🟡 72 / ⬜ 14」与全表重算的「✅ 210 / 🟡 96 / ⬜ 97」不是同一套口径，
   待统一后再报总数（各轮只报本条迁移）。
 
-## 下一项（R68 收尾时更新）
+## 下一项（R72 收尾时更新）
 
-**0. R68 已落地**：`FR-STD-WS-UI-004` 判据列 🟡 → ✅（陈旧标记归正，零新增用例；Core 4900 不变）· 包 `6902c3e1（08:02:30）` · 明细 `.agent/evidence/2026-10-29-WS-UI-004.md`。
+**0. R72 已落地**：CLI `export` 的方言判 —— 方言按连接派生（`SQLDialectFactory.make(for: dbType)`）· 非 PG 在**建目录 / 拼语句之前**退 69 并说清「一条语句都没发出去」· `mysql` / `gbase8a` 子命令不再**静默忽略** `--export`；判据 +14 例（`Tests/TableExportTests` +7 / `Tests/CLIExportDialectSourceTests` 7）· Core **4936 / 0 failures** · 包 `be96b836（09:04:34）` · 明细 `.agent/evidence/2026-10-29-CLI-export-dialect.md`。
+同条前几片的进度：R69 整表导出接线 · R70 整库导出接线 · R71 修「入口只加在 SwiftUI 那份渲染」+ 生产右键补齐。
 
-**1. 下一轮先做 `DB-IO-002` 的「评估改动面」**（COPY … TO STDOUT 流式导出）：R68 实测 `Vendor/postgres-nio/Sources` 里 `copyOut` **零命中**（只有协议层消息 id `copyOutResponse`），公开 API 只有写入向 `copyFrom` ⇒ 「驱动缺能力」成立，但改动面 = 驱动补 copyOut + Core 流式导出 + 界面入口一整片，且要先定口径（`COPY TO STDOUT` vs 既有 `SELECT` 分页；后者今天就能做、前者要动 `Vendor/`）。**只出评估 + 两方案代价，别直接改 `Vendor/`。**
+**1. 台账里能自己推的活已清空**（`FR-STD-*` 实现列 ✅ 126 / 🟡 83 / ⬜ 4 = 213）。剩下的每一条都要人：
+- **人工点验（只有本人能做）**：整表导出一格 · 整库导出一格 · 顺带确认「导出整表…」在生产右键里看得见（R70 修的那处）；R59–R68 各轮累积清单见每轮卡末。
+- **要他一句话拍板**：**敏感列口径**（`FR-STD-DB-IO-002` 的否定面「不含敏感列除非显式勾选」没有「哪些列算敏感」的依据）· 许愿模式是否另设「不再逐条批」（`WS-AI-002` 后半）· `Q60` 取 B 的确认。
+- **缺环境 / 新活**：MySQL · GBase 的游标替代方案（要新活）· `DB-CONN-020` 真跳板机 · `DB-DRV-009` / `DB-IO-003` / `DB-META-002` / `DB-DIAG-003` 的真库面 · `WS-TOOL-003`（DAP）与 `WS-AI-001`（编辑区 AI）纵切过大。
 
-**2. 11 条 🟡 已逐条核实**（依据 `.agent/evidence/2026-10-29-WS-AI-002.md`）：环境挡 5 条（`DB-CONN-020` / `DB-DIAG-003` / `DB-DRV-009` / `DB-IO-003` / `DB-META-002`）·
-只差人点 2 条（`WS-VCS-001` / `WS-WEB-003`）· 范围 1 条（`WS-NAV-002` Beta 1 全量语种）·
-**标记陈旧 1 条（`WS-UI-004`：备注写「光标 + 滚动未交付」，源码里 `reportCursor` / 快照 `scrollOffset` / `WorkspaceAreaView:94` 都已接 ⇒ 按 R63 做法逐个 `--filter` 核例数再翻判据列）** ·
-机械缺口 1 条（`DB-IO-002`：COPY … TO STDOUT，缺口在 vendored 驱动内，先评估改动面）。
-
-**3. 实现列 3 条 ⬜ 仍不能自己推**（`WS-TOOL-003` / `WS-AI-001` 纵切过大；`WS-LIC-001` 等人工验收；`DB-DIAG-006` 需求摘要仍是「—」）⇒ 进「要你拍板」档。
-
-**4. `FR-STD-WS-AI-002` 仍差的那一半**：许愿模式「先出改动、后生效」（`WishStaging` 暂存面接线）= 产品口径 ⇒ 待主人拍板，别自己起。
+**2. 再没有 ★ 条进来时**：能自己推的活已清空 ⇒ 下一轮应 `action=pause` 停自己，不空转、不为了凑进度扩大范围。

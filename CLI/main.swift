@@ -419,11 +419,15 @@ struct DoyahCLI {
 
         // export：**流式**导出（FR-RES-13 的「取」那一半）。
         // 走服务端游标逐页取、逐页写盘：内存占用与总行数无关，也不用 OFFSET 翻页（大表上那是 O(n²)）。
+        // **方言按连接取**（2026-10-29 第七十二批）：以前这里钉死 `PostgresDialect()`，
+        // 于是「用哪个方言」与「连的是哪种库」是两句互不相干的说法 —— 一旦这条路接上非 PG 的连接
+        // （`mysql` / `gbase8a` 子命令已经能建出它们的服务），它会照 PG 语义拼出
+        // `DECLARE … CURSOR` / 双引号标识符，对面只会回一句莫名其妙的语法错。
         if arguments.contains("--export") || arguments.first == "export" {
             let code = await runExportCommand(
             arguments: arguments.filter { $0 != "export" },
             service: service,
-            dialect: PostgresDialect()
+            dbType: config.dbType
             )
             await service.disconnect()
             exit(code)
@@ -645,7 +649,7 @@ struct DoyahCLI {
     /// 整表导出的 `SELECT`：不手写 SQL 也能导整张表（FR-IO-02）。
     ///
     /// 排序不指定 —— 大表上 `ORDER BY` 会让服务端先排完再吐，反而更慢也更吃内存。
-    static func tableSelect(_ table: String, schema: String?, dialect: PostgresDialect) -> String {
+    static func tableSelect(_ table: String, schema: String?, dialect: any SQLDialect) -> String {
         "SELECT * FROM " + SQLGenerator.qualifiedName(table: table, schema: schema, dialect: dialect)
     }
 
@@ -659,7 +663,7 @@ struct DoyahCLI {
     formatName: String,
     fetchSize: Int,
     service: any DatabaseService,
-    dialect: PostgresDialect,
+    dialect: any SQLDialect,
     encoding: ResultExportEncoding = .utf8
     ) async -> Int32 {
         let schemaName = schema ?? "public"
@@ -1934,6 +1938,18 @@ struct DoyahCLI {
         /// 存在的理由与 `tunnel` 一样：界面里"能不能连上"只能靠眼睛，**命令行能给出一条可断言的路径** ——
         /// 本机没有 MySQL 实例时，脚本用**假 MySQL 服务器**（真跑 MySQL 线协议）把整条链路验一遍。
         private static func runMySQLCommand(arguments: [String], defaultType: String = "mysql") async -> Int32 {
+            // `--export` / `export` 在这条路上**当场拒绝**（2026-10-29 第七十二批）。
+            //
+            // 实测的旧行为：`doyah mysql --export --out x.csv --host …` 里那个 `--export` **被静默忽略**
+            // （这条子命令只认 `--sql`），于是退出码 0、什么文件都没有 —— 用户看到的是一次「成功」的
+            // 空操作。另一头，导出那条路整条建立在服务端游标上（PG 独有），非 PG 连接照 PG 语义拼语句
+            // 只会拿到一屏对面语法错。两边的处置是同一条口径（`TableExport.decision` + 同一句话），
+            // 所以这里在**建连接之前**就把它拦下：不连库、不发语句、不留半个目录。
+            if arguments.contains("--export") || arguments.first == "export" {
+                let type = DatabaseType(rawValue: defaultType) ?? .mysql
+                print(exportDialectMessage(.streamingUnsupported(type)))
+                return 69
+            }
             func value(for flag: String) -> String? {
                 guard let index = arguments.firstIndex(of: flag), index + 1 < arguments.count else { return nil }
                 return arguments[index + 1]
@@ -4858,8 +4874,21 @@ client: any LLMClient
 private static func runExportCommand(
 arguments: [String],
 service: any DatabaseService,
-dialect: PostgresDialect
+dbType: DatabaseType
 ) async -> Int32 {
+    // **第一件事就是取证并把话说明白**（2026-10-29 第七十二批）：导出这条路整条建立在
+    // 服务端游标上（`DECLARE` / `FETCH` / `CLOSE`），只有 PostgreSQL 有。非 PG 连接在这里
+    // 当场退 69 并说清「一条语句都没发出去」—— 再往下走就是先建目录、再逐表拼 PG 语句、
+    // 最后拿到一屏别人看不懂的语法错（`--all-tables` 还会留下一个装满失败信息的半截目录）。
+    //
+    // 方言与裁定都从**连接的类型**派生（`SQLDialectFactory` / `TableExport.decision`），
+    // 不是在这里再钉一个字面量：钉死的那一个值一旦与连接不符，是「静默按错方言拼 SQL」，
+    // 而这类错在命令行上看起来像「数据库坏了」。
+    let dialect = SQLDialectFactory.make(for: dbType)
+    if case .rejected(let issue) = TableExport.decision(for: dbType) {
+        print(exportDialectMessage(issue))
+        return 69
+    }
     func value(for flag: String) -> String? {
         guard let index = arguments.firstIndex(of: flag), index + 1 < arguments.count else { return nil }
         return arguments[index + 1]
@@ -4959,6 +4988,25 @@ dialect: PostgresDialect
     )
 }
 
+/// 走不了流式导出时给用户的那句话（`TableExport.decision` 判红之后说的唯一一句）。
+///
+/// 这句话必须写清三件事，缺一件用户就得自己猜：① **缺的是什么**（服务端游标，只有 PostgreSQL 有）；
+/// ② **一条语句都没发出去**（否则他会担心「是不是已经动过库了」）；③ 今天还能走哪条路。
+/// 只回一句「暂不支持」等于把排查工作留给用户，而他手上没有能查的工具。
+static func exportDialectMessage(_ issue: TableExport.Issue) -> String {
+    switch issue {
+    case .streamingUnsupported(let type):
+        return "\(type.displayName) 连接没有服务端游标（DECLARE / FETCH / CLOSE 是 PostgreSQL 语义），"
+        + "导出（--query / --table / --all-tables）今天只在 PostgreSQL 上可用。"
+        + "这条命令一条语句都没有发出去，目标库没有任何改动。"
+        + "替代：先用 `mysql --sql \"SELECT …\" --json` 把结果取回来，再自行落盘。"
+    case .emptyTableName:
+        return "--table 的表名是空的：导出要一张具体的表（或者用 --query 给一条查询）"
+    case .invalidIdentifier(let name):
+        return "标识符里有 NUL 字符，拼不成一条安全语句：\(name)"
+    }
+}
+
 /// `--format` 名字解析失败时打给用户的那句话（队列 `L-124` 片 2）。
 ///
 /// 为什么分两档说：`et` / `xls` 这种名字**认得出**，回一句「不支持的格式（csv / json / …）」
@@ -4997,7 +5045,7 @@ formatName: String,
 fetchSize: Int,
 tableName: String,
 service: any DatabaseService,
-dialect: PostgresDialect,
+dialect: any SQLDialect,
 quiet: Bool,
 encoding: ResultExportEncoding = .utf8
 ) async -> Int32 {

@@ -75,6 +75,69 @@ final class TableExportTests: XCTestCase {
         XCTAssertFalse(TableExport.streamingSupported(.gbase8a))
     }
 
+    // MARK: - 取数裁定（CLI 与界面共用的那一处）
+
+    /// PostgreSQL 走流式；这一条是**允许面**（只有拒绝面的判据会让「一律拒绝」看起来全绿）。
+    func testDecisionStreamsOnPostgres() {
+        XCTAssertEqual(TableExport.decision(for: .postgresql), .streaming)
+        XCTAssertTrue(TableExport.decision(for: .postgresql).isStreaming)
+    }
+
+    /// 拒绝必须**带上认出来的类型**（CLI 靠它把「这个连接是 MySQL」说清楚，而不是一句「不支持」）。
+    func testDecisionRejectsMySQLWithItsOwnType() {
+        XCTAssertEqual(TableExport.decision(for: .mysql), .rejected(.streamingUnsupported(.mysql)))
+        XCTAssertFalse(TableExport.decision(for: .mysql).isStreaming)
+    }
+
+    func testDecisionRejectsGBaseWithItsOwnType() {
+        XCTAssertEqual(TableExport.decision(for: .gbase8a), .rejected(.streamingUnsupported(.gbase8a)))
+        XCTAssertFalse(TableExport.decision(for: .gbase8a).isStreaming)
+    }
+
+    /// 两种非 PG 类型**不许压成同一个值**：压掉差别，命令行就分不清自己连的是谁。
+    func testRejectedDecisionsKeepTheTwoNonPostgresTypesApart() {
+        XCTAssertNotEqual(
+            TableExport.decision(for: .mysql),
+            TableExport.decision(for: .gbase8a)
+        )
+    }
+
+    /// 布尔与裁定**必须同源**：`streamingSupported` 是 `decision` 的投影，逐个类型对账。
+    /// 这条判据的用处是把「两处各写一份」钉死在编译产物之外 —— 谁把布尔改回自己算，这里就红。
+    func testStreamingSupportedIsTheProjectionOfDecision() {
+        for type in DatabaseType.allCases {
+            XCTAssertEqual(
+                TableExport.streamingSupported(type),
+                TableExport.decision(for: type).isStreaming,
+                "\(type.rawValue) 的两处口径不一致"
+            )
+        }
+    }
+
+    /// 拒绝理由要能落到一句可排查的话上（类型名在里面），不是「出错了」。
+    func testRejectedDecisionCarriesAReadableReason() {
+        guard case .rejected(let issue) = TableExport.decision(for: .mysql) else {
+            return XCTFail("MySQL 必须被判成拒绝")
+        }
+        XCTAssertTrue(issue.description.contains("mysql"), issue.description)
+        XCTAssertFalse(issue.description.isEmpty)
+    }
+
+    /// **方言必须随连接类型取**（第七十二批的口径）：同一句 `selectSQL` 在三种连接下按各自的
+    /// 引用规则拼 —— 钉死一个方言时这条判据会红（两种非 PG 都拿不到反引号）。
+    func testDialectFollowsTheConnectionType() throws {
+        for type in DatabaseType.allCases {
+            let dialect = SQLDialectFactory.make(for: type)
+            XCTAssertEqual(dialect.databaseType, type, "\(type.rawValue) 拿到的方言不是它自己的")
+            let sql = try TableExport.selectSQL(table: "orders", schema: nil, dialect: dialect)
+            let expectedQuote = dialect.identifierQuote
+            XCTAssertTrue(
+                sql.contains("\(expectedQuote)orders\(expectedQuote)"),
+                "\(type.rawValue) 的限定名没用它自己的引号：\(sql)"
+            )
+        }
+    }
+
     // MARK: - 整库：文件名
 
     func testEntriesSanitizeUnsafeCharactersAndDeduplicate() {
