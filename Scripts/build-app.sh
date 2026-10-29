@@ -398,4 +398,12 @@ echo "目录里的历史包：$(ls -d "${ROOT}"/dist/DoyahStudio-*.app 2>/dev/nu
 echo "=================="
 echo ""
 echo "完成：${APP}"
+# **装到人真的会点开的地方**（主人 2026-10-30：「QQ 扫码配置也没有」—— 包只进 dist，
+# `~/Applications` 停在三天前，于是新功能一次都没被看见）。默认自动安装，可用
+# `DOYAH_SKIP_INSTALL=1` 只打包。
+if [[ "${DOYAH_SKIP_INSTALL:-0}" != "1" ]]; then
+  bash "${ROOT}/Scripts/install-app.sh" || echo "⚠️ 已打包装好 dist，但安装到 ~/Applications 失败（见上面的原因）"
+else
+  echo "（DOYAH_SKIP_INSTALL=1：只打包，未安装到 ~/Applications）"
+fi
 echo "运行：open \"${APP}\""

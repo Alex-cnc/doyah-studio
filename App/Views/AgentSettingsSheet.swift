@@ -394,6 +394,16 @@ struct AgentSettingsSheet: View {
 
     private var imTab: some View { tabScroll {
                 Section(L(.agentIMSection)) {
+                    // **正规路径放最上面**（主人 2026-10-30：「你说的QQ扫码配置也没有，那只是一个链接
+                    // 跳转到QQ机器人官网」——按钮埋在一排次要按钮里，等于没有）。
+                    Button(L(.agentIMQRButton)) { isQQScanPresented = true }
+                        .buttonStyle(.borderedProminent)
+                        .accessibilityIdentifier("agent-im-qr-connect")
+                    Text(L(.agentIMQRInlineHint))
+                        .font(Theme.font(.caption))
+                        .foregroundStyle(Theme.text(.secondary))
+                        .fixedSize(horizontal: false, vertical: true)
+                    Divider()
                     // ★0（2026-10-28 主人原话「既然是 QQ 通道，为什么还要用户填 wss 地址？」）：
                     // 地址整格删掉，只留「环境」—— 程序拿 AppID + Secret 换 token、再问官方要网关地址。
                     Picker(L(.agentIMFieldEnvironment), selection: $imEnvironment) {
@@ -477,7 +487,6 @@ struct AgentSettingsSheet: View {
                             .disabled(isTestingIM)
                         Button(L(.agentIMConnect)) { connectIMChannel() }
                         Button(L(.agentIMDisconnect)) { disconnectIMChannel() }
-                        Button(L(.agentIMQRButton)) { isQQScanPresented = true }
                         Button(L(.agentIMClear), role: .destructive) { clearIMCredentials() }
                     }
                     HStack(spacing: Spacing.m) {

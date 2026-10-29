@@ -2032,6 +2032,7 @@ public enum LKey: String, CaseIterable, Sendable {
     case agentTabIM
     case agentTabExtensions
     case agentTabDisplay
+    case agentIMQRInlineHint
     case agentIMQRButton
     case agentIMQRTitle
     case agentIMQRHint
@@ -5262,6 +5263,7 @@ public enum LocalizedStrings {
         .agentTabIM: [.simplifiedChinese: "IM 通道", .english: "IM channel"],
         .agentTabExtensions: [.simplifiedChinese: "扩展", .english: "Extensions"],
         .agentTabDisplay: [.simplifiedChinese: "外观", .english: "Appearance"],
+        .agentIMQRInlineHint: [.simplifiedChinese: "用手机 QQ 扫一下就自动拿到 AppID 与 AppSecret，不用去开放平台抄。下面是手填（没装 Node 或不想扫码时用）。", .english: "Scan with QQ on your phone and the AppID and AppSecret come back automatically — no copying from the console. The fields below are for manual entry."],
         .agentIMQRButton: [.simplifiedChinese: "用 QQ 扫码接入", .english: "Connect with QQ scan"],
         .agentIMQRTitle: [.simplifiedChinese: "用手机 QQ 扫一扫", .english: "Scan with QQ on your phone"],
         .agentIMQRHint: [.simplifiedChinese: "扫码后会自动拿到机器人的 AppID 与 AppSecret，你不用去开放平台抄。扫完这一页会自己关。", .english: "Scanning hands back the bot's AppID and AppSecret for you — no copying from the console. This sheet closes itself when done."],
