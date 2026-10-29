@@ -173,6 +173,20 @@ struct ConnectionListView: View {
                     .environmentObject(appState)
             }
         }
+        // 整表 / 整库导出的小结（`FR-STD-DB-IO-002` 验收要点 ④）。
+        // 用 `isPresented` + 读 `tableExportSummary` 而不是 `sheet(item:)`：进行中这一档会**中途更新**
+        // 文本（已取 N 行），`sheet(item:)` 拿的是呈现那一刻捕获的值，进度永远停在「已取 0 行」。
+        .sheet(
+            isPresented: Binding(
+                get: { appState.tableExportSummary != nil },
+                set: { if !$0 { appState.tableExportSummary = nil } }
+            )
+        ) {
+            if let summary = appState.tableExportSummary {
+                TableExportSheet(summary: summary) { appState.tableExportSummary = nil }
+                    .environmentObject(appState)
+            }
+        }
         .sheet(isPresented: $appState.isSessionCommandPresented) {
             SessionPanel()
                 .environmentObject(appState)

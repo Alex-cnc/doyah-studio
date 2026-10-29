@@ -2358,15 +2358,9 @@ final class AppState: ObservableObject {
 
             // `BEGIN` / `DECLARE` / `CLOSE` / `COMMIT` 都**没有结果集**，所以不能走
             // `runSingleQuery`（它把"没有结果集"当错误）—— 与 CLI 一样只取最后一个结果集，没有就空着。
-            func run(_ sql: String) async throws -> QueryResult {
-                var last: QueryResult?
-                for try await event in service.execute(sql, options: .default) {
-                    if case .resultSet(let result) = event { last = result }
-                }
-                return last ?? QueryResult()
-            }
-
-            let fetcher = CursorFetcher(plan: plan, execute: { try await run($0) })
+            let fetcher = CursorFetcher(plan: plan, execute: { [self] sql in
+                try await runTakingLastResultSet(sql, service: service)
+            })
             var streamWriter: ResultStreamWriter?
             do {
                 try await fetcher.open()
@@ -2421,6 +2415,166 @@ final class AppState: ObservableObject {
             errorMessage = L(.exportFailed, ErrorPresenter.message(for: error))
             return false
         }
+    }
+
+    // MARK: - 整表 / 整库导出（FR-STD-DB-IO-002）
+
+    /// 「执行一条语句、只取最后一个结果集」的唯一出口。
+    ///
+    /// 为什么抽出来：`BEGIN` / `DECLARE` / `CLOSE` / `COMMIT` 都没有结果集，而 `runSingleQuery`
+    /// 把「没有结果集」当错误。这条循环原来写在流式结果集导出里，整表导出要用同一条 ——
+    /// 两处各写一份的话，一处改了另一处没改，两边的「空页 / 空结果集」口径迟早对不上。
+    func runTakingLastResultSet(_ sql: String, service: any DatabaseService) async throws -> QueryResult {
+        var last: QueryResult?
+        for try await event in service.execute(sql, options: .default) {
+            if case .resultSet(let result) = event { last = result }
+        }
+        return last ?? QueryResult()
+    }
+
+    /// 整表 / 整库导出的小结（sheet 的数据源）。
+    ///
+    /// 为什么要有它：验收要点 ④ 要求「完成后报告行数与文件路径」，而对象树上的动作**没有页签**
+    /// （`reportTabStatus` 得给 tabID，全局 `statusMessage` 的下读方又是页签的 outputLog）
+    /// ⇒ 这条路线的成果原来无处可看。小结单独成一块面板，整库导出（下一批）复用同一个。
+    struct TableExportSummary: Identifiable, Equatable {
+        enum Phase: Equatable { case running, done, failed }
+        let id = UUID()
+        var title: String
+        var phase: Phase
+        var text: String
+    }
+
+    @Published var tableExportSummary: TableExportSummary?
+
+    /// 对象树右键「导出整表…」的唯一落地口。
+    ///
+    /// 取数走**与 CLI 完全相同的那条路**（服务端游标逐页取 + `ResultStreamWriter` 流式写盘），
+    /// 因此界面导出的文件与命令行导出的文件同源，不另造一套 —— CLI 那条已真机验证
+    /// （12 万行 / 27 MB，内存增量远小于数据量，见需求规格 R-036）。
+    func exportTable(_ object: DatabaseObject, format: ResultExportFormat) async {
+        guard let configuration = selectedConnection else {
+            statusMessage = L(.stateSelectConnectionFirst)
+            return
+        }
+        // 服务端游标只有 PostgreSQL 有 —— 在**入口**就拦住，并给一条今天就能走的路，
+        // 而不是让用户点一个必然失败的按钮。
+        guard TableExport.streamingSupported(configuration.dbType) else {
+            tableExportSummary = TableExportSummary(
+                title: L(.tableExportTitle),
+                phase: .failed,
+                text: L(.tableExportUnsupported, configuration.dbType.displayName)
+            )
+            return
+        }
+        let dialect = SQLDialectFactory.make(for: configuration.dbType)
+        let query: String
+        do {
+            query = try TableExport.selectSQL(table: object.name, schema: object.schema, dialect: dialect)
+        } catch {
+            tableExportSummary = TableExportSummary(
+                title: L(.tableExportTitle),
+                phase: .failed,
+                text: L(.tableExportBadName, object.name)
+            )
+            return
+        }
+
+        let panel = NSSavePanel()
+        panel.canCreateDirectories = true
+        panel.nameFieldStringValue = "\(TableExport.safeBaseName(object.name)).\(format.fileExtension)"
+        if let type = UTType(filenameExtension: format.fileExtension) {
+            panel.allowedContentTypes = [type]
+        }
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+
+        tableExportSummary = TableExportSummary(
+            title: L(.tableExportTitle),
+            phase: .running,
+            text: L(.tableExportRunning, 0, 0)
+        )
+        var ledger = TableExport.Ledger()
+        do {
+            let database = object.database?.isEmpty == false ? object.database : configuration.database
+            let service = try await ensureService(for: configuration, database: database)
+            let plan: CursorPagingPlan
+            switch CursorPaging.plan(query: query, pageSize: Self.streamingExportPageSize) {
+            case .success(let value): plan = value
+            case .failure(let error): throw error
+            }
+            let fetcher = CursorFetcher(plan: plan, execute: { [self] sql in
+                try await runTakingLastResultSet(sql, service: service)
+            })
+            var writer: ResultStreamWriter?
+            do {
+                try await fetcher.open()
+                guard let first = try await fetcher.nextPage() else {
+                    await fetcher.close()
+                    // 空表：一页都取不到 ⇒ 连列定义都没有，生成不了只有表头的文件。
+                    // 如实说「0 行、没生成文件」，不凭空造一个空文件冒充导出成功。
+                    ledger.record(.failed(table: object.name, reason: L(.tableExportEmpty)))
+                    tableExportSummary = TableExportSummary(
+                        title: L(.tableExportFailedTitle),
+                        phase: .failed,
+                        text: ledger.report(labels: tableExportLabels(), orderGuaranteed: false)
+                    )
+                    return
+                }
+                let streamWriter = ResultStreamWriter(
+                    targetURL: url,
+                    format: format,
+                    columns: first.columns,
+                    tableName: object.name,
+                    dialect: dialect,
+                    encoding: .utf8
+                )
+                writer = streamWriter
+                try streamWriter.begin()
+                try streamWriter.write(first.rows)
+                tableExportSummary?.text = L(
+                    .tableExportRunning,
+                    await fetcher.rowCount,
+                    await fetcher.pageCount
+                )
+                while let page = try await fetcher.nextPage() {
+                    try streamWriter.write(page.rows)
+                    tableExportSummary?.text = L(
+                        .tableExportRunning,
+                        await fetcher.rowCount,
+                        await fetcher.pageCount
+                    )
+                }
+                let report = try streamWriter.finish()
+                await fetcher.close()
+                ledger.record(.succeeded(table: object.name, rows: report.rowCount, path: url.path))
+                tableExportSummary = TableExportSummary(
+                    title: L(.tableExportDoneTitle),
+                    phase: .done,
+                    text: ledger.report(labels: tableExportLabels(), orderGuaranteed: false)
+                )
+            } catch {
+                writer?.abort()
+                await fetcher.close()
+                throw error
+            }
+        } catch {
+            ledger.record(.failed(table: object.name, reason: ErrorPresenter.message(for: error)))
+            tableExportSummary = TableExportSummary(
+                title: L(.tableExportFailedTitle),
+                phase: .failed,
+                text: ledger.report(labels: tableExportLabels(), orderGuaranteed: false)
+            )
+        }
+    }
+
+    /// 导出小结的文案来源（与 `TableExport.Labels` 一一对应，实参与模板写在同一句里）。
+    private func tableExportLabels() -> TableExport.Labels {
+        TableExport.Labels(
+            row: { table, rows, path in L(.tableExportRowLine, table, rows, path) },
+            failedRow: { table, reason in L(.tableExportFailedLine, table, reason) },
+            summary: { ok, failed, rows in L(.tableExportSummaryLine, ok, failed, rows) },
+            orderNote: L(.tableExportOrderNote)
+        )
     }
 
     // MARK: - 结果集内联编辑（FR-DATA-04）

@@ -172,6 +172,30 @@ enum ObjectTreeContextMenu {
             }
         }
 
+        // 整表导出（FR-STD-DB-IO-002）：走服务端游标逐页取、流式写盘，与 CLI 同一条路。
+        // 只给文本格式：xlsx 是二进制工作簿（ZIP 的中央目录要等所有行写完才能落），
+        // 天生不能流式 —— 在这里摆一个「导出 xlsx」等于承诺一件做不到的事。
+        // 视图同表一样可以导（它就是一条 SELECT），所以这一项对 `.view` 也给。
+        if object.kind == .table || object.kind == .view {
+            Menu(L(.treeActionExportTable)) {
+                Button(L(.exportCSV)) {
+                    Task { await appState.exportTable(object, format: .csv) }
+                }
+                Button(L(.exportTSV)) {
+                    Task { await appState.exportTable(object, format: .tsv) }
+                }
+                Button(L(.exportJSON)) {
+                    Task { await appState.exportTable(object, format: .json) }
+                }
+                Button(L(.exportMarkdown)) {
+                    Task { await appState.exportTable(object, format: .markdown) }
+                }
+                Button(L(.exportSQLInsert)) {
+                    Task { await appState.exportTable(object, format: .sqlInsert) }
+                }
+            }
+        }
+
         if ObjectTreeActions.isAvailable(.viewDDL, for: object.kind) {
             Divider()
 

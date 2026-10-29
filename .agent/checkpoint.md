@@ -1,8 +1,12 @@
 # 检查点
 
-updated: 2026-10-29T07:56
+updated: 2026-10-29T08:30
 
 ## 现状
+
+- **R69（2026-10-29）已落地**：`FR-STD-DB-IO-002` 的「评估」结论 = **不是要不要改 vendor，是界面没有入口**（R-036 已把 `COPY … TO STDOUT` 登记为已知限制并真机验证过游标路径 · §11.5 项 2 建议不动 vendor · 驱动里 CopyOut 连消息解码都没有）⇒ 本轮接**整表导出**：`Core/TableExport.swift`（SELECT 口径 / 整库文件名 / 逐表账）+ `AppState.exportTable`（游标流式 + 同一条 CLI 路）+ `App/Views/TableExportSheet.swift`（小结 = 验收 ④）；判据 `Tests/TableExportTests` **15 例**、反例四段各判红后逐字节还原；`verify-core` **4915 项 / 0 failures**（4900 → +15）；五门全绿；包 `996be408（08:24:17）`；`Vendor/` 未动。明细 `.agent/evidence/2026-10-29-DB-IO-002.md`。
+- **下一项（R70 就做，不用再问）**：**整库导出的界面入口** —— 右键 schema / database → 选目录 → 逐表落文件，小结复用 `TableExport.Ledger`（Core 的 `entries` / `Ledger` 已备，只差接线）；顺手补 CLI `export --table` 缺的那道方言判（MySQL 上今天会拼 PG 游标语句然后失败）。
+- **仍待主人拍板**：敏感列口径（「哪些列算敏感」没有口径 ⇒ 今天一条都不排除）。
 
 - 最近读数（2026-10-29 **R67 · ★00 钥匙串每次启动弹密码**）：`verify-core` **4900 项 / 0 failures**（4885 → +15 =
   `Tests/CredentialItemReconciliationTests`）；五门（numbers / tables / versions / invariants / version-scope）+ `check-format-arguments`

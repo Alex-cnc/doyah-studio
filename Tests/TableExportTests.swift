@@ -1,0 +1,155 @@
+import XCTest
+@testable import DoyahCore
+
+/// 整表 / 整库导出的计划与账（`FR-STD-DB-IO-002`，2026-10-29 第七十批）。
+///
+/// 这一套只判**纯判定**：那条 `SELECT` 怎么拼、整库的文件名怎么取、逐表结局怎么记账。
+/// 真取数与真写盘在 `CursorFetcher` / `ResultStreamWriter`（各有自己的套件），这里一条 IO 都不碰。
+final class TableExportTests: XCTestCase {
+
+    private let postgres = SQLDialectFactory.make(for: .postgresql)
+    private let mysql = SQLDialectFactory.make(for: .mysql)
+
+    // MARK: - 整表导出：那条 SELECT
+
+    func testSelectSQLWithoutSchemaQuotesTableName() throws {
+        let sql = try TableExport.selectSQL(table: "orders", schema: nil, dialect: postgres)
+        XCTAssertEqual(sql, "SELECT * FROM \"orders\"")
+    }
+
+    func testSelectSQLWithSchemaQualifies() throws {
+        let sql = try TableExport.selectSQL(table: "orders", schema: "public", dialect: postgres)
+        XCTAssertEqual(sql, "SELECT * FROM \"public\".\"orders\"")
+    }
+
+    /// 合法的「引用名」不许被拒：`My Table` 在 PG 里是一张正常的表，
+    /// 若拿 `isValidIdentifier`（首字符须字母 / 下划线）当闸门，这类表就永远导不出来。
+    func testSelectSQLAcceptsLegalNamesWithSpaces() throws {
+        let sql = try TableExport.selectSQL(table: "My Table", schema: nil, dialect: postgres)
+        XCTAssertEqual(sql, "SELECT * FROM \"My Table\"")
+    }
+
+    /// 注入面钉在这里：名字里的双引号必须被双写、整体仍在引号内。
+    func testSelectSQLEscapesEmbeddedQuotes() throws {
+        let hostile = "a\"b; DROP TABLE users; --"
+        let sql = try TableExport.selectSQL(table: hostile, schema: nil, dialect: postgres)
+        XCTAssertEqual(sql, "SELECT * FROM \"a\"\"b; DROP TABLE users; --\"")
+        // 反向守卫：语句里除了最外那对引号之外，任何 `"` 都必须成对出现，
+        // 否则一次拼接就能从标识符里「跳出」到语句层面。
+        let body = sql.replacingOccurrences(of: "SELECT * FROM ", with: "")
+        XCTAssertTrue(body.hasPrefix("\""), body)
+        XCTAssertTrue(body.hasSuffix("\""), body)
+    }
+
+    func testSelectSQLRejectsEmptyNameAndNUL() {
+        XCTAssertThrowsError(try TableExport.selectSQL(table: "   ", schema: nil, dialect: postgres)) { error in
+            XCTAssertEqual(error as? TableExport.Issue, .emptyTableName)
+        }
+        XCTAssertThrowsError(try TableExport.selectSQL(table: "bad\0name", schema: nil, dialect: postgres)) { error in
+            XCTAssertEqual(error as? TableExport.Issue, .invalidIdentifier("bad\0name"))
+        }
+        XCTAssertThrowsError(
+            try TableExport.selectSQL(table: "orders", schema: "bad\0schema", dialect: postgres)
+        ) { error in
+            XCTAssertEqual(error as? TableExport.Issue, .invalidIdentifier("bad\0schema"))
+        }
+    }
+
+    /// 不带 schema 的方言（MySQL 走库而不是 schema）不许硬拼前缀。
+    func testSelectSQLRespectsDialectSchemaSupport() throws {
+        let sql = try TableExport.selectSQL(table: "orders", schema: "shop", dialect: mysql)
+        XCTAssertEqual(sql, "SELECT * FROM `orders`")
+    }
+
+    /// **不加 `ORDER BY`** 是这条需求的性能口径（排序要把全量读进内存，正好毁掉流式）。
+    func testSelectSQLDoesNotSort() throws {
+        let sql = try TableExport.selectSQL(table: "orders", schema: nil, dialect: postgres)
+        XCTAssertFalse(sql.uppercased().contains("ORDER BY"), sql)
+    }
+
+    // MARK: - 流式能力
+
+    func testStreamingSupportedOnlyForPostgres() {
+        XCTAssertTrue(TableExport.streamingSupported(.postgresql))
+        XCTAssertFalse(TableExport.streamingSupported(.mysql))
+        XCTAssertFalse(TableExport.streamingSupported(.gbase8a))
+    }
+
+    // MARK: - 整库：文件名
+
+    func testEntriesSanitizeUnsafeCharactersAndDeduplicate() {
+        let entries = TableExport.entries(
+            schema: "public",
+            tables: ["a/b", "a:b", "normal"],
+            format: .csv
+        )
+        XCTAssertEqual(entries.map(\.fileName), ["a_b.csv", "a_b-2.csv", "normal.csv"])
+        XCTAssertEqual(entries.map(\.table), ["a/b", "a:b", "normal"])
+    }
+
+    func testEntriesKeepUnicodeAndAreDeterministic() {
+        let first = TableExport.entries(schema: "public", tables: ["订单", "客户"], format: .json)
+        let second = TableExport.entries(schema: "public", tables: ["订单", "客户"], format: .json)
+        XCTAssertEqual(first.map(\.fileName), ["订单.json", "客户.json"])
+        XCTAssertEqual(first, second)
+    }
+
+    func testSafeBaseNameHandlesDotNamesAndLeadingDot() {
+        XCTAssertEqual(TableExport.safeBaseName(".."), "table")
+        XCTAssertEqual(TableExport.safeBaseName(".hidden"), "_.hidden")
+        XCTAssertEqual(TableExport.safeBaseName("   "), "table")
+        XCTAssertEqual(TableExport.safeBaseName("My Table"), "My_Table")
+    }
+
+    // MARK: - 账
+
+    private func labels(orderNote: String = "顺序说明") -> TableExport.Labels {
+        TableExport.Labels(
+            row: { table, rows, path in "\(table):\(rows):\(path)" },
+            failedRow: { table, reason in "\(table):失败:\(reason)" },
+            summary: { ok, failed, rows in "汇总:\(ok)/\(failed)/\(rows)" },
+            orderNote: orderNote
+        )
+    }
+
+    func testLedgerSeparatesSuccessAndFailure() {
+        var ledger = TableExport.Ledger()
+        ledger.record(.succeeded(table: "orders", rows: 42, path: "/tmp/orders.csv"))
+        ledger.record(.failed(table: "users", reason: "连接断了"))
+        // 取到 30 行之后写盘失败：这一行**有**行数读数，但它不是「导出了 30 行」——
+        // 汇总里的行数只算写成的那些表，否则一份失败的文件会替自己报出一批假成果。
+        ledger.record(TableExport.Receipt(table: "partial", rows: 30, path: nil, failure: "写到一半失败"))
+        XCTAssertEqual(ledger.succeededCount, 1)
+        XCTAssertEqual(ledger.failedCount, 2)
+        // 失败那张表的行数**不许**并进总数：它本来就没有可交付的成果。
+        XCTAssertEqual(ledger.succeededRows, 42)
+        XCTAssertFalse(ledger.isEmpty)
+    }
+
+    func testLedgerReportListsRowsPathsAndSummary() {
+        var ledger = TableExport.Ledger()
+        ledger.record(.succeeded(table: "orders", rows: 42, path: "/tmp/orders.csv"))
+        ledger.record(.failed(table: "users", reason: "连接断了"))
+        let text = ledger.report(labels: labels())
+        XCTAssertTrue(text.contains("orders:42:/tmp/orders.csv"), text)
+        XCTAssertTrue(text.contains("users:失败:连接断了"), text)
+        XCTAssertTrue(text.contains("汇总:1/1/42"), text)
+        XCTAssertTrue(text.contains("顺序说明"), text)
+    }
+
+    func testLedgerReportOmitsOrderNoteWhenGuaranteed() {
+        var ledger = TableExport.Ledger()
+        ledger.record(.succeeded(table: "orders", rows: 1, path: "/tmp/orders.csv"))
+        XCTAssertFalse(ledger.report(labels: labels(), orderGuaranteed: true).contains("顺序说明"))
+        XCTAssertTrue(ledger.report(labels: labels(), orderGuaranteed: false).contains("顺序说明"))
+    }
+
+    func testReceiptSuccessRequiresBothPathAndNoFailure() {
+        XCTAssertTrue(TableExport.Receipt.succeeded(table: "a", rows: 0, path: "/tmp/a.csv").isSuccess)
+        // 有路径但也带了失败原因 ⇒ 不算成功（半个文件不许冒充成品）。
+        XCTAssertFalse(
+            TableExport.Receipt(table: "a", rows: 0, path: "/tmp/a.csv", failure: "写到一半失败").isSuccess
+        )
+        XCTAssertFalse(TableExport.Receipt.failed(table: "a", reason: "x").isSuccess)
+    }
+}

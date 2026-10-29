@@ -2821,6 +2821,20 @@ public enum LKey: String, CaseIterable, Sendable {
     case exportStreamReasonMultiStatement
     case exportStreamReasonNotQuery
     case exportStreamReasonManualTransaction
+    // 整表 / 整库导出（FR-STD-DB-IO-002，2026-10-29 第七十批）
+    case tableExportTitle
+    case treeActionExportTable
+    case tableExportUnsupported
+    case tableExportBadName
+    case tableExportRunning
+    case tableExportDoneTitle
+    case tableExportFailedTitle
+    case tableExportRowLine
+    case tableExportFailedLine
+    case tableExportSummaryLine
+    case tableExportOrderNote
+    case tableExportEmpty
+    case tableExportClose
     // 结果集内联编辑（FR-DATA-04）
     case inlineEditNoSourceTable
     case inlineEditActive
@@ -5725,6 +5739,19 @@ public enum LocalizedStrings {
         .exportStreamReasonMultiStatement: [.simplifiedChinese: "页签里的 SQL 不止一条语句，服务端游标只能用于单条查询", .english: "the tab holds more than one statement, and a server cursor works on a single query only"],
         .exportStreamReasonNotQuery: [.simplifiedChinese: "语句不是查询（游标只能用于 SELECT / WITH 这类查询）", .english: "the statement is not a query (a cursor only works for SELECT / WITH and the like)"],
         .exportStreamReasonManualTransaction: [.simplifiedChinese: "当前连接处在手工事务里，而游标导出会自己开一个事务", .english: "the connection is inside a manual transaction, and a cursor export opens its own transaction"],
+        .tableExportTitle: [.simplifiedChinese: "导出整表", .english: "Export Table"],
+        .treeActionExportTable: [.simplifiedChinese: "导出整表…", .english: "Export Table…"],
+        .tableExportUnsupported: [.simplifiedChinese: "整表导出要服务端游标逐页取数，而游标只有 PostgreSQL 有（当前连接是 %@）。这条路要求「内存不随行数增长」，把整张表读进内存的做法不能算。今天可走的替代：执行一条 SELECT * FROM <表>，再在查询页签里导出结果集。", .english: "A whole-table export streams through a server-side cursor, which only PostgreSQL has (current connection: %@). This path requires memory not to grow with row count, so reading the whole table into memory does not qualify. Today's alternative: run SELECT * FROM <table>, then export the result set from the query tab."],
+        .tableExportBadName: [.simplifiedChinese: "导不出这张表：名字为空或含不可见字符（%@）。", .english: "Cannot export this table: its name is empty or contains invisible characters (%@)."],
+        .tableExportRunning: [.simplifiedChinese: "正在流式导出…已取 %d 行（%d 页）", .english: "Streaming export… %d row(s) fetched in %d page(s)"],
+        .tableExportDoneTitle: [.simplifiedChinese: "导出完成", .english: "Export Finished"],
+        .tableExportFailedTitle: [.simplifiedChinese: "导出没成", .english: "Export Did Not Finish"],
+        .tableExportRowLine: [.simplifiedChinese: "%@：%d 行 → %@", .english: "%@: %d row(s) → %@"],
+        .tableExportFailedLine: [.simplifiedChinese: "%@：没导出成（%@）", .english: "%@: not exported (%@)"],
+        .tableExportSummaryLine: [.simplifiedChinese: "合计：%d 张表导出成功、%d 张没成，成功部分共 %d 行", .english: "Total: %d table(s) exported, %d did not finish, %d row(s) in the exported ones"],
+        .tableExportOrderNote: [.simplifiedChinese: "顺序约定：这条查询没有 ORDER BY，导出文件里的行序与界面网格不保证一致 —— 为了顺序而排序要把全量读进内存，正好毁掉流式。要固定顺序请自己写带 ORDER BY 的查询。", .english: "Row order: this query has no ORDER BY, so the order in the exported file is not guaranteed to match the grid. Sorting for order would read the whole table into memory and defeat streaming. Use your own ordered query if you need a fixed order."],
+        .tableExportEmpty: [.simplifiedChinese: "表里没有行：一页都取不到，连列定义都拿不到，因此没有生成文件（不造一个空文件冒充导出成功）。", .english: "The table has no rows: not even one page came back, so no column definitions were available and no file was created (an empty file would pretend to be a successful export)."],
+        .tableExportClose: [.simplifiedChinese: "关闭", .english: "Close"],
         .inlineEditNoSourceTable: [.simplifiedChinese: "这个结果来自手写 SQL，无法确定来源表；改 / 删 / 加行都需要知道是哪张表。请用对象树里的「浏览数据」打开表，或在 SQL 里显式写出表名后重跑。", .english: "This result came from hand-written SQL, so its source table is unknown; editing, deleting and inserting all need to know the table. Open the table via Browse rows in the object tree, or re-run a query that names the table explicitly."],
         .inlineEditActive: [.simplifiedChinese: "编辑中：%d 处改动未提交", .english: "Editing: %d uncommitted change(s)"],
         .inlineEditAppendRow: [.simplifiedChinese: "追加一行…", .english: "Append row…"],
