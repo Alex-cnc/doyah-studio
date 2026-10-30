@@ -1645,7 +1645,10 @@ final class AppState: ObservableObject {
     ///   - agentKeyStore: 模型 API Key 的存储。默认系统钥匙串；同上可注入。
     ///   - agentIMCredentialStore: IM 通道凭据的存储。默认 = 配置文件（AppID）+ 系统钥匙串（Secret）。
     init(
-        secretStore: SecretStore = KeychainSecretStore(),
+        // 2026-10-31 05:57 实测：连库取口令走 `KeychainSecretStore` 时，钥匙串弹框会**卡住主线程**
+        //（stack: SecItemCopyMatching → mach_msg 等授权），整轮对话与 IM 派活一起静默挂死，
+        //  连主窗口都出不来。库口令因此也改走 0600 文件（`FileSecretStore`），钥匙串不再是热路径。
+        secretStore: SecretStore = FileSecretStore(),
         // 2026-10-30 主人：「这个 keychain 太烦人了，总是要输入」——Ad-hoc 签名每装一版就变，
         // 钥匙串 ACL 跟着失效 ⇒ 改成 0600 文件后端（见 `FileAgentSecretStore` 的头注）。
         agentKeyStore: AgentKeyStore = FileAgentSecretStore(),
@@ -4066,7 +4069,10 @@ final class AppState: ObservableObject {
         // · 取不到摘要（没连库 / 元数据拿不到）⇒ **不带这一段**，而不是编一个空壳出来；
         // · 文件 / 选中 / 终端尾部三类挂在编辑器侧那条路上（下一片），此处不假装带上。
         var references: [AgentContextReference] = []
-        if let summary = try? await agentSchemaSummary(includeTableList: true) {
+        // **带超时**：这一段是「锦上添花」的上下文，取不到就该照常跑。
+        // 2026-10-31 05:53 实测：库连不上时 `ensureService` 会一直等，整轮对话**静默挂死**
+        // （IM 那条链上只留下「跑一轮开始」，既没模型请求也没有回话）。
+        if let summary = await agentSchemaSummaryWithTimeout() {
             references.append(.schemaSummary(
                 database: selectedConnection?.database ?? "",
                 tables: summary.tables.map {
@@ -5140,6 +5146,27 @@ final class AppState: ObservableObject {
     ///
     /// 取表清单走**一条**查询（方言的 `listTablesQuery`），并把数量封顶 ——
     /// 「最小外发」不只是不发结果集，也包括别把上千张表一股脑倒出去。
+    /// 表结构摘要的**有界**取法：最多等 `seconds` 秒，超时就当没取到。
+    ///
+    /// 为什么必须有界：`agentSchemaSummary` 会经 `ensureService` 去连库，库不可达时
+    /// 连接层可能长时间不返回（没有连接超时）—— 而它坐在**每一轮对话的必经之路**上，
+    /// 一条等不到结果的 await 会把整轮（含 IM 派活）静默挂住。上下文是附加物，不是前置条件。
+    private func agentSchemaSummaryWithTimeout(seconds: UInt64 = 3) async -> AgentSQLGenerator.SchemaSummary? {
+        await withTaskGroup(of: AgentSQLGenerator.SchemaSummary?.self) { group in
+            group.addTask { [weak self] in
+                guard let self else { return nil }
+                return try? await self.agentSchemaSummary(includeTableList: true)
+            }
+            group.addTask {
+                try? await Task.sleep(nanoseconds: seconds * 1_000_000_000)
+                return nil
+            }
+            let first = await group.next() ?? nil
+            group.cancelAll()
+            return first
+        }
+    }
+
     func agentSchemaSummary(includeTableList: Bool) async throws -> AgentSQLGenerator.SchemaSummary {
         guard let configuration = selectedConnection else {
             throw AppError.notConnected
