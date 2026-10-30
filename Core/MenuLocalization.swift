@@ -26,6 +26,7 @@ public enum MenuLocalization {
         .menuAgentSchedule,
         .menuAgent,
         .menuAgentOpenChat,
+        .menuAgentQQScan,
         .menuAgentSettings,
         .menuAgentGenerateSQL,
         // 诊断这条查询（FR-AI-03）：菜单叶子项同样要能运行时切语言。

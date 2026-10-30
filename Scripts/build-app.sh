@@ -59,6 +59,14 @@ CACHE="${ROOT}/.build-cache"
 # 当前 **Beta 1 = 全量功能** ⇒ `beta1.0`（2026-10-21 出包齐套 · 派单 `T-20261021-001`：产物身份与所有 `alpha3.1` 包不同 ⇒ 换里程碑，避免「同标签不同身份」；改前值 = `alpha3.1`）。
 RELEASE_LABEL="beta1.0"
 
+# ── 构建戳（**每次构建都不一样**，用来分清新旧）──────────────────────────────────
+# 主人 2026-10-30：「这个 beta1.0.app 始终不增长子版本号，我也分不清哪个是新哪个是旧」。
+# 发布标签必须稳定（`check-release-version.py` 拿它跟台账比），所以**不动标签**，
+# 另存一条随手可读的构建戳：`<提交数>.<sha7> · <时刻>` ⇒ About 页与 Info.plist 都看得到。
+BUILD_COUNT="$(git -C "${ROOT}" rev-list --count HEAD 2>/dev/null || echo 0)"
+SHORT_SHA="$(git -C "${ROOT}" rev-parse --short=7 HEAD 2>/dev/null || echo nosha)"
+BUILD_STAMP="${BUILD_COUNT}.${SHORT_SHA} · $(date +%m-%d\ %H:%M)"
+
 APP="${ROOT}/dist/DoyahStudio-${RELEASE_LABEL}.app"
 LATEST_LINK="${ROOT}/dist/DoyahStudio.app"
 DOYAH_ARCH="${DOYAH_ARCH:-}"
@@ -194,6 +202,8 @@ cat > "${APP}/Contents/Info.plist" <<PLIST
     <string>3</string>
     <key>DoyahReleaseLabel</key>
     <string>${RELEASE_LABEL}</string>
+    <key>DoyahBuildStamp</key>
+    <string>${BUILD_STAMP}</string>
     <key>LSMinimumSystemVersion</key>
     <string>14.0</string>
     <key>NSHighResolutionCapable</key>
@@ -289,7 +299,16 @@ if [[ -f "Scripts/qq-qr-bridge.mjs" ]]; then
   cp "Scripts/qq-qr-bridge.mjs" "${APP}/Contents/Resources/qq-qr-bridge.mjs"
 fi
 
-IDENTITY="${DOYAH_CODESIGN_IDENTITY:-DoyahStudio Local Dev}"
+# 身份名**不要写死**：机器上可能早有一个（本机现存 `Doyah Local Dev`），
+# 名字对不上就会一路掉回 ad-hoc —— 那正是「每装一版 keychain 又弹一次」的根因。
+# 取值顺序：环境变量 → 已存在的两个常见名 → 缺省名（没有就由下面的真签试探决定是否 ad-hoc）。
+if [ -n "${DOYAH_CODESIGN_IDENTITY:-}" ]; then
+  IDENTITY="${DOYAH_CODESIGN_IDENTITY}"
+elif security find-certificate -c "Doyah Local Dev" "${HOME}/Library/Keychains/login.keychain-db" >/dev/null 2>&1; then
+  IDENTITY="Doyah Local Dev"
+else
+  IDENTITY="DoyahStudio Local Dev"
+fi
 SIGN_LOG="$(mktemp)"
 PROBE_DIR="$(mktemp -d)"
 cp /usr/bin/true "${PROBE_DIR}/signtest"

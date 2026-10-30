@@ -330,6 +330,14 @@ struct MainWindow: View {
             QueryParameterSheet()
                 .environmentObject(appState)
         }
+        // 扫码面板（`FR-AGT-LINK-CHAN-003`）：菜单一步直达，不必先进设置找按钮。
+        .sheet(isPresented: $appState.isQQScanPresented) {
+            QQQRLoginSheet { appID, secret in
+                _ = appState.saveAgentIMCredentials(appID: appID, secret: secret)
+                appState.refreshAgentIMCredentials()
+            }
+            .environmentObject(appState)
+        }
         .sheet(isPresented: $appState.isAgentSettingsPresented) {
             AgentSettingsSheet()
         }

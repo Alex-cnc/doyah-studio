@@ -153,6 +153,12 @@ struct DoyahStudioCommands: Commands {
 
             // 这一项的文案前面**带根名词**，是为满足「标题唯一」：菜单切语言靠**标题反查**键
             // （`MenuLocalization.key(forTitle:)`），裸「设置…」会与系统「设置…」撞车 ⇒ 反查歧义、切语言时串项。
+            // 扫码接入（`FR-AGT-LINK-CHAN-003`）：2026-10-30 主人原话「可我没有看到哪里有啊」
+            // —— 入口原来只有「智能体设置…」里那一层，菜单里没有直路。这里给一条一键直路。
+            Button(L(.menuAgentQQScan)) {
+                appState.isQQScanPresented = true
+            }
+
             Button(L(.menuAgentSettings)) {
                 appState.isAgentSettingsPresented = true
             }

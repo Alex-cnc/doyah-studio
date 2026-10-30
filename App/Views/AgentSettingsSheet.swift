@@ -99,8 +99,22 @@ struct AgentSettingsSheet: View {
 
             footerRow
         }
+        // 扫码面板（`FR-AGT-LINK-CHAN-003`）：2026-10-30 查实的**死按钮** ——
+        // `isQQScanPresented` 之前只置位、没人接 `.sheet`，点了没反应，等于没有这条正规路径。
+        .sheet(isPresented: $isQQScanPresented) {
+            QQQRLoginSheet { appID, secret in
+                imAppID = appID
+                if appState.saveAgentIMCredentials(appID: appID, secret: secret) {
+                    imSecretInput = ""
+                    imLine = L(.agentIMSaved)
+                    appState.refreshAgentIMCredentials()
+                } else {
+                    imLine = appState.errorMessage
+                }
+            }
+        }
         .padding(Spacing.l)
-        .frame(width: 560, height: min(sheetHeight, AgentSettingsSheet.maxSheetHeight))
+        .frame(width: AgentSettingsSheet.sheetWidth, height: min(sheetHeight, AgentSettingsSheet.maxSheetHeight))
         // 换提供商 ⇒ 自动填端点与模型；手改端点 ⇒ 重认一次「这是谁」。
         // 两条都不自己判，只读契约层（`AgentProviderCatalog`）给的答案。
         .onChange(of: providerID) { _, newValue in applyProvider(newValue) }
@@ -108,6 +122,11 @@ struct AgentSettingsSheet: View {
         .task {
             guard !isLoaded else { return }
             isLoaded = true
+            // 从菜单「用 QQ 扫码接入…」进来：直接停在 IM 通道页。
+            if appState.agentSettingsOpenIM {
+                selectedTab = .im
+                appState.agentSettingsOpenIM = false
+            }
             let configuration = appState.agentConfiguration
             isEnabled = configuration.isEnabled
             endpoint = configuration.endpoint
@@ -628,8 +647,10 @@ struct AgentSettingsSheet: View {
     private func tabScroll<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
         ScrollView {
             Form { content() }
-                .formStyle(.columns)
-                .frame(maxWidth: .infinity)
+                .formStyle(.grouped)
+                // 标签列给足宽度，说明文字整行铺开 —— 不再挤到边框外（2026-10-30 主人指出的窄）。
+                .labelStyle(.titleAndIcon)
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
         .frame(maxHeight: .infinity)
     }
@@ -712,7 +733,7 @@ struct AgentSettingsSheet: View {
                     .foregroundStyle(Theme.status(.warning))
             }
         }
-        .frame(width: 460, alignment: .leading)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     // MARK: - 提供商预设（L-146）
@@ -811,6 +832,14 @@ struct AgentSettingsSheet: View {
     /// `NSScreen.visibleFrame` 已经扣掉菜单栏与 Dock，再留 96 点给窗口边距 ——
     /// 这样在 13 寸笔记本（可用约 700 点）上也不会把底栏推到 Dock 底下。
     /// 对话框高度上限 = 屏幕可见高度的 85%（再高就会被 Dock / 菜单栏吃掉底部按钮）。
+    /// 对话框宽度：**跟着屏幕走**，不再死钉 560 点。
+    /// 2026-10-30 主人原话：「就那么一点点宽，字体都撑到两边外面去了」——
+    /// `Form(.columns)` 的标签列在 560 点里放不下，直接被裁到边框外。
+    static var sheetWidth: CGFloat {
+        let visible = NSScreen.main?.visibleFrame.width ?? 1200
+        return min(920, max(700, visible * 0.66))
+    }
+
     static var maxSheetHeight: CGFloat {
         let visible = NSScreen.main?.visibleFrame.height ?? 800
         return max(420, visible - 120)
@@ -819,7 +848,7 @@ struct AgentSettingsSheet: View {
 
     private var sheetHeight: CGFloat {
         let available = (NSScreen.main?.visibleFrame.height ?? 800) - 96
-        return min(680, max(420, available))
+        return min(780, max(460, available))
     }
 
     /// 今日用量那一行（`%d / %d`）。

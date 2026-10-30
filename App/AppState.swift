@@ -408,6 +408,10 @@ final class AppState: ObservableObject {
     private var agentIMRunInFlight = false
     /// 「智能体设置…」面板的呈现开关（菜单命令驱动）。
     @Published var isAgentSettingsPresented = false
+    /// 从菜单「用 QQ 扫码接入…」直接落到 IM 通道页（`FR-AGT-LINK-CHAN-003` 的入口那一半）。
+    @Published var agentSettingsOpenIM = false
+    /// 菜单直开扫码面板：不进设置也能扫码（2026-10-30 主人「可我没有看到哪里有啊」）。
+    @Published var isQQScanPresented = false
 
     /// 「外观」面板（FR-EDIT-33：强调色可配置）。
     @Published var isAppearancePresented = false
@@ -1642,9 +1646,12 @@ final class AppState: ObservableObject {
     ///   - agentIMCredentialStore: IM 通道凭据的存储。默认 = 配置文件（AppID）+ 系统钥匙串（Secret）。
     init(
         secretStore: SecretStore = KeychainSecretStore(),
-        agentKeyStore: AgentKeyStore = KeychainAgentKeyStore(),
-        agentIMCredentialStore: AgentIMCredentialStore = AgentIMCredentialStore(secretStore: KeychainAgentIMSecretStore())
+        // 2026-10-30 主人：「这个 keychain 太烦人了，总是要输入」——Ad-hoc 签名每装一版就变，
+        // 钥匙串 ACL 跟着失效 ⇒ 改成 0600 文件后端（见 `FileAgentSecretStore` 的头注）。
+        agentKeyStore: AgentKeyStore = FileAgentSecretStore(),
+        agentIMCredentialStore: AgentIMCredentialStore = AgentIMCredentialStore(secretStore: FileAgentSecretStore())
     ) {
+        FileAgentSecretStore.migrateFromKeychainOnce()
         self.secretStore = secretStore
         self.agentKeyStore = agentKeyStore
         self.agentIMCredentialStore = agentIMCredentialStore

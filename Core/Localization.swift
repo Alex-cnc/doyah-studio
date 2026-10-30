@@ -1904,6 +1904,7 @@ public enum LKey: String, CaseIterable, Sendable {
 
     // 智能体设置（FR-AI-01）
     case menuAgent
+    case menuAgentQQScan
     case menuAgentSettings
     case agentSettingsTitle
     case agentEnabled
@@ -5192,7 +5193,7 @@ public enum LocalizedStrings {
         .agentIMRelayAdvanced: [.simplifiedChinese: "高级：自建中继地址", .english: "Advanced: self-hosted relay address"],
         .agentIMRelayHint: [.simplifiedChinese: "留空 = 走官方（推荐）。填了就连你给的中继，不去问官方网关。", .english: "Leave empty to use the official gateway (recommended). If filled, that relay is used and QQ is not asked."],
         .agentIMOpenPlatform: [.simplifiedChinese: "去 QQ 开放平台创建 / 绑定机器人", .english: "Open the QQ bot platform to create or bind a bot"],
-        .agentIMOpenPlatformHint: [.simplifiedChinese: "AppID 与 App Secret 在开放平台那个机器人的「开发设置」里；本程序不做运行时扫码（扫码是平台登录，不是机器人鉴权）。", .english: "AppID and App Secret live under the bot's development settings on the platform. This app does not scan QR codes at runtime (that is a platform login, not bot authentication)."],
+        .agentIMOpenPlatformHint: [.simplifiedChinese: "AppID 与 App Secret 在开放平台那个机器人的「开发设置」里；上面那条扫码是腾讯官方连接器直接返回这两个值，不必手抄。", .english: "AppID and App Secret live under the bot's development settings on the platform. The scan button above returns both directly through Tencent's official connector, so there is nothing to copy by hand."],
         .agentIMSandboxHint: [.simplifiedChinese: "沙箱环境要先把机器人拉进沙箱群 / 沙箱用户列表，否则一条消息都收不到。", .english: "In the sandbox, add the bot to the sandbox group or user list first; otherwise no message will arrive."],
         .agentIMQQEnvironmentMissing: [.simplifiedChinese: "还没选环境（正式 / 沙箱）：地址按环境取，不选就不知道连哪个网关", .english: "No environment chosen (production / sandbox): the gateway address depends on it"],
         .agentIMQQAppIDMissing: [.simplifiedChinese: "还不能取 token：先填 AppID", .english: "Cannot fetch a token yet: fill in the AppID first"],
@@ -5265,6 +5266,7 @@ public enum LocalizedStrings {
         .agentTabDisplay: [.simplifiedChinese: "外观", .english: "Appearance"],
         .agentIMQRInlineHint: [.simplifiedChinese: "用手机 QQ 扫一下就自动拿到 AppID 与 AppSecret，不用去开放平台抄。下面是手填（没装 Node 或不想扫码时用）。", .english: "Scan with QQ on your phone and the AppID and AppSecret come back automatically — no copying from the console. The fields below are for manual entry."],
         .agentIMQRButton: [.simplifiedChinese: "用 QQ 扫码接入", .english: "Connect with QQ scan"],
+        .menuAgentQQScan: [.simplifiedChinese: "用 QQ 扫码接入…", .english: "Connect QQ by QR Scan…"],
         .agentIMQRTitle: [.simplifiedChinese: "用手机 QQ 扫一扫", .english: "Scan with QQ on your phone"],
         .agentIMQRHint: [.simplifiedChinese: "扫码后会自动拿到机器人的 AppID 与 AppSecret，你不用去开放平台抄。扫完这一页会自己关。", .english: "Scanning hands back the bot's AppID and AppSecret for you — no copying from the console. This sheet closes itself when done."],
         .agentIMQRStarting: [.simplifiedChinese: "正在生成二维码…", .english: "Generating the QR code…"],

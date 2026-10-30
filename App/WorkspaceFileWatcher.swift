@@ -102,7 +102,13 @@ final class WorkspaceFileWatcher {
         var context = FSEventStreamContext(
             version: 0, info: info, retain: nil, release: nil, copyDescription: nil
         )
-        let flags = UInt32(kFSEventStreamCreateFlagFileEvents | kFSEventStreamCreateFlagNoDefer)
+        // **必须带 `UseCFTypes`**：不带这个标志时，回调第 4 个参数是 `char **`（C 字符串数组），
+        // 而下面按 `CFArray` 去取元素 —— 取出来的不是对象，一条 `objc_msgSend` 就 SIGSEGV。
+        // 2026-10-30 22:14 的崩溃就是这么来的（`closure #1 in start(root:onChanges:)` → objc_msgSend）：
+        // 主人发一条 QQ 消息 ⇒ 助手写文件 ⇒ FSEvents 回调 ⇒ 崩。
+        let flags = UInt32(kFSEventStreamCreateFlagFileEvents
+                           | kFSEventStreamCreateFlagNoDefer
+                           | kFSEventStreamCreateFlagUseCFTypes)
         guard let stream = FSEventStreamCreate(
             kCFAllocatorDefault,
             { _, info, count, paths, _, _ in

@@ -373,7 +373,7 @@ struct WorkspaceHomeView: View {
                 .font(Theme.font(.body))
                 .foregroundStyle(Theme.text(.secondary))
                 .fixedSize(horizontal: false, vertical: true)
-            Text(L(.workspaceHomeBuildLine, Self.appVersion, Self.appBuild))
+            Text(L(.workspaceHomeBuildLine, Self.appVersion, Self.buildStamp))
                 .font(Theme.font(.caption))
                 .foregroundStyle(Theme.text(.tertiary))
             Text(L(.workspaceHomeCopyright))
@@ -514,5 +514,11 @@ struct WorkspaceHomeView: View {
 
     private static var appBuild: String {
         (Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String) ?? "—"
+    }
+
+    /// 构建戳（`<提交数>.<sha7> · <时刻>`）：首页那行直接显示它，
+    /// 一眼能分出装的是哪一版（发布标签 `beta1.0` 是不变的）。
+    private static var buildStamp: String {
+        (Bundle.main.object(forInfoDictionaryKey: "DoyahBuildStamp") as? String) ?? appBuild
     }
 }

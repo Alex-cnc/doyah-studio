@@ -77,7 +77,9 @@ struct AboutLicenseSheet: View {
                         .foregroundStyle(Theme.text(.secondary))
                         .textSelection(.enabled)
                         .accessibilityIdentifier("app-copyright")
-                    line(L(.licAboutAppVersion), appVersion)
+                    // 版本后面挂构建戳（2026-10-30 主人：「分不清哪个是新哪个是旧」）——
+                    // 发布标签稳定不变，构建戳每次都不一样。
+                    line(L(.licAboutAppVersion), buildStamp.isEmpty ? appVersion : "\(appVersion)  ·  \(buildStamp)")
                     // 人员行用「开发者 / Developer」，**不用 Owner**
                     line(L(.licAboutDeveloper), L(.appCopyrightHolder))
                 }
@@ -236,6 +238,11 @@ struct AboutLicenseSheet: View {
 
     private var appVersion: String {
         (Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String) ?? "—"
+    }
+
+    /// 构建戳：`<提交数>.<sha7> · <时刻>`（`build-app.sh` 写进 Info.plist）。
+    private var buildStamp: String {
+        (Bundle.main.object(forInfoDictionaryKey: "DoyahBuildStamp") as? String) ?? ""
     }
 
     private var activityItemsText: String {
