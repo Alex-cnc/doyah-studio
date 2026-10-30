@@ -3515,6 +3515,24 @@ final class AppState: ObservableObject {
     }
 
     /// 建连：配置齐才动手；缺什么 / 取不到 token 都**当场说出来**，不静默失败。
+    /// 启动时**自动接上** IM 通道（`FR-AGT-LINK-CHAN-003`）。
+    ///
+    /// 主人 2026-10-30：「QQ 通道虽然配置了，但还是不能对话」——根因之一：连接只在
+    /// 「智能体设置 → IM 通道 → 连接」那一下发生，**重启就断**，而人不会每次开 App 都去点一遍。
+    /// 口径：凭据齐（`readiness.isReady`）且「接收任务」开着 ⇒ 启动即连；关着就老实不连。
+    func startAgentIMIfConfigured() {
+        guard agentIMSettings.receiveTasks else {
+            StartupLog.write("IM 启动：接收任务关着，不自动连")
+            return
+        }
+        guard agentIMReadiness.isReady else {
+            StartupLog.write("IM 启动：凭据不齐（\(AgentIMStatusText.fieldList(agentIMReadiness.missing, language: agentIMLanguage))），不自动连")
+            return
+        }
+        StartupLog.write("IM 启动：自动连接")
+        connectAgentIM()
+    }
+
     func connectAgentIM() {
         let readiness = agentIMReadiness
         guard readiness.isReady else {
@@ -3634,6 +3652,9 @@ final class AppState: ObservableObject {
     /// 一个跑（接进界面的对话模型，审批照旧）、一个推（传输层 send）。
     private func acceptAgentIMInbound(_ frame: AgentIMInboundFrame) {
         guard case .message(let message) = frame else { return }
+        // 留痕（2026-10-30 主人「配置了但不能对话」）：整条链每一步都写一行，
+        // 出问题能直接指着日志说卡在哪一步，不靠猜。
+        StartupLog.write("IM 收到消息 id=\(message.platformMessageID) chat=\(message.chatID) 字数=\(message.text.count)")
         let runner = makeAgentIMInboundRunner()
         Task { @MainActor [weak self] in
             guard let self else { return }
@@ -3642,6 +3663,7 @@ final class AppState: ObservableObject {
                                               readiness: self.agentIMReadiness,
                                               connection: self.agentIMConnectionState,
                                               language: self.agentIMLanguage)
+            StartupLog.write("IM 一轮结束 outcome=\(String(describing: outcome))")
             self.recordAgentIMInbound(outcome, message: message)
         }
     }
@@ -3664,11 +3686,32 @@ final class AppState: ObservableObject {
     /// 跑一轮：**同一时刻只跑一条**（同时进来两条时第二条如实回「上一轮还在跑」，
     /// 不排队、也不并行 —— 两条并行会互相盖上下文）。
     private func runAgentIMTask(_ task: AgentIMTask) async -> AgentIMTaskRunResult {
-        guard let runner = agentIMTaskRunner else { return .unavailable(code: "noRunner") }
+        guard let runner = agentIMTaskRunner else {
+            StartupLog.write("IM 跑一轮：没有注入 runner（noRunner）")
+            return .unavailable(code: "noRunner")
+        }
         guard !agentIMRunInFlight else { return .unavailable(code: "busy") }
         agentIMRunInFlight = true
+        StartupLog.write("IM 跑一轮开始 chat=\(task.chatID) 会话=\(task.sessionID)")
         defer { agentIMRunInFlight = false }
-        return await runner(task)
+        // **硬超时**：一轮挂住（等审批 / 模型不返回）时，人在这边只会看到「没反应」——
+        // 超时就如实回一句，并把结局写进日志，不静默。
+        let result = await withTaskGroup(of: AgentIMTaskRunResult?.self) { group in
+            group.addTask { await runner(task) }
+            group.addTask {
+                try? await Task.sleep(nanoseconds: 180 * 1_000_000_000)
+                return nil
+            }
+            let first = await group.next() ?? nil
+            group.cancelAll()
+            return first
+        }
+        if let result {
+            StartupLog.write("IM 跑一轮结束 result=\(String(describing: result))")
+            return result
+        }
+        StartupLog.write("IM 跑一轮超时（180s，按超时回话）")
+        return .unavailable(code: "timeout")
     }
 
     /// 推一条已入队的结果。

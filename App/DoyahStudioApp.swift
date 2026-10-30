@@ -268,6 +268,8 @@ struct DoyahStudioApp: App {
                     // （下面那条 `willTerminate`）—— 工作区页签带内容，不跟着按键落盘。
                     workspaceTabs.restoreSession()
                     await workspace.load()
+                    // IM 通道：配好就启动即连（见 AppState.startAgentIMIfConfigured 的由来）。
+                    appState.startAgentIMIfConfigured()
                 }
                 // **退出时落会话快照**（FR-EDIT-43 · 片 `L116-RESTORE-1`）：会话恢复的另一半落点。
                 // 为什么不在「每次变化」时写（浏览器页签走的是那条路）：工作区页签**带内容**，
