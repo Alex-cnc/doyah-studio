@@ -1,0 +1,49 @@
+#!/bin/sh
+# Doyah Studio · 提交前钩子（最小面）
+#
+# 为什么只有两条：本仓的文档判据（check-doc-*）已在发布流程里跑；这里只挡**两类当场就该挡**的错：
+#   ① 需求编号形状 —— 新增编号必须是 L0 §1.5 的五段式（`FR|NFR|AC-<产品>-<面>-<域>-<序号>`）；
+#   ② 越界（有 check-exclusive-sections.py 时）—— 改动落在不属于本侧的独占节。
+#
+# 安装：bash Scripts/hooks/install.sh   绕过：git commit --no-verify（只在明确知道后果时用）
+set -e
+ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+cd "$ROOT"
+
+PY=""
+for candidate in "${PYTHON:-}" "py -3" python python3; do
+  [ -n "$candidate" ] || continue
+  command -v $candidate >/dev/null 2>&1 || continue
+  if [ "$($candidate -c 'import sys; print(sys.version_info[0])' 2>/dev/null)" = "3" ]; then PY="$candidate"; break; fi
+done
+
+FAIL=0
+RAN=0
+
+BASE=origin/master
+git rev-parse --verify -q origin/master >/dev/null 2>&1 || BASE=HEAD
+
+if [ -n "$PY" ] && [ -f Scripts/check-req-ids.py ]; then
+  echo "[pre-commit] 需求编号形状：$PY Scripts/check-req-ids.py --base $BASE"
+  $PY Scripts/check-req-ids.py --base "$BASE" || FAIL=1
+  RAN=$((RAN + 1))
+fi
+
+if [ -n "$PY" ] && [ -f Scripts/check-exclusive-sections.py ]; then
+  MINE="${DOYAH_MINE:-hugehippo}"   # 本仓是三书本体 + macOS 实现，契约层归本侧（2026-10-15 受让）
+  echo "[pre-commit] 越界门禁：$PY Scripts/check-exclusive-sections.py --mine $MINE --base $BASE"
+  $PY Scripts/check-exclusive-sections.py --mine "$MINE" --base "$BASE" || FAIL=1
+  RAN=$((RAN + 1))
+fi
+
+if [ "$RAN" = 0 ]; then
+  echo "[pre-commit] 本仓未发现可用检查，跳过"
+  exit 0
+fi
+
+if [ "$FAIL" != 0 ]; then
+  echo ""
+  echo "[pre-commit] ✗ 检查未通过，提交已阻止。（确认无误时可用 git commit --no-verify，慎用）"
+  exit 1
+fi
+echo "[pre-commit] ✓ 通过"

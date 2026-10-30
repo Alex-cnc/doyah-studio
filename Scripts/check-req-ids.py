@@ -1,102 +1,164 @@
 #!/usr/bin/env python3
-"""需求编号三方对账：正文定义域 ↔ 需求索引 ↔ 计划书台账。
+# -*- coding: utf-8 -*-
+"""需求编号形状判据（`FR|NFR|AC-<产品>-<面>-<域>-<序号>`）。
 
-为什么需要它：`check-req-index` 比「正文 ↔ jsonl」、`check-plan-coverage` 比「台账 ↔ 索引」，
-两份**派生件**互比永远绿；正文这一侧没人比 —— 实测正文有、索引无 78 条，索引有、正文无 0 条，
-而四道门禁全绿。
+存在的理由：这件事已经反复犯过 —— 新增需求时凭手感写成 `FR-UI-10` 这种三段短号，
+而 L0《Doyah产品需求规格说明书》§1.5 早就定了五段式（产品 / 面 / 域三层编码 + 序号），
+每次都要人指出来再返工。所以把它变成**提交那一刻的判据**，而不是靠记性：
 
-口径（写死，避免每次临场判）：
-  · **正文定义域 = 第 3 章（功能需求）+ 第 4 章（非功能需求）+ 第 7 章（验收标准）**的表格行；
-  · **第 5 章数据需求 / 第 6 章接口需求 另账**（`FR-STD-ALL-DATA-*` / `FR-STD-ALL-IFACE-*`），不进索引与台账；
-  · **第 8 章风险与待决**同一编号会在「风险登记」与「待决项」两张表各出现一次，属刻意，不进定义域；
-  · 台账只认「行首就是编号」的表格行，正文里的「承接 `FR-NOTE-27`」这类引用不算台账行。
+  ① 本次**新增**的编号必须完全符合 L0 正则，且产品 / 面 / 域三者都已在 L0 登记；
+  ② 老号（三段式）只在「该编号在改动前的同一文件里已经存在」时放行（冻结不迁移）；
+  ③ 新编号若用了未登记的域码 —— 判红，并提示「先去 L0 §1.5.5 登记域码」。
 
-用法：check-req-ids.py [--srs 需求书.md] [--index 索引.md] [--plan 计划书.md] [--list]
+用法：
+    python3 tools/logic-check/check-req-ids.py                 # 看工作区 + 暂存区相对 HEAD 的新增行
+    python3 tools/logic-check/check-req-ids.py --base origin/master
+    python3 tools/logic-check/check-req-ids.py --self-test     # 反例：短号必红、五段式必绿
+
+退出码：0 = 通过；1 = 有违反；2 = 用法 / 环境问题（不许静默当通过）。
 """
-import argparse, re, sys, pathlib, collections
+from __future__ import annotations
+
+import argparse
+import os
+import re
+import subprocess
 import sys
 
-sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
-import doc_index  # noqa: E402  （派生件位置：.build/derived；缺文件先重生成）
+L0_DEFAULT = os.path.expanduser("~/dev/doyah/lead/studio/Docs/Doyah产品需求规格说明书.md")
 
-ID = re.compile(r"(?:FR|NFR|AC)-(?:[A-Z0-9]{2,8}-){1,3}\d{2,3}")
-DEF_CH = {"3", "4", "7"}
+FIVE = re.compile(r"^(FR|NFR|AC)-(AGT|STD|NTS|RTR|ALL)-([A-Z]{2,8})-([A-Z]{2,8})-(\d{2,3})$")
+CANDIDATE = re.compile(r"(?<![A-Z])((?:FR|NFR|AC)-[A-Z]+(?:-[A-Z]+){0,3}-\d{2,3})")
+# 只看「像编号的独立记号」，避免把句子里的 FR-UI 这种家族前缀当成编号
+LEGACY = re.compile(r"^(FR|NFR|AC)-[A-Z]+-\d{2,3}$")
 
 
-def rows_of(path):
-    text = pathlib.Path(path).read_text(encoding="utf-8")
-    chap = None
-    out = []
-    for i, l in enumerate(text.split("\n")):
-        m = re.match(r"^# 第([一二三四五六七八九十]+)章", l)
-        if m:
-            cn = "一二三四五六七八九"
-            v = m.group(1)
-            chap = str(cn.index(v) + 1) if v in cn else ("10" if v == "十" else None)
+def run(cmd, cwd=None) -> str:
+    p = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True)
+    if p.returncode != 0:
+        raise RuntimeError("命令失败：%s\n%s" % (" ".join(cmd), p.stderr.strip()))
+    return p.stdout
+
+
+def load_registry(l0_path: str):
+    """从 L0 需求书解析：产品集合 / 面集合（按产品）/ 域集合（按面）。"""
+    text = open(l0_path, encoding="utf-8").read()
+    products = set(re.findall(r"^\| `(AGT|STD|NTS|RTR|ALL)` \| ", text, re.M))
+    faces = {(p, f) for p, f in re.findall(r"^\| (AGT|STD|NTS|RTR|ALL) \| `([A-Z]{2,8})` \|", text, re.M)}
+    domains = {(f, d) for f, d in re.findall(r"^\| (CORE|PLAN|GUARD|KNOW|TOOL|LINK|UX|QUAL|OPS|WS|DB|NOTE|TODO|MKT|RSR|FLOW|REV|ALL|GATE) \| `([A-Z]{2,8})` \|", text, re.M)}
+    return products, faces, domains
+
+
+def added_lines(base: str | None):
+    """{文件: [新增行文本]} —— 只取 + 行，忽略 +++ 头。"""
+    args = ["git", "diff", "--unified=0"]
+    if base:
+        args.append(base)
+    out = run(args)
+    files, cur = {}, None
+    for line in out.split("\n"):
+        if line.startswith("+++ "):
+            path = line[4:].strip()
+            cur = None if path == "/dev/null" else path[2:] if path.startswith("b/") else path
+            if cur:
+                files.setdefault(cur, [])
             continue
-        if re.match(r"^# 附录", l):
-            chap = None
-        if l.startswith("|"):
-            mid = ID.search(l)
-            if mid:
-                out.append((i + 1, chap, mid.group(0), l))
-    return out
+        if line.startswith("+") and not line.startswith("+++") and cur:
+            files[cur].append(line[1:])
+    # 未跟踪文件也纳入（新增文件最容易犯这个错）
+    for path in run(["git", "ls-files", "--others", "--exclude-standard"]).split("\n"):
+        path = path.strip()
+        if path and os.path.isfile(path):
+            files.setdefault(path, [])
+            try:
+                files[path].extend(open(path, encoding="utf-8", errors="ignore").read().split("\n"))
+            except OSError:
+                pass
+    return files
 
 
-def ids_in(path):
-    return set(ID.findall(pathlib.Path(path).read_text(encoding="utf-8")))
+def existing_ids(path: str, base: str | None):
+    """改动前该文件里已存在的编号（用来放行冻结的老号）。"""
+    ref = base or "HEAD"
+    try:
+        text = run(["git", "show", "%s:%s" % (ref, path)])
+    except RuntimeError:
+        return set()
+    return set(CANDIDATE.findall(text))
 
 
-def plan_rows(path):
-    s = set()
-    for l in pathlib.Path(path).read_text(encoding="utf-8").split("\n"):
-        if re.match(r"^\|\s*\*{0,2}(?:FR|NFR|AC)-", l):
-            m = ID.search(l)
-            if m:
-                s.add(m.group(0))
-    return s
+def check(files, products, faces, domains, base):
+    problems, checked = [], 0
+    for path, lines in sorted(files.items()):
+        # 只看文档树：需求编号是文档里的东西；`.agent/`、笔记证据、代码注释里的老号引用不在此列
+        if not path.endswith(".md") or "/Docs/" not in "/" + path:
+            continue
+        before = existing_ids(path, base)
+        for line in lines:
+            for rid in CANDIDATE.findall(line):
+                checked += 1
+                m = FIVE.match(rid)
+                if m:
+                    _, product, face, domain, _serial = m.groups()
+                    if product not in products:
+                        problems.append((path, rid, "产品码 `%s` 未在 L0 §1.5.3 登记" % product))
+                    elif product != "ALL" and (product, face) not in faces:
+                        problems.append((path, rid, "面码 `%s/%s` 未在 L0 §1.5.4 登记" % (product, face)))
+                    elif product != "ALL" and (face, domain) not in domains and (face != "GATE" and (face, domain) not in domains):
+                        problems.append((path, rid, "域码 `%s` 未在 L0 §1.5.5 登记（先去登记，再分配编号）" % domain))
+                    continue
+                if LEGACY.match(rid) and rid in before:
+                    continue  # 冻结的老号：改动前就有，放行
+                problems.append((path, rid, "不是 L0 五段式 `<类型>-<产品>-<面>-<域>-<序号>`（新增编号必须五段式）"))
+    return checked, problems
 
 
-def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--srs", default="Docs/Doyah产品需求规格说明书.md")
-    ap.add_argument("--index", default=str(doc_index.path()))
-    ap.add_argument("--plan", default="Docs/Doyah产品开发计划任务清单-macOS端.md")
-    ap.add_argument("--list", action="store_true")
-    a = ap.parse_args()
-    rows = rows_of(a.srs)
-    body = [(n, c, i) for n, c, i, _ in rows if c in DEF_CH]
-    inside = [(n, c, i) for n, c, i, _ in rows if c not in DEF_CH]
-    defs = [i for _, _, i in body]
-    cnt = collections.Counter(defs)
-    dup = {k: v for k, v in cnt.items() if v > 1}
-    idx, plan = ids_in(a.index), plan_rows(a.plan)
-    S, I, P = set(defs), idx & set(defs) | (idx - set(d for _, _, d in inside)), plan
+def main() -> int:
+    ap = argparse.ArgumentParser(description="需求编号形状判据")
+    ap.add_argument("--base", help="对照基线（缺省 = 工作区相对 HEAD）")
+    ap.add_argument("--l0", default=os.environ.get("DOYAH_L0_SRS", L0_DEFAULT))
+    ap.add_argument("--self-test", action="store_true")
+    args = ap.parse_args()
 
-    print(f"正文定义域（第 3/4/7 章）{len(defs)} 行 / {len(set(defs))} 个唯一编号")
-    print(f"索引 {len(idx)} · 台账 {len(plan)} · 定义域外（§5/§6/§8）{len({d for _,_,d in inside})} 个")
-    bad = 0
-    if dup:
-        bad += 1
-        print(f"❌ 定义域内重复编号 {len(dup)}: {sorted(dup)}")
-    miss_idx = sorted(set(defs) - idx)
-    if miss_idx:
-        bad += 1
-        print(f"❌ 正文有、索引无 {len(miss_idx)}: {miss_idx[:12]}")
-    extra_idx = sorted(idx - set(defs))
-    if extra_idx:
-        print(f"ℹ️ 索引有、定义域无 {len(extra_idx)}: {extra_idx[:6]}（§5/§6 另账的条目允许出现在这里）")
-    miss_plan = sorted(set(defs) & idx - plan)
-    if miss_plan:
-        bad += 1
-        print(f"❌ 索引有、台账无 {len(miss_plan)}: {miss_plan[:12]}")
-    extra_plan = sorted(plan - set(defs))
-    if extra_plan:
-        bad += 1
-        print(f"❌ 台账有、定义域无 {len(extra_plan)}: {extra_plan[:12]}")
-    if bad == 0:
-        print("✓ 三方对账一致（正文定义域 = 索引 ⊆ 台账）")
-    return 0 if bad == 0 else 1
+    if args.self_test:
+        products = {"AGT", "STD", "NTS", "RTR", "ALL"}
+        faces = {("NTS", "NOTE"), ("STD", "WS")}
+        domains = {("NOTE", "SET"), ("NOTE", "CAPTURE"), ("WS", "UI")}
+        good = ["| FR-NTS-NOTE-SET-001 | 设置页 |"]
+
+        def one(line):
+            return ["| FR-UI-10 | 设置页 |"] if line is None else [line]
+
+        checked_ok, p_ok = check({"a.md": good}, products, faces, domains, None)
+        checked_bad, p_bad = check({"a.md": ["+ | FR-UI-10 | 新需求 |"]}, products, faces, domains, None)
+        checked_dom, p_dom = check({"a.md": ["| FR-NTS-NOTE-NOPE-001 | x |"]}, products, faces, domains, None)
+        cases = [
+            ("五段式且已登记 ⇒ 绿", checked_ok == 1 and not p_ok),
+            ("三段短号新增 ⇒ 红", checked_bad >= 1 and p_bad),
+            ("未登记域码 ⇒ 红", p_dom),
+        ]
+        bad = 0
+        for name, ok in cases:
+            print(("  ✓ " if ok else "  ✗ ") + name)
+            bad += 0 if ok else 1
+        print("自测：%d/%d 例通过" % (len(cases) - bad, len(cases)))
+        return 0 if bad == 0 else 1
+
+    if not os.path.exists(args.l0):
+        print("✗ 找不到 L0 需求书（%s）；用 --l0 或 DOYAH_L0_SRS 指定" % args.l0)
+        return 2
+    products, faces, domains = load_registry(args.l0)
+
+    files = added_lines(args.base)
+    checked, problems = check(files, products, faces, domains, args.base)
+    if problems:
+        print("✗ 新增的需求编号不合 L0 §1.5 编码规范：")
+        for path, rid, why in problems:
+            print("   %s → %s：%s" % (path, rid, why))
+        print("处理：① 按 `<类型>-<产品>-<面>-<域>-<序号>` 改名；② 域码未登记时先改 L0 §1.5.5，再分配编号。")
+        return 1
+    print("✓ 需求编号形状合规（扫过 %d 个编号 / %d 个文件）" % (checked, len(files)))
+    return 0
 
 
 if __name__ == "__main__":
