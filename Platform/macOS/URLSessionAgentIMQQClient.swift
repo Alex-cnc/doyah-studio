@@ -37,7 +37,12 @@ public struct URLSessionAgentIMQQClient: AgentIMQQHTTPClient, AgentIMOutboundHTT
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.httpBody = Data(payload.utf8)
-        for (key, value) in headers {
+        // **Content-Type 是客户端不变式**，不能指望调用方记得带。
+        // 2026-10-31 06:30 实测：只带 `Authorization` 的 POST 会被 QQ 回
+        // `400 {"code":40034030,"message":"消息content字段不能为空"}` —— 正文根本没被解析，
+        // 于是每一条回话都 `delivered: false`（人在手机上就是「发了没反应」）。
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        for (key, value) in headers where key.lowercased() != "content-type" {
             request.setValue(value, forHTTPHeaderField: key)
         }
         return try await perform(request)

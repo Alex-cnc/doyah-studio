@@ -3735,6 +3735,8 @@ final class AppState: ObservableObject {
             }
             let outcome = await sender.send(entry: entry)
             agentIMOutboundLine = AgentIMSendText.line(for: outcome, language: agentIMLanguage)
+            // 投递失败的原因必须留痕（不然只会看到「没回应」）。
+            StartupLog.write("IM 投递 outcome=\(String(describing: outcome)) openid=\(entry.target?.openID.prefix(8) ?? "-")…")
             return outcome.isDelivered
         }
         guard let transport = agentIMTransport else { return false }

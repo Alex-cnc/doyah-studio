@@ -249,6 +249,20 @@ struct DoyahStudioApp: App {
                         let before = agentChat.messages.count
                         agentChat.input = task.prompt
                         await agentChat.send()
+                        // **等这一轮真的跑完**（2026-10-31 06:26 实测：`send()` 只是把循环丢到
+                        // 后台就返回，紧接着取消息必然是空的 —— 于是每一条派活都秒回
+                        // `noAnswer`。这里等到「有新助手消息」或「不在跑了」，最多 150s）。
+                        let deadline = Date().addingTimeInterval(150)
+                        while Date() < deadline {
+                            if agentChat.hasPendingApproval { return .awaitingApproval }
+                            let text = agentChat.messages.dropFirst(before)
+                                .last(where: { $0.role == .assistant })?.text ?? ""
+                            if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                                return .answered(text)
+                            }
+                            if !agentChat.state.isRunning, agentChat.messages.count > before { break }
+                            try? await Task.sleep(nanoseconds: 400_000_000)
+                        }
                         if agentChat.hasPendingApproval { return .awaitingApproval }
                         let fresh = agentChat.messages.dropFirst(before)
                             .last(where: { $0.role == .assistant })?.text ?? ""
