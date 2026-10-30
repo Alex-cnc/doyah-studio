@@ -63,6 +63,11 @@ RELEASE_LABEL="beta1.0"
 # 主人 2026-10-30：「这个 beta1.0.app 始终不增长子版本号，我也分不清哪个是新哪个是旧」。
 # 发布标签必须稳定（`check-release-version.py` 拿它跟台账比），所以**不动标签**，
 # 另存一条随手可读的构建戳：`<提交数>.<sha7> · <时刻>` ⇒ About 页与 Info.plist 都看得到。
+# 面向用户的版本号：**从发布标签派生，不许手抄第二份**。
+# 主人 2026-10-30：「系统菜单里的关于面板上的版本是 0.3.0，而构建出的 app 却一直是 beta1.0」
+# —— 标签是内部里程碑（`beta1.0`），系统「关于」读的是 `CFBundleShortVersionString`，两者必须同源。
+# 口径：`beta1.0` → `1.0.0`，`alpha3.1` → `3.1.0`（去掉里程碑前缀，两段补成三段）。
+MARKETING_VERSION="$(printf '%s' "${RELEASE_LABEL}" | sed -E 's/^(alpha|beta|rc)//' | awk -F. '{ if (NF>=3) print $1"."$2"."$3; else print $1"."$2".0" }')"
 BUILD_COUNT="$(git -C "${ROOT}" rev-list --count HEAD 2>/dev/null || echo 0)"
 SHORT_SHA="$(git -C "${ROOT}" rev-parse --short=7 HEAD 2>/dev/null || echo nosha)"
 BUILD_STAMP="${BUILD_COUNT}.${SHORT_SHA} · $(date +%m-%d\ %H:%M)"
@@ -197,9 +202,9 @@ cat > "${APP}/Contents/Info.plist" <<PLIST
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
-    <string>0.3.0</string>
+    <string>${MARKETING_VERSION}</string>
     <key>CFBundleVersion</key>
-    <string>3</string>
+    <string>${BUILD_COUNT}</string>
     <key>DoyahReleaseLabel</key>
     <string>${RELEASE_LABEL}</string>
     <key>DoyahBuildStamp</key>
