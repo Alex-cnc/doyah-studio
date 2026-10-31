@@ -660,7 +660,7 @@ struct AgentChatView: View {
                     // 哪一段是机器要做的事。状态字形（✓ / ✗）仍按成败着色，不被这一层覆盖。
                     Text(card.arguments)
                         .font(Self.transcriptFont)
-                        .foregroundStyle(Theme.accent(.accentGlow))
+                        .foregroundStyle(Theme.chat(.command, colorScheme))
                         .lineLimit(1)
                 }
                 Spacer(minLength: 0)
@@ -686,7 +686,7 @@ struct AgentChatView: View {
                 Text(card.arguments)
                     .font(Self.transcriptFont)
                     .textSelection(.enabled)
-                    .foregroundStyle(Theme.accent(.accentGlow))
+                    .foregroundStyle(Theme.chat(.command, colorScheme))
                     .padding(.leading, Spacing.l)
             }
             // ③「展开可见**用的哪个模型与端点**」（`FR-AI-25` ③）：每张卡展开都带这一行 ——
@@ -734,7 +734,11 @@ struct AgentChatView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .overlay(
             RoundedRectangle(cornerRadius: Radius.badge)
-                .strokeBorder(pendingApproval(card) ? Theme.hairline(colorScheme) : .clear, lineWidth: 1)
+                // 待批那一圈用**紫**（§5.3.8.4）：框和「待你决定」徽章、`⚠` 字形同一色，
+                // 一眼就是「这件事在等你」；其余状态仍是中性发丝线（终端语汇里没有彩色卡片）。
+                .strokeBorder(pendingApproval(card)
+                              ? Theme.chat(.pending, colorScheme).opacity(0.55)
+                              : .clear, lineWidth: 1)
         )
     }
 
