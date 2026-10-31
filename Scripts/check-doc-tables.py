@@ -90,6 +90,7 @@ import sys
 from collections import Counter
 
 DEFAULT_TARGETS = [
+    "AGENTS.md",
     "Docs/Doyah产品开发计划任务清单-Android.md",
     "Docs/Doyah产品开发计划任务清单-iOS.md",
     "Docs/Doyah产品开发计划任务清单-HarmonyOS.md",
@@ -797,6 +798,7 @@ def main() -> int:
 # 例数仍是 17（跳过不改总数、也不许静默）。
 
 SELF_TEST_TRACKED = [
+    "AGENTS.md",
     "Docs/Doyah产品开发计划任务清单-Android.md",
     "Docs/Doyah产品开发计划任务清单-iOS.md",
     "Docs/Doyah产品开发计划任务清单-HarmonyOS.md",

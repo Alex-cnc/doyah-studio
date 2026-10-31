@@ -418,6 +418,7 @@ if [ "${REQUIRE_ALL}" = "1" ]; then
   python3 Scripts/check-ui-design-section.py --platform ios
 else
   python3 Scripts/check-doc-tables.py
+  python3 Scripts/check-agents-index.py
 fi
 # 这一半是门禁自己的证据（L-33；L-41 补例 5；L-89 补例 6）：干净克隆跳过 12 份且 exit 0 /
 # --require-all 判红 / 显式点名判红 / **写坏一行被判红并指名行号** / **带表格却不在清单判红且归档豁免** /

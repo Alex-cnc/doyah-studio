@@ -53,9 +53,12 @@ public struct AgentCodeRunOutcome: Equatable, Sendable {
 public struct AgentCodeRunner: Sendable {
     /// 解释器白名单（绝对路径，随系统）。
     public static let interpreters: [AgentCodeRunRequest.Language: [String]] = [
+        // portability-ok: 这是**候选路径表**，下面 `run` 用 `isExecutableFile` 逐个探测、不存在即跳过，
+        // 真正可用的解释器取决于本机；表里只有 macOS / Linux 的常规安装点，不含 Windows 专有路径。
         .python: ["/usr/bin/python3", "/opt/homebrew/bin/python3"],
-        .node: ["/opt/homebrew/bin/node", "/usr/local/bin/node", "/usr/bin/env"],
-        .swift: ["/usr/bin/swift"],
+        // portability-ok: 同上 —— 候选表，运行期探测；`/usr/bin/env` 只为兜底 PATH。
+        .node: ["/opt/homebrew/bin/node", "/usr/local/bin/node", "/usr/bin/env"],   // portability-ok: 候选表，运行期探测
+        .swift: ["/usr/bin/swift"],   // portability-ok: 候选表，运行期探测
     ]
 
     /// 缺依赖的典型字样（只做**如实归类**，不据此去装东西）。

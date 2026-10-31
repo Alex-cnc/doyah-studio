@@ -42,7 +42,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-SPEC = ROOT / "Docs" / "智能体助手-开发规范.md"
+SPEC = ROOT / "Docs" / "通用开发规范.md"   # 2026-10-31：旧名《智能体助手-开发规范》已改名，判据跟着改
 QUEUE = ROOT / "Docs" / "design" / "开发循环-任务队列.md"
 LEDGER = ROOT / "Docs" / "design" / "待拍板台账-三仓.md"
 

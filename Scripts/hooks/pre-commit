@@ -3,7 +3,8 @@
 #
 # 为什么只有两条：本仓的文档判据（check-doc-*）已在发布流程里跑；这里只挡**两类当场就该挡**的错：
 #   ① 需求编号形状 —— 新增编号必须是 L0 §1.5 的五段式（`FR|NFR|AC-<产品>-<面>-<域>-<序号>`）；
-#   ② 越界（有 check-exclusive-sections.py 时）—— 改动落在不属于本侧的独占节。
+#   ② 越界（有 check-exclusive-sections.py 时）—— 改动落在不属于本侧的独占节；
+#   ③ AGENTS.md 索引（check-agents-index.py）—— 索引与规范正文的铁律条数/编号必须一致。
 #
 # 安装：bash Scripts/hooks/install.sh   绕过：git commit --no-verify（只在明确知道后果时用）
 set -e
@@ -33,6 +34,13 @@ if [ -n "$PY" ] && [ -f Scripts/check-exclusive-sections.py ]; then
   MINE="${DOYAH_MINE:-hugehippo}"   # 本仓是三书本体 + macOS 实现，契约层归本侧（2026-10-15 受让）
   echo "[pre-commit] 越界门禁：$PY Scripts/check-exclusive-sections.py --mine $MINE --base $BASE"
   $PY Scripts/check-exclusive-sections.py --mine "$MINE" --base "$BASE" || FAIL=1
+  RAN=$((RAN + 1))
+fi
+
+if [ -n "$PY" ] && [ -f Scripts/check-agents-index.py ]; then
+  # AGENTS.md 是索引、规范是正文：两边条数/编号对不上就判红（铁律 #13/#14）
+  echo "[pre-commit] AGENTS.md 索引：$PY Scripts/check-agents-index.py"
+  $PY Scripts/check-agents-index.py || FAIL=1
   RAN=$((RAN + 1))
 fi
 
