@@ -613,10 +613,15 @@ public struct AgentWebTools: Sendable {
         // 而 `resolved` 只用于面板上那句话。两者混用会让 auto 悄悄退化成单后端。
         switch config.backend {
         case .auto:
+            // 「自动」= 配了 key 就先 Tavily（质量好），**网络不通**时退回内置；
+            // 鉴权失败 / 被限流不退回（那会让人以为在用付费后端，其实在用免费的那个）。
+            var chain: [any AgentWebSearchBackend] = []
             if let key = config.tavilyAPIKey, !key.isEmpty {
-                return [TavilyBackend(transport: transport, apiKey: key)]
+                chain.append(TavilyBackend(transport: transport, apiKey: key))
             }
-            return [DuckDuckGoBackend(transport: transport), BingBackend(transport: transport)]
+            chain.append(DuckDuckGoBackend(transport: transport))
+            chain.append(BingBackend(transport: transport))
+            return chain
         default:
             break
         }
