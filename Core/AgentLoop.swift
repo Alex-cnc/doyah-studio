@@ -164,6 +164,12 @@ public enum AgentLoopStop: Equatable, Sendable {
     /// **配额拦下**（`NFR-AI-04` + `FR-AI-31` ③）：调用次数 / 累计 token 到顶 —— 停在发送之前，
     /// 并把配额自己那句可读原因带出来（不是一句「停了」）。
     case quotaLimit(String)
+    /// **原地打转**（`FR-AI-31` ③）：同一工具 + 同一参数 + 同样的结果连来 N 跳 —— 停手。
+    ///
+    /// 为什么要「停」而不只是「报警」：告警只是给过程面留一行字，循环照样往前跑。
+    /// 2026-10-31 现场：状态行 `spinning 3 hops` 亮着，一条 `python3 hello.py` 仍跑满 124 步，
+    /// 每一跳都弹一张「等你批准」的单子 —— 人点了上百次。报警不停 = 没拦住。
+    case spinning(Int)
     case cancelled
 
     /// 供回灌 / 界面读的原因串（**机器形态**：带数值与档位，人话由渲染入口给）。
@@ -172,6 +178,7 @@ public enum AgentLoopStop: Equatable, Sendable {
         case .stepLimit(let limit): return "stepLimit:\(limit)"
         case .tokenLimit(let limit): return "tokenLimit:\(limit)"
         case .quotaLimit(let detail): return "quotaLimit:\(detail)"
+        case .spinning(let hops): return "spinning:\(hops)"
         case .cancelled: return "cancelled"
         }
     }
@@ -192,6 +199,10 @@ public enum AgentLoopStop: Equatable, Sendable {
         if reason.hasPrefix("tokenLimit:") {
             guard let value = Int(reason.dropFirst("tokenLimit:".count)) else { return nil }
             return .tokenLimit(value)
+        }
+        if reason.hasPrefix("spinning:") {
+            guard let value = Int(reason.dropFirst("spinning:".count)) else { return nil }
+            return .spinning(value)
         }
         let quotaPrefix = "quotaLimit:"
         if reason.hasPrefix(quotaPrefix) {
@@ -773,7 +784,17 @@ public struct AgentLoop: Sendable {
             if var running = monitor {
                 let alert = running.recordHop(signature: Self.hopSignature(invocations: invocations, text: text))
                 monitor = running
-                if let alert { await raise(alert) }
+                if let alert {
+                    await raise(alert)
+                    // **报警之后必须真的停**：只报不停等于没拦（见 `.spinning` 的注释）。
+                    if alert.kind == .spinning {
+                        await observer?.observe(.stopped(.spinning(alert.observed)))
+                        recordStop(.spinning(alert.observed), context: context, at: startedAt)
+                        return seal(AgentLoopResult(
+                            outcome: .stopped(.spinning(alert.observed)), steps: steps,
+                            executedTools: executed, rejectedTools: rejected, usage: usage, text: ""))
+                    }
+                }
             }
             recordTurn(context: context, kind: .model, role: "assistant", text: text, at: startedAt)
             // `FR-AI-24` ②：**每一次模型调用**都留一条（含模型 / 端点 / token / 耗时 / 状态）。

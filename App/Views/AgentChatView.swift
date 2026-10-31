@@ -595,6 +595,7 @@ struct AgentChatView: View {
                 case .stepLimit(let limit): return L(.agentChatStopStepLimit, Int(limit))
                 case .tokenLimit(let limit): return L(.agentChatStopTokenLimit, Int(limit))
                 case .quotaLimit(let detail): return L(.agentChatQuotaStopped, String(detail))
+                case .spinning(let hops): return L(.agentChatStopSpinning, Int(hops))
                 }
             }
             // 认不出的码原样交回（宁可见机器码，也不假装成别的话 —— 但已知的四种一个都不许落到这里）。

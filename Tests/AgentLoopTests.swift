@@ -366,3 +366,25 @@ extension AgentLoopTests {
         XCTAssertTrue(silent.contains("(无输出)"), "真没输出也要说出来，别让模型猜：\(silent)")
     }
 }
+
+extension AgentLoopTests {
+    /// 回归（2026-10-31 现场）：连续同样的工具调用只报警、不停 ⇒ 一条 `python3 hello.py` 跑满 124 步。
+    /// 契约：`maxIdenticalHops` 跳形态相同 ⇒ **停在这一跳之前**（该跳的工具调用不执行），并如实报 `spinning:N`。
+    func testIdenticalToolCallsStopTheLoopInsteadOfRunningToTheStepLimit() async {
+        let same = toolEvent(name: "read_file", arguments: #"{"path":"a.txt"}"#)
+        let client = ScriptedStreamingClient((0..<6).map { _ in same })
+        let dispatcher = RecordingDispatcher()
+        let loop = AgentLoop(client: client, dispatcher: dispatcher, sessionStore: store,
+                             monitor: AgentRunMonitor(limits: AgentRunMonitorLimits(maxIdenticalHops: 3)))
+        let result = await loop.run(context: context)
+
+        guard case .stopped(let stop) = result.outcome else {
+            return XCTFail("空转该如实停，实际 \(result.outcome)")
+        }
+        XCTAssertEqual(stop, .spinning(3), "停在第 3 跳，并把跳数带出来")
+        XCTAssertEqual(AgentLoopStop.parse(reason: stop.reason), .spinning(3),
+                       "界面要把 spinning:N 翻成人话，不是原样印机器码")
+        XCTAssertEqual(result.steps, 3, "第三跳收到后即停（不许再发第 4 次请求）")
+        XCTAssertEqual(dispatcher.invoked.count, 2, "触发那一跳的工具调用不许执行：前两跳跑了，第三跳没跑")
+    }
+}

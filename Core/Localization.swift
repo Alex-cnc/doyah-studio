@@ -1268,6 +1268,7 @@ public enum LKey: String, CaseIterable, Sendable {
     /// `NFR-AI-04` + `FR-AI-31` ③：配额把这个请求拦在发送之前（%@ = 配额自己那句原因）。
     case agentChatQuotaStopped
     /// `FR-AI-18` ④：这一轮被用户停止（界面要标「用户取消」，不许原样印 `cancelled`）。
+    case agentChatStopSpinning
     case agentChatStopCancelled
     /// `FR-AI-18` ②：到了步数上限（%d 跳）—— 如实停且报明上限值。
     case agentChatStopStepLimit
@@ -4480,6 +4481,7 @@ public enum LocalizedStrings {
         // 界面此前把这三串机器码原样印出来（`stepLimit:3` / `cancelled`）⇒ 人看不懂，也不知道是不是自己按的停。
         .agentChatStopStepLimit: [.simplifiedChinese: "到了步数上限（%d 跳）—— 如实停在这里，不是说完。可以补一句更具体的要求再跑一轮。", .english: "Step limit reached (%d hops) — stopping honestly here, not finishing. Add a more specific instruction to run another round."],
         .agentChatStopTokenLimit: [.simplifiedChinese: "到了令牌上限（%d）—— 下一次请求没有发出就停了，不会半截继续烧。", .english: "Token limit reached (%d) — the next request was not sent, so nothing keeps burning."],
+        .agentChatStopSpinning: [.simplifiedChinese: "连续 %d 次同样的调用、同样的结果 —— 我停手了：再跑一遍只会是同一句话。换个说法，或者直接告诉我下一步做什么。", .english: "Stopped after %d identical calls returning the same result — another round would repeat itself. Rephrase, or tell me the next step."],
         .agentChatStopCancelled: [.simplifiedChinese: "这一轮已被你停止（已跑过的工具结果都留着）。", .english: "You stopped this run (results from tools already run are kept)."],
         // §5.3.8 的六态：加载中要有一行「开口之前的占位」，错误档要说清「这一轮没跑成」而不是印机器码。
         .agentChatStreamingPlaceholder: [.simplifiedChinese: "正在等模型开口…", .english: "waiting for the model…"],
