@@ -344,3 +344,25 @@ final class AgentLoopTests: XCTestCase {
         XCTAssertEqual(a, AgentLoop.digest(of: ["read_file: 内容 A"]), "同内容同指纹")
     }
 }
+
+extension AgentLoopTests {
+    /// 回归（2026-10-31 现场）：`run_command` 只回 `command:0`、正文一个字都不给 ⇒ 模型以为没跑，
+    /// 同一条 `python3 hello.py` 跑满 124 步，人点了上百次批准。
+    /// 判据不是格式好看，而是：**下一跳真的能读到命令输出**。
+    func testCommandObservationCarriesStdoutAndStderr() {
+        let ok = AgentLoop.summary(of: .command(AgentCommandResult(exitCode: 0,
+                                                                   standardOutput: "hello\n",
+                                                                   standardError: "")))
+        XCTAssertTrue(ok.hasPrefix("command:0"), "退出码仍要如实写在最前：\(ok)")
+        XCTAssertTrue(ok.contains("hello"), "命令输出必须进观察段：\(ok)")
+
+        let failed = AgentLoop.summary(of: .command(AgentCommandResult(exitCode: 127,
+                                                                      standardOutput: "",
+                                                                      standardError: "zsh: command not found: nope\n")))
+        XCTAssertTrue(failed.hasPrefix("command:127"))
+        XCTAssertTrue(failed.contains("command not found"), "stderr 也要回灌：\(failed)")
+
+        let silent = AgentLoop.summary(of: .command(AgentCommandResult(exitCode: 0, standardOutput: "", standardError: "")))
+        XCTAssertTrue(silent.contains("(无输出)"), "真没输出也要说出来，别让模型猜：\(silent)")
+    }
+}

@@ -1209,7 +1209,19 @@ public struct AgentLoop: Sendable {
             var text = "rows:\(rows.rowCount) 行（\(rows.statementKind)）列:\(columns)"
             if let error = rows.errorMessage, !error.isEmpty { text += "\n错误:\(error)" }
             return text
-        case .command(let command): return "command:\(command.exitCode)"
+        case .command(let command):
+            // **`FR-AI-21` ① 对本地命令同样成立**：只回 `command:0`、不回正文，模型等于什么也没看见。
+            // 2026-10-31 现场：一条 `python3 hello.py` 在 App 里跑了 124 步、人点了上百次批准 ——
+            // 因为模型收到 `command:0`，以为命令没跑，于是再调一次。
+            var text = "command:\(command.exitCode)"
+            if !command.standardOutput.isEmpty {
+                text += "\nstdout:\n" + clamp(command.standardOutput, label: "stdout")
+            }
+            if !command.standardError.isEmpty {
+                text += "\nstderr:\n" + clamp(command.standardError, label: "stderr")
+            }
+            if command.standardOutput.isEmpty && command.standardError.isEmpty { text += "\n(无输出)" }
+            return text
         case .wrote(let file): return "wrote:\(file.path):\(file.totalBytes)"
         case .mcp(let call):
             // **`FR-AI-21` ①：「结果回灌进模型」** —— 远端正文必须真的进下一跳的观察段，

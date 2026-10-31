@@ -4340,12 +4340,30 @@ final class AppState: ObservableObject {
     /// 所以「先到的批准」先记在这儿，循环来等的时候**立刻兑现**。
     private var agentPendingGrants: Set<String> = []
 
+    /// **本会话内已批准过的指纹**（策略类出单）。
+    ///
+    /// 为什么：同一条命令重跑是常态（模型改正后重试、人反复验证），每次重问等于让人重复点同一个「批准」——
+    /// 2026-10-31 现场一条 `python3 hello.py` 让人点了上百次。**越界单不进这里**：越界授权仍是
+    /// 「一次一单、批准前不动盘」（§3.26），同一条路径改一次就要再问一次。
+    private var agentSessionGrants: Set<String> = []
+
+    /// 这一张单能不能「批一次、本会话免重问」。
+    private func isSessionGrantable(_ request: AgentApprovalRequest) -> Bool {
+        !request.payload.hasPrefix("越界")
+    }
+
     /// 循环来这里等一个决定。**超时就按「不行」**（`AgentApprovalDecision.timeout`）——
     /// 挂死人比误拒更糟：挂住的那一轮会把步数和令牌都耗在原地。
     func awaitAgentApproval(_ request: AgentApprovalRequest) async -> Bool {
+        // 同类命令本会话已经批过 ⇒ 不再问人（越界单除外）。
+        if isSessionGrantable(request), agentSessionGrants.contains(request.fingerprint) {
+            StartupLog.write("同类命令已批过：\(request.toolName) 指纹=\(request.fingerprint.prefix(8)) ⇒ 直接放行")
+            return true
+        }
         // 批准先到（卡片先推给界面、人先点了）⇒ 立刻兑现，不进等待队列。
         if agentPendingGrants.remove(request.fingerprint) != nil {
             StartupLog.write("审批已先行：\(request.toolName) 指纹=\(request.fingerprint.prefix(8)) ⇒ 批准")
+            if isSessionGrantable(request) { agentSessionGrants.insert(request.fingerprint) }
             return true
         }
         StartupLog.write("等审批：\(request.toolName) 指纹=\(request.fingerprint.prefix(8))")
@@ -4371,6 +4389,7 @@ final class AppState: ObservableObject {
             return false
         }
         StartupLog.write("审批决议：\(request.toolName) 指纹=\(request.fingerprint.prefix(8)) ⇒ \(decided ? "批准" : "拒绝")")
+        if decided, isSessionGrantable(request) { agentSessionGrants.insert(request.fingerprint) }
         return decided
     }
 
