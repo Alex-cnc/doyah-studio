@@ -3330,6 +3330,10 @@ final class AppState: ObservableObject {
 
     // MARK: - 智能体接入配置（FR-AI-01）
 
+    /// 凭据后端开关：`false` = 全部走 0600 文件（`FileAgentSecretStore` / `FileSecretStore`），
+    /// 启动与对话链上**一次都不碰钥匙串**。切回钥匙串要同时把 `secretStore` 的注入换回去。
+    static let credentialsUseKeychain = false
+
     /// 读取智能体配置与 Key 状态（进入面板 / 启动时调用）。
     ///
     /// 配置读失败不弹错误框：退回安全默认即可（关掉开关不会外发任何东西），
@@ -3342,13 +3346,16 @@ final class AppState: ObservableObject {
             statusMessage = L(.agentSaveFailed, ErrorPresenter.message(for: error))
         }
 
-        // 钥匙串不可用时（未签名 / 无授权）按「没有 Key」处理，不阻断界面。
-        migrateLegacySecretsIfNeeded()
-        // ★00（主人 2026-10-29 原话「keychain 有个问题就是每次启动都要输入密码」）：
-        // 把**旧签名留下的**条目按当前这套签名重写一遍并记账（同一签名下只做一次）。
-        // 顺序放在旧文件迁移之后、读 Key 之前：先搬进钥匙串，再由这一步配上当前应用的 ACL，
-        // 之后这次启动的读走的就是新条目 —— 否则搬进来的还是「谁建的谁读」那条老规矩。
-        reconcileKeychainCredentials()
+        // 凭据后端：本机开发形态**一律 0600 文件**（主人 2026-10-31：
+        // 「还是不用 keychain 了，每次打开要输入无数次密码」）。钥匙串的 ACL 绑签名，
+        // 开发期每装一版签名就变 ⇒ 每次启动都要重新授权，等于不可用；这两步都会碰钥匙串，
+        // 于是在文件后端下**整个跳过**（不是「读失败就算了」，是根本不发起那次读）。
+        if Self.credentialsUseKeychain {
+            // 钥匙串不可用时（未签名 / 无授权）按「没有 Key」处理，不阻断界面。
+            migrateLegacySecretsIfNeeded()
+            // ★00：把**旧签名留下的**条目按当前这套签名重写一遍并记账（同一签名下只做一次）。
+            reconcileKeychainCredentials()
+        }
         let key = (try? agentKeyStore.apiKey()) ?? nil
         agentAPIKey = key
         hasAgentAPIKey = !(key?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
