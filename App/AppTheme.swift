@@ -76,6 +76,23 @@ enum Theme {
         Color(nsColor: nsColor(tone.color(in: designTheme)))
     }
 
+    /// 强调家族色（`AccentFamily`：accent / accentGlow / accentSoft / teal / warm）。
+    ///
+    /// 谁要用它：**用户提问那一格**（见 `AgentChatView` 的 `.user` 分支）—— 主人 2026-10-31：
+    /// 「用户输入的文字和 Agent 返回的文字颜色是一样的，一眼望去难以区分」，所以用户的字走暖金。
+    static func accent(_ tone: AccentFamily) -> Color {
+        Color(nsColor: nsColor(tone.color(in: designTheme)))
+    }
+
+    /// 对话区「用户说的话」的正文色（**对话区专用**）。
+    ///
+    /// 主人 2026-10-31：「用户输入的文字和 Agent 返回的文字颜色一样，一眼难以区分」→ 要金黄；
+    /// 先用 `accentWarm` 试过，主人回「还不够金黄」⇒ 换成饱和金：#FFC740（深色底，对比 ≈11）/ #8A5E00（浅色底，对比 ≈6.5）。
+    /// 与主题无关联是有意的：这表达「谁在说话」，不是「当前哪套配色」——三套主题下同一个金。
+    static func chatUser(_ scheme: ColorScheme) -> Color {
+        Color(nsColor: nsColor(hex: scheme == .dark ? 0xFFC740 : 0x8A5E00))
+    }
+
     static func status(_ tone: StatusTone) -> Color {
         Color(nsColor: nsColor(tone.color(in: designTheme)))
     }

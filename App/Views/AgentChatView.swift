@@ -324,8 +324,13 @@ struct AgentChatView: View {
             // 用户**自己的字**仍走 `AgentTranscriptText`（原样显示，不改写他的话）；
             // 富文本渲染只针对**模型回复** —— 见下面 `.assistant` 那一支。
             HStack(alignment: .top, spacing: 0) {
-                gutter(">", Theme.accentColor)
+                gutter(">", Theme.chatUser(colorScheme))
+                // **用户的话走暖金**（主人 2026-10-31：「用户输入的文字和 Agent 返回的文字颜色一样，
+                // 一眼难以区分」——Hermes 那边也是把他的话标成金色）。助手正文仍走常规文本色，
+                // 两种颜色对看，谁说的不用猜。取 `accentWarm` 这条既有令牌：三个主题都有值，
+                // 且它本来就是"文字级暖色"，不必新增令牌（新令牌要连带跑设计棘轮）。
                 AgentTranscriptText(text: message.text, font: Self.transcriptFont, highlight: highlightNeedle)
+                    .foregroundStyle(Theme.chatUser(colorScheme))
                 Spacer(minLength: 0)
             }
         case .assistant:
@@ -649,9 +654,13 @@ struct AgentChatView: View {
                 .buttonStyle(.plain)
                 .help(card.expanded ? L(.agentChatCollapse) : L(.agentChatExpand))
                 if !card.arguments.isEmpty {
+                    // **命令 / 参数走淡蓝**（主人 2026-10-31：「DSH 还会把命令类的信息标记成标志性的
+                    // 淡蓝色，让人想起蓝色鲸鱼娘」）。取 `accentGlow` 这条既有令牌：深色 #7AB0FA、
+                    // 浅色 #1C63C4 —— 与用户那句暖金、助手正文的中性色三方对比，一眼分得清谁在说话、
+                    // 哪一段是机器要做的事。状态字形（✓ / ✗）仍按成败着色，不被这一层覆盖。
                     Text(card.arguments)
                         .font(Self.transcriptFont)
-                        .foregroundStyle(Theme.text(.secondary))
+                        .foregroundStyle(Theme.accent(.accentGlow))
                         .lineLimit(1)
                 }
                 Spacer(minLength: 0)
@@ -677,7 +686,7 @@ struct AgentChatView: View {
                 Text(card.arguments)
                     .font(Self.transcriptFont)
                     .textSelection(.enabled)
-                    .foregroundStyle(Theme.text(.secondary))
+                    .foregroundStyle(Theme.accent(.accentGlow))
                     .padding(.leading, Spacing.l)
             }
             // ③「展开可见**用的哪个模型与端点**」（`FR-AI-25` ③）：每张卡展开都带这一行 ——
