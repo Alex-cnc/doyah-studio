@@ -984,8 +984,13 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
         }
     }
 
+    /// 拒绝了某张单 ⇒ 叫醒正在等它的循环（`FR-AI-23`）。不接 ⇒ 循环那边等到超时按拒绝处理。
+    var denyApproval: ((AgentToolCard) -> Void)?
+
     func deny(_ cardID: UUID) {
+        let card = state.cards.first(where: { $0.id == cardID })
         _ = state.deny(cardID: cardID)
+        if let card { denyApproval?(card) }
     }
 
     /// **一步撤销**（`FR-AI-25` ⑤）：把这张卡片已经落盘的改动退回去。

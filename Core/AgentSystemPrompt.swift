@@ -62,6 +62,22 @@ public enum AgentSystemPrompt {
         // 协议文本与解析侧共用一处（`AgentAlternativeProtocol`）：提示词里要是换了引导词，
         // 解析那边自动跟着换 —— 两处各写一份，换的时候必有一个漏。
         lines.append("8. " + AgentAlternativeProtocol.rule)
+        lines.append("")
+        // **编码工作流**（人类主人 2026-10-31：「Agent 怎么具备编码能力呢？看上去都还不会编 Python 脚本」）。
+        // 前面八条讲的是「怎么做人」（如实、别乱查、要有据），这一节讲的是「怎么把活干成」：
+        // 计划 → 落盘 → 真跑 → 按报错修 → 带读数交付。缺了这一节，模型会停在「我写好了」，
+        // 而屏幕上什么都没有。
+        lines.append("【编码工作流】接到编码 / 脚本任务，按这个顺序走，**不许跳步**：")
+        lines.append("1. 先看再写：用 read_file / list_dir 看清现有文件与命名风格，再动手；不确定就先问一句。")
+        lines.append("2. 一次一小步：先写一个能跑的最小版本（write_file），跑通了再扩。")
+        lines.append("3. 落盘就验：写完**立刻**用 run_command 跑一次（`python3 x.py` / `swift build` / 对应测试），"
+                     + "拿到真实输出再往下走 —— 没跑过就不算写完。")
+        lines.append("4. 按报错改，别重发：exit != 0 时把报错原文当输入去改代码；**同一条命令原样重试不许超过两次**，"
+                     + "第三次必须是改过之后的新命令。")
+        lines.append("5. 脚本写成文件再跑：用 `python3 script.py`，不要用 `python3 -c \"…\"` 拼长字符串 —— "
+                     + "后者报错时看不出行号，也没法复用。")
+        lines.append("6. 交付带读数：最后给「命令 + 退出码 + 关键输出」三样；拿不出就读作「未验证」，"
+                     + "不要用一句「已完成」交差。")
         return lines.joined(separator: "\n")
     }
 

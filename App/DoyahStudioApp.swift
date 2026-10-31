@@ -135,6 +135,9 @@ struct DoyahStudioApp: App {
                                                                checkpointScopeID: plan.checkpointScopeID,
                                                                observer: observer)
                     }
+                    agentChat.denyApproval = { card in
+                        appState.resolveAgentApproval(fingerprint: card.approvalFingerprint, granted: false)
+                    }
                     agentChat.applyApproval = { card in
                         guard let rootPath = workspace.rootPath else { return .failure("failed") }
                         return await appState.applyAgentChatApproval(card: card, workspacePath: rootPath)

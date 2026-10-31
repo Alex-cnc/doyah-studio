@@ -4262,7 +4262,75 @@ final class AppState: ObservableObject {
                                        checkpointScopeID: checkpointScopeID)
         // 多轮：把这一段会话里已经说过的话带上（`FR-AI-17` 续聊）。空数组 = 单轮，行为不变。
         context.priorTurns = history
+        // 审批决议：`run_command` / `write_file` 这类要人点头的工具，循环拿着单子来这里等
+        // 「行 / 不行」。没有这条，人点了批准也回不到循环里 —— 卡片一遍遍被重新要，命令永不执行。
+        context.approvalDecision = { [weak self] request in
+            guard let self else { return false }
+            return await self.awaitAgentApproval(request)
+        }
         return (loop, context)
+    }
+
+    // MARK: - 审批决议（`FR-AI-23`）
+
+    /// 正在等「人点头」的循环（按指纹排队）。同一张单可能被两条路同时问（循环 + 界面），
+    /// 所以是**数组**：每个等待者都要被唤醒，不能只叫醒一个、剩下的干等到超时。
+    private var agentApprovalWaiters: [String: [CheckedContinuation<Bool, Never>]] = [:]
+
+    /// **已经批了、但循环还没开始等**的指纹。
+    ///
+    /// 为什么需要：卡片是「先推到界面、再开始等」的（不先推，人根本看不见要批什么）。这张卡的
+    /// 自动批准 / 人手快点点下去，可能就发生在循环挂上等待之前的几毫秒里 —— 那一刻没有等待者，
+    /// 批准会当场丢掉，循环随后挂上去等 600 秒，最后按拒绝处理（2026-10-31 实测就是这个时序）。
+    /// 所以「先到的批准」先记在这儿，循环来等的时候**立刻兑现**。
+    private var agentPendingGrants: Set<String> = []
+
+    /// 循环来这里等一个决定。**超时就按「不行」**（`AgentApprovalDecision.timeout`）——
+    /// 挂死人比误拒更糟：挂住的那一轮会把步数和令牌都耗在原地。
+    func awaitAgentApproval(_ request: AgentApprovalRequest) async -> Bool {
+        // 批准先到（卡片先推给界面、人先点了）⇒ 立刻兑现，不进等待队列。
+        if agentPendingGrants.remove(request.fingerprint) != nil {
+            StartupLog.write("审批已先行：\(request.toolName) 指纹=\(request.fingerprint.prefix(8)) ⇒ 批准")
+            return true
+        }
+        StartupLog.write("等审批：\(request.toolName) 指纹=\(request.fingerprint.prefix(8))")
+        let decided = await withTaskGroup(of: Bool?.self) { group -> Bool? in
+            group.addTask { [weak self] in
+                await withCheckedContinuation { (cont: CheckedContinuation<Bool, Never>) in
+                    Task { @MainActor in
+                        self?.agentApprovalWaiters[request.fingerprint, default: []].append(cont)
+                    }
+                }
+            }
+            group.addTask {
+                try? await Task.sleep(nanoseconds: UInt64(Self.agentApprovalTimeout * 1_000_000_000))
+                return nil
+            }
+            let first = await group.next() ?? nil
+            group.cancelAll()
+            return first
+        }
+        guard let decided else {
+            StartupLog.write("审批超时：\(request.toolName) 指纹=\(request.fingerprint.prefix(8)) ⇒ 按拒绝处理")
+            resolveAgentApproval(fingerprint: request.fingerprint, granted: false)
+            return false
+        }
+        StartupLog.write("审批决议：\(request.toolName) 指纹=\(request.fingerprint.prefix(8)) ⇒ \(decided ? "批准" : "拒绝")")
+        return decided
+    }
+
+    /// 等人的上限（秒）。到点按拒绝处理并留痕。
+    static let agentApprovalTimeout: TimeInterval = 600
+
+    /// 界面点了「批准 / 拒绝」⇒ 唤醒正在等的循环。没有等待者（例如重放旧卡片）就什么都不做。
+    func resolveAgentApproval(fingerprint: String?, granted: Bool) {
+        guard let fingerprint, !fingerprint.isEmpty else { return }
+        if agentApprovalWaiters[fingerprint] == nil {
+            StartupLog.write("决议无等待者：\(fingerprint.prefix(8))（走旧兑现路径）")
+        }
+        for cont in agentApprovalWaiters.removeValue(forKey: fingerprint) ?? [] {
+            cont.resume(returning: granted)
+        }
     }
 
     /// `query_db` 的宿主实现（`FR-AI-20` ①）：对着**当前选中连接**跑一次 SQL，
@@ -4353,6 +4421,19 @@ final class AppState: ObservableObject {
     ///   写失败就不该留下一条「能撤销」的空账。
     func applyAgentChatApproval(card: AgentToolCard, workspacePath: String) async -> AgentChatModel.ApplyResult {
         StartupLog.write("批准兑现：\(card.name) 指纹=\(card.approvalFingerprint?.prefix(8) ?? "nil")")
+        // **执行口只有一处：循环**。这里只负责「把批准送到循环手上」：
+        // · 循环正在等 ⇒ 当场唤醒，它就地重派；
+        // · 循环还没开始等（几毫秒的时序差）⇒ 先记账，它来等的时候立刻兑现。
+        // 以前这里也自己执行一遍，于是「循环重发 + 这侧执行」两条路各跑一次，还互相覆盖。
+        if let fingerprint = card.approvalFingerprint, !fingerprint.isEmpty {
+            if agentApprovalWaiters[fingerprint] != nil {
+                resolveAgentApproval(fingerprint: fingerprint, granted: true)
+            } else {
+                agentPendingGrants.insert(fingerprint)
+                StartupLog.write("批准先到：\(card.name) 指纹=\(fingerprint.prefix(8)) ⇒ 已记账，等循环来取")
+            }
+            return .success
+        }
         guard let fingerprint = card.approvalFingerprint,
               let arguments = AgentToolArguments.parse(card.arguments),
               let definition = (agentMCPRegistry ?? AgentToolRegistry.standard).definition(named: card.name)

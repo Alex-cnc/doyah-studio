@@ -310,6 +310,16 @@ public struct AgentLoopContext: Sendable {
     /// 本轮之前已经说过的话（`FR-AI-17` 会话续聊）：**空 = 单轮**，与改动前行为一致。
     /// 由宿主按会话挑（挑几条、留多长都在宿主，Core 只搬）。
     public var priorTurns: [LLMTurn] = []
+
+    /// **审批决议回调**（`FR-AI-23`）：工具要人点头时，循环就拿这张单去问宿主要一个「行 / 不行」。
+    ///
+    /// 为什么要有它：此前 `approvals` 只在 `run(...)` 开跑那一刻给一次，运行中人点了「批准」
+    /// 这件事**回不到循环**里 —— 循环下一跳又把同一张单重新要一遍（审计里同一个指纹
+    /// `pendingApproval` 连着几十跳），模型只能一遍遍重试同一条命令。宿主接上这条之后，
+    /// 批了就**就地重派**，不再依赖模型「自己想再试一次」。
+    ///
+    /// 不给 ⇒ 旧行为逐字不变（出了单就记一笔 `approvalRequired`，继续下一跳）。
+    public var approvalDecision: (@Sendable (AgentApprovalRequest) async -> Bool)?
 }
 
 /// Agent 循环（`FR-AI-18`）：模型 → `tool_calls` → 执行 → 结果回灌 → 再跳。
@@ -922,13 +932,29 @@ public struct AgentLoop: Sendable {
                 let toolStartedAt = Date()
                 // `dispatch_subtasks` 是**异步**的（要真起子循环、并行跑），同步的 `AgentToolDispatcher`
                 // 跑不了它 ⇒ 在循环这一层认领；其余工具照旧走分发器（契约不动）。
-                let outcome: AgentToolOutcome
+                var outcome: AgentToolOutcome
+                /// 已经推给界面的那张单（等审批时先推、再等；下方记录分支不要重复推一次）。
+                var approvalAnnounced: String?
                 if definition.capability == .dispatchSubtasks {
                     outcome = await runSubagentDispatch(invocation: invocation, context: context)
                 } else {
                     // `run_command` 要 await 真 shell 里的执行 ⇒ 走异步入口；
                     // 其余文件类工具在 `dispatchAsync` 内部原样落到同步 `dispatch`（行为不变）。
                     outcome = await dispatcher.dispatchAsync(invocation, approvals: approvals)
+                    // **要人点头的，在这里就地等**（`FR-AI-23`）：先把单子推给界面（不推就没人能批），
+                    // 批了就带指纹重派一次 —— 不把「再试一次」这件事推给模型（模型重发只会得到同一张单）。
+                    if case .needsApproval(let request) = outcome,
+                       let decide = context.approvalDecision {
+                        approvalAnnounced = request.fingerprint
+                        await observer?.observe(.approvalRequested(name: request.toolName,
+                                                                   fingerprint: request.fingerprint,
+                                                                   preview: request.payload,
+                                                                   baseDigest: request.baseDigest))
+                        if await decide(request) {
+                            outcome = await dispatcher.dispatchAsync(invocation,
+                                                                     approvals: approvals.union([request.fingerprint]))
+                        }
+                    }
                 }
                 let toolMillis = Int(Date().timeIntervalSince(toolStartedAt) * 1000)
                 // 工具开跑 = 有进展（看门狗据此判「卡住」）。
@@ -940,10 +966,12 @@ public struct AgentLoop: Sendable {
                     await observer?.observe(.toolFinished(name: invocation.name, outcome: "pendingApproval", millis: toolMillis))
                     // **把单子交给界面**（`FR-AI-23` ④）：要改什么 / 指纹 / 基线，一次给全 ——
                     // 少任何一格，用户都点不出一次能兑现的批准。
-                    await observer?.observe(.approvalRequested(name: request.toolName,
-                                                               fingerprint: request.fingerprint,
-                                                               preview: request.payload,
-                                                               baseDigest: request.baseDigest))
+                    if approvalAnnounced != request.fingerprint {
+                        await observer?.observe(.approvalRequested(name: request.toolName,
+                                                                   fingerprint: request.fingerprint,
+                                                                   preview: request.payload,
+                                                                   baseDigest: request.baseDigest))
+                    }
                     rejected.append((invocation.name, AgentToolRefusal.approvalRequired.rawValue))
                     observations.append("\(invocation.name): \(request.toolName)/\(request.fingerprint)")
                     recordTurn(context: context, kind: .approval, role: "system",

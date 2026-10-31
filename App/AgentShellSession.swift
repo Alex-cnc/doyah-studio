@@ -83,7 +83,10 @@ final class AgentShellSession: @unchecked Sendable {
             //（`printf '\n__DOYAH_AGENT_DONE_x:%d\n'`）—— 2026-10-31 实测：开回显时第一条命令
             // 立刻被「自己写的那行」判成已完成，退出码解析成 -1，模型以为失败就一直重试。
             // 关掉之后缓冲里只剩程序输出与哨兵结果行；命令本身由 `run` 直接喂给显示面。
-            session.write(text: "stty -echo 2>/dev/null; unset HISTFILE\n")
+            // **必须用 `\r` 提交行，不是 `\n`**：PTY 的行规程按 CR 收行（`ICRNL` 把 CR 折成 NL），
+            // 只发 `\n` 时命令被原样打在提示符后面、**不会执行** —— 于是回收永远等不到哨兵，
+            // 60 秒超时后模型重试同一条（2026-10-31 实测：`python3 hello.py` 连试三次、每次 60.2s）。
+            session.write(text: "stty -echo 2>/dev/null; unset HISTFILE\r")
         }
         lock.lock()
         started = ok
@@ -138,7 +141,8 @@ final class AgentShellSession: @unchecked Sendable {
     private func script(command: String, sentinel: String) -> (text: String, sentinel: String) {
         // 命令原样放进去（人写的是什么就是什么）；退出码由紧跟着的一行取。
         // 结尾那个空行保证：命令本身不以换行结尾时，哨兵行也不会粘在最后一行上。
-        let text = command + "\n__doyah_ec=$?\nprintf '\\n\(sentinel):%d\\n' \"$__doyah_ec\"\n"
+        // 三条各以 `\r` 收行（理由同上：只有 CR 才算「回车」）。
+        let text = command + "\r__doyah_ec=$?\rprintf '\n\(sentinel):%d\n' \"$__doyah_ec\"\r"
         return (text, sentinel + ":")
     }
 
