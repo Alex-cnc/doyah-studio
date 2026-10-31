@@ -472,7 +472,7 @@ public struct AgentWorkspaceTools: Sendable {
                            fingerprint: String,
                            granted: Set<String>,
                            policy: AgentCommandPolicy = .standard,
-                           runner: AgentCommandRunner) -> AgentToolOutcome {
+                           runner: AgentCommandRunner) async -> AgentToolOutcome {
         let prepared = prepareCommand(command, tool: tool, guardPolicy: guardPolicy, policy: policy)
         guard case .needsApproval(let request) = prepared else { return prepared }
         guard request.fingerprint == fingerprint, granted.contains(fingerprint) else {
@@ -481,7 +481,7 @@ public struct AgentWorkspaceTools: Sendable {
         guard case .allowed(let executable, let arguments) = policy.assess(command) else {
             return .refused(.commandNotAllowed, detail: command)
         }
-        return .command(runner.run(executable: executable, arguments: arguments, workingDirectory: root))
+        return .command(await runner.run(executable: executable, arguments: arguments, workingDirectory: root))
     }
 
     // MARK: - 内部

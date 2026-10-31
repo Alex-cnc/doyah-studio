@@ -72,7 +72,10 @@ public struct AgentCommandPolicy: Equatable, Sendable {
 
 /// 执行器（**注入**：单测用假执行器，不真起进程）。
 public protocol AgentCommandRunner: Sendable {
-    func run(executable: String, arguments: [String], workingDirectory: URL) -> AgentCommandResult
+    /// **异步**：命令可能跑在一次真实的 shell 会话里（`AgentShellSession`），
+    /// 也可能跑在独立进程里（`AgentCommandExecutor`）。同步签名会把主 actor 钉住一整个命令时长
+    /// （2026-10-31：命令在 Terminal 里执行这件事要求能 await）。
+    func run(executable: String, arguments: [String], workingDirectory: URL) async -> AgentCommandResult
 }
 
 public struct AgentCommandResult: Equatable, Sendable {

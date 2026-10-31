@@ -12,7 +12,7 @@ final class AgentApprovalGateTests: XCTestCase {
 
     private final class RecordingRunner: AgentCommandRunner, @unchecked Sendable {
         private(set) var calls: [String] = []
-        func run(executable: String, arguments: [String], workingDirectory: URL) -> AgentCommandResult {
+        func run(executable: String, arguments: [String], workingDirectory: URL) async -> AgentCommandResult {
             calls.append(executable)
             return AgentCommandResult(exitCode: 0, standardOutput: "ok", standardError: "")
         }
@@ -62,7 +62,7 @@ final class AgentApprovalGateTests: XCTestCase {
         // 命令那侧同样：没批 ⇒ 假终端零记录
         let runner = RecordingRunner()
         guard case .needsApproval(let commandRequest) = tools.prepareCommand("cat target.txt") else { return XCTFail("要审批") }
-        _ = tools.runCommand("cat target.txt", fingerprint: commandRequest.fingerprint, granted: [], runner: runner)
+        _ = await tools.runCommand("cat target.txt", fingerprint: commandRequest.fingerprint, granted: [], runner: runner)
         XCTAssertTrue(runner.calls.isEmpty, "未审批的命令一次都不许执行")
     }
 

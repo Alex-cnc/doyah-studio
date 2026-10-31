@@ -159,6 +159,20 @@ final class TerminalModel: ObservableObject {
         return id
     }
 
+    /// 开一个**绑外部会话**的页签（Agent 自己那条 shell）。
+    ///
+    /// 与 `newTab()` 的区别：这条会话不是本页签造的，页签只是它的显示面
+    /// （关掉页签不终止它 —— 关掉页签就把 Agent 的 shell 弄死，下一次派活会莫名失败）。
+    @discardableResult
+    func openAgentTab(session: TerminalSession, title: String = "Agent") -> Int {
+        let id = tabs.newTab(launchTitle: title)
+        let mirror = TerminalPane(session: session)
+        wire(mirror, to: id)
+        panes[id] = mirror
+        refusalHint = nil
+        return id
+    }
+
     /// 建页签 + 建它自己的会话（两个入口共用这一段：`newTab()` / `launchTab(_:)`）。
     @discardableResult
     private func makeTab(launchTitle: String?) -> Int {

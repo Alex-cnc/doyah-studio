@@ -131,12 +131,27 @@ public struct AgentStandardDispatcher: AgentToolDispatcher {
                                                     guardPolicy: guardPolicy)
             guard case .needsApproval(let request) = prepared else { return prepared }
             guard approvals.contains(request.fingerprint) else { return prepared }
-            return workspace.runCommand(arguments["command"] ?? "",
-                                        tool: definition,
-                                        guardPolicy: guardPolicy,
-                                        fingerprint: request.fingerprint,
-                                        granted: approvals,
-                                        runner: commandRunner)
+            // `dispatch` 是**同步**契约（循环那边把它整段丢进 `Task.detached` 跑），
+            // 而执行器自 2026-10-31 起是 async（命令要能进真 shell 里跑、不能钉住主 actor）。
+            // 这里就地桥一次：**只允许在非主线程等**（主线程等会与 PTY 的回收互相卡死）。
+            guard !Thread.isMainThread else {
+                return .refused(.unavailable, detail: "runCommandOnMainThread")
+            }
+            let semaphore = DispatchSemaphore(value: 0)
+            let box = OutcomeBox()
+            let task = Task.detached(priority: .userInitiated) {
+                let outcome = await workspace.runCommand(arguments["command"] ?? "",
+                                                         tool: definition,
+                                                         guardPolicy: guardPolicy,
+                                                         fingerprint: request.fingerprint,
+                                                         granted: approvals,
+                                                         runner: commandRunner)
+                box.set(outcome)
+                semaphore.signal()
+            }
+            _ = task
+            semaphore.wait()
+            return box.get() ?? .refused(.unavailable, detail: "runCommandNoResult")
 
         case .queryDatabase:
             guard let database else { return .refused(.unavailable, detail: definition.capability.rawValue) }
@@ -179,5 +194,18 @@ public struct AgentStandardDispatcher: AgentToolDispatcher {
                 }
             }
         }
+    }
+}
+
+
+/// 跨线程交一次结果的盒子（`dispatch` 的同步桥用；只在「写一次 / 读一次」的时序下使用）。
+private final class OutcomeBox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var value: AgentToolOutcome?
+    func set(_ outcome: AgentToolOutcome) {
+        lock.lock(); value = outcome; lock.unlock()
+    }
+    func get() -> AgentToolOutcome? {
+        lock.lock(); defer { lock.unlock() }; return value
     }
 }

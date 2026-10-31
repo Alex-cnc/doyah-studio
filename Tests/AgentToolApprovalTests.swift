@@ -13,7 +13,7 @@ final class AgentToolApprovalTests: XCTestCase {
         private(set) var calls: [(executable: String, arguments: [String], workingDirectory: URL)] = []
         var result = AgentCommandResult(exitCode: 0, standardOutput: "ok", standardError: "")
 
-        func run(executable: String, arguments: [String], workingDirectory: URL) -> AgentCommandResult {
+        func run(executable: String, arguments: [String], workingDirectory: URL) async -> AgentCommandResult {
             calls.append((executable, arguments, workingDirectory))
             return result
         }
@@ -135,14 +135,14 @@ final class AgentToolApprovalTests: XCTestCase {
 
         let runner = RecordingRunner()
         // 未批准 ⇒ 一次都不执行
-        if case .refused(let code, _) = tools.runCommand("cat target.txt", fingerprint: request.fingerprint,
+        if case .refused(let code, _) = await tools.runCommand("cat target.txt", fingerprint: request.fingerprint,
                                                         granted: [], runner: runner) {
             XCTAssertEqual(code, .approvalRequired)
         } else { XCTFail("未批准不许执行") }
         XCTAssertTrue(runner.calls.isEmpty, "**未审批的命令一次都不许执行**")
 
         // 批准 ⇒ 执行，且**工作目录钉在工作区根**
-        guard case .command(let result) = tools.runCommand("cat target.txt", fingerprint: request.fingerprint,
+        guard case .command(let result) = await tools.runCommand("cat target.txt", fingerprint: request.fingerprint,
                                                            granted: [request.fingerprint], runner: runner) else {
             return XCTFail("批准后应当执行")
         }
@@ -174,7 +174,7 @@ final class AgentToolApprovalTests: XCTestCase {
         let runner = RecordingRunner()
         runner.result = AgentCommandResult(exitCode: 2, standardOutput: "", standardError: "no such file\n")
         guard case .needsApproval(let request) = tools.prepareCommand("cat missing.txt") else { return XCTFail("要审批") }
-        guard case .command(let result) = tools.runCommand("cat missing.txt", fingerprint: request.fingerprint,
+        guard case .command(let result) = await tools.runCommand("cat missing.txt", fingerprint: request.fingerprint,
                                                            granted: [request.fingerprint], runner: runner) else {
             return XCTFail("应当执行")
         }

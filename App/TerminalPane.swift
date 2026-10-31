@@ -24,7 +24,10 @@ final class TerminalPane: ObservableObject {
 /// 这样界面重建（例如语言切换导致整树重建）不会把 shell 弄丢——会话挂在 `@StateObject` 上。
 
     let screen: TerminalScreen
-    private let session = TerminalSession()
+    private let session: TerminalSession
+    /// 外部注入的会话（Agent 自己那条 shell）：**不由本页签启动、也不由本页签终止**。
+    /// 页签只是它的显示面 —— 谁建谁管，页签关掉不该把 Agent 的 shell 弄死。
+    private let external: Bool
 
     @Published private(set) var isRunning = false
     @Published private(set) var errorText: String?
@@ -33,8 +36,10 @@ final class TerminalPane: ObservableObject {
     private var requestRedraw: (() -> Void)?
     private var didStart = false
 
-    init(columns: Int = 80, rows: Int = 24) {
+    init(columns: Int = 80, rows: Int = 24, session: TerminalSession? = nil) {
         screen = TerminalScreen(columns: columns, rows: rows)
+        self.session = session ?? TerminalSession()
+        self.external = session != nil
     }
 
     func attach(redraw: @escaping () -> Void) {
@@ -191,6 +196,19 @@ final class TerminalPane: ObservableObject {
     func startIfNeeded(columns: Int, rows: Int) {
         guard !didStart else { return }
         didStart = true
+        if external {
+            // **只接管显示**：输出喂屏幕，按键仍写回这条会话（人可以在页签里接着敲）。
+            session.onOutput = { [weak self] data in
+                guard let self else { return }
+                self.screen.feed([UInt8](data))
+                let responses = self.screen.drainResponses()
+                if !responses.isEmpty { self.session.write(responses) }
+                self.requestRedraw?()
+            }
+            screen.resize(columns: columns, rows: rows)
+            isRunning = session.isRunning
+            return
+        }
         session.onOutput = { [weak self] data in
             guard let self else { return }
             self.screen.feed([UInt8](data))

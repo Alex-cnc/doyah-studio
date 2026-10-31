@@ -24,7 +24,26 @@ struct AgentLocalCommandRunner: AgentCommandRunner {
     /// 老实现「读管道到 EOF 再等退出」在子进程狂输出 + 挂住时会永远等下去，没有上限。
     var limits = AgentCommandLimits()
 
-    func run(executable: String, arguments: [String], workingDirectory: URL) -> AgentCommandResult {
+    /// 有它就在**真 shell**（PTY）里跑：状态延续、脚本原样、终端面板里看得见。
+    /// 没注入（单测 / 未开工作区）⇒ 退回独立进程那条老路，行为与改动前一致。
+    var shell: AgentShellSession?
+
+    /// argv → 一行 shell 命令。**每个参数单独加引号**：参数里的空格 / 引号 / `$` 不许多义。
+    static func shellLine(executable: String, arguments: [String]) -> String {
+        ([executable] + arguments).map(shellQuote).joined(separator: " ")
+    }
+
+    static func shellQuote(_ raw: String) -> String {
+        let safe = raw.allSatisfy { $0.isLetter || $0.isNumber || "-_./=:@%+,".contains($0) }
+        if !raw.isEmpty, safe { return raw }
+        return "'" + raw.replacingOccurrences(of: "'", with: "'\\''") + "'"
+    }
+
+    func run(executable: String, arguments: [String], workingDirectory: URL) async -> AgentCommandResult {
+        if let shell {
+            let line = Self.shellLine(executable: executable, arguments: arguments)
+            return await shell.run(command: line, timeout: limits.timeoutSeconds)
+        }
         let executor = AgentCommandExecutor()
         do {
             let run = try executor.run(executable: executable, arguments: arguments,

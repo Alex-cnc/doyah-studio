@@ -3693,6 +3693,22 @@ final class AppState: ObservableObject {
                              })
     }
 
+    /// **Agent 那条 shell**：每个工作区根一条，建一次复用（`cd` / 变量才能延续）。
+    ///
+    /// 第一次要到它时建会话并通知宿主开一个终端页签 —— 于是「命令在 Terminal 里跑」
+    /// 不是一句说法，而是人能在面板上看见的那条会话。
+    private var agentShellSessions: [String: AgentShellSession] = [:]
+    var onAgentShellReady: ((AgentShellSession) -> Void)?
+
+    func agentShell(for workspacePath: String) -> AgentShellSession {
+        if let existing = agentShellSessions[workspacePath] { return existing }
+        let shell = AgentShellSession(workingDirectory: workspacePath)
+        agentShellSessions[workspacePath] = shell
+        _ = shell.startIfNeeded()
+        onAgentShellReady?(shell)
+        return shell
+    }
+
     /// 跑一轮：**同一时刻只跑一条**（同时进来两条时第二条如实回「上一轮还在跑」，
     /// 不排队、也不并行 —— 两条并行会互相盖上下文）。
     private func runAgentIMTask(_ task: AgentIMTask) async -> AgentIMTaskRunResult {
@@ -4421,12 +4437,12 @@ final class AppState: ObservableObject {
         // 判定**不在这里重做**：`runCommand` 内部会拿这张单的指纹再核一次，并再走一次白名单
         //（对不上 ⇒ `.refused`，不执行）。换句话说，这里只是"把已批准的那一条送进执行器"，
         // 真正的闸始终只有一处。
-        let commandOutcome = tools.runCommand(arguments["command"] ?? "",
+        let commandOutcome = await tools.runCommand(arguments["command"] ?? "",
                                               tool: definition,
                                               guardPolicy: agentGuardPolicy,
                                               fingerprint: fingerprint,
                                               granted: [fingerprint],
-                                              runner: AgentLocalCommandRunner())
+                                              runner: AgentLocalCommandRunner(shell: agentShell(for: workspacePath)))
         switch commandOutcome {
         case .command(let result):
             // 交付面（`FR-STD-WS-AI-002` ③）：这一批**最后一条真跑起来的命令**的读数。

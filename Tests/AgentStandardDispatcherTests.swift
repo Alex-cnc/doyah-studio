@@ -10,7 +10,7 @@ final class AgentStandardDispatcherTests: XCTestCase {
 
     private final class RecordingRunner: AgentCommandRunner, @unchecked Sendable {
         private(set) var executables: [String] = []
-        func run(executable: String, arguments: [String], workingDirectory: URL) -> AgentCommandResult {
+        func run(executable: String, arguments: [String], workingDirectory: URL) async -> AgentCommandResult {
             executables.append(executable)
             return AgentCommandResult(exitCode: 0, standardOutput: "ok", standardError: "")
         }

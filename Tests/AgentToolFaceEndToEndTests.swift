@@ -13,7 +13,7 @@ final class AgentToolFaceEndToEndTests: XCTestCase {
 
     /// 真起进程的 runner（与 App 侧适配层同语义：起不来就返回 -1，不编 0）。
     private struct RealRunner: AgentCommandRunner {
-        func run(executable: String, arguments: [String], workingDirectory: URL) -> AgentCommandResult {
+        func run(executable: String, arguments: [String], workingDirectory: URL) async -> AgentCommandResult {
             let process = Process()
             // 白名单里给的是裸名字（`cat`），真起进程要落到绝对路径上
             let resolved = executable.hasPrefix("/") ? executable : "/bin/" + executable
@@ -159,7 +159,7 @@ final class AgentToolFaceEndToEndTests: XCTestCase {
         guard case .needsApproval(let request) = prepared else {
             return XCTFail("跑命令要先审批：\(prepared)")
         }
-        let outcome = tools.runCommand("cat a.txt",
+        let outcome = await tools.runCommand("cat a.txt",
                                        fingerprint: request.fingerprint, granted: [request.fingerprint],
                                        runner: RealRunner())
         guard case .command(let result) = outcome else { return XCTFail("应真跑一条命令：\(outcome)") }
@@ -168,7 +168,7 @@ final class AgentToolFaceEndToEndTests: XCTestCase {
     }
 
     func testRunCommandRefusedWithoutApproval() {
-        let outcome = tools.runCommand("cat a.txt", fingerprint: "无", granted: [], runner: RealRunner())
+        let outcome = await tools.runCommand("cat a.txt", fingerprint: "无", granted: [], runner: RealRunner())
         if case .refused(let why, _) = outcome {
             XCTAssertEqual(why, .approvalRequired)
         } else { XCTFail("未批准的命令不许跑") }
