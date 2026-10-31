@@ -16,6 +16,7 @@ import DoyahCore
 public struct FileAgentSecretStore: AgentKeyStore, AgentIMSecretStore {
 
     /// 与 `KeychainAgentKeyStore.defaultAccount` 对齐，便于一次性迁移。
+    public static let webSearchSlot = "agent-web-search-tavily"
     public static let apiKeySlot = "agent.api-key"
 
     private let fileURL: URL
@@ -64,6 +65,12 @@ public struct FileAgentSecretStore: AgentKeyStore, AgentIMSecretStore {
     public func setAPIKey(_ key: String) throws { try write(slot: Self.apiKeySlot, value: key) }
     public func apiKey() throws -> String? { try read(slot: Self.apiKeySlot) }
     public func deleteAPIKey() throws { try remove(slot: Self.apiKeySlot) }
+
+    // **联网检索的 Tavily key**（`FR-AGT-TOOL-INGEST-004`）：与模型 key 分槽位 ——
+    // 「换模型服务」不该顺手把搜索后端也换掉。0600 文件，不进日志、不进审计、不回显。
+    public func setWebSearchKey(_ key: String) throws { try write(slot: Self.webSearchSlot, value: key) }
+    public func webSearchKey() throws -> String? { try read(slot: Self.webSearchSlot) }
+    public func deleteWebSearchKey() throws { try remove(slot: Self.webSearchSlot) }
 
     // MARK: - AgentIMSecretStore
 

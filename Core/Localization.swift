@@ -2033,6 +2033,15 @@ public enum LKey: String, CaseIterable, Sendable {
     case agentTabIM
     case agentTabExtensions
     case agentTabDisplay
+    // **联网检索**（`FR-AGT-TOOL-INGEST-004` 的设置面）
+    case agentWebSearchSection
+    case agentWebSearchBackend
+    case agentWebSearchBackendAuto
+    case agentWebSearchBackendBing
+    case agentWebSearchKey
+    case agentWebSearchKeyHint
+    case agentWebSearchCurrent
+    case agentWebSearchSave
     case agentIMQRInlineHint
     case agentIMQRButton
     case agentIMQRTitle
@@ -5264,6 +5273,16 @@ public enum LocalizedStrings {
         .agentTabIM: [.simplifiedChinese: "IM 通道", .english: "IM channel"],
         .agentTabExtensions: [.simplifiedChinese: "扩展", .english: "Extensions"],
         .agentTabDisplay: [.simplifiedChinese: "外观", .english: "Appearance"],
+        .agentWebSearchSection: [.simplifiedChinese: "联网检索", .english: "Web search"],
+        .agentWebSearchBackend: [.simplifiedChinese: "检索后端", .english: "Search backend"],
+        .agentWebSearchBackendAuto: [.simplifiedChinese: "自动（先 DuckDuckGo，不通换 Bing；有 Tavily key 用 Tavily）",
+                                      .english: "Automatic (DuckDuckGo, then Bing; Tavily when a key is set)"],
+        .agentWebSearchBackendBing: [.simplifiedChinese: "Bing（国内可达）", .english: "Bing (reachable in mainland China)"],
+        .agentWebSearchKey: [.simplifiedChinese: "Tavily 密钥（API key）", .english: "Tavily API key"],
+        .agentWebSearchKeyHint: [.simplifiedChinese: "留空 = 用内置的 DuckDuckGo（免 key）。key 只存本机 0600 文件，不进日志、不回显。",
+                                 .english: "Leave empty to use the built-in DuckDuckGo (no key). The key is stored in a local 0600 file only — never logged, never echoed."],
+        .agentWebSearchCurrent: [.simplifiedChinese: "当前后端", .english: "Active backend"],
+        .agentWebSearchSave: [.simplifiedChinese: "保存 key", .english: "Save key"],
         .agentIMQRInlineHint: [.simplifiedChinese: "用手机 QQ 扫一下就自动拿到 AppID 与 AppSecret，不用去开放平台抄。下面是手填（没装 Node 或不想扫码时用）。", .english: "Scan with QQ on your phone and the AppID and AppSecret come back automatically — no copying from the console. The fields below are for manual entry."],
         .agentIMQRButton: [.simplifiedChinese: "用 QQ 扫码接入", .english: "Connect with QQ scan"],
         .menuAgentQQScan: [.simplifiedChinese: "用 QQ 扫码接入…", .english: "Connect QQ by QR Scan…"],

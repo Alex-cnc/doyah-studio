@@ -13,6 +13,10 @@ struct AgentSettingsSheet: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var appState: AppState
 
+    // 联网检索（`FR-AGT-TOOL-INGEST-004`）：后端选择 + Tavily key（只进 0600 文件）
+    @State private var webBackend: AgentWebSearchConfig.Backend = .auto
+    @State private var webKeyInput = ""
+    @State private var webKeyStatus = ""
     @State private var isEnabled = false
     @State private var endpoint = ""
     @State private var model = ""
@@ -295,6 +299,42 @@ struct AgentSettingsSheet: View {
     } }
 
     private var runtimeTab: some View { tabScroll {
+                // **联网检索**（`FR-AGT-TOOL-INGEST-004`）：两个后端任选，DDG 免 key 开箱可用。
+                // 读数写「当前后端」而不是用户点的那个选项 —— `auto` 的解析结果才是有用的那句话。
+                Section(L(.agentWebSearchSection)) {
+                    Picker(L(.agentWebSearchBackend), selection: $webBackend) {
+                        Text(L(.agentWebSearchBackendAuto)).tag(AgentWebSearchConfig.Backend.auto)
+                        Text("DuckDuckGo").tag(AgentWebSearchConfig.Backend.duckduckgo)
+                        Text(L(.agentWebSearchBackendBing)).tag(AgentWebSearchConfig.Backend.bing)
+                        Text("Tavily").tag(AgentWebSearchConfig.Backend.tavily)
+                    }
+                    .onAppear { webBackend = appState.agentWebSearchBackend }
+                    .onChange(of: webBackend) { _, newValue in
+                        appState.agentWebSearchBackend = newValue
+                    }
+                    HStack(spacing: Spacing.s) {
+                        Text("\(L(.agentWebSearchCurrent))：\(appState.agentWebSearchBackendLine)")
+                            .font(Theme.font(.caption))
+                            .foregroundStyle(Theme.text(.secondary))
+                    }
+                    SecureField(L(.agentWebSearchKey), text: $webKeyInput)
+                    HStack(spacing: Spacing.s) {
+                        Button(L(.agentWebSearchSave)) {
+                            webKeyStatus = appState.saveAgentWebSearchKey(webKeyInput)
+                            webKeyInput = ""
+                        }
+                        .buttonStyle(.bordered)
+                        if !webKeyStatus.isEmpty {
+                            Text(webKeyStatus)
+                                .font(Theme.font(.caption))
+                                .foregroundStyle(Theme.text(.secondary))
+                        }
+                    }
+                    Text(L(.agentWebSearchKeyHint))
+                        .font(Theme.font(.caption))
+                        .foregroundStyle(Theme.text(.secondary))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
                 Section(L(.agentMCPSection)) {
                     HStack(spacing: Spacing.s) {
                         Button(L(.agentMCPConfigure)) { showsMCPServers = true }

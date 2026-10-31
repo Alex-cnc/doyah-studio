@@ -62,33 +62,31 @@ final class AgentWorkspaceToolsTests: XCTestCase {
 
     // MARK: - ② 边界：`..` 与绝对路径两种写法都要被拒并报明原因
 
-    func testPathsThatEscapeTheWorkspaceAreRefusedWithAReason() {
-        // `..` 爬出去
-        guard case .refused(let code, let detail) = tools.readFile(path: "../outside.txt") else {
-            return XCTFail("`..` 逃逸必须被拒")
+    /// 越界读：**不硬拒**，出一张「越界」单（详设 §3.26）。
+    func testPathsThatEscapeTheWorkspaceProduceAnOutsideApproval() {
+        guard case .needsApproval(let request) = tools.readFile(path: "../outside.txt") else {
+            return XCTFail("`..` 逃逸应当出单，而不是直接拒")
         }
-        XCTAssertEqual(code, .outsideWorkspace)
-        XCTAssertFalse(detail.isEmpty, "要报明原因（细节串带上实际路径）")
+        XCTAssertTrue(request.payload.contains("越界"), "单上要写明越界与目标")
+        XCTAssertTrue(request.payload.contains("outside.txt"))
 
-        // 绝对路径落在工作区外
-        guard case .refused(let absoluteCode, let absoluteDetail) = tools.readFile(path: "/etc/hosts") else {
-            return XCTFail("工作区外的绝对路径必须被拒")
+        // 绝对路径落在工作区外：同样出单（§3.26），单上写的是那个绝对路径
+        guard case .needsApproval(let absoluteRequest) = tools.readFile(path: "/etc/hosts") else {
+            return XCTFail("越界绝对路径应当出单")
         }
-        XCTAssertEqual(absoluteCode, .outsideWorkspace)
-        XCTAssertEqual(absoluteDetail, "/etc/hosts")
+        XCTAssertTrue(absoluteRequest.payload.contains("/etc/hosts"))
 
-        // 列目录同样挡
-        if case .refused(let code, _) = tools.listDirectory(path: "../../") {
-            XCTAssertEqual(code, .outsideWorkspace)
+        // 列目录同样出单
+        guard case .needsApproval(let listingRequest) = tools.listDirectory(path: "../../") else {
+            return XCTFail("列目录越界也要出单")
+        }
+        XCTAssertTrue(listingRequest.payload.contains("越界"))
+
+        // 深层逃逸：先钻进子目录再爬出去 —— 同样出单
+        if case .needsApproval = tools.readFile(path: "dir/../../escape.txt") {
+            // 单子出对了
         } else {
-            XCTFail("列目录也要挡逃逸")
-        }
-
-        // 深层逃逸：先钻进子目录再爬出去
-        if case .refused(let code, _) = tools.readFile(path: "dir/../../escape.txt") {
-            XCTAssertEqual(code, .outsideWorkspace)
-        } else {
-            XCTFail("深层逃逸也要挡")
+            XCTFail("深层逃逸也要出单")
         }
     }
 
@@ -188,11 +186,11 @@ final class AgentWorkspaceToolsTests: XCTestCase {
     }
 
     /// 越界（工作区之外）一律拒 —— 与只读件同一道沙箱。
-    func testEditFileRefusesPathsOutsideTheWorkspace() {
-        guard case .refused(let code, _) = tools.prepareEdit(path: "../outside.txt", oldString: "a",
-                                                             newString: "b") else {
-            return XCTFail("越界必须拒")
+    func testEditFileOutsideTheWorkspaceProducesAnApproval() {
+        guard case .needsApproval(let request) = tools.prepareEdit(path: "../outside.txt",
+                                                                  oldString: "a", newString: "b") else {
+            return XCTFail("越界改应当出单（§3.26）")
         }
-        XCTAssertEqual(code, .outsideWorkspace)
+        XCTAssertTrue(request.payload.contains("越界"))
     }
 }

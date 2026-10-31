@@ -94,8 +94,44 @@ public enum AgentToolOutcome: Equatable, Sendable {
     case wrote(AgentToolFileOutput)
     /// 用户自配 MCP server 上的工具跑完（`FR-AI-21`）：远端正文**原样** + 是不是远端报的错。
     case mcp(MCPClientToolCall)
+    /// **联网**（`FR-AGT-TOOL-INGEST-001/004`）：一次搜索或一次抓取的结果（详设 §3.27）。
+    case web(AgentWebOutput)
     case refused(AgentToolRefusal, detail: String)
     case needsApproval(AgentApprovalRequest)
+}
+
+/// 联网工具的结果：搜索给命中列表，抓取给正文（两者共用一只结构，`kind` 分开）。
+public struct AgentWebOutput: Equatable, Sendable {
+    public enum Kind: String, Equatable, Sendable {
+        /// `web_search`：只有命中（标题 / URL / 摘要），**没有正文**
+        case search
+        /// `fetch_url`：只有正文（HTML 已转纯文本）
+        case page
+    }
+
+    public var kind: Kind
+    public var query: String
+    public var hits: [AgentWebHit]
+    public var text: String
+    public var finalURL: String
+    public var totalBytes: Int
+    public var truncated: Bool
+
+    public init(kind: Kind,
+                query: String = "",
+                hits: [AgentWebHit] = [],
+                text: String = "",
+                finalURL: String = "",
+                totalBytes: Int = 0,
+                truncated: Bool = false) {
+        self.kind = kind
+        self.query = query
+        self.hits = hits
+        self.text = text
+        self.finalURL = finalURL
+        self.totalBytes = totalBytes
+        self.truncated = truncated
+    }
 }
 
 /// `query_db` 的只读结果（行数据**不进**这个结构 —— 它只带列名与行数，`NFR-AI-01` 口径）。

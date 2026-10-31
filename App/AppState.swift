@@ -3330,6 +3330,45 @@ final class AppState: ObservableObject {
 
     // MARK: - 智能体接入配置（FR-AI-01）
 
+    // MARK: - 联网检索（`FR-AGT-TOOL-INGEST-004`）
+
+    /// 联网 key 的落盘处（与模型 key / IM 凭据分开槽位，0600 文件）。
+    private let webSecretStore = FileAgentSecretStore()
+
+    /// 后端选择：`auto`（有 Tavily key 就走它）/ 强制 DDG / 强制 Tavily。
+    var agentWebSearchBackend: AgentWebSearchConfig.Backend {
+        get {
+            let raw = UserDefaults.standard.string(forKey: "agent.webSearch.backend") ?? "auto"
+            return AgentWebSearchConfig.Backend(rawValue: raw) ?? .auto
+        }
+        set { UserDefaults.standard.set(newValue.rawValue, forKey: "agent.webSearch.backend") }
+    }
+
+    /// 当前生效的联网配置（key 从 0600 文件读，**不回显**）。
+    var agentWebSearchConfig: AgentWebSearchConfig {
+        let key = (try? webSecretStore.webSearchKey()) ?? nil
+        return AgentWebSearchConfig(backend: agentWebSearchBackend, tavilyAPIKey: key)
+    }
+
+    /// 设置页那一行读数：当前到底走谁（`auto` 解析之后的结果，不是用户点的那个选项）。
+    var agentWebSearchBackendLine: String { agentWebSearchConfig.displayName }
+
+    /// 保存 Tavily key：只进文件、只回一句「已配置 / 长度 / 尾 4 位」。
+    func saveAgentWebSearchKey(_ key: String) -> String {
+        let trimmed = key.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            try? webSecretStore.deleteWebSearchKey()
+            return "已清除 Tavily key"
+        }
+        do {
+            try webSecretStore.setWebSearchKey(trimmed)
+            let tail = String(trimmed.suffix(4))
+            return "已保存（长度 \(trimmed.count)，尾 4 位 \(tail)）"
+        } catch {
+            return "保存失败：\(error.localizedDescription)"
+        }
+    }
+
     /// 凭据后端开关：`false` = 全部走 0600 文件（`FileAgentSecretStore` / `FileSecretStore`），
     /// 启动与对话链上**一次都不碰钥匙串**。切回钥匙串要同时把 `secretStore` 的注入换回去。
     static let credentialsUseKeychain = false
@@ -4217,6 +4256,10 @@ final class AppState: ObservableObject {
                                                 commandRunner: commandRunner,
                                                 // `FR-AI-21`：远端工具走同一条分发（名字原样、结果原样回灌）。
                                                 mcp: mcpReady.bridge,
+                                                // **联网**（`FR-AGT-TOOL-INGEST-001/004`）：后端与 key 从设置里现读，
+                                                // 面板改完下一轮就是新的（与其余运行策略同一口径）。
+                                                web: AgentWebTools(config: agentWebSearchConfig,
+                                                                   transport: URLSessionTransport()),
                                                 guardPolicy: agentGuardPolicy)
         // 插件目录**先建出来**：用户要往里放东西，得先看得见这个位置（不存在就建，失败也不拦本轮）。
         // 扫描归口到 `rescanAgentExtensions()`：面板与循环读的是同一份台账（各读各的会造出

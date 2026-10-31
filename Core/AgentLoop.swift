@@ -928,6 +928,18 @@ public struct AgentLoop: Sendable {
                                    at: startedAt)
                         continue
                     }
+                    // **没有可问的人就不执行**（例如单测里的纯逻辑循环、或宿主没装审批闸）：
+                    // 判成待批、如实记下来。装了钩子（`approvalDecision`）时才放到分发器去出单。
+                    if verdict.decision == .requiresApproval, context.approvalDecision == nil {
+                        rejected.append((invocation.name, AgentToolRefusal.approvalRequired.rawValue))
+                        observations.append("\(invocation.name): \(AgentToolRefusal.approvalRequired.rawValue)/\(policyDetail)")
+                        await audit?.record(AgentActionRecord.makeToolCall(
+                            toolName: invocation.name, argumentsSummary: invocation.argumentsJSON,
+                            outcome: .pendingApproval, detail: AgentToolRefusal.approvalRequired.rawValue,
+                            sessionID: context.sessionID, hopIndex: steps - 1,
+                            chainID: context.chainID, at: startedAt))
+                        continue
+                    }
                 }
                 let toolStartedAt = Date()
                 // `dispatch_subtasks` 是**异步**的（要真起子循环、并行跑），同步的 `AgentToolDispatcher`
@@ -1125,6 +1137,13 @@ public struct AgentLoop: Sendable {
             guard definition.capability == .runCommand else { return nil }
             return AgentCompletionEvidence(kind: .command, toolName: definition.name,
                                            exitCode: Int(result.exitCode), step: step)
+        case .web(let web):
+            guard definition.capability == .webSearch || definition.capability == .fetchURL else { return nil }
+            let path = web.kind == .page ? web.finalURL : web.query
+            let body = web.kind == .page ? web.text : web.hits.map(\.url).joined(separator: "\n")
+            return AgentCompletionEvidence(kind: .read, toolName: definition.name, path: path,
+                                           digest: AgentCompletionEvidence.digest(of: body),
+                                           step: step)
         case .file(let file):
             guard definition.capability == .readFile else { return nil }
             return AgentCompletionEvidence(kind: .read, toolName: definition.name, path: file.path,
@@ -1152,6 +1171,22 @@ public struct AgentLoop: Sendable {
             let head = "file:\(file.path):\(file.text.utf8.count)B"
                 + (file.truncated ? "（读取时已截断，磁盘上共 \(file.totalBytes)B）" : "")
             return head + "\n" + clamp(file.text, label: "file")
+        case .web(let web):
+            switch web.kind {
+            case .search:
+                var lines = ["web:\(web.hits.count) 条（关键词：\(web.query)）"]
+                if web.hits.isEmpty { lines.append("(无命中)") }
+                for (index, hit) in web.hits.enumerated() {
+                    lines.append("\(index + 1). \(hit.title)")
+                    lines.append("   \(hit.url)")
+                    if !hit.snippet.isEmpty { lines.append("   \(hit.snippet)") }
+                }
+                return clamp(lines.joined(separator: "\n"), label: "web")
+            case .page:
+                let head = "web:\(web.finalURL):\(web.totalBytes)B"
+                    + (web.truncated ? "（正文已截断，磁盘上共 \(web.totalBytes)B）" : "")
+                return head + "\n" + clamp(web.text, label: "web")
+            }
         case .directory(let directory):
             let head = "dir:\(directory.path):\(directory.entries.count) 项"
                 + (directory.truncated ? "（列表已按上限截断）" : "")

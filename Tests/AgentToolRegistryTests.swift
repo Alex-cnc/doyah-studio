@@ -9,7 +9,7 @@ final class AgentToolRegistryTests: XCTestCase {
     // MARK: - ② 每条声明字段齐全，且**指纹随 schema 变化而变**
 
     func testEveryEntryCarriesAllDeclaredFieldsAndAFingerprintThatTracksTheSchema() {
-        XCTAssertEqual(registry.definitions.count, 10, "标准表 = MVP 八件（2026-10-16 增 `edit_file`；2026-10-27 增 `dispatch_subtasks`：派子代理）+ 第二批两件（如实登记，不写成已做）")
+        XCTAssertEqual(registry.definitions.count, 11, "标准表 = MVP 十件（含 2026-10-31 联网 `web_search` 与启用的 `fetch_url`）+ 第二批一件（`read_notes`，如实登记，不写成已做）")
         for definition in registry.definitions {
             XCTAssertFalse(definition.name.isEmpty, "name 不许空")
             XCTAssertFalse(definition.summary.isEmpty, "summary 不许空")
@@ -48,12 +48,12 @@ final class AgentToolRegistryTests: XCTestCase {
 
     func testInjectedToolsEqualTheEnabledEntriesExactly() {
         let enabled = registry.enabledDefinitions
-        XCTAssertEqual(enabled.count, 8, "MVP 八件（第二批两件不启用）—— 含 2026-10-16 增的 `edit_file`、2026-10-27 增的 `dispatch_subtasks`")
+        XCTAssertEqual(enabled.count, 10, "MVP 十件 —— 含 2026-10-16 增的 `edit_file`、2026-10-27 增的 `dispatch_subtasks`、2026-10-31 联网的 `web_search` 与启用的 `fetch_url`（第二批只剩 `read_notes`）")
         XCTAssertEqual(registry.enabledTools.map(\.name), enabled.map(\.name), "一条不多、一条不少，顺序也一致")
 
         // 与 `LLMRequest` 那条通道接得上：工具名与 schema 原样进 payload
         let tools = registry.enabledTools
-        XCTAssertEqual(Set(tools.map(\.name)), Set(["read_file", "list_dir", "search", "query_db", "write_file", "edit_file", "run_command", "dispatch_subtasks"]))
+        XCTAssertEqual(Set(tools.map(\.name)), Set(["read_file", "list_dir", "search", "query_db", "write_file", "edit_file", "run_command", "dispatch_subtasks", "web_search", "fetch_url"]))
         let request = LLMRequest(endpoint: URL(string: "http://127.0.0.1:11434/v1")!, model: "m",
                                  systemPrompt: "s", userPrompt: "u", tools: tools, toolChoice: .automatic, stream: true)
         let body = try? OpenAICompatibleClient.makeBody(request)
@@ -82,7 +82,7 @@ final class AgentToolRegistryTests: XCTestCase {
                 XCTAssertEqual(definition.approval, .required, "写 / 执行 ⇒ 逐次要审批（\(definition.name)）")
             }
         }
-        XCTAssertEqual(registry.definitions.filter { $0.stage == .secondBatch }.map(\.name), ["read_notes", "fetch_url"])
+        XCTAssertEqual(registry.definitions.filter { $0.stage == .secondBatch }.map(\.name), ["read_notes"])
         XCTAssertTrue(registry.definitions.filter { $0.stage == .secondBatch }.allSatisfy { !$0.enabled },
                       "第二批不许默认启用")
     }

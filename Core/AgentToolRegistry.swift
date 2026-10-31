@@ -25,6 +25,8 @@ public enum AgentToolCapability: String, Codable, Equatable, Sendable, CaseItera
     case editFile
     case runCommand
     case readNotes
+    /// **联网检索**（`FR-AGT-TOOL-INGEST-001`）：按关键词找来源，不抓正文。
+    case webSearch
     case fetchURL
     /// **用户自配 MCP server 上的工具**（`FR-AI-21`）：名字与参数**原样透传**，
     /// 这一侧不解释、不改写、不补全 —— 于是「同一个工具在两个客户端里名字不同」这件事不发生。
@@ -190,13 +192,24 @@ public struct AgentToolRegistry: Sendable {
                                 required: ["path"],
                                 level: .readOnly, approval: .none,
                                 stage: .secondBatch, enabled: false),
+            // **联网两件**（详设 §3.27）：搜索找来源、抓取读正文 —— 是**两个动作**，
+            // 「能搜不能取」等于看见标题读不到内容（能力书 §3.5.2）。
+            AgentToolDefinition(name: "web_search",
+                                summary: "按关键词搜公开网页，返回标题 / URL / 摘要（不含正文）；"
+                                    + "要读正文再用 fetch_url。没有可用后端时会如实说检索不可用",
+                                capability: .webSearch,
+                                parameters: ["query": "string", "limit": "number"],
+                                required: ["query"],
+                                level: .readOnly, approval: .none,
+                                stage: .mvp, enabled: true),
             AgentToolDefinition(name: "fetch_url",
-                                summary: "抓一个 URL（第二批，本档未启用）",
+                                summary: "抓一个 http(s) 地址并把 HTML 转成纯文本（上限 2 MB、20 秒超时）；"
+                                    + "本机 / 内网地址会被拒",
                                 capability: .fetchURL,
                                 parameters: ["url": "string"],
                                 required: ["url"],
                                 level: .readOnly, approval: .none,
-                                stage: .secondBatch, enabled: false),
+                                stage: .mvp, enabled: true),
             // **派子代理**（`FR-AGT-TOOL-SYS-002`）：`tasks` 是一段 JSON 数组字符串，
             // 每路 `{"id","label","prompt","budgetSeconds"?}` —— 参数类型表只支持标量，
             // 所以整段 JSON 以字符串传；解析失败如实拒（`badArguments`），不猜。

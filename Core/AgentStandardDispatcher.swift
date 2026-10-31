@@ -46,6 +46,8 @@ public struct AgentStandardDispatcher: AgentToolDispatcher {
     public var commandRunner: AgentCommandRunner?
     /// MCP 桥（用户自配 server 的调用面，`FR-AI-21`；不给 ⇒ MCP 工具如实拒 `mcpNotConfigured`）。
     public var mcp: MCPClientCalling?
+    /// 联网两件（`FR-AGT-TOOL-INGEST-001/004`）：搜索 / 抓取。配置与传输都在这里，视图不碰。
+    public var web: AgentWebTools
     /// 只读 / 写审批的策略（`FR-AI-23` ⑥：只读模式下写类**连单都建不出来**）。
     public var guardPolicy: AgentGuardPolicy
 
@@ -54,10 +56,12 @@ public struct AgentStandardDispatcher: AgentToolDispatcher {
                 database: AgentDatabaseTool? = nil,
                 commandRunner: AgentCommandRunner? = nil,
                 mcp: MCPClientCalling? = nil,
+                web: AgentWebTools = AgentWebTools(),
                 guardPolicy: AgentGuardPolicy = AgentGuardPolicy(readOnly: false,
                                                                  requireApprovalForHighRisk: true,
                                                                  requireApprovalForWrites: true)) {
         self.registry = registry
+        self.web = web
         self.workspace = workspace
         self.database = database
         self.commandRunner = commandRunner
@@ -71,9 +75,53 @@ public struct AgentStandardDispatcher: AgentToolDispatcher {
     /// 为什么必须有它：`dispatch` 是同步契约，循环那边原先把整段丢进 `Task.detached` 里跑；
     /// 再在**池线程**上 `semaphore.wait()` 等内层任务 ⇒ 池被自己堵住、内层永远起不来
     ///（2026-10-31 实测：命令一步都不执行，模型看着「已批准」一直重试）。
+
+    /// 联网两件的执行面（详设 §3.27）：搜索只给命中，抓取只给正文。
+    ///
+    /// **失败要分清楚**：`notConfigured` / `unavailable(原因)` / `noResults` / 被边界拦下 ——
+    /// 四句不同的话原样回到模型，绝不在这一层糊成「搜索失败」。
+    private func dispatchWeb(_ capability: AgentToolCapability,
+                             _ invocation: AgentToolInvocation) async -> AgentToolOutcome {
+        guard let arguments = AgentToolArguments.parse(invocation.argumentsJSON) else {
+            return .refused(.badArguments, detail: invocation.name)
+        }
+        switch capability {
+        case .webSearch:
+            let query = (arguments["query"] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !query.isEmpty else { return .refused(.emptyQuery, detail: invocation.name) }
+            let limit = Int(arguments["limit"] ?? "") ?? 5
+            switch await web.search(query: query, limit: limit) {
+            case .success(let hits):
+                return .web(AgentWebOutput(kind: .search, query: query, hits: hits))
+            case .failure(let failure):
+                return .refused(.unavailable, detail: failure.message)
+            }
+        case .fetchURL:
+            let url = (arguments["url"] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !url.isEmpty else { return .refused(.badArguments, detail: invocation.name) }
+            switch await web.fetch(urlString: url) {
+            case .success(let page):
+                return .web(AgentWebOutput(kind: .page,
+                                           text: page.text,
+                                           finalURL: page.finalURL.absoluteString,
+                                           totalBytes: page.totalBytes,
+                                           truncated: page.truncated))
+            case .failure(let failure):
+                return .refused(.unavailable, detail: failure.message)
+            }
+        default:
+            return .refused(.unavailable, detail: invocation.name)
+        }
+    }
+
     public func dispatchAsync(_ invocation: AgentToolInvocation,
                               approvals: Set<String>) async -> AgentToolOutcome {
-        guard registry.definition(named: invocation.name)?.capability == .runCommand else {
+        let capability = registry.definition(named: invocation.name)?.capability
+        // 联网是要等的（真发请求），和 `run_command` 一样先在这里分流；其余照旧走同步。
+        if capability == .webSearch || capability == .fetchURL {
+            return await dispatchWeb(capability!, invocation)
+        }
+        guard capability == .runCommand else {
             return dispatch(invocation, approvals: approvals)
         }
         let definition = registry.definition(named: invocation.name)
@@ -105,6 +153,9 @@ public struct AgentStandardDispatcher: AgentToolDispatcher {
         }
 
         switch definition.capability {
+        case .webSearch, .fetchURL:
+            // 联网必须走 `dispatchAsync`（要等网络）；同步入口遇到就当没接上，如实说。
+            return .refused(.unavailable, detail: "联网工具需要异步入口")
         case .readFile:
             guard let workspace else { return .refused(.unavailable, detail: definition.capability.rawValue) }
             let path = arguments["path"] ?? ""

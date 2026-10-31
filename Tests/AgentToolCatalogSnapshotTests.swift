@@ -29,12 +29,13 @@ final class AgentToolCatalogSnapshotTests: XCTestCase {
         let catalog = try AgentToolCatalog(registry: .standard)
         var snapshot = catalog.snapshot(for: .terminalShell)
         XCTAssertFalse(snapshot.entries.isEmpty)
-        // 标准表里 `read_notes` / `fetch_url` 是第二批、`enabled: false` ⇒ 不进快照
-        XCTAssertEqual(snapshot.omittedCount, 2)
+        // 现在只有 `read_notes` 是第二批未启用 ⇒ 不进快照；`fetch_url` 已启用（2026-10-31 联网）
+        XCTAssertEqual(snapshot.omittedCount, 1)
         // 同一 profile 同一指纹 ⇒ 同一内容（幂等）
         XCTAssertEqual(snapshot, catalog.snapshot(for: .terminalShell))
-        // 第二批未启用的工具不该出现在快照里
-        XCTAssertNil(snapshot.entry(named: "fetch_url"))
+        // 第二批未启用的工具不该出现在快照里；已启用的 `fetch_url` 必须在
+        XCTAssertNil(snapshot.entry(named: "read_notes"))
+        XCTAssertNotNil(snapshot.entry(named: "fetch_url"))
         snapshot = catalog.snapshot(for: .subagent)
         XCTAssertNil(snapshot.entry(named: "read_notes"))
     }
