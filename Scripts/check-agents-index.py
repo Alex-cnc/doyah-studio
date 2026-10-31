@@ -59,8 +59,9 @@ def normalise(text: str) -> str:
 
 
 def check(rules_path: Path, index_path: Path) -> tuple[int, dict]:
-    sources = [str(rules_path.relative_to(ROOT)) if rules_path.is_relative_to(ROOT) else str(rules_path),
-               str(index_path.relative_to(ROOT)) if index_path.is_relative_to(ROOT) else str(index_path)]
+    # 报告里的路径是**标识**不是本机路径 ⇒ 统一 as_posix()（Windows 上不出现反斜杠，macOS 上逐字节不变）。
+    sources = [rules_path.relative_to(ROOT).as_posix() if rules_path.is_relative_to(ROOT) else rules_path.as_posix(),
+               index_path.relative_to(ROOT).as_posix() if index_path.is_relative_to(ROOT) else index_path.as_posix()]
     report: dict = {"sources": sources, "uncovered": [], "problems": []}
 
     if not rules_path.exists() or not index_path.exists():

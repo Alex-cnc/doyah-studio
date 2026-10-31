@@ -25,7 +25,7 @@
 
 **面与边界（如实登记，不假装覆盖比实际宽）**：
 
-- 本版**接入面** = `Docs/通用开发规范.md` §6（Studio 的 `Q` 号空间）
+- 本版**接入面** = `Docs/项目管理规范.md` 的待拍板表（Studio 的 `Q` 号空间；按表头定位，不按节号）
   + `Docs/design/开发循环-任务队列.md`（`needs-user` 行）+ 台账自身。
 - **面外** = 台账里**落点格**指向 Notes / Retro 书（`核心契约` / `需求书` / `规划书` / `§9.2`）
   的行 —— 本版**只计数、不判定**（它们的原书在别的仓，尚未接入；计数会打印在收尾行上，
@@ -42,7 +42,10 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-SPEC = ROOT / "Docs" / "通用开发规范.md"   # 2026-10-31：旧名《智能体助手-开发规范》已改名，判据跟着改
+# 2026-10-31 第三次搬家：旧《智能体助手-开发规范》§6 → 拆成《通用开发规范》（只剩铁律/门禁）
+# + 《项目管理规范》（**待拍板与待授权那张表在这里**，且没有「§6」这个编号）。
+# ⇒ 判据不再靠「第 6 节」定位，改成认表头（见 `parse_spec6`）：编号会搬，表头不会。
+SPEC = ROOT / "Docs" / "项目管理规范.md"
 QUEUE = ROOT / "Docs" / "design" / "开发循环-任务队列.md"
 LEDGER = ROOT / "Docs" / "design" / "待拍板台账-三仓.md"
 
@@ -53,7 +56,8 @@ NUM_TOKENS = re.compile(r"Q\d+|L-\d+|N-\d+|R-\d+|RQ-\d+|\u00a7[\d.]+-\d+")
 OUTSIDE_HINT = re.compile(r"Notes|Retro|核心契约|需求书|规划书|9\.2")
 
 # 空跑防护下限（测得值见收尾行；取值留余量，只为挡「一个号都没解析到」）
-MIN_SPEC_ROWS = 20
+# 2026-10-31 实测：《项目管理规范》待拍板表 10 行 ⇒ 取 6（旧值 20 是给旧 §6 那 30 多行定的）。
+MIN_SPEC_ROWS = 6
 MIN_LEDGER_ROWS = 8
 
 
@@ -66,23 +70,35 @@ def norm_state(cell):
     return re.sub(r"^[\s*]+", "", cell or "")
 
 
+SPEC_HEADER = ("编号", "问题", "状态")   # 待拍板表的表头三列（顺序固定，第四列「卡住什么」可缺）
+
+
 def parse_spec6(lines):
-    """→ {Q号: (是否未决, 状态格原文)}；只认 §6 那一节里的数据行。"""
-    start = end = None
+    """→ {Q号: (是否未决, 状态格原文)}；认**表头**定位，不认「第 6 节」这个编号。
+
+    为什么不再认编号：这张表搬过三次（旧《智能体助手-开发规范》§6 → 《通用开发规范》→
+    《项目管理规范》），每搬一次「§6」就变一次含义；判据跟着编号走就会**静默变成 0 行**，
+    而 0 行正是「空跑防护」要挡的那种假绿。表头 `编号 | 问题 | 状态` 是这张表的形状，
+    搬到哪一版都得有 ⇒ 认形状比认位置稳。
+    """
+    start = None
     for i, l in enumerate(lines):
-        if start is None and re.match(r"^#{2,3}\s*6\.\s", l):
-            start = i
-        elif start is not None and i > start and re.match(r"^#{2}\s+\d+\.\s", l):
-            end = i
+        if not l.startswith("|"):
+            continue
+        c = cells(l)
+        if len(c) >= 3 and all(h in c[j] for j, h in enumerate(SPEC_HEADER)):
+            start = i + 1
             break
     if start is None:
         return {}
     out = {}
-    for l in lines[start:end or len(lines)]:
+    for l in lines[start:]:
         if not l.startswith("|"):
+            if out:
+                break          # 表结束（表后再有别的表也不吃）
             continue
         c = cells(l)
-        if len(c) < 3:
+        if len(c) < 3 or re.fullmatch(r"[-: ]+", c[0]):
             continue
         m = re.search(r"Q(\d+)", c[0])
         if not m:
@@ -307,7 +323,7 @@ def main():
     print("== \u5f85\u62cd\u677f\u53f0\u8d26\u8986\u76d6\u5ea6\uff08\u961f\u5217 L-130 \u2461\uff09==")
     for c, t in probs:
         print(f"[{c}] {t}")
-    tail = (f"面内 §6 {st.get('spec_rows', 0)} 行 / 未决 {st.get('pending', 0)}（其中挂起类 {st.get('hang', 0)}）· "
+    tail = (f"面内待拍板表 {st.get('spec_rows', 0)} 行 / 未决 {st.get('pending', 0)}（其中挂起类 {st.get('hang', 0)}）· "
             f"台账 {st.get('ledger_rows', 0)} 行（挂 \u23f3 {st.get('ledger_pending', 0)}）· "
             f"面外未接入 {st.get('outside', 0)} 行（Notes/Retro \u4e66\uff0c\u672c\u7248\u53ea\u8ba1\u6570\uff09")
     if probs:

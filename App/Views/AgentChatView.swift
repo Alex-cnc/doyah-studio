@@ -1699,7 +1699,12 @@ struct AgentChatView: View {
             }
         }
         // 写确认档：关掉「每次确认」时这一格要看得见（那是一档风险状态，不是装饰）。
-        extras.append(appState.isConfirmAllWritesEnabled ? L(.agentStatusWritesOn) : L(.agentStatusWritesOff))
+        //
+        // **取值必须是 Agent 自己那一档**（`AgentGuardPolicy.requireApprovalForWrites`，落 `agent.json`），
+        // 不能拿 SQL 工具条的 `execution.confirmAllWrites` 顶 —— 2026-10-31 现场就是这么错的：
+        // 状态行写着「写确认：关」，而 `agent.json` 里 `requireApprovalForWrites: true`，两个开关说两句话。
+        extras.append(appState.agentGuardPolicy.requireApprovalForWrites
+                      ? L(.agentStatusWritesOn) : L(.agentStatusWritesOff))
         return extras
     }
 

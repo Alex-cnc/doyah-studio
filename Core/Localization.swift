@@ -5463,11 +5463,11 @@ public enum LocalizedStrings {
         // 模型按提示词里的那一行起头，解析侧照它认（中英各一份，另派生半角冒号变体）。
         .agentAlternativeMarker: [.simplifiedChinese: "备选：", .english: "Alternative:"],
         .agentAlternativeMarkerLong: [.simplifiedChinese: "替代方案：", .english: "Alternatives:"],
+        // 单行写死：`check-copy-emphasis.py` 按「一行一条目」解析，跨行 `+` 拼接会让它**静默少解析一条**
+        // （2026-10-31 现场：槽位命中 2780、解析出 2779，落差就是这么来的）。
         .agentPromptAlternativeRule: [
-            .simplifiedChinese: "拿不准的结论（没验证 / 把握低）后面紧跟一行替代方案，形如「备选：另一种做法或另一种可能」；"
-                + "拿得准的结论不必写。写了这句就把「不确定」说全了 —— 只承认不确定、不给替代方案，等于把人晾在原地。",
-            .english: "For any claim you are unsure about (unverified / low confidence), add a follow-up line "
-                + "“Alternative: another approach or another possibility”. Claims you are sure about need none.",
+            .simplifiedChinese: "拿不准的结论（没验证 / 把握低）后面紧跟一行替代方案，形如「备选：另一种做法或另一种可能」；拿得准的结论不必写。写了这句就把「不确定」说全了 —— 只承认不确定、不给替代方案，等于把人晾在原地。",
+            .english: "For any claim you are unsure about (unverified / low confidence), add a follow-up line “Alternative: another approach or another possibility”. Claims you are sure about need none.",
         ],
 
         .agentApprovalSection: [.simplifiedChinese: "待审批", .english: "Pending approvals"],

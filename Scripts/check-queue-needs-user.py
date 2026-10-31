@@ -56,7 +56,8 @@ import sys
 import tempfile
 
 QUEUE_REL = "Docs/design/开发循环-任务队列.md"
-SPEC_REL = "Docs/通用开发规范.md"
+# 2026-10-31：待拍板队列搬家（《通用开发规范》§6 → 《项目管理规范》§4 待人类主人拍板的队列）。
+SPEC_REL = "Docs/项目管理规范.md"
 # 小节名 → 条目号前缀（与 doyah-loop-watch.py / doyah-loop-status.py 同源）
 SECTION_PREFIX = {"Studio 队列": "L", "Notes 队列": "N", "Retro 队列": "R"}
 # 本仓提案目录里「还没裁」的状态词（其余 = 已结）
@@ -69,9 +70,10 @@ PENDING_WORDS = ("⏳ 待拍板", "⏳ 待确认", "⏳ 待提供", "⏳ 待授�
 SUSPEND_WORD = "挂起"
 SUSPEND_REASONS = ("≠ 待拍板", "不重复追问", "不具备条件")
 # 空跑防护下限（低于即判红：「一个都没解析到」不许当通过）
-FLOORS = {"specRows": 20, "specNumbers": 20, "queueRows": 120}
+# 2026-10-31 实测：队列 10 行 / 10 个 Q 号（旧下限 20 是给旧 §6 的 34 行定的）⇒ 取 6。
+FLOORS = {"specRows": 6, "specNumbers": 6, "queueRows": 120}
 H2 = re.compile(r"^##\s+")
-H2_SIX = re.compile(r"^##\s*6\.\s*待拍板")
+H2_SIX = re.compile(r"^##\s*4(?:[\s\.、]|$).*待.*拍板")   # 本版 = 「## 4 待人类主人拍板的队列」
 H2_SECTION = re.compile(r"^##\s+(.*队列.*)$")
 SEPARATOR_CELL = re.compile(r"^:?-{2,}:?$")
 # 编号格：容许 `~~` 划掉与紧跟其后的括注（队列 L-77 定的行形状：`| ~~**L-27**~~（…）` /
@@ -391,7 +393,7 @@ def self_test_cases(repo: pathlib.Path) -> tuple[list[Case], list[str]]:
     anchors = sorted(pending) + settled
     skips: list[str] = []
     if not anchors:
-        return [], ["整份自检都构造不出来 —— `%s` 的 §6 里一个 `Q` 号都没解析到" % SPEC_REL]
+        return [], ["整份自检都构造不出来 —— `%s` 的待拍板队列里一个 `Q` 号都没解析到" % SPEC_REL]
 
     a = anchors[0]
     cases: list[Case] = []
@@ -451,9 +453,9 @@ def self_test_cases(repo: pathlib.Path) -> tuple[list[Case], list[str]]:
              "全部已决 / 挂起",
              extra=[("DoyahNotes/Docs/proposals/0010-夹具.md",
                      "| 字段 | 值 |\n| --- | --- |\n| 状态 | **已采纳** |\n")]),
-        Case("spec §6 小节标题被改（解析不到 ⇒ 空跑防护必须判红）",
-             [("spec", "## 6. 待拍板与待授权（需求提出者的输入队列）",
-               "## 六. 待拍板与待授权（需求提出者的输入队列）")],
+        Case("待拍板队列小节标题被改（解析不到 ⇒ 空跑防护必须判红）",
+             [("spec", "## 4 待人类主人拍板的队列",
+               "## 四、待人类主人拍板的队列")],
              "空跑防护"),
     ]
     return cases, skips
@@ -558,7 +560,7 @@ def main() -> int:
             print("❌ %s" % problem)
         return 1
     if not skipped:
-        print("✅ `needs-user` 点名纪律通过（`needs-user` 行 %d / spec §6 数据行 %d · 号 %d "
+        print("✅ `needs-user` 点名纪律通过（`needs-user` 行 %d / 待拍板队列表数据行 %d · 号 %d "
               "（待拍板 %d · 挂起 %d）/ 队列行 %d / 待裁提案 %d）"
               % (counts["needsUser"], counts["specRows"], counts["specNumbers"],
                  counts["pendingQ"], counts["suspendedQ"], counts["queueRows"],

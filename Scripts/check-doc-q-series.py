@@ -58,11 +58,15 @@ import shutil
 import sys
 import tempfile
 
-SPEC_REL = "Docs/通用开发规范.md"
+# 2026-10-31 第二次搬家：待拍板队列从《通用开发规范》§6 挪到《项目管理规范》§4
+# （旧 §6 那 34 行已随文档拆分迁走；编号/状态/关闭成对这三条纪律不变，只是换了家）。
+SPEC_REL = "Docs/项目管理规范.md"
 
 H2 = re.compile(r"^##\s")
-SEC6_HEAD = re.compile(r"^##\s*6[\.、]")
-SEC4_HEAD = re.compile(r"^##\s*4[\.、]")
+SEC6_HEAD = re.compile(r"^##\s*4(?:[\s\.、]|$)")   # 队列所在节（本版 = 「## 4 待人类主人拍板的队列」）
+# 本版没有「已拍板」对照表（旧 §4）：置 None ⇒ §4↔§6 同源对账**跳过并如实说明**，
+# 不许假装对过（跳过 ≠ 通过）。
+SEC4_HEAD = None
 SEPARATOR_CELL = re.compile(r"^:?-{2,}:?$")
 Q_IN_CELL = re.compile(r"Q(\d+)")
 Q_CELL_ONLY = re.compile(r"^\s*~{0,2}\*{0,2}Q(\d+)\*{0,2}~{0,2}\s*$")
@@ -72,9 +76,11 @@ SEC4_CLOSED_HINT = re.compile(r"已关闭|已拍板|已定|✅")
 STATUS_WORDS = ("⏳ 待拍板", "⏳ 待确认", "⏳ 待提供", "⏳ 待授权", "✅", "已随分工转移")
 STRUCK = "~~"
 # 空跑下限（第 62 轮实测：数据行 34 / Q 号 34 / §4 对账 3 对）—— 调低会放走「文件被截断」
-MIN_ROWS = 30
-MIN_QNUMBERS = 30
-MIN_PARITY = 3
+# 2026-10-31 实测：队列 10 行 / 10 个 Q 号（旧值 30 是给旧 §6 那 34 行定的，按新家调低到 6：
+# 下限只挡「一行都没解析到」，不挡「条目变少」——条目变少是内容问题，由台账那条判据管）。
+MIN_ROWS = 6
+MIN_QNUMBERS = 6
+MIN_PARITY = 0
 
 
 def split_row(line: str) -> list[str]:
@@ -159,11 +165,13 @@ def check(root: pathlib.Path) -> tuple[list[str], list[str], dict[str, int]]:
 
     lines = spec.read_text().splitlines()
     sec6 = section_lines(lines, SEC6_HEAD)
-    sec4 = section_lines(lines, SEC4_HEAD)
-    if not sec6 or not sec4:
-        problems.append("%s：解析不到 §4 或 §6 小节（空跑防护 —— 小节标题被改 / 被删，"
+    sec4 = section_lines(lines, SEC4_HEAD) if SEC4_HEAD else []
+    if not sec6:
+        problems.append("%s：解析不到待拍板队列那一节（空跑防护 —— 小节标题被改 / 被删，"
                         "本判据不该静默通过）" % SPEC_REL)
         return problems, notes, counts
+    if not sec4:
+        notes.append("ℹ️ 本版没有「已拍板」对照表 ⇒ §4↔§6 同源对账**未覆盖**（跳过 ≠ 通过）")
 
     # ---- §6：编号可判且唯一 + 状态词表 + 关闭行成对 ----
     rows = table_rows(sec6)
@@ -269,7 +277,7 @@ def check(root: pathlib.Path) -> tuple[list[str], list[str], dict[str, int]]:
     if counts["numbers"] < MIN_QNUMBERS:
         problems.append("%s：§6 只解析到 %d 个 `Q<号>`（下限 %d）—— 编号被删光也算红"
                         % (SPEC_REL, counts["numbers"], MIN_QNUMBERS))
-    if counts["parity"] < MIN_PARITY:
+    if MIN_PARITY and counts["parity"] < MIN_PARITY:
         problems.append("%s：§4 ↔ §6 只对账到 %d 对（下限 %d）—— 要么 §4 被改没了，"
                         "要么两侧已不成体系" % (SPEC_REL, counts["parity"], MIN_PARITY))
 
@@ -300,31 +308,20 @@ class Case:
 def self_test_cases() -> list[Case]:
     return [
         Case("前提自检（绿对照）：未改动的 spec ⇒ 0 问题，且真的解析到输入", [], None),
-        Case("同号两条（Q47 的行改成 Q48，与 PG 版本那条撞号）",
-             [("| **Q47** ✅ | **WPS 专有格式", "| **Q48** ✅ | **WPS 专有格式")],
+        Case("同号两条（Q63 的行改成 Q64，与既有 Q64 撞号）",
+             [("| **Q63** |", "| **Q64** |")],
              "编号必须唯一"),
-        Case("编号格退回 `——` 占位（L-41 的临时形态）",
-             [("| **Q46** ✅ | **FR-AGT-GUARD-PERM-004", "| —— ✅ | **FR-AGT-GUARD-PERM-004")],
+        Case("编号格退回 `——` 占位（不取号）",
+             [("| **Q66** |", "| —— |")],
              "编号格没有"),
         Case("状态首词写词表外的 `⬜`",
-             [("| ⏳ **待提供（2026-09-30 需求提出者：「先挂起",
-               "| ⬜ **待提供（2026-09-30 需求提出者：「先挂起")],
+             [("| ⏳ 待拍板 | 改哪边待一句话", "| ⬜ 待拍板 | 改哪边待一句话")],
              "不在词表内"),
-        Case("关闭行（编号划掉）却写回 `⏳ 待拍板`",
-             [("| ✅ 已关闭 | —— |", "| ⏳ 待拍板 | —— |")],
-             "编号已划掉"),
-        Case("状态判 ✅ 而编号没划掉也没 ✅",
-             [("| ⏳ **待提供（2026-09-30 需求提出者：「先挂起",
-               "| ✅ 已决（夹具）**待提供（2026-09-30 需求提出者：「先挂起")],
+        Case("状态判 ✅ 而编号格没划掉也没有 ✅",
+             [("| ✅ **Q65** |", "| **Q65** |")],
              "既没划掉也没有"),
-        Case("§4 已拍板而 §6 仍挂待拍板（Q19 复发）",
-             [("| ~~**Q19**~~ | **Windows 版排在哪个里程碑** |",
-               "| **Q19** | **Windows 版排在哪个里程碑** |"),
-              ("✅ 已关闭（2026-09-27 需求提出者拍板", "⏳ 待拍板（2026-09-27 需求提出者拍板")],
-             "两处状态必须同源"),
-        Case("§6 小节标题被改（解析不到 ⇒ 不许静默通过）",
-             [("## 6. 待拍板与待授权（需求提出者的输入队列）",
-               "## 六. 待拍板与待授权（需求提出者的输入队列）")],
+        Case("队列小节标题被改（解析不到 ⇒ 不许静默通过）",
+             [("## 4 待人类主人拍板的队列", "## 四、待人类主人拍板的队列")],
              "空跑防护"),
     ]
 
