@@ -4441,12 +4441,14 @@ final class AppState: ObservableObject {
         // 判定**不在这里重做**：`runCommand` 内部会拿这张单的指纹再核一次，并再走一次白名单
         //（对不上 ⇒ `.refused`，不执行）。换句话说，这里只是"把已批准的那一条送进执行器"，
         // 真正的闸始终只有一处。
+        StartupLog.write("兑换命令：cmd=\(arguments["command"] ?? "") 指纹=\(fingerprint.prefix(8)) readOnly=\(agentGuardPolicy.readOnly)")
         let commandOutcome = await tools.runCommand(arguments["command"] ?? "",
                                               tool: definition,
                                               guardPolicy: agentGuardPolicy,
                                               fingerprint: fingerprint,
                                               granted: [fingerprint],
                                               runner: AgentLocalCommandRunner(shell: agentShell(for: workspacePath)))
+        StartupLog.write("兑换命令结局：\(String(describing: commandOutcome).prefix(80))")
         switch commandOutcome {
         case .command(let result):
             // 交付面（`FR-STD-WS-AI-002` ③）：这一批**最后一条真跑起来的命令**的读数。
