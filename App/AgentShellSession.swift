@@ -65,7 +65,9 @@ final class AgentShellSession: @unchecked Sendable {
         if startFailed { lock.unlock(); return false }
         lock.unlock()
 
-        session.onOutput = { [weak self] data in
+        // 用**追加观察者**而不是占用 `onOutput` 槽：终端页签也要看同一份输出，
+        // 谁后挂都不该把对方顶掉。
+        session.addOutputObserver { [weak self] data in
             guard let self else { return }
             self.ingest(data)
             self.onOutput?(data)
@@ -76,10 +78,18 @@ final class AgentShellSession: @unchecked Sendable {
         let ok = session.start(columns: 120, rows: 32,
                                shell: nil, loginShell: true,
                                workingDirectory: workingDirectory)
+        if ok {
+            // **关掉回显**：PTY 默认会把我们写进去的整段脚本原样吐回来，而那段里就含哨兵字面量
+            //（`printf '\n__DOYAH_AGENT_DONE_x:%d\n'`）—— 2026-10-31 实测：开回显时第一条命令
+            // 立刻被「自己写的那行」判成已完成，退出码解析成 -1，模型以为失败就一直重试。
+            // 关掉之后缓冲里只剩程序输出与哨兵结果行；命令本身由 `run` 直接喂给显示面。
+            session.write(text: "stty -echo 2>/dev/null; unset HISTFILE\n")
+        }
         lock.lock()
         started = ok
         startFailed = !ok
         lock.unlock()
+        StartupLog.write("AgentShell 启动\(ok ? "成功" : "失败")：\(workingDirectory)\(ok ? "" : " · " + (session.lastError ?? ""))")
         return ok
     }
 
@@ -111,6 +121,9 @@ final class AgentShellSession: @unchecked Sendable {
             pendingDeadline = DispatchTime.now() + timeout
             lock.unlock()
 
+            // 关回显后，命令本身要自己喂给显示面（否则页签里只剩输出，看不出敲了什么）。
+            onOutput?(Data(("❯ " + command + "\n").utf8))
+            StartupLog.write("AgentShell 写入命令：\(command.prefix(60))（哨兵 \(echo.sentinel)）")
             session.write(text: echo.text)
 
             // 超时看门狗：到点还没等到哨兵 ⇒ 打断（Ctrl-C）+ 如实回「超时」。
@@ -132,6 +145,9 @@ final class AgentShellSession: @unchecked Sendable {
     private func ingest(_ data: Data) {
         guard let chunk = String(data: data, encoding: .utf8) else { return }
         lock.lock()
+        if pendingSentinel != nil, buffer.isEmpty {
+            StartupLog.write("AgentShell 收到首批输出 \(chunk.prefix(40).debugDescription)")
+        }
         buffer += chunk
         if buffer.count > bufferLimit {
             buffer = String(buffer.suffix(bufferLimit / 2))
@@ -143,7 +159,15 @@ final class AgentShellSession: @unchecked Sendable {
         if let sentinel, let continuation, let range = buffer.range(of: sentinel) {
             let after = buffer[range.upperBound...]
             let codeLine = after.prefix { $0 != "\n" }
-            let exitCode = Int32(codeLine.trimmingCharacters(in: .whitespaces)) ?? -1
+            // PTY 的行尾是 `\r\n`：只按 `.whitespaces` 修剪会把 `\r` 留下，
+            // 于是 "0\r" 过不了数字校验、这一条永远判不成完成（2026-10-31 实测：模型一直重试 pwd）。
+            let digits = codeLine.trimmingCharacters(in: .whitespacesAndNewlines)
+            // 只认「哨兵 + 数字退出码」：回显残留、半截输出都不算跑完。
+            guard !digits.isEmpty, digits.allSatisfy({ $0.isNumber }) else {
+                lock.unlock()
+                return
+            }
+            let exitCode = Int32(digits) ?? -1
             var body = String(buffer[..<range.lowerBound])
             buffer = ""
             pending = nil
@@ -172,6 +196,7 @@ final class AgentShellSession: @unchecked Sendable {
         pendingEcho = ""
         pendingDeadline = nil
         lock.unlock()
+        StartupLog.write("AgentShell 超时（\(Int(timeout))s），发 Ctrl-C 打断")
         session.write(text: "\u{03}")   // Ctrl-C：把还挂着的命令打断
         let text = Self.stripControl(Self.stripEcho(body, echo: ""))
         continuation.resume(returning: AgentCommandResult(

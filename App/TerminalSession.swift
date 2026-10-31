@@ -43,6 +43,16 @@ final class TerminalSession {
 
     /// 收到 shell 输出（已在主线程）。
     var onOutput: ((Data) -> Void)?
+
+    /// **多个观察者**：同一条会话可能既要被回收（Agent 按哨兵切段）、又要被显示（终端页签喂屏幕）。
+    /// 2026-10-31 实测教训：只留一个 `onOutput` 槽时，页签一挂显示就把回收那一个顶掉，
+    /// 于是 Agent 的命令永远等不到哨兵（表现为一直重试同一条命令）。
+    private var outputObservers: [(Data) -> Void] = []
+
+    /// 追加一个输出观察者（与 `onOutput` 同时生效）。
+    func addOutputObserver(_ handler: @escaping (Data) -> Void) {
+        outputObservers.append(handler)
+    }
     /// shell 退出（已在主线程），参数是退出码。
     var onExit: ((Int32) -> Void)?
 
@@ -270,7 +280,11 @@ final class TerminalSession {
             let count = read(masterFD, &buffer, buffer.count)
             if count > 0 {
                 let chunk = Data(buffer[0..<count])
-                DispatchQueue.main.async { [weak self] in self?.onOutput?(chunk) }
+                DispatchQueue.main.async { [weak self] in
+                    guard let self else { return }
+                    self.onOutput?(chunk)
+                    for observer in self.outputObservers { observer(chunk) }
+                }
                 if count < buffer.count { break }
             } else {
                 // 0 / EAGAIN / EIO（从设备关闭）都到此为止

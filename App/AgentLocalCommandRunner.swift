@@ -42,8 +42,10 @@ struct AgentLocalCommandRunner: AgentCommandRunner {
     func run(executable: String, arguments: [String], workingDirectory: URL) async -> AgentCommandResult {
         if let shell {
             let line = Self.shellLine(executable: executable, arguments: arguments)
+            StartupLog.write("runCommand → Agent shell：\(line.prefix(60))")
             return await shell.run(command: line, timeout: limits.timeoutSeconds)
         }
+        StartupLog.write("runCommand → 独立进程（没有 shell）：\(executable)")
         let executor = AgentCommandExecutor()
         do {
             let run = try executor.run(executable: executable, arguments: arguments,

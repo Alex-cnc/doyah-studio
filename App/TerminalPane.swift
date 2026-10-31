@@ -198,7 +198,8 @@ final class TerminalPane: ObservableObject {
         didStart = true
         if external {
             // **只接管显示**：输出喂屏幕，按键仍写回这条会话（人可以在页签里接着敲）。
-            session.onOutput = { [weak self] data in
+            // 追加观察者而不是占用 `onOutput` —— 那条槽留给会话的所有者（Agent 的哨兵回收）。
+            session.addOutputObserver { [weak self] data in
                 guard let self else { return }
                 self.screen.feed([UInt8](data))
                 let responses = self.screen.drainResponses()

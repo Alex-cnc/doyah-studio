@@ -4195,7 +4195,10 @@ final class AppState: ObservableObject {
         let whitelisted = mcpReady.registry.applyingWhitelist(runtimePolicy.toolWhitelist)
         agentToolWhitelistUnknown = whitelisted.unknown
         let commandRunner = AgentLocalCommandRunner(
-            limits: AgentCommandLimits(timeoutSeconds: TimeInterval(runtimePolicy.commandTimeoutSeconds)))
+            limits: AgentCommandLimits(timeoutSeconds: TimeInterval(runtimePolicy.commandTimeoutSeconds)),
+            // **循环这条路也要进同一条 Agent shell**（2026-10-31）：只接审批那条路的话，
+            // 模型自己发起的 `run_command` 仍走独立进程 —— 那就等于「看得见」只对一半命令成立。
+            shell: agentShell(for: workspacePath))
         let dispatcher = AgentStandardDispatcher(registry: whitelisted.registry,
                                                 workspace: tools,
                                                 database: databaseTool,
@@ -4349,6 +4352,7 @@ final class AppState: ObservableObject {
     /// · **留下可撤销的原文**：写之前把 `before` 读下来记账 —— 账记在**写成功之后**，
     ///   写失败就不该留下一条「能撤销」的空账。
     func applyAgentChatApproval(card: AgentToolCard, workspacePath: String) async -> AgentChatModel.ApplyResult {
+        StartupLog.write("批准兑现：\(card.toolName) 指纹=\(card.fingerprint?.prefix(8) ?? "nil")")
         guard let fingerprint = card.approvalFingerprint,
               let arguments = AgentToolArguments.parse(card.arguments),
               let definition = (agentMCPRegistry ?? AgentToolRegistry.standard).definition(named: card.name)

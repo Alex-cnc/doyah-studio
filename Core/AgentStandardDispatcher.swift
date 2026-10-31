@@ -65,6 +65,37 @@ public struct AgentStandardDispatcher: AgentToolDispatcher {
         self.guardPolicy = guardPolicy
     }
 
+    /// **异步入口**（生产路径走这条）：`run_command` 要 await 真 shell 里的执行，
+    /// 不能像文件类工具那样同步返回。其余能力原样落到同步 `dispatch`。
+    ///
+    /// 为什么必须有它：`dispatch` 是同步契约，循环那边原先把整段丢进 `Task.detached` 里跑；
+    /// 再在**池线程**上 `semaphore.wait()` 等内层任务 ⇒ 池被自己堵住、内层永远起不来
+    ///（2026-10-31 实测：命令一步都不执行，模型看着「已批准」一直重试）。
+    public func dispatchAsync(_ invocation: AgentToolInvocation,
+                              approvals: Set<String>) async -> AgentToolOutcome {
+        guard registry.definition(named: invocation.name)?.capability == .runCommand else {
+            return dispatch(invocation, approvals: approvals)
+        }
+        let definition = registry.definition(named: invocation.name)
+        guard let workspace, let commandRunner else {
+            return .refused(.unavailable, detail: invocation.name)
+        }
+        guard let arguments = AgentToolArguments.parse(invocation.argumentsJSON) else {
+            return .refused(.badArguments, detail: invocation.name)
+        }
+        let prepared = workspace.prepareCommand(arguments["command"] ?? "",
+                                                tool: definition,
+                                                guardPolicy: guardPolicy)
+        guard case .needsApproval(let request) = prepared else { return prepared }
+        guard approvals.contains(request.fingerprint) else { return prepared }
+        return await workspace.runCommand(arguments["command"] ?? "",
+                                          tool: definition,
+                                          guardPolicy: guardPolicy,
+                                          fingerprint: request.fingerprint,
+                                          granted: approvals,
+                                          runner: commandRunner)
+    }
+
     public func dispatch(_ invocation: AgentToolInvocation, approvals: Set<String>) -> AgentToolOutcome {
         guard let definition = registry.definition(named: invocation.name) else {
             return .refused(.unregistered, detail: invocation.name)
@@ -135,6 +166,7 @@ public struct AgentStandardDispatcher: AgentToolDispatcher {
             // 而执行器自 2026-10-31 起是 async（命令要能进真 shell 里跑、不能钉住主 actor）。
             // 这里就地桥一次：**只允许在非主线程等**（主线程等会与 PTY 的回收互相卡死）。
             guard !Thread.isMainThread else {
+                // 主线程上等会与 PTY 的回收互相卡死（Core 不认识宿主的日志设施，这里只用返回值说）。
                 return .refused(.unavailable, detail: "runCommandOnMainThread")
             }
             let semaphore = DispatchSemaphore(value: 0)

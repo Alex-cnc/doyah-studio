@@ -77,6 +77,16 @@ public struct AgentToolInvocation: Equatable, Sendable {
 /// 具体实现（工作区工具 / 查库工具）由上层组装。
 public protocol AgentToolDispatcher: Sendable {
     func dispatch(_ invocation: AgentToolInvocation, approvals: Set<String>) -> AgentToolOutcome
+    /// 异步入口：只有需要等真实执行（`run_command` 进 shell）的能力才重写它；
+    /// 默认实现退回同步 `dispatch`，所以既有实现（含测试里的假分发器）一字不用改。
+    func dispatchAsync(_ invocation: AgentToolInvocation, approvals: Set<String>) async -> AgentToolOutcome
+}
+
+extension AgentToolDispatcher {
+    public func dispatchAsync(_ invocation: AgentToolInvocation,
+                              approvals: Set<String>) async -> AgentToolOutcome {
+        dispatch(invocation, approvals: approvals)
+    }
 }
 
 /// 参数与声明的一致性校验（`FR-AI-18` ⑤：**参数不合 schema ⇒ 如实报错并回灌给模型，不执行**）。
@@ -913,9 +923,9 @@ public struct AgentLoop: Sendable {
                 if definition.capability == .dispatchSubtasks {
                     outcome = await runSubagentDispatch(invocation: invocation, context: context)
                 } else {
-                    outcome = await Task.detached(priority: .userInitiated) {
-                        dispatcher.dispatch(invocation, approvals: approvals)
-                    }.value
+                    // `run_command` 要 await 真 shell 里的执行 ⇒ 走异步入口；
+                    // 其余文件类工具在 `dispatchAsync` 内部原样落到同步 `dispatch`（行为不变）。
+                    outcome = await dispatcher.dispatchAsync(invocation, approvals: approvals)
                 }
                 let toolMillis = Int(Date().timeIntervalSince(toolStartedAt) * 1000)
                 // 工具开跑 = 有进展（看门狗据此判「卡住」）。
