@@ -4,6 +4,19 @@ import Foundation
 ///
 /// 刻意只有「提示词 + 采样参数」：**没有任何可以携带结果集行数据的字段**。
 /// NFR-AI-01 的「结果集行数据永不外发」因此不是靠调用方自觉，而是类型层面就没有入口。
+/// 多轮历史里的一条（`FR-AI-17` 会话续聊的原料）。
+///
+/// 只搬「谁说了什么」：`role` 取 `user` / `assistant`，`content` 是纯文本。
+/// 工具跳不进这里（工具结果当轮就已入过模型上下文，重放会重复计数、也撑爆预算）。
+public struct LLMTurn: Equatable, Sendable {
+    public var role: String
+    public var content: String
+    public init(role: String, content: String) {
+        self.role = role
+        self.content = content
+    }
+}
+
 public struct LLMRequest: Equatable, Sendable {
     public var endpoint: URL
     public var model: String
@@ -19,6 +32,8 @@ public struct LLMRequest: Equatable, Sendable {
     public var toolChoice: LLMToolChoice?
     /// 是否走流式 SSE。**默认 `false`** ⇒ 既有调用点的请求体一字不变。
     public var stream: Bool
+    /// 本轮之前已经说过的话（按时间顺序）。**空 = 单轮**，请求体与改动前逐字节一致。
+    public var history: [LLMTurn] = []
 
     public init(
         endpoint: URL,
@@ -252,13 +267,14 @@ public struct OpenAICompatibleClient: LLMClient {
 
     /// 构造请求体（JSON）。
     public static func makeBody(_ request: LLMRequest) throws -> Data {
+        // 历史按时间顺序夹在 system 与本次 user 之间（空历史 ⇒ 与单轮逐字节相同）。
+        var messages: [[String: Any]] = [["role": "system", "content": request.systemPrompt]]
+        messages.append(contentsOf: request.history.map { ["role": $0.role, "content": $0.content] })
+        messages.append(["role": "user", "content": request.userPrompt])
         var payload: [String: Any] = [
             "model": request.model,
             "stream": request.stream,
-            "messages": [
-                ["role": "system", "content": request.systemPrompt],
-                ["role": "user", "content": request.userPrompt]
-            ]
+            "messages": messages
         ]
         if let maxOutputTokens = request.maxOutputTokens {
             payload["max_tokens"] = maxOutputTokens

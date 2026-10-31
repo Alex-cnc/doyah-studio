@@ -296,6 +296,10 @@ public struct AgentLoopContext: Sendable {
 
     /// 检查点实际用的键：给了分账号就用分账号，没给就等于会话号。
     public var checkpointKey: String { checkpointScopeID ?? sessionID }
+
+    /// 本轮之前已经说过的话（`FR-AI-17` 会话续聊）：**空 = 单轮**，与改动前行为一致。
+    /// 由宿主按会话挑（挑几条、留多长都在宿主，Core 只搬）。
+    public var priorTurns: [LLMTurn] = []
 }
 
 /// Agent 循环（`FR-AI-18`）：模型 → `tool_calls` → 执行 → 结果回灌 → 再跳。
@@ -1018,6 +1022,7 @@ public struct AgentLoop: Sendable {
         // 换路（`FR-AGT-PLAN-PLAN-006` ①）：失败换过模型就用换过的，请求模板里的模型只当起点。
         if let modelOverride { request.model = modelOverride }
         request.systemPrompt = context.systemPrompt
+        request.history = context.priorTurns
         var prompt = context.userPrompt
         var report: AgentContextCompressionReport?
         var entries = observations

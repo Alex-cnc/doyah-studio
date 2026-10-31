@@ -129,6 +129,7 @@ struct DoyahStudioApp: App {
                         // `checkpointScopeID`（`NFR-AI-08` ⑤）来自 `AgentTurnPlanner` 的落账 ——
                         // 检查点按「哪一轮提问」分账，于是新的提问不会接上一个问题的检查点。
                         return await appState.makeAgentChatLoop(prompt: prompt,
+                                                               history: agentChat.historyTurns(),
                                                                sessionID: agentChat.sessionID,
                                                                workspacePath: rootPath,
                                                                checkpointScopeID: plan.checkpointScopeID,

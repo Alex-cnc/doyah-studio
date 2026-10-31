@@ -4060,6 +4060,7 @@ final class AppState: ObservableObject {
     ///
     /// 造不出来（端点没配 / 地址不合法）⇒ 返回 `nil` —— 界面那边**如实拦**，不假装在跑。
     func makeAgentChatLoop(prompt: String,
+                           history: [LLMTurn] = [],
                            sessionID: String,
                            workspacePath: String,
                            checkpointScopeID: String? = nil,
@@ -4230,9 +4231,11 @@ final class AppState: ObservableObject {
                              // `dispatch_subtasks`（并发上限只从这份快照的
                              // `maxConcurrentSubtasks` 来；每轮开跑重读 ⇒ 面板改完下一轮生效）。
                              subagentPolicy: AgentSubagentPolicy(snapshot: runtimePolicy))
-        let context = AgentLoopContext(systemPrompt: systemPrompt, userPrompt: promptWithNotes,
+        var context = AgentLoopContext(systemPrompt: systemPrompt, userPrompt: promptWithNotes,
                                        baseRequest: request, sessionID: sessionID, workspace: workspacePath,
                                        checkpointScopeID: checkpointScopeID)
+        // 多轮：把这一段会话里已经说过的话带上（`FR-AI-17` 续聊）。空数组 = 单轮，行为不变。
+        context.priorTurns = history
         return (loop, context)
     }
 

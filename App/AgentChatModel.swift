@@ -559,6 +559,32 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
     /// 为什么必须接管：不接管时所有 IM 消息都落进面板当前那一条会话 ⇒ **两个不同的
     /// 聊天窗口共用一份上下文**（验收①「同一 chat 永远同一条会话」当场不成立）。
     @discardableResult
+    /// 这一段会话里**已经说过的话**（只取 user / assistant，按预算从尾部留）。
+    ///
+    /// 为什么在这里挑：消息流是界面模型持有的唯一真值（会话恢复、切换、流式都落到它），
+    /// Core 不该知道界面的消息结构，宿主也不该另抄一份。
+    /// 当前这条提问**不在内**（它作为 `userPrompt` 单独发，带上就重复了）。
+    func historyTurns(maxCharacters: Int = 6_000) -> [LLMTurn] {
+        var picked: [LLMTurn] = []
+        var used = 0
+        var skippedCurrent = false
+        for message in messages.reversed() {
+            guard message.role == .user || message.role == .assistant else { continue }
+            guard !message.isStreaming else { continue }
+            let text = message.text.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !text.isEmpty else { continue }
+            if message.role == .user, !skippedCurrent {
+                // 最新的那条用户消息 = 本次提问本身，跳过。
+                skippedCurrent = true
+                continue
+            }
+            if used + text.count > maxCharacters { break }
+            used += text.count
+            picked.append(LLMTurn(role: message.role.rawValue, content: text))
+        }
+        return picked.reversed()
+    }
+
     func adoptSession(_ id: String, workspacePath: String?) -> Bool {
         guard canSwitchSession, !id.isEmpty else { return false }
         if let store = sessionStore, let workspacePath, !workspacePath.isEmpty,
