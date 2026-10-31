@@ -126,7 +126,7 @@ final class AgentToolApprovalTests: XCTestCase {
         }
     }
 
-    func testWhitelistedCommandNeedsApprovalAndRunsInTheWorkspace() {
+    func testWhitelistedCommandNeedsApprovalAndRunsInTheWorkspace() async {
         guard case .needsApproval(let request) = tools.prepareCommand("cat target.txt") else {
             return XCTFail("白名单命令也要审批")
         }
@@ -170,7 +170,7 @@ final class AgentToolApprovalTests: XCTestCase {
     }
 
     /// 退出码要如实带出来（不许只给 stdout 假装成功）。
-    func testNonZeroExitCodeIsReportedNotHidden() {
+    func testNonZeroExitCodeIsReportedNotHidden() async {
         let runner = RecordingRunner()
         runner.result = AgentCommandResult(exitCode: 2, standardOutput: "", standardError: "no such file\n")
         guard case .needsApproval(let request) = tools.prepareCommand("cat missing.txt") else { return XCTFail("要审批") }

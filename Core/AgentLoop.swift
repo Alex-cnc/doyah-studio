@@ -896,20 +896,23 @@ public struct AgentLoop: Sendable {
                         outcome: traceOutcome, detail: policyDetail,
                         sessionID: context.sessionID, hopIndex: steps - 1,
                         chainID: context.chainID, at: startedAt))
-                    if verdict.decision != .allow {
-                        let reason = verdict.decision == .deny
-                            ? AgentToolRefusal.deniedByPolicy.rawValue
-                            : AgentToolRefusal.approvalRequired.rawValue
+                    // **只有「直接拒」在这里停**。`.requiresApproval` 不能在这里 `continue` ——
+                    // 那等于「要求审批，然后永远不给人批的机会」：单子还没出，这一跳就被判成
+                    // `approvalRequired` 塞回模型，模型只能一遍遍重试同一条命令
+                    //（2026-10-31 实测：`pwd` 连点 20 步，一次都没真跑）。
+                    // 放行到分发器：它自己的审批闸会出单子（`approvalRequested`），人批了才执行。
+                    if verdict.decision == .deny {
+                        let reason = AgentToolRefusal.deniedByPolicy.rawValue
                         rejected.append((invocation.name, reason))
                         observations.append("\(invocation.name): \(reason)/\(policyDetail)")
                         await observer?.observe(.toolStarted(name: invocation.name,
                                                              summary: AgentToolSummary.line(fromArgumentsJSON: invocation.argumentsJSON)))
                         await observer?.observe(.toolFinished(
                             name: invocation.name,
-                            outcome: verdict.decision == .deny ? "denied" : "pendingApproval",
+                            outcome: "denied",
                             millis: nil))
                         recordTurn(context: context,
-                                   kind: verdict.decision == .deny ? .tool : .approval,
+                                   kind: .tool,
                                    role: "system",
                                    text: "\(invocation.name) => \(reason)/\(policyDetail)",
                                    at: startedAt)

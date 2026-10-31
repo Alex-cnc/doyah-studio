@@ -154,7 +154,7 @@ final class AgentToolFaceEndToEndTests: XCTestCase {
 
     // MARK: - run_command（真进程）
 
-    func testRunCommandExecutesForReal() {
+    func testRunCommandExecutesForReal() async {
         let prepared = tools.prepareCommand("cat a.txt")
         guard case .needsApproval(let request) = prepared else {
             return XCTFail("跑命令要先审批：\(prepared)")
@@ -167,7 +167,7 @@ final class AgentToolFaceEndToEndTests: XCTestCase {
         XCTAssertTrue(result.standardOutput.contains("枫叶"), "真实 cat 输出里要有文件内容：\(result.standardOutput)")
     }
 
-    func testRunCommandRefusedWithoutApproval() {
+    func testRunCommandRefusedWithoutApproval() async {
         let outcome = await tools.runCommand("cat a.txt", fingerprint: "无", granted: [], runner: RealRunner())
         if case .refused(let why, _) = outcome {
             XCTAssertEqual(why, .approvalRequired)

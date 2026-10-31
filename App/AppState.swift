@@ -4352,7 +4352,7 @@ final class AppState: ObservableObject {
     /// · **留下可撤销的原文**：写之前把 `before` 读下来记账 —— 账记在**写成功之后**，
     ///   写失败就不该留下一条「能撤销」的空账。
     func applyAgentChatApproval(card: AgentToolCard, workspacePath: String) async -> AgentChatModel.ApplyResult {
-        StartupLog.write("批准兑现：\(card.toolName) 指纹=\(card.fingerprint?.prefix(8) ?? "nil")")
+        StartupLog.write("批准兑现：\(card.name) 指纹=\(card.approvalFingerprint?.prefix(8) ?? "nil")")
         guard let fingerprint = card.approvalFingerprint,
               let arguments = AgentToolArguments.parse(card.arguments),
               let definition = (agentMCPRegistry ?? AgentToolRegistry.standard).definition(named: card.name)

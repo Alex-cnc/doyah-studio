@@ -83,17 +83,19 @@ final class AgentStandardDispatcherTests: XCTestCase {
         }
     }
 
-    func testCommandDispatchNeedsApprovalAndUsesTheInjectedRunner() {
+    /// 走**生产入口** `dispatchAsync`：`run_command` 自 2026-10-31 起要 await 真 shell 里的执行，
+    /// 同步 `dispatch` 只剩「文件类工具」兼容路径（在主线程调 `run_command` 会被它如实拒）。
+    func testCommandDispatchNeedsApprovalAndUsesTheInjectedRunner() async {
         let runner = RecordingRunner()
         let dispatcher = AgentStandardDispatcher(workspace: tools, commandRunner: runner)
         let call = invocation("run_command", #"{"command":"ls -a"}"#)
 
-        guard case .needsApproval(let request) = dispatcher.dispatch(call, approvals: []) else {
+        guard case .needsApproval(let request) = await dispatcher.dispatchAsync(call, approvals: []) else {
             return XCTFail("执行类要审批")
         }
         XCTAssertTrue(runner.executables.isEmpty, "**没批准就不许起进程**")
 
-        guard case .command(let result) = dispatcher.dispatch(call, approvals: [request.fingerprint]) else {
+        guard case .command(let result) = await dispatcher.dispatchAsync(call, approvals: [request.fingerprint]) else {
             return XCTFail("批准后该真跑")
         }
         XCTAssertEqual(result.exitCode, 0)

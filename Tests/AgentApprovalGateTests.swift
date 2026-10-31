@@ -41,7 +41,7 @@ final class AgentApprovalGateTests: XCTestCase {
 
     // MARK: - ③ 队列里没有决定 ⇒ 一次都没执行（目标文件逐字节未变）
 
-    func testNothingExecutesWithoutADecision() throws {
+    func testNothingExecutesWithoutADecision() async throws {
         let before = try XCTUnwrap(bytes(of: "target.txt"))
         guard case .needsApproval(let request) = tools.prepareWrite(path: "target.txt", content: "新内容\n") else {
             return XCTFail("要审批")
