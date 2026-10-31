@@ -176,13 +176,49 @@ public struct AgentWorkspaceTools: Sendable {
         self.writes = writes
     }
 
+    // MARK: - 越界授权（`§3.26`）
+
+    /// 目标落在工作区外时的**唯一出路**：出一张单，写明越界目标，**批准之前一个字节都不动**。
+    ///
+    /// 指纹用**绝对路径**：同一个相对路径在不同工作区指向不同文件 —— 用相对路径会让
+    /// 「在别处批过的那一次」在这边也算数（详设 §3.26「指纹」一格）。
+    private func outsideApproval(tool: AgentToolDefinition, url: URL, payload: String) -> AgentToolOutcome {
+        let absolute = url.standardizedFileURL.path
+        let preview = "越界：\(absolute)（工作区：\(root.path)）\n" + payload
+        return .needsApproval(AgentApprovalRequest(
+            toolName: tool.name,
+            fingerprint: AgentFingerprint.hash("\(tool.name)|\(absolute)|\(payload)"),
+            payload: preview,
+            baseDigest: AgentWriteTargetState.digest(at: url)))
+    }
+
+    /// 把一个可能越界的相对 / 绝对路径**绝对化**（不改写用户给的原值，只用于比较与出单）。
+    private func absoluteURL(for path: String) -> URL {
+        let trimmed = path.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.hasPrefix("/") { return URL(fileURLWithPath: trimmed).standardizedFileURL }
+        return root.appendingPathComponent(trimmed).standardizedFileURL
+    }
+
     // MARK: - read_file
 
-    public func readFile(path: String) -> AgentToolOutcome {
+    public func readFile(path: String,
+                         fingerprint: String? = nil,
+                         granted: Set<String> = []) -> AgentToolOutcome {
         let resolved = AgentWorkspaceSandbox.resolve(path, in: root)
-        guard case .inside(let url) = resolved else {
-            if case .outside(let detail) = resolved { return .refused(.outsideWorkspace, detail: detail) }
-            return .refused(.outsideWorkspace, detail: path)
+        let url: URL
+        switch resolved {
+        case .inside(let inside):
+            url = inside
+        case .outside:
+            // 越界**不直接拒**：没批过就出单（§3.26）；批过（指纹命中）才读。
+            guard let tool = registry.definition(for: .readFile) else {
+                return .refused(.unregistered, detail: AgentToolLevel.readOnly.rawValue)
+            }
+            let target = absoluteURL(for: path)
+            guard let fingerprint, granted.contains(fingerprint) else {
+                return outsideApproval(tool: tool, url: target, payload: path)
+            }
+            url = target
         }
 
         var isDirectory: ObjCBool = false
@@ -228,11 +264,24 @@ public struct AgentWorkspaceTools: Sendable {
 
     // MARK: - list_dir
 
-    public func listDirectory(path: String) -> AgentToolOutcome {
+    public func listDirectory(path: String,
+                              fingerprint: String? = nil,
+                              granted: Set<String> = []) -> AgentToolOutcome {
         let resolved = AgentWorkspaceSandbox.resolve(path, in: root)
-        guard case .inside(let url) = resolved else {
-            if case .outside(let detail) = resolved { return .refused(.outsideWorkspace, detail: detail) }
-            return .refused(.outsideWorkspace, detail: path)
+        let url: URL
+        switch resolved {
+        case .inside(let inside):
+            url = inside
+        case .outside:
+            // 列目录越界也是越界（§3.26）：先出单，批了才列。
+            guard let tool = registry.definition(for: .listDirectory) else {
+                return .refused(.unregistered, detail: AgentToolLevel.readOnly.rawValue)
+            }
+            let target = absoluteURL(for: path)
+            guard let fingerprint, granted.contains(fingerprint) else {
+                return outsideApproval(tool: tool, url: target, payload: path)
+            }
+            url = target
         }
 
         var isDirectory: ObjCBool = false
@@ -295,9 +344,13 @@ public struct AgentWorkspaceTools: Sendable {
             return .refused(.unregistered, detail: AgentToolLevel.writable.rawValue)
         }
         let resolved = AgentWorkspaceSandbox.resolve(path, in: root)
-        guard case .inside(let url) = resolved else {
-            if case .outside(let detail) = resolved { return .refused(.outsideWorkspace, detail: detail) }
-            return .refused(.outsideWorkspace, detail: path)
+        let url: URL
+        switch resolved {
+        case .inside(let inside):
+            url = inside
+        case .outside:
+            // 越界写 = 出单（§3.26）：批了才落盘，单上写明目标绝对路径。
+            return outsideApproval(tool: tool, url: absoluteURL(for: path), payload: content)
         }
 
         var isDirectory: ObjCBool = false
@@ -329,8 +382,12 @@ public struct AgentWorkspaceTools: Sendable {
         guard request.fingerprint == fingerprint, granted.contains(fingerprint) else {
             return .refused(.approvalRequired, detail: request.fingerprint)
         }
-        guard case .inside(let url) = AgentWorkspaceSandbox.resolve(path, in: root) else {
-            return .refused(.outsideWorkspace, detail: path)
+        // 走到这里**指纹已经核过**（下一行的 guard 在前面）：越界写也放行 —— 那正是这张单批的东西。
+        let url: URL
+        if case .inside(let inside) = AgentWorkspaceSandbox.resolve(path, in: root) {
+            url = inside
+        } else {
+            url = absoluteURL(for: path)
         }
         // **租约**（`FR-AI-31` ①）：同一个文件同时只许一个人写。拿不到就立刻如实说，**不排队、不覆盖**。
         guard let lease = writes.acquire(path: url.path) else {
@@ -378,8 +435,14 @@ public struct AgentWorkspaceTools: Sendable {
         guard let tool = tool ?? registry.definition(for: .editFile) else {
             return .refused(.unregistered, detail: AgentToolLevel.writable.rawValue)
         }
-        guard case .inside(let url) = AgentWorkspaceSandbox.resolve(path, in: root) else {
-            return .refused(.outsideWorkspace, detail: path)
+        let url: URL
+        switch AgentWorkspaceSandbox.resolve(path, in: root) {
+        case .inside(let inside):
+            url = inside
+        case .outside:
+            // 越界改 = 出单（§3.26）：单上写目标绝对路径与要改的两行，批了才动。
+            return outsideApproval(tool: tool, url: absoluteURL(for: path),
+                                   payload: "− " + oldString + "\n+ " + newString)
         }
         guard let before = try? String(contentsOf: url, encoding: .utf8) else {
             return .refused(.unreadable, detail: url.lastPathComponent)
@@ -407,8 +470,12 @@ public struct AgentWorkspaceTools: Sendable {
         guard request.fingerprint == fingerprint, granted.contains(fingerprint) else {
             return .refused(.approvalRequired, detail: request.fingerprint)
         }
-        guard case .inside(let url) = AgentWorkspaceSandbox.resolve(path, in: root) else {
-            return .refused(.outsideWorkspace, detail: path)
+        // 走到这里**指纹已经核过**（下一行的 guard 在前面）：越界写也放行 —— 那正是这张单批的东西。
+        let url: URL
+        if case .inside(let inside) = AgentWorkspaceSandbox.resolve(path, in: root) {
+            url = inside
+        } else {
+            url = absoluteURL(for: path)
         }
         // **租约**（`FR-AI-31` ①）：与整篇重写共用同一本账 —— 两种写落在同一个文件上也要串行化。
         guard let lease = writes.acquire(path: url.path) else {
@@ -455,13 +522,16 @@ public struct AgentWorkspaceTools: Sendable {
         case .refused(let code, let detail):
             return .refused(code, detail: detail)
         case .allowed(let executable, let arguments):
+            // 越界参数**不再直接拒**（§3.26）：整条命令本来就要审批，人在单上看得见 `cd /etc` 这种
+            // 目标。这里只把越界目标标在单子上，让「批的是什么」不用猜。
+            var payload = command
             if let refusal = policy.argumentsStayInsideWorkspace(arguments, root: root) {
-                return .refused(refusal, detail: arguments.joined(separator: " "))
+                payload += "\n（越界：\(refusal.rawValue)）"
             }
             let material = "\(tool.name)|\(executable)|\(arguments.joined(separator: " "))"
             return .needsApproval(AgentApprovalRequest(toolName: tool.name,
                                                       fingerprint: AgentFingerprint.hash(material),
-                                                      payload: command))
+                                                      payload: payload))
         }
     }
 

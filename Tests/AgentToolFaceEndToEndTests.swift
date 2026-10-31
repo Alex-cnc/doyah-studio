@@ -69,10 +69,14 @@ final class AgentToolFaceEndToEndTests: XCTestCase {
         XCTAssertLessThan(file.text.utf8.count, file.totalBytes)
     }
 
-    func testReadFileRefusesEscapeAndMissingFile() {
-        if case .refused(let why, _) = tools.readFile(path: "../外面.txt") {
-            XCTAssertEqual(why, .outsideWorkspace)
-        } else { XCTFail("越界必须拒") }
+    func testReadFileEscapeGoesThroughApprovalAndMissingFileIsHonest() {
+        // 越界读：先出单；没批不读；批了才读到（详设 §3.26）
+        guard case .needsApproval(let request) = tools.readFile(path: "../外面.txt") else {
+            return XCTFail("越界读应当出单")
+        }
+        if case .needsApproval = tools.readFile(path: "../外面.txt", fingerprint: request.fingerprint, granted: []) {
+            // 没批 ⇒ 仍是同一张单（不出新单、也不读）
+        } else { XCTFail("没批就该继续等批") }
 
         if case .refused(let why, _) = tools.readFile(path: "没有这个文件.txt") {
             XCTAssertEqual(why, .notFound)
@@ -130,11 +134,13 @@ final class AgentToolFaceEndToEndTests: XCTestCase {
         XCTAssertEqual(onDisk, "写进去的内容\n", "落盘内容必须与批准的内容一致")
     }
 
-    func testWriteRefusesOutsideWorkspace() {
+    /// 越界写：**出单**（详设 §3.26），单上标明越界目标；不是直接拒。
+    func testWriteOutsideWorkspaceGoesThroughApproval() {
         let prepared = tools.prepareWrite(path: "../溜出去.txt", content: "x")
-        if case .refused(let why, _) = prepared {
-            XCTAssertEqual(why, .outsideWorkspace)
-        } else { XCTFail("越界写必须拒：\(prepared)") }
+        guard case .needsApproval(let request) = prepared else {
+            return XCTFail("越界写应当出单：\(prepared)")
+        }
+        XCTAssertTrue(request.payload.contains("越界"), "单上必须写明越界")
     }
 
     // MARK: - edit_file

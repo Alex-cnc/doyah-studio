@@ -95,10 +95,34 @@ final class AgentToolApprovalTests: XCTestCase {
         XCTAssertEqual(try XCTUnwrap(bytes(of: "target.txt")), Data("改过的\n".utf8))
     }
 
-    func testWriteOutsideWorkspaceIsRefusedEvenWithApproval() {
-        if case .refused(let code, _) = tools.prepareWrite(path: "../escape.txt", content: "x") {
-            XCTAssertEqual(code, .outsideWorkspace)
-        } else { XCTFail("工作区外连审批单都不该建") }
+    /// 越界写：**不再硬拒**，出一张单（详设 §3.26）；没批之前盘上零改动，批了才落。
+    func testWriteOutsideWorkspaceGoesThroughApprovalAndOnlyThenLands() {
+        let target = root.deletingLastPathComponent().appendingPathComponent("escape-越界.txt")
+        try? FileManager.default.removeItem(at: target)
+
+        guard case .needsApproval(let request) = tools.prepareWrite(path: target.path, content: "x") else {
+            return XCTFail("越界写应当出单，而不是直接拒")
+        }
+        XCTAssertTrue(request.payload.contains("越界"), "单上必须写明这是越界")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: target.path), "**没批之前一个字节都不许动**")
+
+        // 没批 ⇒ 写不动
+        guard case .refused(let code, _) = tools.writeFile(path: target.path, content: "x",
+                                                          fingerprint: request.fingerprint,
+                                                          granted: []) else {
+            return XCTFail("没批就该拒")
+        }
+        XCTAssertEqual(code, AgentToolRefusal.approvalRequired)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: target.path))
+
+        // 批了 ⇒ 落到工作区外那个路径上
+        guard case .wrote = tools.writeFile(path: target.path, content: "x",
+                                            fingerprint: request.fingerprint,
+                                            granted: [request.fingerprint]) else {
+            return XCTFail("批了就该写")
+        }
+        XCTAssertEqual(try? String(contentsOf: target, encoding: .utf8), "x")
+        try? FileManager.default.removeItem(at: target)
     }
 
     /// 伤害性命令的拒因**先于**白名单判定（`FR-AI-34`：有害就是有害，与策略无关）——
@@ -154,13 +178,17 @@ final class AgentToolApprovalTests: XCTestCase {
                        "工作目录沙箱 = 工作区根")
     }
 
-    /// 参数里带路径 ⇒ 必须落在工作区内（否则等于绕开沙箱）。
-    func testArgumentsThatPointOutsideTheWorkspaceAreRefused() {
+    /// 参数里带工作区外的路径：**不再硬拒**，而是出单并在单上标出「越界」（详设 §3.26）。
+    /// 整条命令本来就要审批，所以这里的判据是「单上有越界标记」，而不是「被拒」。
+    func testArgumentsThatPointOutsideTheWorkspaceAreMarkedOnTheApproval() {
         for command in ["cat /etc/passwd", "head -n 5 ../../etc/hosts", "grep x /tmp/elsewhere.txt"] {
-            if case .refused(let code, _) = tools.prepareCommand(command) {
-                XCTAssertEqual(code, .outsideWorkspace, "\(command) 的参数跑出工作区了")
-            } else {
-                XCTFail("\(command) 不该通过")
+            switch tools.prepareCommand(command) {
+            case .needsApproval(let request):
+                XCTAssertTrue(request.payload.contains("越界"), "\(command) 的单上必须标出越界")
+            case .refused(let code, _):
+                XCTFail("\(command) 不该被硬拒（\(code.rawValue)）—— 越界要走审批")
+            default:
+                XCTFail("\(command) 应当出单")
             }
         }
         // 反向：工作区内的相对路径照样能用

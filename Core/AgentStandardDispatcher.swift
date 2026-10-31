@@ -107,11 +107,20 @@ public struct AgentStandardDispatcher: AgentToolDispatcher {
         switch definition.capability {
         case .readFile:
             guard let workspace else { return .refused(.unavailable, detail: definition.capability.rawValue) }
-            return workspace.readFile(path: arguments["path"] ?? "")
+            let path = arguments["path"] ?? ""
+            // 工作区内直接读；越界会回一张单（§3.26）—— 批了就带指纹再读一次。
+            let read = workspace.readFile(path: path)
+            guard case .needsApproval(let request) = read else { return read }
+            guard approvals.contains(request.fingerprint) else { return read }
+            return workspace.readFile(path: path, fingerprint: request.fingerprint, granted: approvals)
 
         case .listDirectory:
             guard let workspace else { return .refused(.unavailable, detail: definition.capability.rawValue) }
-            return workspace.listDirectory(path: arguments["path"] ?? ".")
+            let path = arguments["path"] ?? "."
+            let listing = workspace.listDirectory(path: path)
+            guard case .needsApproval(let request) = listing else { return listing }
+            guard approvals.contains(request.fingerprint) else { return listing }
+            return workspace.listDirectory(path: path, fingerprint: request.fingerprint, granted: approvals)
 
         case .search:
             guard let workspace else { return .refused(.unavailable, detail: definition.capability.rawValue) }
