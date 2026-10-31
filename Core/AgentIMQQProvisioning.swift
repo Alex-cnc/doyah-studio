@@ -468,6 +468,13 @@ public enum AgentIMQQHandshake {
     private static func dispatch(_ object: [String: Any], receivedAt: Date) -> AgentIMInboundFrame? {
         guard let event = object["t"] as? String,
               let data = object["d"] as? [String: Any] else { return .unknown(op: "dispatch") }
+        // **READY 要留 session_id**：断线后 Resume 靠它。以前这一帧被当成 `unknown` 丢掉了。
+        if event == "READY" {
+            if let sessionID = data["session_id"] as? String, !sessionID.isEmpty {
+                return .ready(sessionID: sessionID)
+            }
+            return .unknown(op: "READY")
+        }
         guard let text = (data["content"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines),
               let messageID = data["id"] as? String else {
             return .unknown(op: event)

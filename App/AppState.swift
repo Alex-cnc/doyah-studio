@@ -3521,7 +3521,13 @@ final class AppState: ObservableObject {
                 AgentIMQQHandshake.heartbeatFrame(sequence: sequence)
             },
             sequence: { text in AgentIMQQHandshake.sequence(of: text) },
-            decode: { text, at in AgentIMQQHandshake.decode(text, receivedAt: at) })
+            decode: { text, at in AgentIMQQHandshake.decode(text, receivedAt: at) },
+            // 断线恢复：带 session id 与最后 seq 发 `op=6`，网关把断线期间的 event 补回来。
+            resume: { [weak self] sessionID, sequence in
+                guard let self else { return nil }
+                let token = (try? await self.fetchAgentIMQQToken()) ?? fallbackToken
+                return AgentIMQQHandshake.resumeFrame(token: token, sessionID: sessionID, sequence: sequence)
+            })
     }
 
     /// 建连：配置齐才动手；缺什么 / 取不到 token 都**当场说出来**，不静默失败。
@@ -3562,9 +3568,11 @@ final class AppState: ObservableObject {
             } catch let problem as AgentIMQQProvisionProblem {
                 self.agentIMProbeLine = AgentIMQQProvisionText.line(for: problem, language: self.agentIMLanguage)
                 self.agentIMConnectionState = .stopped(reason: "connectFailed")
+                StartupLog.write("IM 建连失败（取 token / 地址那一档）：\(self.agentIMProbeLine)")
             } catch {
                 self.agentIMProbeLine = L(.agentIMTestOpenFailed)
                 self.agentIMConnectionState = .stopped(reason: "connectFailed")
+                StartupLog.write("IM 建连失败（其它）：\(error)")
             }
         }
     }
@@ -3577,7 +3585,8 @@ final class AppState: ObservableObject {
             config: AgentIMTransportConfig(gatewayURL: provisioning.gateway.url),
             signer: AgentIMGatewaySigner(appID: agentIMAppID, secret: secret),
             makeSocket: AgentIMSocketFactories.webSocket(),
-            handshake: usesRelay ? nil : makeAgentIMQQHandshake(fallbackToken: provisioning.token))
+            handshake: usesRelay ? nil : makeAgentIMQQHandshake(fallbackToken: provisioning.token),
+            log: { line in StartupLog.write(line) })
         agentIMTransport = transport
         // 结果队列**在 start() 之前**接上：连上那一刻的补发走的就是这条真路
         // （连完再接 = 断线期间攒下的结论要等下一次重连才出去）。
@@ -3588,6 +3597,9 @@ final class AppState: ObservableObject {
                 Task { @MainActor in
                     guard let self else { return }
                     self.agentIMConnectionState = state
+                    // **状态要留痕**：2026-10-31 主人报「QQ 发消息没回应」，而日志里只有一句
+                    // 「IM 启动：自动连接」——连没连上、断在哪一档，全看不出来。
+                    StartupLog.write("IM 状态：\(state)")
                     // 连上就把官方那条路的未投递结论补发一遍（传输层只补 WebSocket 那一路）。
                     if state.isOnline { await self.flushAgentIMOutboundQueue() }
                 }

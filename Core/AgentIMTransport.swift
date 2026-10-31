@@ -85,17 +85,22 @@ public struct AgentIMGatewayHandshake: Sendable {
     public var sequence: @Sendable (String) -> Int?
     /// 帧的解析（官方口径）。
     public var decode: @Sendable (String, Date) -> AgentIMInboundFrame?
+    /// 断线恢复（官方 `op=6`）：给 session id 与最后的 seq，网关补发断线期间的事件。
+    /// nil = 这条通道不会恢复（自建中继），重连一律重新 Identify。
+    public var resume: (@Sendable (String, Int) async -> String?)?
 
     public init(authorizationHeaders: @escaping @Sendable () async -> [String: String],
                 identify: @escaping @Sendable () async -> String?,
                 heartbeat: @escaping @Sendable (Int?) async -> String,
                 sequence: @escaping @Sendable (String) -> Int?,
-                decode: @escaping @Sendable (String, Date) -> AgentIMInboundFrame?) {
+                decode: @escaping @Sendable (String, Date) -> AgentIMInboundFrame?,
+                resume: (@Sendable (String, Int) async -> String?)? = nil) {
         self.authorizationHeaders = authorizationHeaders
         self.identify = identify
         self.heartbeat = heartbeat
         self.sequence = sequence
         self.decode = decode
+        self.resume = resume
     }
 }
 
@@ -133,6 +138,8 @@ public struct AgentIMGatewaySigner: Sendable {
 public enum AgentIMInboundFrame: Equatable, Sendable {
     case message(AgentIMInboundMessage)
     case pong
+    /// 网关握手完成（官方 `op=0 / t=READY`）：带着 `session_id`，断线后靠它 **Resume** 而不是重开新会话。
+    case ready(sessionID: String)
     case unknown(op: String)
 
     /// 宽松解析：认 `op=message`（要 `platformMessageID` / `chatID` / `senderID` / `text`）
@@ -181,6 +188,12 @@ public actor AgentIMTransport {
     private var socket: (any AgentIMSocket)?
     private var stopped = false
     private var missedHeartbeats = 0
+    /// 网关给的会话 id（`READY` 里来）。**重连靠它 Resume** —— 没有它就只能重开一个会话，
+    /// 断线那几百毫秒里人发来的消息网关不会补，等于永久丢（2026-10-31 实测：15:39 那条就这样没了）。
+    private var sessionID: String?
+    /// 留痕口：Core 不依赖 App 的 `StartupLog`，由宿主构造时注入（`let`，actor 内只读）。
+    private let log: (@Sendable (String) -> Void)?
+
     /// 这一轮是不是被心跳判死的（决定重连原因写 `heartbeatLost` 还是 `receiveFailed`）。
     private var lostHeartbeat = false
     private var resultQueue: AgentIMResultQueue?
@@ -202,7 +215,9 @@ public actor AgentIMTransport {
                 sleep: @escaping @Sendable (TimeInterval) async -> Void = { seconds in
                     try? await Task.sleep(nanoseconds: UInt64(max(0, seconds) * 1_000_000_000))
                 },
-                handshake: AgentIMGatewayHandshake? = nil) {
+                handshake: AgentIMGatewayHandshake? = nil,
+                log: (@Sendable (String) -> Void)? = nil) {
+        self.log = log
         self.config = config
         self.signer = signer
         self.makeSocket = makeSocket
@@ -312,10 +327,19 @@ public actor AgentIMTransport {
 
             do {
                 try await sock.open()
-                // 官方网关：连上**先 Identify**（不发这一帧，后面什么事件都收不到）。
+                // 官方网关：连上先握手。**有会话就 Resume**（断线期间的消息靠它补），
+                // 没会话才 Identify —— 一上来就 Identify = 换新会话，断线那段时间的消息永久丢。
                 if let handshake {
-                    if let identify = await handshake.identify() {
+                    var resumed = false
+                    if let sessionID, let lastSequence, let resume = handshake.resume,
+                       let frame = await resume(sessionID, lastSequence) {
+                        try await sock.send(frame)
+                        resumed = true
+                        log?("IM 断线恢复：Resume session=\(sessionID.prefix(8)) seq=\(lastSequence)")
+                    }
+                    if !resumed, let identify = await handshake.identify() {
                         try await sock.send(identify)
+                        log?("IM 新会话：Identify")
                     }
                 }
             } catch {
@@ -347,8 +371,27 @@ public actor AgentIMTransport {
                     }
                     let decoded = handshake?.decode(frame, nowFn())
                         ?? AgentIMInboundFrame.decode(frame, receivedAt: nowFn())
-                    guard let decoded else { continue }
-                    if case .pong = decoded { missedHeartbeats = 0 }
+                    guard let decoded else {
+                        // **解不出来的帧以前是静默丢弃**：人发了消息、日志一片安静，谁也不知道丢在哪。
+                        log?("IM 丢弃无法解析的帧：\(frame.prefix(120))")
+                        continue
+                    }
+                    switch decoded {
+                    case .pong:
+                        missedHeartbeats = 0
+                    case .ready(let id):
+                        sessionID = id
+                        log?("IM 会话就绪 session=\(id.prefix(8))")
+                    case .unknown(let op) where op == "invalidSession":
+                        // 网关说这个会话作废了 ⇒ 清掉，下一次连接重新 Identify。
+                        sessionID = nil
+                        lastSequence = nil
+                        log?("IM 会话作废（invalidSession），下次重新 Identify")
+                    case .unknown(let op):
+                        log?("IM 未识别事件：\(op)")
+                    default:
+                        break
+                    }
                     if let handler = inboundHandler { await handler(decoded) }
                 } catch {
                     reason = stopped ? "stopped" : (lostHeartbeat ? "heartbeatLost" : "receiveFailed")
