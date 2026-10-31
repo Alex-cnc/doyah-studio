@@ -505,10 +505,15 @@ struct AgentChatView: View {
             Text(isLast ? "└─ ⏺" : "├─ ⏺")
                 .font(Self.transcriptFont)
                 .foregroundStyle(Theme.text(.tertiary))
+            // **调用的那一行走淡蓝**（§5.3.8.4：蓝 = 机器动作）。以前这里是 `Theme.text(.primary)`，
+            // 于是「工具过程」整片是白的，跟助手正文混成一片 —— 主人 2026-10-31：「执行的 tools
+            // 这里还是白色，并不是淡蓝」。跑着的调暗一档表示「还没回来」，结果行仍走中性。
             Text(TranscriptHighlight.apply(highlightNeedle,
                                            to: AttributedString(AgentToolLines.callText(row))))
                 .font(Self.transcriptFont)
-                .foregroundStyle(row.outcome == .running ? Theme.text(.secondary) : Theme.text(.primary))
+                .foregroundStyle(row.outcome == .running
+                                 ? Theme.chat(.command, colorScheme).opacity(0.7)
+                                 : Theme.chat(.command, colorScheme))
                 .textSelection(.enabled)
             // **失败逐条标在自己这一行上**（六态「部分失败」：不许整轮报失败、也不许丢失败条目）。
             // 行内只放**短码**（一行要看得完），整句解释进 `.help`。
