@@ -51,7 +51,11 @@ final class AgentShellSession: @unchecked Sendable {
     private var pending: CheckedContinuation<AgentCommandResult, Never>?
     private var pendingSentinel: String?
     private var pendingEcho = ""
+    /// 本条命令的原文（洗输出时要把它的回显剔掉）。
+    private var pendingCommand = ""
     private var pendingDeadline: DispatchTime?
+    /// 诊断落盘只做一次（每条命令）。
+    private var dumpedDiagnostics = false
 
     init(workingDirectory: String) {
         self.workingDirectory = workingDirectory
@@ -120,13 +124,17 @@ final class AgentShellSession: @unchecked Sendable {
             pending = continuation
             pendingSentinel = echo.sentinel
             pendingEcho = echo.text
+            pendingCommand = command
             buffer = ""
+            dumpedDiagnostics = false
             pendingDeadline = DispatchTime.now() + timeout
             lock.unlock()
 
             // 关回显后，命令本身要自己喂给显示面（否则页签里只剩输出，看不出敲了什么）。
             onOutput?(Data(("❯ " + command + "\n").utf8))
             StartupLog.write("AgentShell 写入命令：\(command.prefix(60))（哨兵 \(echo.sentinel)）")
+            // 先掐断可能悬着的续行 / 未闭合引号，再写这一条（理由见 `AgentShellProtocol.reset`）。
+            session.write(text: AgentShellProtocol.reset)
             session.write(text: echo.text)
 
             // 超时看门狗：到点还没等到哨兵 ⇒ 打断（Ctrl-C）+ 如实回「超时」。
@@ -139,18 +147,17 @@ final class AgentShellSession: @unchecked Sendable {
     // MARK: - 内部
 
     private func script(command: String, sentinel: String) -> (text: String, sentinel: String) {
-        // 命令原样放进去（人写的是什么就是什么）；退出码由紧跟着的一行取。
-        // 结尾那个空行保证：命令本身不以换行结尾时，哨兵行也不会粘在最后一行上。
-        // 三条各以 `\r` 收行（理由同上：只有 CR 才算「回车」）。
-        let text = command + "\r__doyah_ec=$?\rprintf '\n\(sentinel):%d\n' \"$__doyah_ec\"\r"
-        return (text, sentinel + ":")
+        // 拼法与理由见 `AgentShellProtocol`：括号粘贴包住三行、粘贴外一次回车提交。
+        (AgentShellProtocol.script(command: command, sentinel: sentinel), sentinel + ":")
     }
 
     private func ingest(_ data: Data) {
         guard let chunk = String(data: data, encoding: .utf8) else { return }
         lock.lock()
-        if pendingSentinel != nil, buffer.isEmpty {
-            StartupLog.write("AgentShell 收到首批输出 \(chunk.prefix(40).debugDescription)")
+        if pendingSentinel != nil {
+            // 逐块留痕：等不到哨兵时，只有「读到了几块、每块多少字节」能说明是 shell 没执行、
+            // 还是执行了但读循环断了（2026-10-31 这一单就是靠它定位的）。
+            StartupLog.write("AgentShell 读 \(data.count)B：\(chunk.prefix(50).debugDescription)")
         }
         buffer += chunk
         if buffer.count > bufferLimit {
@@ -158,31 +165,33 @@ final class AgentShellSession: @unchecked Sendable {
         }
         let sentinel = pendingSentinel
         let echo = pendingEcho
+        let commandText = pendingCommand
         let continuation = pending
         var result: AgentCommandResult?
-        if let sentinel, let continuation, let range = buffer.range(of: sentinel) {
-            let after = buffer[range.upperBound...]
-            let codeLine = after.prefix { $0 != "\n" }
-            // PTY 的行尾是 `\r\n`：只按 `.whitespaces` 修剪会把 `\r` 留下，
-            // 于是 "0\r" 过不了数字校验、这一条永远判不成完成（2026-10-31 实测：模型一直重试 pwd）。
-            let digits = codeLine.trimmingCharacters(in: .whitespacesAndNewlines)
-            // 只认「哨兵 + 数字退出码」：回显残留、半截输出都不算跑完。
-            guard !digits.isEmpty, digits.allSatisfy({ $0.isNumber }) else {
-                lock.unlock()
-                return
-            }
-            let exitCode = Int32(digits) ?? -1
-            var body = String(buffer[..<range.lowerBound])
+        if let sentinel, pending != nil,
+           let hit = AgentShellProtocol.completion(in: buffer, sentinel: String(sentinel.dropLast())) {
+            StartupLog.write("AgentShell 哨兵命中 exit=\(hit.exitCode)｜缓冲 \(buffer.count)B")
+        } else if pending != nil, buffer.count > 4096, !dumpedDiagnostics {
+            // 等不到哨兵时留一份现场（每条命令只落一次），下次不必再靠猜。
+            dumpedDiagnostics = true
+            try? buffer.write(toFile: "/tmp/doyah-shell-buffer.txt", atomically: true, encoding: .utf8)
+        }
+        if let sentinel, let continuation,
+           let done = AgentShellProtocol.completion(in: buffer, sentinel: String(sentinel.dropLast())) {
+            let exitCode = done.exitCode
+            var body = done.body
             buffer = ""
             pending = nil
             pendingSentinel = nil
             pendingEcho = ""
+            pendingCommand = ""
             pendingDeadline = nil
             lock.unlock()
-            // 回显剔除：PTY 会把写进去的那一整段原样吐回来一遍。
-            body = Self.stripEcho(body, echo: echo)
+            // 回显剔除 + 洗成正文（PTY 会把写进去的脚本用 zle 逐字重绘一遍）。
+            let clean = AgentShellProtocol.cleanOutput(body, echo: echo, command: commandText)
+            StartupLog.write("AgentShell 结果 exit=\(exitCode)｜stdout=" + clean.prefix(120).debugDescription)
             result = AgentCommandResult(exitCode: exitCode,
-                                        standardOutput: Self.stripControl(body),
+                                        standardOutput: clean,
                                         standardError: "")
             continuation.resume(returning: result!)
             return
@@ -200,10 +209,12 @@ final class AgentShellSession: @unchecked Sendable {
         pendingEcho = ""
         pendingDeadline = nil
         lock.unlock()
+        // 诊断用：把整段缓冲落盘，超时后才能看清 shell 到底回了什么（含 zle 重绘的转义序列）。
+        try? body.write(toFile: "/tmp/doyah-shell-timeout.txt", atomically: true, encoding: .utf8)
         StartupLog.write("AgentShell 超时（\(Int(timeout))s），发 Ctrl-C 打断；缓冲尾部＝"
                          + String(buffer.suffix(300)).debugDescription)
         session.write(text: "\u{03}")   // Ctrl-C：把还挂着的命令打断
-        let text = Self.stripControl(Self.stripEcho(body, echo: ""))
+        let text = AgentShellProtocol.cleanOutput(body)
         continuation.resume(returning: AgentCommandResult(
             exitCode: 124, standardOutput: text,
             standardError: "\n[命令超时 \(Int(timeout))s 被终止]"))
@@ -219,52 +230,7 @@ final class AgentShellSession: @unchecked Sendable {
         buffer = ""
         lock.unlock()
         continuation?.resume(returning: AgentCommandResult(
-            exitCode: exitCode, standardOutput: Self.stripControl(body), standardError: note))
+            exitCode: exitCode, standardOutput: AgentShellProtocol.stripControl(body), standardError: note))
     }
 
-    /// 把回显那一段剔掉：优先按整段精确匹配；匹配不上（换行被 PTY 重排过）就按行剔。
-    static func stripEcho(_ body: String, echo: String) -> String {
-        if !echo.isEmpty, let range = body.range(of: echo) {
-            return String(body[range.upperBound...])
-        }
-        let echoed = Set(echo.split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) })
-        let lines = body.split(separator: "\n", omittingEmptySubsequences: false)
-        var dropped = 0
-        var out: [String] = []
-        for line in lines {
-            let trimmed = line.trimmingCharacters(in: .whitespaces)
-            if dropped < 3, echoed.contains(trimmed) || trimmed.hasPrefix("__doyah_ec=$?")
-                || trimmed.hasPrefix("printf '") {
-                dropped += 1
-                continue
-            }
-            out.append(String(line))
-        }
-        return out.joined(separator: "\n")
-    }
-
-    /// 去掉 ANSI 转义与控制字符（提示符配色、`\r`），留下人能读的正文。
-    static func stripControl(_ text: String) -> String {
-        var out = ""
-        var iterator = Array(text)
-        var index = 0
-        while index < iterator.count {
-            let ch = iterator[index]
-            if ch == "\u{1B}" {
-                index += 1
-                if index < iterator.count, iterator[index] == "[" {
-                    index += 1
-                    while index < iterator.count, !(iterator[index].isLetter || iterator[index] == "m") {
-                        index += 1
-                    }
-                }
-                index += 1
-                continue
-            }
-            if ch == "\r" { index += 1; continue }
-            out.append(ch)
-            index += 1
-        }
-        return out.trimmingCharacters(in: CharacterSet(charactersIn: "\n"))
-    }
 }
