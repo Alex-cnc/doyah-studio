@@ -200,7 +200,8 @@ final class AgentShellSession: @unchecked Sendable {
         pendingEcho = ""
         pendingDeadline = nil
         lock.unlock()
-        StartupLog.write("AgentShell 超时（\(Int(timeout))s），发 Ctrl-C 打断")
+        StartupLog.write("AgentShell 超时（\(Int(timeout))s），发 Ctrl-C 打断；缓冲尾部＝"
+                         + String(buffer.suffix(300)).debugDescription)
         session.write(text: "\u{03}")   // Ctrl-C：把还挂着的命令打断
         let text = Self.stripControl(Self.stripEcho(body, echo: ""))
         continuation.resume(returning: AgentCommandResult(

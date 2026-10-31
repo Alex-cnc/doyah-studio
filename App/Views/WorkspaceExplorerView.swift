@@ -469,7 +469,10 @@ struct WorkspaceTreeRow: View {
                     .accessibilityIdentifier("workspace-rename-field-\(entry.relativePath)")
             } else {
                 Text(entry.name)
-                    .font(Theme.font(.body))
+                    // **与 Agent 会话同一支等宽字**（`Theme.font(.mono)`）：那一支是用户选的代码字体，
+                    // 会话里他看惯了。此前这里是 `Theme.font(.body)`（系统比例字 PingFang），
+                    // 13pt 压在壁纸蒙版上显得又细又软，主人 2026-10-31 的原话是「看上去是宋体，不太好看」。
+                    .font(Theme.font(.monoSmall))
                     .foregroundStyle(isSelected ? Theme.text(.primary) : Theme.text(.secondary))
                     .lineLimit(1)
             }
