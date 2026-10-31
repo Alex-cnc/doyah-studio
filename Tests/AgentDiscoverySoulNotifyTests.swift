@@ -157,7 +157,7 @@ final class AgentNotifyChannelTests: XCTestCase {
                                     why: "要读工作区里的 SQL 脚本才能继续",
                                     resumeFrom: "第 3 步：扫脚本")
         XCTAssertTrue(help.isActionable)
-        let text = help.rendered
+        let text = help.rendered(language: .simplifiedChinese)
         XCTAssertTrue(text.contains("需要你授权"))
         XCTAssertTrue(text.contains("原因："))
         XCTAssertTrue(text.contains("从「第 3 步：扫脚本」接着跑"))
@@ -169,8 +169,8 @@ final class AgentNotifyChannelTests: XCTestCase {
     }
 
     func testManualActionKindIsDistinguished() {
-        XCTAssertEqual(AgentHelpRequest.Kind.manualAction.label, "需要你亲手做一步")
-        XCTAssertEqual(AgentHelpRequest.Kind.grant.label, "需要你授权")
-        XCTAssertEqual(AgentHelpRequest.Kind.information.label, "需要你给信息")
+        XCTAssertEqual(AgentHelpRequest.Kind.manualAction.label(language: .simplifiedChinese), "需要你亲手做一步")
+        XCTAssertEqual(AgentHelpRequest.Kind.grant.label(language: .simplifiedChinese), "需要你授权")
+        XCTAssertEqual(AgentHelpRequest.Kind.information.label(language: .simplifiedChinese), "需要你给信息")
     }
 }

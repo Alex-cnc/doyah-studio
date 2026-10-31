@@ -82,7 +82,7 @@ final class AgentNotifyWiringTests: XCTestCase {
         XCTAssertFalse(help.ask.isEmpty)
         XCTAssertFalse(help.why.isEmpty)
         XCTAssertNotNil(help.resumeFrom, "必须说清给完之后从哪接着跑")
-        XCTAssertTrue(help.rendered.contains(help.reasonPrefixForTest), "三行文案要真的拼出来")
+        XCTAssertTrue(help.rendered(language: .simplifiedChinese).contains(help.reasonPrefixForTest), "三行文案要真的拼出来")
     }
 
     /// 缺点端：同一条纪律（这是一类要人去设置里办的事，不是「重试就好」）。
@@ -90,7 +90,7 @@ final class AgentNotifyWiringTests: XCTestCase {
         let help = AgentHelpCatalogue.missingEndpoint()
         XCTAssertTrue(help.isActionable)
         XCTAssertEqual(help.kind, .information)
-        XCTAssertTrue(help.rendered.contains("API Key"))
+        XCTAssertTrue(help.rendered(language: .simplifiedChinese).contains("API Key"))
     }
 
     /// 英文界面下求助卡也不许漏汉字。

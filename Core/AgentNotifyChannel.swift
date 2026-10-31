@@ -174,8 +174,9 @@ public struct AgentHelpRequest: Equatable, Sendable {
         /// 要人亲自动手（界面之外的点击、插设备、登录）。
         case manualAction
 
-        /// 抬头（缺省简体中文；旧调用点与既有判据都走这一格）。
-        public var label: String { label(language: .simplifiedChinese) }
+        // 抬头**只留带语言的那一个**：写死 `.simplifiedChinese` 的「方便入口」本身就是语言透传门禁
+        // 要拦的形状（2026-10-31 判据点名两处）。要中文就显式写 `.simplifiedChinese`，让读者知道
+        // 自己在选语言，而不是被一个默认值悄悄代劳。
 
         public func label(language: AppLanguage) -> String {
             switch self {
@@ -201,8 +202,8 @@ public struct AgentHelpRequest: Equatable, Sendable {
         self.resumeFrom = resumeFrom
     }
 
-    /// 给用户看的整段（三行：要什么 / 为什么 / 给我之后从哪接）。缺省简体中文。
-    public var rendered: String { rendered(language: .simplifiedChinese) }
+    // 「三行整段」只留带语言的那一个入口（`rendered(language:)`）。无语言版是语言透传门禁
+    // 点名的那种形状：要哪种语言，调用点自己写清楚。
 
     /// 「为什么」那一行（求助卡的第二行）。**格式化留在 Core**：界面只拿成品串，
     /// 于是模板与实参永远对得上（`check-format-arguments` 那一族在界面上也就没有第二处出处）。
