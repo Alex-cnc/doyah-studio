@@ -93,6 +93,48 @@ enum Theme {
         Color(nsColor: nsColor(hex: scheme == .dark ? 0xFFC740 : 0x8A5E00))
     }
 
+    /// 对话区「这一句是谁说的 / 这是哪一类内容」的一组色。
+    ///
+    /// 主人 2026-10-31 拍板（先看图，再定稿）：「待我批准用紫色没问题，但是批准是绿色，
+    /// 拒绝应该是红色」。规矩只有一条 —— **一屏最多三种有彩色**：
+    ///   金 = 人（用户）· 蓝 = 机器动作（命令/参数）· 紫 = 等你拍板；
+    /// 其余全中性（助手正文 / 系统提示 / 思考）。成功与失败只出现在徽章与按钮上，从不染正文，
+    /// 这样金黄才显眼，而不是满屏都在喊。
+    ///
+    /// 取值与「哪套主题」解耦是有意的：这表达「谁在说话」，不是「当前什么配色」——
+    /// 三套主题下同一个金、同一个蓝。深/浅两档只是把亮色压暗，色相不动。
+    enum ChatSpeaker: String, CaseIterable, Sendable {
+        /// 用户说的话（行首 `>` 同色）
+        case user
+        /// 助手正文（中性高对比）
+        case assistant
+        /// 命令与参数（`run_command("…")` 那一行）
+        case command
+        /// 系统 / 界面自己的话（notice、时间线事件）
+        case notice
+        /// 思考段（比正文淡一档，字号也小一号）
+        case thinking
+        /// 等待人拍板（卡片描边 + 「待你决定」徽章；**批准/拒绝按钮走绿/红，不用紫**）
+        case pending
+
+        /// 深色下饱和、浅色下压暗（同为金/蓝/紫，只是明度不同）。
+        func hex(dark: Bool) -> UInt32 {
+            switch self {
+            case .user:      return dark ? 0xFFC740 : 0x8A5E00
+            case .assistant: return dark ? 0xE6EDF2 : 0x1B2733
+            case .command:   return dark ? 0x7AB0FA : 0x1C63C4
+            case .notice:    return dark ? 0x8FA3B0 : 0x5B6B78
+            case .thinking:  return dark ? 0x6E8B9A : 0x7A8A96
+            case .pending:   return dark ? 0xA78BFA : 0x5B3FB5
+            }
+        }
+    }
+
+    /// 取「谁在说话」的色。界面里**不写死 hex**：换主题只改这张表。
+    static func chat(_ speaker: ChatSpeaker, _ scheme: ColorScheme) -> Color {
+        Color(nsColor: nsColor(hex: speaker.hex(dark: scheme == .dark)))
+    }
+
     static func status(_ tone: StatusTone) -> Color {
         Color(nsColor: nsColor(tone.color(in: designTheme)))
     }

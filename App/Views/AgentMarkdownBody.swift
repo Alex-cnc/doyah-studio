@@ -30,6 +30,9 @@ struct AgentMarkdownBody: View {
     var font: Font = .system(.callout, design: .monospaced)
     /// 会话内搜索的命中词（`nil` / 空串 = 不染）。
     var highlight: String? = nil
+    /// 正文色（`nil` = 常规主文本色）。助手正文传 `Theme.chat(.assistant, …)`，
+    /// 与用户那句的金黄、命令那句的淡蓝同出一张表（`Theme.ChatSpeaker`）。
+    var tint: Color? = nil
 
     var body: some View {
         switch AgentMarkdownBodyContent.layout(text: text, isStreaming: isStreaming) {
@@ -64,7 +67,7 @@ struct AgentMarkdownBody: View {
     private func raw(_ source: String) -> some View {
         Text(TranscriptHighlight.apply(highlight, to: AttributedString(source)))
             .font(font)
-            .foregroundStyle(Theme.text(.primary))
+            .foregroundStyle(tint ?? Theme.text(.primary))
             .textSelection(.enabled)
             .frame(maxWidth: .infinity, alignment: .leading)
     }

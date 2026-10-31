@@ -324,13 +324,13 @@ struct AgentChatView: View {
             // 用户**自己的字**仍走 `AgentTranscriptText`（原样显示，不改写他的话）；
             // 富文本渲染只针对**模型回复** —— 见下面 `.assistant` 那一支。
             HStack(alignment: .top, spacing: 0) {
-                gutter(">", Theme.chatUser(colorScheme))
+                gutter(">", Theme.chat(.user, colorScheme))
                 // **用户的话走暖金**（主人 2026-10-31：「用户输入的文字和 Agent 返回的文字颜色一样，
                 // 一眼难以区分」——Hermes 那边也是把他的话标成金色）。助手正文仍走常规文本色，
                 // 两种颜色对看，谁说的不用猜。取 `accentWarm` 这条既有令牌：三个主题都有值，
                 // 且它本来就是"文字级暖色"，不必新增令牌（新令牌要连带跑设计棘轮）。
                 AgentTranscriptText(text: message.text, font: Self.transcriptFont, highlight: highlightNeedle)
-                    .foregroundStyle(Theme.chatUser(colorScheme))
+                    .foregroundStyle(Theme.chat(.user, colorScheme))
                 Spacer(minLength: 0)
             }
         case .assistant:
@@ -416,7 +416,7 @@ struct AgentChatView: View {
             } else {
                 Text(TranscriptHighlight.apply(highlightNeedle, to: AttributedString(noticeText(message.text))))
                     .font(Self.transcriptFont)
-                    .foregroundStyle(Theme.text(.secondary))
+                    .foregroundStyle(Theme.chat(.notice, colorScheme))
             }
         }
     }
@@ -629,7 +629,7 @@ struct AgentChatView: View {
         HStack(alignment: .top, spacing: 0) {
             // 卡片行首栏用「要人动手」的告警字形（§5.3.8.1 ②：`⚠`），其余候补用 `▼`。
             gutter(pendingApproval(card) ? "⚠" : "▼",
-                   pendingApproval(card) ? Theme.accentColor : Theme.text(.secondary))
+                   pendingApproval(card) ? Theme.chat(.pending, colorScheme) : Theme.text(.secondary))
             toolCardBody(card)
         }
     }
@@ -700,10 +700,14 @@ struct AgentChatView: View {
             }
             if case .pendingApproval = card.outcome {
                 HStack(spacing: Spacing.s) {
-                    Text(L(.agentChatApprovalPending)).font(Self.transcriptFont).foregroundStyle(Theme.text(.secondary))
-                    ToolbarIconButton(systemName: "checkmark.circle", help: L(.agentChatApprovalApprove)) { model.approve(card.id) }
+                    Text(L(.agentChatApprovalPending)).font(Self.transcriptFont).foregroundStyle(Theme.chat(.pending, colorScheme))
+                    ToolbarIconButton(systemName: "checkmark.circle",
+                                      help: L(.agentChatApprovalApprove),
+                                      tint: Theme.status(.success)) { model.approve(card.id) }
                         .controlSize(.small)
-                    ToolbarIconButton(systemName: "xmark.circle", help: L(.agentChatApprovalDeny)) { model.deny(card.id) }
+                    ToolbarIconButton(systemName: "xmark.circle",
+                                      help: L(.agentChatApprovalDeny),
+                                      tint: Theme.status(.danger)) { model.deny(card.id) }
                         .controlSize(.small)
                 }
             }
@@ -765,7 +769,9 @@ struct AgentChatView: View {
         case .running: return Theme.accentColor
         case .executed, .applied, .approved: return Theme.status(.success)
         case .denied: return Theme.status(.danger)
-        case .pendingApproval: return Theme.status(.warning)
+        // 待批用紫（与用户的金黄拉开）：紫只标「这件事在等你」，
+        // 真按下去的两个动作才走语义色 —— 批准绿、拒绝红。
+        case .pendingApproval: return Theme.chat(.pending, colorScheme)
         case .undone: return Theme.text(.secondary)
         }
     }
@@ -1487,15 +1493,15 @@ struct AgentChatView: View {
            let thinking = message.thinking,
            !thinking.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             HStack(alignment: .top, spacing: 0) {
-                gutter("·", Theme.text(.tertiary))
+                gutter("·", Theme.chat(.thinking, colorScheme))
                 VStack(alignment: .leading, spacing: Spacing.hair) {
                     Text(L(.agentChatThinkingTitle))
                         .font(Self.transcriptFont)
-                        .foregroundStyle(Theme.text(.tertiary))
+                        .foregroundStyle(Theme.chat(.thinking, colorScheme))
                     AgentTranscriptText(text: thinking,
                                         font: Self.transcriptFont,
                                         highlight: highlightNeedle)
-                        .foregroundStyle(Theme.text(.secondary))
+                        .foregroundStyle(Theme.chat(.thinking, colorScheme).opacity(0.92))
                 }
                 Spacer(minLength: 0)
             }
@@ -1518,7 +1524,8 @@ struct AgentChatView: View {
                     text: split.head,
                     isStreaming: false,
                     font: Self.transcriptFont,
-                    highlight: highlightNeedle
+                    highlight: highlightNeedle,
+                    tint: Theme.chat(.assistant, colorScheme)
                 )
                 // 折叠处：`…` + 展开入口（契约⑥「折叠处有 `…` 且可展开」）。
                 //
@@ -1537,7 +1544,8 @@ struct AgentChatView: View {
                     text: split.tail,
                     isStreaming: false,
                     font: Self.transcriptFont,
-                    highlight: highlightNeedle
+                    highlight: highlightNeedle,
+                    tint: Theme.chat(.assistant, colorScheme)
                 )
             }
         } else {
@@ -1545,7 +1553,8 @@ struct AgentChatView: View {
                 text: message.text,
                 isStreaming: message.isStreaming,
                 font: Self.transcriptFont,
-                highlight: highlightNeedle
+                highlight: highlightNeedle,
+                tint: Theme.chat(.assistant, colorScheme)
             )
         }
     }

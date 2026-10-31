@@ -38,11 +38,13 @@ struct ToolbarIcon: View {
     /// 不写文字、不加标签）。与「悬停底」两回事：悬停是鼠标位置、选中是真状态 ——
     /// `ActivityBarView` 里那一对（强调条 + 极淡底）分的也是这两层，这里量的是同一件事。
     var isSelected: Bool = false
+    /// 指定色（少数「语义动作」用：批准 = 绿、拒绝 = 红）。不给就按默认灰/选中强调。
+    var tint: Color? = nil
 
     var body: some View {
         Image(systemName: systemName)
             .font(.system(size: Metrics.toolbarIconSize, weight: .semibold))
-            .foregroundStyle(isSelected ? Theme.accentColor : Theme.text(.secondary))
+            .foregroundStyle(tint ?? (isSelected ? Theme.accentColor : Theme.text(.secondary)))
             .frame(width: Metrics.toolbarButtonWidth, height: Metrics.toolbarButtonHeight)
             .background(
                 RoundedRectangle(cornerRadius: Radius.control, style: .continuous)
@@ -72,11 +74,13 @@ struct ToolbarIconButton: View {
     var role: ButtonRole? = nil
     /// 选中态高亮（透传给 `ToolbarIcon`；默认不选中 —— 既有调用点一个都不动）。
     var isSelected: Bool = false
+    /// 语义动作的指定色（批准 = 绿 / 拒绝 = 红）；默认 nil = 既有观感。
+    var tint: Color? = nil
     let action: () -> Void
 
     var body: some View {
         Button(role: role, action: action) {
-            ToolbarIcon(systemName: systemName, isSelected: isSelected)
+            ToolbarIcon(systemName: systemName, isSelected: isSelected, tint: tint)
         }
         .buttonStyle(.plain)
         .help(help)
