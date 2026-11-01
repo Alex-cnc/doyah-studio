@@ -106,29 +106,29 @@ tasks:
     done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-IO-003 | grep -q '✅'"
     layer: "常用增强"
     prio: "中"
-    status: todo
-    evidence: ""
+    status: done
+    evidence: ".agent/evidence/2026-11-01-B4.md"
   - id: FR-STD-DB-IO-004
     goal: "备份文件恢复到指定库（pg_restore 的 --clean / --sectio"
     done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-IO-004 | grep -q '✅'"
     layer: "进阶可选"
     prio: "低"
-    status: todo
-    evidence: ""
+    status: done
+    evidence: ".agent/evidence/2026-11-01-B4.md"
   - id: FR-STD-DB-IO-006
     goal: "CSV / JSON 导入：COPY … FROM STDIN 流式导入 + 列映射"
     done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-IO-006 | grep -q '✅'"
     layer: "进阶可选"
     prio: "低"
-    status: todo
-    evidence: ""
+    status: done
+    evidence: ".agent/evidence/2026-11-01-B4.md"
   - id: FR-STD-DB-IO-007
     goal: "Excel（.xlsx）导入映射向导"
     done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-IO-007 | grep -q '✅'"
     layer: "进阶可选"
     prio: "低"
-    status: todo
-    evidence: ""
+    status: done
+    evidence: ".agent/evidence/2026-11-01-B4.md"
   - id: FR-STD-DB-DATA-002
     goal: "表行数统计与条件过滤入口：一键 count(*)"
     done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-DATA-002 | grep -q '✅'"

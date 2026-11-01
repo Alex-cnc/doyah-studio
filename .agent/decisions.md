@@ -19,3 +19,6 @@
 - 2026-11-01 B2 批次：`AgentApprovalDecisionProbeTests` 与源锚点里「审批单里要有 `AgentApprovalDecisionRow(`」改成反向钉（审批单**不许**自己构造那一行）—— 该钉子钉的是上一片之前那个旧形状，保留它等于保留一条永远判红的判据；产出者的锚点仍在 `AgentApprovalDecisionRow.swift` 那块。
 - 2026-11-01 B3 批次：`FR-STD-DB-META-002` 判 `blocked` 而不是 ✅ —— 本机没有 GBase 8a 实例，端到端 0 次；层级映射只有假服务的 5 例单测。拿 MySQL 假服务器（`Scripts/mysql-stub`）冒充 GBase 8a 端到端属于「判据由被判方提供」（红线 #3），宁可留 🟡 并写 next_try。
 - 2026-11-01 B3 批次：`FR-STD-DB-META-011` / `015` 的「界面那一跳」用**真 AppState + 真集群读页签文本**判（`MetadataDeliveryProbeTests`），不加探针专用旁路 —— 理由：这两行缺的正是「点下去之后页签里究竟是什么」，`performTreeAction` / `searchObjects` / `browseSearchHit` 本身就是生产入口，多包一层只会让判据离开产品那条线。
+- 2026-11-01 B4 批次：备份 / 导入四条长期挂在「界面点击待人工点验」的真因不是没人点，而是 `BackupExecutor()` 与 `ensureService()` 都写在方法体里 ⇒ 探针没处注入。选择**开两处生产注入缝**（`AppState.backupRunner` / `AppState.importServiceOverride`，生产默认仍是真进程 / 真连接）而不是把探针写成「另调 Core」—— 后者判不到「点了执行之后到底发了几条命令」。
+- 2026-11-01 B4 批次：`FR-STD-DB-IO-003` 判 ✅ 同时**如实登记 217 那一面为「未知」**（本轮 192.168.5.217:5432 连接超时）—— 本机 16.2 完整往返（备份 → 删表 → 恢复 → 行数 500 + 抽样）已经真跑过，217 只是环境不可达，不把「没连上」写成「没这个能力」，也不把它算进 ✅ 的覆盖。
+- 2026-11-01 B4 批次：探针进程里先 `setenv("DOYAH_EGRESS_LOG_DIR", <本仓 .build/ui-probe-egress>)` 再构造 `AppState` —— `EgressLog.shared` 是懒单例，谁先碰它谁定位置，而本类按字母序排在 `MarkdownPreviewProbeTests` 前面；不先指好，那条「shared 必须与默认构造解到同一个文件」的对照判据会假红（实测撞到过一次）。

@@ -2,19 +2,11 @@
 #
 # 唯一事实源 = Docs/Doyah产品开发计划任务清单-macOS.md（活书台账）。
 # 本文件只决定「一跳做哪几条」，不许反向改台账。
-# 生成于 2026-11-01，源 = plan.yaml 里 18 条 status: todo（已收口 17 条：RES-006, RES-007, RES-008, RES-009, RES-011, RES-013, RES-014, META-002, META-006, META-007, META-008, META-011, META-015, IO-002, TASK-001, TASK-002, TASK-003）
+# 生成于 2026-11-01，源 = plan.yaml 里 14 条 status: todo（已收口 21 条：RES-006, RES-007, RES-008, RES-009, RES-011, RES-013, RES-014, META-002, META-006, META-007, META-008, META-011, META-015, IO-002, IO-003, IO-004, IO-006, IO-007, TASK-001, TASK-002, TASK-003）
 #
 # 生成命令：python3 Scripts/plan-batches.py --write   （--check 只比对不写盘）
 
 batches:
-
-  - id: B4
-    title: "导入导出：pg_dump/restore / 恢复到指定库 / CSV·JSON 导入 / xlsx 向导"
-    status: todo
-    est_min: 50
-    items: [FR-STD-DB-IO-003, FR-STD-DB-IO-004, FR-STD-DB-IO-006, FR-STD-DB-IO-007]
-    why: "四条共用 IO 执行器与进度回执，命令拼装可一次写完"
-    exit: "4 行两列全 ✅；含一条「命令拼错必判红」反例"
 
   - id: B5
     title: "会话与诊断：会话列表 / 取消终止 / 服务器级对象 / 慢查询 / 统计面板 / DIAG-006"
@@ -40,5 +32,5 @@ batches:
     why: "连接层同一处改：分组是配置结构、SSH 隧道是连接前段、GBase 是协议族复用"
     exit: "3 行两列全 ✅；SSH 隧道允许只落「本机无跳板机」的如实未知"
 
-# 合计 18 条，覆盖 plan.yaml 全部 todo。
-# 粗估 225 分钟 ≈ 3.8 小时（原一格一条的节奏按 20 分钟/条算）。
+# 合计 14 条，覆盖 plan.yaml 全部 todo。
+# 粗估 175 分钟 ≈ 2.9 小时（原一格一条的节奏按 20 分钟/条算）。

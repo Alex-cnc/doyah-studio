@@ -946,6 +946,17 @@ final class AppState: ObservableObject {
     /// 正在执行。
     @Published private(set) var isBackupRunning = false
 
+    /// 备份 / 恢复**起子进程用的执行器**（探针缝）。
+    ///
+    /// 生产 = `FoundationProcessRunner`（真起 `pg_dump` / `pg_restore`）。探针换上假的之后，
+    /// `runBackupPlan` / `runRestoreSections` 走的仍是生产那条路 —— 计划 → argv → 环境变量 →
+    /// 日志逐行 → 退出码判读 —— 只有「谁去执行」换掉了。
+    ///
+    /// 为什么要开这一处：`FR-STD-DB-IO-003` / `-004` 的台账备注长期是「界面点击待人工点验」，
+    /// 而「点了执行到底跑了几条命令、argv 长什么样、失败后有没有说清从哪一段续跑」这些
+    /// **都不是只有人眼能判** —— 卡住的是 `BackupExecutor()` 在方法体里直接 new，探针没处注入。
+    var backupRunner: any ExternalProcessRunner = FoundationProcessRunner()
+
     /// 前置诊断（工具与服务器主版本不兼容时给出「为什么 + 怎么办」）。
     func diagnoseBackupTool(_ plan: BackupPlan, password: String?) async -> String? {
         // 工具版本：跑一次 `--version` 并解析（Core 已有解析器，不重复实现）
@@ -1019,7 +1030,7 @@ final class AppState: ObservableObject {
         isBackupRunning = true
         defer { isBackupRunning = false }
         do {
-            let result = try await BackupExecutor().execute(plan, password: password) { [weak self] line in
+            let result = try await BackupExecutor(runner: backupRunner).execute(plan, password: password) { [weak self] line in
                 Task { @MainActor in self?.backupRestoreLog.append(line) }
             }
             if result.isFailure {
@@ -2973,7 +2984,7 @@ final class AppState: ObservableObject {
             backupRestoreLog.append(L(.backupRestoreSectionStarting, name))
             backupRestoreLog.append(L(.backupRestoreLogCommand, sectionPlan.displayCommand(password: password)))
             do {
-                let result = try await BackupExecutor().execute(sectionPlan, password: password) { [weak self] line in
+                let result = try await BackupExecutor(runner: backupRunner).execute(sectionPlan, password: password) { [weak self] line in
                     Task { @MainActor in self?.backupRestoreLog.append("  " + line) }
                 }
                 if result.isFailure {
@@ -7395,6 +7406,16 @@ final class AppState: ObservableObject {
     @Published var importMessage: String?
     private var importTask: Task<Void, Never>?
 
+    /// 导入往哪儿写（探针缝）：为 `nil` 时按连接真连（生产）；探针放进一个假 `DatabaseService`
+    /// 之后，`startTableImport` 走的仍是生产那条路 —— 安全检查 → 通道选择 → `SET search_path` →
+    /// COPY 负载 / 分批 INSERT → 进度与日志 —— 只有「数据落到哪」换成了假的。
+    ///
+    /// 为什么开这一处：`FR-STD-DB-IO-006` / `-007` 的台账备注是「界面点击待人工点验」，
+    /// 而「点执行之后到底发了哪些语句、负载里每个值有没有串列、NULL 与空串分不分得开」
+    /// 完全可以由探针从**假服务收到的字节**上判（`performTableImport` 原先把服务从私有
+    /// `ensureService` 里取，注不进去）。
+    var importServiceOverride: (any DatabaseService)?
+
     /// 读目标表结构 → 生成列映射。**映射用 Core 的 `TableImport.plan`**，
     /// 界面不自己写一套"名字对上就映射"的规则（那会与 CLI 的映射漂移）。
     func tableImportPlan(
@@ -7524,10 +7545,15 @@ final class AppState: ObservableObject {
         var written = 0
 
         do {
-            let service = try await ensureService(
-                for: configuration,
-                database: queryDatabase(for: configuration)
-            )
+            let service: any DatabaseService
+            if let importServiceOverride {
+                service = importServiceOverride
+            } else {
+                service = try await ensureService(
+                    for: configuration,
+                    database: queryDatabase(for: configuration)
+                )
+            }
 
             if request.mode == .copy {
                 // 驱动的 COPY 自己给表名加引号，表达不了 schema 限定名 ——

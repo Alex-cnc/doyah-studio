@@ -226,7 +226,7 @@ SWIFT="${DEVELOPER_DIR}/Toolchains/XcodeDefault.xctoolchain/usr/bin/swift"
 SCRATCH="${ROOT}/.build"
 CACHE="${ROOT}/.build-cache"
 OUT="${SCRATCH}/ui-interactions"
-FILTER="TerminalInteractionProbeTests|MultiCursorProbeTests|ObjectTreeContextMenuProbeTests|TitleBarSearchClickProbeTests|ResultCopyProbeTests|ResultSortProbeTests|ResultFilterProbeTests|ResultPagingProbeTests|ResultStreamExportProbeTests|ResultXLSXExportProbeTests|ExecutionReceiptPaneProbeTests|SQLTaskMenuProbeTests|TableExportStreamProbeTests|AgentApprovalDecisionProbeTests|ObjectTreeRetryProbeTests"
+FILTER="TerminalInteractionProbeTests|MultiCursorProbeTests|ObjectTreeContextMenuProbeTests|TitleBarSearchClickProbeTests|ResultCopyProbeTests|ResultSortProbeTests|ResultFilterProbeTests|ResultPagingProbeTests|ResultStreamExportProbeTests|ResultXLSXExportProbeTests|ExecutionReceiptPaneProbeTests|SQLTaskMenuProbeTests|TableExportStreamProbeTests|AgentApprovalDecisionProbeTests|ObjectTreeRetryProbeTests|BackupRestoreImportProbeTests"
 while [ $# -gt 0 ]; do
     case "${1}" in
         --filter) FILTER="${2:-}"; shift 2 ;;
@@ -290,9 +290,9 @@ else:
     total, failed, unexpected = max(executed, key=lambda row: int(row[0]))
     if int(failed) or int(unexpected):
         failures.append(f"汇总非零失败：{failed} 失败 / {unexpected} 意外")
-    if int(total) < 76:
+    if int(total) < 85:
         failures.append(
-            f"只跑了 {total} 条 —— 十三批七十六条（鼠标上报 / DECCKM / 右键归属 / ⌥⌘D 多光标 /"
+            f"只跑了 {total} 条 —— 十四批八十五条（鼠标上报 / DECCKM / 右键归属 / ⌥⌘D 多光标 /"
             " ⌥⌘↑↓ 加光标 / ⌥ 拖拽列选 / 逐行菜单内容 / 菜单作用行 / 菜单确定性与跟随行 /"
             " 点击地图 / 留白点给键盘 / 清空按钮三态 + 回车接线 / 打字后回车交词 / 修前对照 / 整框源锚点 /"
             " 复制四档格式与默认 TSV / 排序三档与 NULL / Shift 次要键 / 筛选条默认在场 /"
@@ -394,6 +394,16 @@ expected = [
     "testNumericAndTextCellsAreTypedTheWayTheResultSays",
     "testEveryRowLandsOnceAndTheSameInputExportsIdenticalBytes",
     "testTheWriterDoesNotPullAThirdPartyXLSXLibrary",
+    # 第十四批（B4 批次 · FR-STD-DB-IO-003 / 004 / 006 / 007）：备份 · 逐段恢复 · 导入
+    "testDumpRunsExactlyOneCommandWithTheArgvThePanelPreviewed",
+    "testDumpFailureSurfacesExitCodeAndTailInsteadOfSayingDone",
+    "testSectionedRestoreWalksAllThreeSectionsAgainstTheChosenDatabase",
+    "testSectionedRestoreStopsAtTheFailingSectionAndOffersTheResumeCommand",
+    "testCSVImportSendsEveryValueToTheRightColumnOverCopy",
+    "testImportFallsBackToBatchedInsertAndReportsEveryRow",
+    "testXLSXWizardReadsARealWorkbookAndImportsEveryCell",
+    "testReadOnlyConnectionRefusesTheImportBeforeAnythingIsSent",
+    "testBackupAndImportStayOnOneProductionPath",
     # 第十二批（B1 批次第四片 · FR-STD-DB-META-006）：失败那一行的「重试」
     "testFailureRowDrawsARealRetryButtonAndClickingItRunsOnce",
     "testCoreJudgementDecidesWhetherTheEntryIsDrawn",
@@ -589,6 +599,12 @@ anchors = {
          "流式导出不再有「服务可注入」的落地口 ⇒ 十二万行那条链只能靠人在保存面板上点一次"),
         ("if format.isBinary {",
          "xlsx 不再走「一次性写完」那条分支 ⇒ 二进制工作簿被塞进逐页写入器（要么报错、要么写出坏文件）"),
+        # 第十四批（B4 批次 · FR-STD-DB-IO-003 / 004 / 006 / 007）：四条链的注入缝 —— 没有它们，
+        # 「点了执行到底跑了几条命令 / 发了几条语句」只能靠人点（那正是四条长期挂 🟡 的真因）。
+        ("var backupRunner: any ExternalProcessRunner",
+         "备份执行器又不可注入 ⇒ 备份 / 逐段恢复只能靠人手点一次"),
+        ("if let importServiceOverride",
+         "导入的服务又不可注入 ⇒ 「值有没有串列」只能靠人点一次"),
     ),
     # 第九批（`FR-STD-DB-TASK-001`）：菜单内容只许有一处判定、铺设只许走 AppKit 那份。
     "App/Views/SQLTaskAppKitMenu.swift": (
@@ -670,7 +686,7 @@ for probe in ("TerminalInteractionProbeTests", "MultiCursorProbeTests", "ObjectT
               "SQLTaskMenuProbeTests", "TableExportStreamProbeTests",
               "AgentApprovalDecisionProbeTests", "ObjectTreeRetryProbeTests",
               "ResultPagingProbeTests", "ResultStreamExportProbeTests",
-              "ResultXLSXExportProbeTests"):
+              "ResultXLSXExportProbeTests", "BackupRestoreImportProbeTests"):
     if not os.path.exists(os.path.join(root, f"TestsUISnapshot/{probe}.swift")):
         failures.append(f"TestsUISnapshot/{probe}.swift 不在盘上")
 

@@ -396,7 +396,7 @@ SANDBOX_MARK="com.doyah.manual-verification-probe"
 #   文件行悬停 2 簇、移开 0 簇、行宽 496 像素两档逐点相同、分组标题未悬停 0 簇 / 悬停 1 簇；
 #   反例三段（`isVisible` 恒真 / 文件行也三枚 / 行按内容收紧）各判红后逐字节还原。
 # `--filter` 传的是**正则**，所以这里用 `|` 连接。
-FILTER="ManualVerificationProbeTests|PaletteWiringProbeTests|AppearanceFontProbeTests|TerminalInterruptProbeTests|TerminalTabsProbeTests|TerminalSubToolbarProbeTests|LargeResultScrollProbeTests|CrossDatabaseBrowseProbeTests|GroupedViewProbeTests|NoteSearchProbeTests|BrowserTabDownloadProbeTests|MySQLFormProbeTests|ObjectTreeRefreshProbeTests|TerminalInteractionProbeTests|MultiCursorProbeTests|ObjectTreeContextMenuProbeTests|MetadataDeliveryProbeTests|NotesEditorSaveProbeTests|SQLLineNumberProbeTests|PerfTypingProbeTests|WorkspaceChromeHeightProbeTests|MarkdownPreviewProbeTests|TitleBarSearchProbeTests|WorkspaceFileRoutingProbeTests|NebulaSkinProbeTests|TitleBarSearchClickProbeTests|FormatMenuWiringProbeTests|NotesLayoutProbeTests|QueryHistoryPaneProbeTests|TodoCalendarEntriesProbeTests|TodoDetailSearchProbeTests|LunarSubtitleProbeTests|NotesEditorFormatProbeTests|RetroHostProbeTests|WorkspaceSessionCursorProbeTests|AccountSyncSheetProbeTests|NotesSearchRevealProbeTests|NotesCrudIconSpacingProbeTests|NotesShelfProbeTests|NotesTitleAreaProbeTests|AgentChatTUILookProbeTests|AutoPairingKeyProbeTests|MarkdownEditingKeyProbeTests|WorkspaceTabStripOverflowProbeTests|EditorSurfaceTokenParityProbeTests|RowActionRevealProbeTests"
+FILTER="ManualVerificationProbeTests|PaletteWiringProbeTests|AppearanceFontProbeTests|TerminalInterruptProbeTests|TerminalTabsProbeTests|TerminalSubToolbarProbeTests|LargeResultScrollProbeTests|CrossDatabaseBrowseProbeTests|GroupedViewProbeTests|NoteSearchProbeTests|BrowserTabDownloadProbeTests|MySQLFormProbeTests|ObjectTreeRefreshProbeTests|TerminalInteractionProbeTests|MultiCursorProbeTests|ObjectTreeContextMenuProbeTests|MetadataDeliveryProbeTests|NotesEditorSaveProbeTests|SQLLineNumberProbeTests|PerfTypingProbeTests|WorkspaceChromeHeightProbeTests|MarkdownPreviewProbeTests|TitleBarSearchProbeTests|WorkspaceFileRoutingProbeTests|NebulaSkinProbeTests|TitleBarSearchClickProbeTests|FormatMenuWiringProbeTests|NotesLayoutProbeTests|QueryHistoryPaneProbeTests|TodoCalendarEntriesProbeTests|TodoDetailSearchProbeTests|LunarSubtitleProbeTests|NotesEditorFormatProbeTests|RetroHostProbeTests|WorkspaceSessionCursorProbeTests|AccountSyncSheetProbeTests|NotesSearchRevealProbeTests|NotesCrudIconSpacingProbeTests|NotesShelfProbeTests|NotesTitleAreaProbeTests|AgentChatTUILookProbeTests|AutoPairingKeyProbeTests|MarkdownEditingKeyProbeTests|WorkspaceTabStripOverflowProbeTests|EditorSurfaceTokenParityProbeTests|RowActionRevealProbeTests|BackupRestoreImportProbeTests"
 while [ $# -gt 0 ]; do
     case "$1" in
         --filter) FILTER="${2:-}"; shift 2 ;;
@@ -1366,6 +1366,8 @@ for relative, needles in anchors.items():
             failures.append("%s 里「%s」不见了：%s" % (relative, needle, why))
 if not os.path.exists(os.path.join(root, "TestsUISnapshot/MySQLFormProbeTests.swift")):
     failures.append("TestsUISnapshot/MySQLFormProbeTests.swift 不在盘上")
+if not os.path.exists(os.path.join(root, "TestsUISnapshot/BackupRestoreImportProbeTests.swift")):
+    failures.append("TestsUISnapshot/BackupRestoreImportProbeTests.swift 不在盘上")
 
 if failures:
     for item in failures:
@@ -1394,3 +1396,9 @@ echo "    ＋ §10 FR-STD-WS-WEB-001 浏览器页签与下载（BrowserTabDownlo
 echo "       盘上两条记录都带页签身份、筛得出来、下拉里恰好那一个 / 下载落在授权目录、同名加 -1）"
 echo "    ＋ §10.7 FR-STD-DB-DRV-010 MySQL 表单联动（MySQLFormProbeTests：换方言 ⇒ 端口当场变 3306、"
 echo "       SSL 清单五项无 Allow、来回都判；连假 MySQL 服务器逐层展开 ⇒ 四层树、无 schema 层、查得到数据）"
+echo "    ＋ §3.4 FR-STD-DB-IO-003 / IO-004 备份与逐段恢复（BackupRestoreImportProbeTests：pg_dump 的 argv 逐字、"
+echo "       密码只走 PGPASSWORD 且日志里是 ***、失败摊出退出码与线索、逐段恢复的目标库与三段依赖顺序、"
+echo "       中途失败停在那一段并给出可粘的续跑命令）"
+echo "    ＋ §3.4 FR-STD-DB-IO-006 / IO-007 导入（同一文件：CSV 走 COPY 时先 SET search_path 再发整段负载、"
+echo "       值逐格不串列且 NULL 与空串分得开；退回批量 INSERT 的批数与行数；xlsx 经产品读取器读出后原样落进 COPY 负载；"
+echo "       只读连接上一条语句都不许发）"

@@ -282,7 +282,10 @@ doyah_test_env_require_port_free() {
         return 0
     fi
     local _doyah_test_holder
-    _doyah_test_holder="$(lsof -nP -iTCP:"${port}" -sTCP:LISTEN 2>/dev/null | awk 'NR > 1 { print $2; exit }')"
+    # `|| true`：端口空着时 `lsof` 退出码是 1，而调用方通常 `set -euo pipefail`
+    # ⇒ 没有它，**「没人占端口」这件好事**会把整个脚本静默杀掉（本轮实测：探针脚本 0 字节输出、
+    # 退出码 1，看着像「探针跑红了」，其实是这一行把脚本带走了）。
+    _doyah_test_holder="$(lsof -nP -iTCP:"${port}" -sTCP:LISTEN 2>/dev/null | awk 'NR > 1 { print $2; exit }' || true)"
     if [ -z "${_doyah_test_holder}" ]; then
         return 0
     fi
