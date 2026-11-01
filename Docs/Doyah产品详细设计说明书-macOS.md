@@ -1030,13 +1030,16 @@
 | 断点复验 `DebugBreakpoints.recheck` | 原行内容还在 ⇒ 不动；只在别处出现**唯一**一处 ⇒ 移到那儿并说「原位置已不存在」；找不到或**多处命中 ⇒ 移除，不猜** | ✅ 已落 |
 | 调试期改文件 `DebugConsistency.warning` | 仅 `running` 时提示「代码与运行体不一致」并列出改动的文件名；`idle` / `terminated` 一律沉默（日常改动不许当噪音） | ✅ 已落 |
 | 不可用不挡编辑 `DebugAvailability` | `canEdit` **恒真**（不做成配置项）；`canStart=false` 时必须给一句人话原因（缺适配器 / 立刻退出带退出码 / 握手超时 / 用户停掉） | ✅ 已落 |
-| stdio 传输 + `initialize` / `launch` / `setBreakpoints` 往返 | 真起适配器，跑最小会话 | ⬜ 下一片 |
-| 单步 / 变量查看 / 断点面板 UI | 界面上真的能停、能单步、能看变量 | ⬜ 下一片 |
+| stdio 传输 + `initialize` / `launch` / `setBreakpoints` 往返（`Core/DAPClient.swift`） | 真起适配器跑最小会话；**读不阻塞写**（`readabilityHandler` 收字节）、**请求必有时限**、失败分四种报（缺适配器 / 启动即退带退出码 / 超时 / 对端关闭） | ✅ 已落 |
+| 单步 / 变量读取（`DAPSession.step` / `.variables`） | `next`/`stepIn`/`stepOut`/`continue` + 栈顶帧变量；**先等事件再算停**（响应回来 ≠ 停下来） | ✅ 已落 |
+| 断点面板 / 调试工具栏 UI | 界面上真的能下断点、单步、看变量 | ⬜ 下一片 |
 
 **为什么不先起进程**：一次 `swift test` 能核的东西先钉死（半包、粘包、断点漂移、噪音提示），
 否则等真接上 lldb-dap 时，才发现「半包被当成格式错误」这类问题会跟协议本身混在一起。
 
-**判据**：`Tests/DAPCoreTests.swift` 13 例（`swift test --filter DAPCoreTests`，实测 0 failures）。
+**判据**：`Tests/DAPCoreTests.swift` 13 例 + `Tests/DAPClientTests.swift` 7 例（假适配器测传输与单步）+ `Tests/DAPSmokeTests.swift` 1 例（**真 lldb-dap 烟测**，需 `DOYAH_DAP_SMOKE=1`）。
+实测：假适配器 7 例 0 failures；真适配器烟测 **1 例 0 failures**（clang 编 C 程序 → 断点停在第 5 行 → 步过后行号变化 → 读到局部变量 `i` / `total`）。
+未设 `DOYAH_DAP_SMOKE` 时该例报 `skipped`（**没条件 ≠ 通过**）。
 反例都写在用例里：多处命中不许猜、没在调试时不许弹「不一致」、调试器不可用时编辑必须仍可用。
 
 
