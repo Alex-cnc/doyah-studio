@@ -99,8 +99,8 @@ tasks:
     done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-IO-002 | grep -q '✅'"
     layer: "常用增强"
     prio: "中"
-    status: todo
-    evidence: ""
+    status: done
+    evidence: ".agent/evidence/2026-11-01-B1-IO-002.md"
   - id: FR-STD-DB-IO-003
     goal: "备份 / 恢复：封装 pg_dump / pg_restore（plain / cu"
     done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-IO-003 | grep -q '✅'"

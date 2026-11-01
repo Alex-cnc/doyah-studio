@@ -2522,7 +2522,11 @@ final class AppState: ObservableObject {
         var writer: ResultStreamWriter?
         do {
             try await fetcher.open()
-            guard let first = try await fetcher.nextPage() else {
+            // 空表要**在写盘之前**认出来：游标的第一页就是「取到 0 行」，
+            // 而 `CursorFetcher.nextPage()` 对空页返回的是**那一页本身**（不是 nil ——
+            // nil 只表示「已经取完」）。早先只判 nil，于是空表会落一个只有表头的文件、
+            // 面板还报「导出成功 0 行」；验收要点 ③ 要的是「表里没有行…没有生成文件」。
+            guard let first = try await fetcher.nextPage(), !first.rows.isEmpty else {
                 await fetcher.close()
                 throw TableExportEmptyTable()
             }
@@ -2691,26 +2695,14 @@ final class AppState: ObservableObject {
         )
         do {
             let service = try await ensureService(for: configuration, database: database)
-            for (index, job) in plan.jobs.enumerated() {
-                let url = directory.appendingPathComponent(job.fileName)
-                do {
-                    let rows = try await streamTable(
-                        job.table,
-                        schema: job.schema,
-                        to: url,
-                        format: format,
-                        dialect: dialect,
-                        service: service
-                    ) { [weak self] rows, _ in
-                        self?.tableExportSummary?.text = L(
-                            .tableExportDatabaseRunning, index + 1, plan.jobs.count, job.label, rows
-                        )
-                    }
-                    ledger.record(.succeeded(table: job.label, rows: rows, path: url.path))
-                } catch {
-                    // 单张失败不打断整批：后面还有表要导，账上记一笔就继续。
-                    ledger.record(.failed(table: job.label, reason: ErrorPresenter.message(for: error)))
-                }
+            ledger = await streamDatabase(
+                plan: plan,
+                directory: directory,
+                format: format,
+                dialect: dialect,
+                service: service
+            ) { index, total, label, rows in
+                self.tableExportSummary?.text = L(.tableExportDatabaseRunning, index, total, label, rows)
             }
         } catch {
             // 连服务都建不起来（连接断了 / 权限不足）：整批一张都导不出来，如实报在对象名上。
@@ -2727,6 +2719,46 @@ final class AppState: ObservableObject {
             phase: anyFailure ? .failed : .done,
             text: text
         )
+    }
+
+    /// 整库导出**逐表落盘那一半**（面板之后），单拎出来是为了它能被探针真跑一遍。
+    ///
+    /// 口径三条，与整表导出**同一处**：取数与写盘都走 `streamTable`；一张失败只记一笔账、
+    /// **不打断**整批；账分成功 / 没成两栏，没成的行数不并进总数。
+    ///
+    /// 名字收窄成一条缝的理由：`exportDatabase` 里那一段只跟「有没有面板」有关，剩下的
+    /// 「按名单逐张导 → 记账」是纯逻辑 —— 不抽出来的话，这一段永远只能靠人点一次来验。
+    ///
+    /// - Parameter onProgress: (第几张, 共几张, 这一张的称呼, 这一张已取行数)。
+    func streamDatabase(
+        plan: TableExport.DatabasePlan,
+        directory: URL,
+        format: ResultExportFormat,
+        dialect: any SQLDialect,
+        service: any DatabaseService,
+        onProgress: (Int, Int, String, Int) -> Void = { _, _, _, _ in }
+    ) async -> TableExport.Ledger {
+        var ledger = TableExport.Ledger()
+        for (index, job) in plan.jobs.enumerated() {
+            let url = directory.appendingPathComponent(job.fileName)
+            do {
+                let rows = try await streamTable(
+                    job.table,
+                    schema: job.schema,
+                    to: url,
+                    format: format,
+                    dialect: dialect,
+                    service: service
+                ) { rows, _ in
+                    onProgress(index + 1, plan.jobs.count, job.label, rows)
+                }
+                ledger.record(.succeeded(table: job.label, rows: rows, path: url.path))
+            } catch {
+                // 单张失败不打断整批：后面还有表要导，账上记一笔就继续。
+                ledger.record(.failed(table: job.label, reason: ErrorPresenter.message(for: error)))
+            }
+        }
+        return ledger
     }
 
     /// 整库导出的名单来源：对象树**一层**子节点；schema 节点再展开一层。

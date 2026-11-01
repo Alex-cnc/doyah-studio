@@ -157,6 +157,22 @@ set -euo pipefail
 # 每一行有自己的捕获器、菜单由这一行现建、目标就是 `row.object`（「不许退回整树一份 + 悬停解析」
 # 那半由两份 Swift 判据的 `XCTAssertFalse` 钉住，不在这里重复）。
 
+# ## 第十批（B1 批次第三片）：`FR-STD-DB-IO-002` 整表 / 整库导出真跑一次落文件
+#
+# `TestsUISnapshot/TableExportStreamProbeTests.swift` 判这一行的**交付面**（台账备注原文是
+# 「差人工点一次」）。本机没有 PG、也不该去碰 217 真库 ⇒ 用**假 `DatabaseService`**：
+# `streamTable` 只依赖 `execute` 这一条缝，假服务按 `BEGIN` / `DECLARE` / `FETCH n` / `CLOSE` /
+# `COMMIT` 逐条应答并记下收到的每条语句。于是量到的是**生产那条路** —— 真 `CursorFetcher` 分页、
+# 真 `ResultStreamWriter` 逐页写盘、真 `TableExport.selectSQL` 拼语句：
+#   ① 2500 行 ⇒ 盘上 2501 行（表头 + 全部行）、FETCH 三趟（1000 · 1000 · 500）、CLOSE 与 COMMIT 各一次；
+#   ② 空表 ⇒ 抛可读错误、**不落文件**（本条在这一片上抓出一个真缺陷：`nextPage()` 对空页返回的是
+#      「那一页」而不是 nil，早先只判 nil ⇒ 空表会落一个只有表头的文件、面板还报「成功 0 行」）；
+#   ③ 取到一半失败 ⇒ 报错、不留半成品、事务回滚（末条 ROLLBACK）；
+#   ④ 整库逐张落文件：成的那张一个文件、空表与断掉的那张记进「没成」、一张没成不打断后面；
+#   ⑤ 源锚点：`streamTable` 恰好两个调用点（整表 / 整库），不许有人另开一条逐行取数的循环。
+# 边界：保存面板 / 选目录面板没点（模态，无人值守不该弹）；不是真数据库（真库那一面见 R-036 的
+# 12 万行 / 27 MB 记录）；内存峰值不做断言。
+
 # ## 第九批（B1 批次第二片）：`FR-STD-DB-TASK-001` 工具栏「任务」菜单
 #
 # `TestsUISnapshot/SQLTaskMenuProbeTests.swift` 判这一行的**交付面**（台账备注原文是
@@ -189,7 +205,7 @@ SWIFT="${DEVELOPER_DIR}/Toolchains/XcodeDefault.xctoolchain/usr/bin/swift"
 SCRATCH="${ROOT}/.build"
 CACHE="${ROOT}/.build-cache"
 OUT="${SCRATCH}/ui-interactions"
-FILTER="TerminalInteractionProbeTests|MultiCursorProbeTests|ObjectTreeContextMenuProbeTests|TitleBarSearchClickProbeTests|ResultCopyProbeTests|ResultSortProbeTests|ResultFilterProbeTests|ExecutionReceiptPaneProbeTests|SQLTaskMenuProbeTests"
+FILTER="TerminalInteractionProbeTests|MultiCursorProbeTests|ObjectTreeContextMenuProbeTests|TitleBarSearchClickProbeTests|ResultCopyProbeTests|ResultSortProbeTests|ResultFilterProbeTests|ExecutionReceiptPaneProbeTests|SQLTaskMenuProbeTests|TableExportStreamProbeTests"
 while [ $# -gt 0 ]; do
     case "${1}" in
         --filter) FILTER="${2:-}"; shift 2 ;;
@@ -253,9 +269,9 @@ else:
     total, failed, unexpected = max(executed, key=lambda row: int(row[0]))
     if int(failed) or int(unexpected):
         failures.append(f"汇总非零失败：{failed} 失败 / {unexpected} 意外")
-    if int(total) < 48:
+    if int(total) < 53:
         failures.append(
-            f"只跑了 {total} 条 —— 九批四十八条（鼠标上报 / DECCKM / 右键归属 / ⌥⌘D 多光标 /"
+            f"只跑了 {total} 条 —— 十批五十三条（鼠标上报 / DECCKM / 右键归属 / ⌥⌘D 多光标 /"
             " ⌥⌘↑↓ 加光标 / ⌥ 拖拽列选 / 逐行菜单内容 / 菜单作用行 / 菜单确定性与跟随行 /"
             " 点击地图 / 留白点给键盘 / 清空按钮三态 + 回车接线 / 打字后回车交词 / 修前对照 / 整框源锚点 /"
             " 复制四档格式与默认 TSV / 排序三档与 NULL / Shift 次要键 / 筛选条默认在场 /"
@@ -263,7 +279,9 @@ else:
             " 回执三枚动作都在且各带各的提示 / 复制整本进剪贴板 / 口令不在剪贴板里 /"
             " 空态给理由不动剪贴板 / 清空后回空态 / 导出字节与结构一致 / 每条回执都画出来 /"
             " 任务菜单每行四段与删除子菜单 / 空册子给理由且保存跟着语句走 / 点载入切语句库连接 /"
-            " 点解绑松开页签 / 点删除盘上少一条 / 工具栏走同一份菜单判定）应当都跑到"
+            " 点解绑松开页签 / 点删除盘上少一条 / 工具栏走同一份菜单判定 /"
+            " 整表导出真落文件与三趟 FETCH / 空表不落文件 / 半途失败不留半成品 /"
+            " 整库逐张落文件且一张没成不打断 / 两条导出入口共用一条取数路）应当都跑到"
         )
 
 expected = [
@@ -319,6 +337,12 @@ expected = [
     "testClickingUnbindReleasesTheTabAndKeepsTheTask",
     "testClickingDeleteRemovesExactlyThatTask",
     "testToolbarUsesTheSameMenuBuilder",
+    # 第十批（B1 批次第三片 · FR-STD-DB-IO-002）：整表 / 整库导出真跑一次落文件
+    "testCursorExportWritesARealFileWithEveryRow",
+    "testEmptyTableThrowsAndLeavesNoFileBehind",
+    "testFailureMidwayLeavesNoPartialFile",
+    "testDatabaseExportWritesOneFilePerTableAndKeepsOneFailureFromStoppingTheRest",
+    "testBothExportEntriesShareOneStreamingPath",
 ]
 for name in expected:
     if name not in log:
@@ -333,7 +357,7 @@ if failures:
     for item in failures:
         print(f"✗ {item}")
     sys.exit(1)
-print(f"✓ {total} 条都真跑过（九批）、都以 passed 收尾、没有跳过")
+print(f"✓ {total} 条都真跑过（十批）、都以 passed 收尾、没有跳过")
 PY
 
 echo
@@ -485,6 +509,13 @@ anchors = {
         ("!tabSQL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty",
          "「保存」不再跟着语句是否空白走 ⇒ 空脚本也能存成一条永远会被拒的定义"),
     ),
+    # 第十批（`FR-STD-DB-IO-002`）：空表要在写盘**之前**认出来、逐表落盘只许一处。
+    "App/AppState.swift": (
+        ("guard let first = try await fetcher.nextPage(), !first.rows.isEmpty else {",
+         "空表又只判 nil ⇒ 会落一个只有表头的文件、面板报「导出成功 0 行」"),
+        ("func streamDatabase(",
+         "整库逐表落盘那一半又被塞回面板闭包里 ⇒ 它只能靠人点一次来验"),
+    ),
     "App/Views/TitleBarSearchField.swift": (
         ("final class TitleBarSearchBoxView: NSView",
          "整框不再是 AppKit 视图 ⇒ 命中测试又会被 SwiftUI 那层接走，可见框里的留白重新点不动（T-20261002-027 二次复测打回后的结构性换法）"),
@@ -511,7 +542,7 @@ for relative, needles in anchors.items():
 for probe in ("TerminalInteractionProbeTests", "MultiCursorProbeTests", "ObjectTreeContextMenuProbeTests",
               "TitleBarSearchClickProbeTests", "ResultCopyProbeTests", "ResultSortProbeTests",
               "ResultFilterProbeTests", "ExecutionReceiptPaneProbeTests",
-              "SQLTaskMenuProbeTests"):
+              "SQLTaskMenuProbeTests", "TableExportStreamProbeTests"):
     if not os.path.exists(os.path.join(root, f"TestsUISnapshot/{probe}.swift")):
         failures.append(f"TestsUISnapshot/{probe}.swift 不在盘上")
 
@@ -525,7 +556,7 @@ PY
 
 echo
 echo "==> 完成：证据日志在 ${OUT}/"
-echo "    本入口判住的十八条："
+echo "    本入口判住的十九条："
 echo "    · §1 FR-STD-WS-TOOL-001 鼠标上报（真 PTY 上的 SGR 报文：右下角点击列行变大、拖动 32、滚轮 64、⌥ 归本机）"
 echo "    · §1 FR-STD-WS-TOOL-001 方向键 DECCKM（?1h 时 ^[OA、复位后 ^[[B）"
 echo "    · §1 FR-STD-WS-TOOL-001 右键菜单（五项齐备且指向产品自己的动作、接管 + ⌥ 时按钮码 10 转发）"
@@ -543,5 +574,6 @@ echo "    · §1 FR-STD-WS-UI-006 修前对照（装饰参与命中测试的那�
 echo "    · §3.4 FR-STD-DB-RES-006 复制为多格式（真视图 + 真菜单 + 真系统剪贴板：四档格式都在菜单里、默认 ⌘C = 带表头 TSV、转义不乱、只复制选中的行、INSERT 指向正在浏览的表、空选中不动剪贴板、不落文件）"
 echo "    · §3.4 FR-STD-DB-RES-008 客户端筛选（真控件点击 + 真字段编辑器打字：条默认在场、加条件不丢行、换列换运算符、逐字打值、大小写开关、多条件 AND、删光条件后入口仍在）"
 echo "    · §3.4 FR-STD-DB-TASK-003 执行回执（真 AppKit 按钮 performClick + 真系统剪贴板：三枚动作都在且各带提示、复制整本新的在前且口令已抹、空态给理由不动剪贴板、清空后回空态、导出字节与结构一致、三条比一条画得多）"
+echo "    · §3.4 FR-STD-DB-IO-002 整表 / 整库导出（假服务应答游标 + 真 streamTable 写盘：2500 行 / 2501 行文件、三趟 FETCH、空表不落文件、半途失败不留残件、整库逐张落文件且一张没成不打断）"
 echo "    · §3.4 FR-STD-DB-TASK-001 工具栏「任务」菜单（真 NSMenu 按行派发：行文案四段、空册子给理由、「保存」跟着语句走、点载入切语句·库·连接并绑上、点解绑松开页签、点删除册子与盘上各少一条、工具栏走同一份判定）"
 echo "    · §3.4 FR-STD-DB-RES-007 客户端排序（真表头点击 + 真 AppKit 跟踪循环：升 → 降 → 取消三档、数值按数值比、NULL 两种方向都留末尾、Shift 加 / 翻 / 删次要键、点空白处不动、排序不改列宽）"
