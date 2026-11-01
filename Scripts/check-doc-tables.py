@@ -91,6 +91,7 @@ from collections import Counter
 
 DEFAULT_TARGETS = [
     "AGENTS.md",
+    "Docs/archive/store-copy-20261101/产品能力说明-Notes与Tuner.md",   # 2026-11-01 合并远端新增：对外产品能力说明（逐句挂依据）
     "Docs/Doyah产品开发计划任务清单-Android.md",
     "Docs/Doyah产品开发计划任务清单-iOS.md",
     "Docs/Doyah产品开发计划任务清单-HarmonyOS.md",
@@ -104,7 +105,7 @@ DEFAULT_TARGETS = [
     "Docs/frozen/Doyah产品需求规格说明书-v1.0-20261025.md",
     "Docs/frozen/Doyah产品概要设计说明书-v1.0-20261025.md",
     "Docs/frozen/Doyah产品详细设计说明书-macOS-v1.0-20261025.md",
-    "Docs/frozen/Doyah产品详细设计说明书-Android-v1.0-20261031.md",
+    "Docs/frozen/Doyah产品详细设计说明书-Android-v1.0-20261101.md",
     "Docs/archive/root-20261026/功能清单（一页纸）.md",
     "Docs/archive/root-20261026/功能清单（管理视图）.md",
     "Docs/Doyah产品需求规格说明书.md",
@@ -813,7 +814,7 @@ SELF_TEST_TRACKED = [
     "Docs/frozen/Doyah产品需求规格说明书-v1.0-20261025.md",
     "Docs/frozen/Doyah产品概要设计说明书-v1.0-20261025.md",
     "Docs/frozen/Doyah产品详细设计说明书-macOS-v1.0-20261025.md",
-    "Docs/frozen/Doyah产品详细设计说明书-Android-v1.0-20261031.md",
+    "Docs/frozen/Doyah产品详细设计说明书-Android-v1.0-20261101.md",
     "Docs/archive/root-20261026/功能清单（一页纸）.md",
     "Docs/archive/root-20261026/功能清单（管理视图）.md",
     "Docs/Doyah产品需求规格说明书.md",
@@ -860,6 +861,7 @@ SELF_TEST_TRACKED = [
     "Docs/proposals/_TEMPLATE.md",
     "Docs/archive/root-20261026/模板-人工测试清单-alpha.md",
     "Docs/archive/root-20261026/人工测试清单-alpha2-macOS.md",
+    "Docs/archive/store-copy-20261101/产品能力说明-Notes与Tuner.md",
 ]
 
 # 2026-10-26：按盘上事实重算（规范合并为一份 + 25 份过程件归档后，口径跟着变）
