@@ -39,6 +39,10 @@
    {
     "script": "Scripts/check-doc-chain.py",
     "reason": "只读普查（四书一单层间引用链 R1–R4），尚未配「必须判红」的负例 ⇒ 按铁律 #14 不许入闸；缺口靠 R2/R4 读数人工看"
+   },
+   {
+    "script": "Scripts/check-book-subset.py",
+    "reason": "自测 3/3（含必红负例）已达标，但实跑 rc=1：Notes 分册 240 个编号里有 227 个全量四书没登记 ⇒ 此刻接进闭环会让整套门禁常红。接闸条件 = 227 条补进全量四书后清零；接入时作为第 19 项，并把 AGENT-SPEC 的「十八项」改「十九项」"
    }
   ],
   "testGlob": "Scripts/test-*.py",
