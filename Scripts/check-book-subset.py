@@ -40,6 +40,9 @@ FASCICLES = [
 ]
 
 ID_RE = re.compile(r"(?:FR|NFR|AC)-[A-Z]{2,4}-[A-Z]{2,8}-[A-Z]{2,8}-\d{3}")
+# 实现级识别的**弱**启发：定义行里出现控件名 / 构建命令 / 数据层实现 ⇒ 更像实现条目而不是产品需求。
+# 只用来分桶提示，不单独判决（可能漏判，故输出里写明「需人核」）。
+IMPL_HINTS = re.compile(r"`[^`]+`|RichEditor|hvigorw|gradle|RDB|SQLite|Kotlin|Compose|Room|MMKV|ViewModel|Coroutines?")
 LEGACY_RE = re.compile(r"\bIR-\d{1,3}\b")
 
 
@@ -54,6 +57,22 @@ def collect(paths: list[pathlib.Path], recursive: bool) -> set[str]:
                 out |= set(ID_RE.findall(f.read_text(encoding="utf-8")))
             except (UnicodeDecodeError, OSError):
                 continue
+    return out
+
+
+def defs_of(directory: pathlib.Path) -> dict[str, str]:
+    """分册里 `| <编号> | … |` 形式的定义行（用于分桶判断，不参与集合比较）。"""
+    out: dict[str, str] = {}
+    for f in directory.rglob("*.md"):
+        if ".git" in f.parts:
+            continue
+        try:
+            for line in f.read_text(encoding="utf-8").split("\n"):
+                m = re.match(r"^\|\s*((?:FR|NFR|AC)-[A-Z]{2,4}-[A-Z]{2,8}-[A-Z]{2,8}-\d{3})\s*\|", line)
+                if m:
+                    out.setdefault(m.group(1), line)
+        except (UnicodeDecodeError, OSError):
+            continue
     return out
 
 
@@ -99,13 +118,30 @@ def run(l0_books: list[pathlib.Path], fascicles: list[tuple[str, pathlib.Path]],
             print(line)
         if gap:
             bad[name] = gap
+            d = defs_of(directory)
+            impl = [i for i in gap if i in d and IMPL_HINTS.search(d[i])]
+            rest = [i for i in gap if i not in impl]
+            if not quiet:
+                print(f"      · 其中定义行含控件/构建/数据层标识（实现级嫌疑）：{len(impl)} 条")
+                print(f"      · 其余（疑似功能级漏登，需人核）：{len(rest)} 条")
 
     if bad:
-        print("\n❌ 分册有、全量无（全量漏登）：")
+        print("\n⚠️ 分册有、全量无 —— 不是同一类问题，分两桶看：")
         for name, gap in bad.items():
-            print(f"  [{name}] {len(gap)} 条：{', '.join(gap[:8])}{' …' if len(gap) > 8 else ''}")
-        total = sum(len(v) for v in bad.values())
-        print(f"\n合计 {total} 条。处理：按功能补进全量四书（能力/需求/概设/详设），再按「只裁剪不增删」重裁分册。")
+            d = defs_of(next(x for n, x in fascicles if n == name))
+            impl = [i for i in gap if i in d and IMPL_HINTS.search(d[i])]
+            rest = [i for i in gap if i not in impl]
+            print(f"  [{name}] 共 {len(gap)} 条")
+            print(f"    ① 实现条目嫌疑 {len(impl)} 条（控件选型 / 构建命令 / 数据层实现）"
+                  f"⇒ **不该进需求层**；它们用了 `FR-/NFR-/AC-` 五段式，才被当成需求，"
+                  f"应改用用例号或契约条款号，或在分册里标成实现条目")
+            if impl:
+                print(f"       {', '.join(impl[:6])}{' …' if len(impl) > 6 else ''}")
+            print(f"    ② 疑似功能级漏登 {len(rest)} 条（含 UI 微条目，如「加粗（B）」—— 粒度是否该上收由人判）")
+            if rest:
+                print(f"       {', '.join(rest[:6])}{' …' if len(rest) > 6 else ''}")
+        print("\n处理顺序：先判 ① 改名归位（机械，不动条文），再逐条判 ② 哪些是全量书该有的产品级需求。")
+        print("⚠️ 覆盖声明：② 的归类靠「定义行是否含控件/构建标识」的弱启发，会漏判 ⇒ 只作分桶提示，判决靠人核。")
         return 1
     print("\n✅ 分册 ⊆ 全量：分册里没有全量四书未登记的编号")
     return 0
