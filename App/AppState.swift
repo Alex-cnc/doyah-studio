@@ -8388,9 +8388,13 @@ final class AppState: ObservableObject {
     private func handleDiskChanges(_ paths: [String]) {
         // 只重列被改目录（不整树重来 —— `refresh()` 会清掉展开状态，见 `reloadDirectories` 注释）
         WorkspaceStore.shared.reloadDirectories(forChangedPaths: paths)
-        let changed = Set(paths)
+        // 路径口径要**先解析符号链接再比**：FSEvents 报的是 realpath（`/var/...` 报成 `/private/var/...`），
+        // 而页签记的是用户打开时那个写法。逐字符串比会漏判 ⇒ 外部改了盘、干净页签不重载，
+        // 看起来正是「外部改动没反映」（2026-11-01 由 `WorkspaceExternalChangeProbeTests` 实测抓出）。
+        let changed = Set(paths.map { URL(fileURLWithPath: $0).resolvingSymlinksInPath().path })
         for index in tabs.indices {
-            guard let url = tabs[index].fileURL, changed.contains(url.path) else { continue }
+            guard let url = tabs[index].fileURL,
+                  changed.contains(url.resolvingSymlinksInPath().path) else { continue }
             reloadTab(at: index, force: false)
         }
     }

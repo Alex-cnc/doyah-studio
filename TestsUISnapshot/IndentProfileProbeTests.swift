@@ -297,13 +297,14 @@ final class IndentProfileProbeTests: XCTestCase {
         XCTAssertEqual(wide.interval / narrow.interval, 4, accuracy: 0.05,
                        "制表位口径没有按宽度换算（\(narrow.interval) → \(wide.interval)）")
 
-        // **屏幕上的格数**：如实读数并如实登记 —— 本轮实测「改了宽度、屏幕上没变」，
-        // 原因与修法方向写在文件头的「发现但未修」里。这里不写成断言：
-        // 那是一条产品缺陷，写进断言会让这条探针长期红；等产品修好之后由下面这两行读数转正。
-        let pinned = try typedTabAdvance(width: 8, pinStyle: true)
-        print("📐 屏幕实测：宽度 2 → tab 占 \(narrow.advance)pt；宽度 8 → 占 \(wide.advance)pt；"
-              + "把制表位显式写进正文段落样式之后（宽度 8）→ 占 \(pinned.advance)pt"
-              + "（差值 = 「口径没到正文上」的证据）")
+        // **屏幕上的格数**：这条原来只打印不判 —— 因为当时实测「改了宽度、屏幕上没变」
+        // （`apply(tokens:)` 每拍着色 `setAttributes` 把段落样式抹掉，硬 tab 退回 AppKit 缺省网格）。
+        // 2026-11-01 修掉之后转成断言：宽度 8 的屏幕占位必须是宽度 2 的 4 倍。
+        print("📐 屏幕实测：宽度 2 → tab 占 \(narrow.advance)pt；宽度 8 → 占 \(wide.advance)pt")
+        XCTAssertGreaterThan(narrow.advance, 0, "宽度 2 的硬 tab 在屏幕上没有宽度")
+        XCTAssertEqual(wide.advance / narrow.advance, 4, accuracy: 0.2,
+                       "改了宽度、屏幕上的格数没跟着变（\(narrow.advance)pt → \(wide.advance)pt）"
+                       + " ⇒ 制表位没到正文上")
     }
 
     // MARK: - ⑤ 「按内容重新判定」不覆盖用户选过的口径

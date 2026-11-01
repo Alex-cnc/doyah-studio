@@ -504,9 +504,11 @@ public enum CodeLanguageRegistry {
                 keywords: [
                     "associatedtype", "class", "deinit", "enum", "extension", "fileprivate", "func", "import",
                     "init", "inout", "internal", "let", "open", "operator", "precedencegroup", "private", "protocol",
-                    "public", "rethrows", "static", "struct", "subscript", "typealias", "var", "break", "case",
+                    // `return` 排在 `rethrows` 前：候选顺序 = 本表顺序，`ret` 的第一个必须是 `return`
+                    // （`CodeCompletion` 的规则 1，2026-11-01 由灰字探针实测 `ret` 给的是 `rethrows`）
+                    "public", "return", "rethrows", "static", "struct", "subscript", "typealias", "var", "break", "case",
                     "catch", "continue", "default", "defer", "do", "else", "fallthrough", "for", "guard", "if", "in",
-                    "repeat", "return", "throw", "switch", "where", "while", "as", "is", "super", "self", "Self",
+                    "repeat", "throw", "switch", "where", "while", "as", "is", "super", "self", "Self",
                     "try", "throws", "async", "await", "actor", "nonisolated", "borrowing", "consuming", "package",
                     "macro", "lazy", "weak", "unowned", "mutating", "nonmutating", "override", "final", "required",
                     "convenience", "dynamic", "indirect", "infix", "prefix", "postfix", "some", "any"

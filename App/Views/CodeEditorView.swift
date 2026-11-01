@@ -888,6 +888,14 @@ final class CodeTextView: NSTextView, UndoScopedEditor {
     /// 硬 tab 在屏幕上占几格（`defaultParagraphStyle` 的制表位按它算）。
     private(set) var indentWidth: Int = IndentProfile.defaultWidth
 
+    /// 这一页制表位用的段落样式。
+    ///
+    /// **为什么必须存一份并写进正文**：`apply(tokens:)` 每拍着色都 `setAttributes` 重置整段属性，
+    /// 只设 `defaultParagraphStyle` 的话段落样式会被当场抹掉 —— 屏幕上硬 tab 恒按 AppKit 缺省网格
+    /// （8 格）排，而状态栏写着「制表符 · 4」，就是「说的和看到的不一致」。
+    /// 2026-11-01 由 `TestsUISnapshot/IndentProfileProbeTests` 量出的真实缺陷（屏上两种口径都是 28.0pt）。
+    private(set) var indentParagraphStyle: NSParagraphStyle?
+
     /// 换上这一页的口径：单位 + 显示宽度。宽度没变就不重排（`applyIndent` 每次 `updateNSView` 都会被调）。
     ///
     /// 为什么显示宽度要跟着走：口径里说「制表符 · 4」，屏幕上却按系统那一档（8 格）展开，
@@ -909,10 +917,16 @@ final class CodeTextView: NSTextView, UndoScopedEditor {
         paragraph.defaultTabInterval = max(1, spaceWidth * CGFloat(indentWidth))
         paragraph.tabStops = []
         defaultParagraphStyle = paragraph
+        indentParagraphStyle = paragraph
         // 打字属性是分开存的一份：只设 `defaultParagraphStyle` 的话，**新打的字**仍按老制表位排。
         var attributes = typingAttributes
         attributes[.paragraphStyle] = paragraph
         typingAttributes = attributes
+        // 已有正文也要带上这一份：光靠 `defaultParagraphStyle` 管不到「重着色时被 setAttributes 重置」那条路。
+        if let storage = textStorage, storage.length > 0 {
+            storage.addAttribute(.paragraphStyle, value: paragraph,
+                                 range: NSRange(location: 0, length: storage.length))
+        }
         // 换宽度要重排：不重排的话旧段落还按上一档排，肉眼看起来「改了没变」。
         if let layoutManager, let textContainer = textContainer {
             layoutManager.invalidateLayout(forCharacterRange: NSRange(location: 0, length: (string as NSString).length),
@@ -930,7 +944,10 @@ final class CodeTextView: NSTextView, UndoScopedEditor {
     /// `Esc`：有灰字就忽略它（并记住"这一条我不要"），没有就交还默认实现。
     override func cancelOperation(_ sender: Any?) {
         if dismissGhost() { return }
-        super.cancelOperation(sender)
+        // 没有灰字可撤时**什么都不做**：`NSResponder` 并不实现 `cancelOperation:`
+        // （它是 `NSStandardKeyBindingResponding` 的可选方法），转给 `super` 会在真机上抛
+        // `unrecognized selector`，AppKit 只打一行 `Exception detected while handling key input` ——
+        // 看起来「按 Esc 没反应」，其实每次按都在抛异常（2026-11-01 由灰字探针实测抓出）。
     }
 
     // MARK: FR-EDIT-48 ⑤ —— 菜单入口（与 ⌘L 共用）
@@ -1243,10 +1260,14 @@ final class CodeTextView: NSTextView, UndoScopedEditor {
         let keywordFont = CodeEditorView.keywordFont
 
         storage.beginEditing()
-        storage.setAttributes(
-            [.font: baseFont, .foregroundColor: Theme.nsColor(TextTone.primary)],
-            range: NSRange(location: 0, length: length)
-        )
+        var base: [NSAttributedString.Key: Any] = [
+            .font: baseFont,
+            .foregroundColor: Theme.nsColor(TextTone.primary)
+        ]
+        // 制表位段落样式必须跟着基底属性一起写回：`setAttributes` 会清掉它，
+        // 抹掉之后屏幕上硬 tab 退回 AppKit 缺省网格（见 `indentParagraphStyle` 的注释）。
+        if let paragraph = indentParagraphStyle { base[.paragraphStyle] = paragraph }
+        storage.setAttributes(base, range: NSRange(location: 0, length: length))
         for token in tokens where token.kind.isHighlighted {
             let range = NSRange(token.range, in: string)
             guard range.location >= 0, range.length > 0, range.location + range.length <= length else { continue }

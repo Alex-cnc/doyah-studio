@@ -14,6 +14,17 @@ final class CodeCompletionTests: XCTestCase {
     }
 
     /// 空前缀返回空：一打开文件就弹一屏候选不是补全。
+    /// `ret` 的第一个候选必须是 `return`（`CodeCompletion` 规则 1 的原话是「永远」）。
+    ///
+    /// 2026-11-01 由灰字探针实测抓出：Swift 关键字表里 `rethrows` 排在 `return` 前面，
+    /// 于是真编辑器里 `ret` 给的灰字是 `rethrows`，按 Tab 接受就写错一个词 ——
+    /// 单测当时没钉这条，因为「表里有哪些词」和「第一个是哪个词」不是一回事。
+    func testPrefixRetPutsReturnFirst() {
+        let suggestions = CodeCompletion.suggestions(prefix: "ret", language: TextLanguage.detect(path: "a.swift"))
+        XCTAssertEqual(suggestions.first?.label, "return",
+                       "ret 的第一个候选不是 return（实测：\(suggestions.map(\.label)))")
+    }
+
     func testEmptyPrefixGivesNothing() {
         XCTAssertTrue(CodeCompletion.suggestions(prefix: "", language: .javascript).isEmpty)
         XCTAssertTrue(CodeCompletion.suggestions(prefix: "   ", language: .javascript).isEmpty)
