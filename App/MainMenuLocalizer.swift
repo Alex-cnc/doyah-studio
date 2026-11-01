@@ -22,6 +22,17 @@ enum MainMenuLocalizer {
 
     @MainActor private static var observing = false
 
+    /// 常驻的「看着菜单栏」定时器（2026-11-01 修）。
+    ///
+    /// **为什么必须常驻，而不是只在几个通知上补一次**：AppKit 会在**任意时刻**把
+    /// `File / Edit / View / Window / Help` 这五个系统菜单的顶层标题按启动语言再本地化一次，
+    /// 而这一次**不发任何通知**（队列 `L-145` 第 141 轮实测：改完 0.3 秒内自己变回英文）。
+    /// 之前的做法是「切换后开几秒补刷窗口 + 若干通知」，窗口一过就没人管了 ——
+    /// 打开一个文档、窗口重新激活之后，菜单栏退回中英混排，直到用户点开它才看起来是对的。
+    /// **用户看到的就是菜单栏上那行字**，所以「点开才修」等于没修。
+    /// 代价：每 0.3 秒比一次 9 个顶层标题的字符串；一致时一次都不写。
+    @MainActor private static var guardTimer: Timer?
+
     /// 「补刷窗口」的截止时刻：语言切换后的头几秒里，**窗口每次刷新都顺手把菜单栏对齐一次**。
     ///
     /// 为什么需要这么密：`setLanguage` 之后 SwiftUI 会重建命令图，那次重建把系统菜单标题恢复成
@@ -235,8 +246,30 @@ enum MainMenuLocalizer {
         // 只改一次的话，它就一直停在英文，直到用户点开某个菜单）。补刷窗口开在启动时刻，
         // 这几秒里的窗口刷新就会把那一笔盖回来。
         healUntil = Date().addingTimeInterval(healWindow)
+        startMenuGuard()
         // 诊断口子：`DOYAH_MENU_DUMP=<文件>` 时把整棵菜单写出来就退出（默认什么都不做）。
         dumpIfRequested()
+    }
+
+    /// 起一个常驻的低频看护：每 0.3 秒比一次顶层标题，被改回启动语言就当场改回来。
+    ///
+    /// 只有「发现不一致」的那一拍才真的写标题（`apply` 里 `retitle` 返回 0 就直接返回），
+    /// 稳态开销是 9 次字符串比较；换来的是**菜单栏上那行字任何时刻都是当前语言**，
+    /// 不再依赖「用户点开菜单」这个动作触发自愈。
+    @MainActor
+    private static func startMenuGuard() {
+        guard guardTimer == nil else { return }
+        let timer = Timer(timeInterval: 0.3, repeats: true) { _ in
+            MainActor.assumeIsolated {
+                guard NSApp.mainMenu != nil else { return }
+                // 直接走同一条 `refresh`：它内部逐项比标题，**一致时一次都不写**
+                // （`retitle` 返回 0 就 return）—— 所以这里不需要另算一份"应该是什么样"。
+                refresh(to: LocalizationManager.shared.language)
+            }
+        }
+        timer.tolerance = 0.1
+        RunLoop.main.add(timer, forMode: .common)
+        guardTimer = timer
     }
 
     /// 按目标语言刷新菜单栏。
