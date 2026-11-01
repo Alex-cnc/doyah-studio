@@ -422,7 +422,7 @@ else
 fi
 # 这一半是门禁自己的证据（L-33；L-41 补例 5；L-89 补例 6）：干净克隆跳过 12 份且 exit 0 /
 # --require-all 判红 / 显式点名判红 / **写坏一行被判红并指名行号** / **带表格却不在清单判红且归档豁免** /
-# 真仓库 70 份受检无跳过（69 份命名 + 1 份通配；
+# 真仓库 74 份受检无跳过（74 份命名 + 0 份通配；
 # **末例核对真仓库逐字节未变**）。
 # **本项里那几处「要看本机台账」的地方在干净克隆 / 并行工作树 / 另一平台上如实报「跳过」**
 # （2026-10-08 · 任务 `t_004a679b` · 口径 = `AGENT-SPEC.md` §9 第 147 条 ④）：`check-doc-tables
@@ -477,7 +477,7 @@ python3 Scripts/check-doc-numbers.py --self-test
 # 判据 `Scripts/check-doc-q-series.py`：A 编号可判且唯一 / B 状态只写词表词 / C 关闭行成对 /
 # D §4 ↔ §6 同源（Q17~Q23 = Studio 号空间）/ E 空跑防护（行数 / 号数 / 对账对数下限）。
 # 该文件与 check-doc-tables 那份同属 `.gitignore` 内的本机台账 ⇒ 不在盘上时**跳过 + 高声提示**，
-# `--require-all` 判红；负例 `--self-test` **9 例** + 末例核对真仓库逐字节未变（例 1 = 前提自检
+# `--require-all` 判红；负例 `--self-test` **8 例** + 末例核对真仓库逐字节未变（例 1 = 前提自检
 # 「干净副本必须绿」且真的解析到输入 —— 队列 L-119）。
 if [ "${REQUIRE_ALL}" = "1" ]; then
   python3 Scripts/check-doc-q-series.py --require-all

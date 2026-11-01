@@ -36,7 +36,7 @@ macOS 主开发机上。原先一律判红 ⇒ **任何干净克隆 / 另一平�
 而红的原因与本侧改动无关**（对侧逐项实测见 `Docs/Doyah产品概要设计说明书.md` §8.5.6-4）。现在：
 
 **这两个数不是「写在这里的自述」**（第 65 轮 L-72 ㈡）：清单口径的两个数 = **被 `.gitignore` 排除的 12 份** /
-**69 份命名 + 1 条通配 = 实跑 70 份**，登记在台账 `Scripts/doc-numbers.json`（`doc-tables-lists` /
+**74 份命名 + 0 条通配 = 实跑 74 份**（通配那只随「当天有没有活的开发记录」变：2026-11-02 主开发机实测 0 份 —— 开发记录已随 10-26 清根进 `Docs/archive/`，故这里写当日实测值）)，登记在台账 `Scripts/doc-numbers.json`（`doc-tables-lists` /
 `doc-tables-files`）；判据 `Scripts/check-doc-numbers.py` 每次**自己算一遍**（导入本模块读清单 +
 `git check-ignore` 实测 + 真跑本脚本）再与本文件 / `Scripts/verify-all.sh` / `AGENT-SPEC.md` 里每一处
 写法对账 —— 本文件里的数字都是**引用**，改口径改台账。
@@ -83,6 +83,7 @@ Markdown 表格」，**实测只覆盖 14 份** —— `AGENT-SPEC.md`（每轮�
 
 from __future__ import annotations
 
+import glob
 import pathlib
 import re
 import subprocess
@@ -170,8 +171,10 @@ DEFAULT_TARGETS = [
 # 否则换一天新开的记录又躲到门禁之外：第 34 轮那处「两行被拼成一行」（前一行被**前缀替换**
 # 劈成两半、后一行粘在后面，多出 2 格）在它里面躺到本轮才被独立探针发现 —— 正是本门禁
 # 要抓的形状。通配匹配 0 份**不判红**（干净克隆 / 另一平台必然 0 份，与「文档被删」区分不开），
-# 但每次运行都会**显式打印匹配份数**（`ℹ️ 本机台账通配：… → 本机 N 份`），
-# 主开发机上打到 0 就是异常信号。
+# 但每次运行都会**显式打印匹配份数**（`ℹ️ 本机台账通配：… → 本机 N 份`）。
+# **2026-11-02 补**：那份开发记录已随 2026-10-26 的清根进 `Docs/archive/root-20261026/`，
+# Docs 根再没有活的 `开发记录-*.md`（主开发机实测 0 份）⇒「主开发机打到 0 就是异常信号」
+# 这句话本版**不再成立**；自检例 4 由「硬钉 1 份」改为「打印的份数 == 盘上实际匹配数」。
 DEFAULT_GLOBS = [
     "Docs/开发记录-*.md",
 ]
@@ -946,7 +949,7 @@ def run_self_test() -> int:
         elif not re.search(r"✅ 表格校验通过（(\d+) 个文件，跳过 12 份）", output):
             failures.append(f"例 1 失败：收尾行没有如实写出跳过数\n{output}")
         elif int(re.search(r"✅ 表格校验通过（(\d+) 个文件，跳过 12 份）", output).group(1)) < 40:
-            # 文件数是随仓库增长的（本片实测 70 份）—— 这里只保「不是空跑」，不再钉死某一个数，
+            # 文件数是随仓库增长的（2026-11-02 实测 74 份）—— 这里只保「不是空跑」，不再钉死某一个数，
             # 否则每加一份文档就要改一次自检（本来就该让它跟着真相走）。
             failures.append(f"例 1 失败：文件数低于空跑下限 40\n{output}")
         elif "ℹ️ 本机台账通配：Docs/开发记录-*.md → 本机 0 份" not in output:
@@ -1122,59 +1125,78 @@ def run_self_test() -> int:
                 )
         cont.unlink()
 
-        # 例 14（㈤(a)）·表体中断：首条数据行行首多一个空格 ⇒ 判红 + 报行号 + 「表体在此中断」
-        # 2026-10-26：索引已离开 `Docs/`（派生件落 `.build/derived/`）⇒ 夹具改用能力书里第一张表。
+        # 例 14（㈤(a)）·表体中断：派生索引首条数据行行首多一个空格 ⇒ 判红 + 报行号 + 「表体在此中断」
+        # 2026-11-02：索引 2026-10-26 迁到 `.build/derived/` 之后，夹具仍锚「能力书里第一张表」——
+        # 而能力书头表现在是**元信息表**（文档编号 / 版本 / 定稿…）⇒ 改的是别人的表，例 14 / 16 因此**假绿**
+        # （实测：表体被打断仍 exit 0、缺格报的是「列数 1 != 表头 2」而不是「格数不足 3」）。改锚派生索引本身。
+        derived_index = clone / ".build" / "derived" / "需求索引.md"
+        if not derived_index.exists():
+            run([], clone)          # 先跑一次，让 `doc_index.path()` 把派生件生成出来
         total += 1
-        idx_copy = clone / "Docs/Doyah产品能力规划说明书.md"
-        original_idx = idx_copy.read_text(encoding="utf-8")
-        idx_lines = original_idx.splitlines()
-        sep_at = next(i for i, line in enumerate(idx_lines)
-                      if line.startswith("|---") or line.startswith("| ---"))
-        header_at = sep_at - 1
-        idx_lines[header_at + 2] = " " + idx_lines[header_at + 2]
-        idx_copy.write_text("\n".join(idx_lines) + "\n", encoding="utf-8")
-        code, output = run([], clone)
-        if code == 0:
-            failures.append(f"例 14 失败：索引表体被行首空格打断仍 exit 0（原单 ㈤(a)）\n{output}")
-        elif "表体在此中断" not in output or f":{header_at + 3}:" not in output:
+        original_idx = None
+        sep_at = -1
+        if not derived_index.exists():
             failures.append(
-                f"例 14 失败：判红了但没有报「表体在此中断」与行号（应为 {header_at + 3}）\n{output}"
+                "例 14 失败：夹具前提不成立 —— 克隆里生成不出派生索引（`.build/derived/需求索引.md`）"
             )
-        idx_copy.write_text(original_idx, encoding="utf-8")
+        else:
+            idx_copy = derived_index
+            original_idx = idx_copy.read_text(encoding="utf-8")
+            idx_lines = original_idx.splitlines()
+            sep_at = next(i for i, line in enumerate(idx_lines)
+                          if re.match(r"^\|\s*:?-{2,}", line.strip()))
+            row_at = sep_at + 1     # 首条数据行
+            idx_lines[row_at] = " " + idx_lines[row_at]
+            idx_copy.write_text("\n".join(idx_lines) + "\n", encoding="utf-8")
+            code, output = run([], clone)
+            if code == 0:
+                failures.append(f"例 14 失败：索引表体被行首空格打断仍 exit 0（原单 ㈤(a)）\n{output}")
+            elif "表体在此中断" not in output or f":{row_at + 1}:" not in output:
+                failures.append(
+                    f"例 14 失败：判红了但没有报「表体在此中断」与行号（应为 {row_at + 1}）\n{output}"
+                )
+            idx_copy.write_text(original_idx, encoding="utf-8")
 
         # 例 15（㈤(b)）·一套切分口径：格内写合法转义（反斜杠 + 竖线）⇒ rc=0（旧版此处判红）
         total += 1
-        idx_lines = original_idx.splitlines()
-        row_at = header_at + 2
-        cells = idx_lines[row_at].split("|")
-        cells[2] = cells[2] + chr(92) + "| 浏览器"
-        idx_lines[row_at] = "|".join(cells)
-        idx_copy.write_text("\n".join(idx_lines) + "\n", encoding="utf-8")
-        code, output = run([], clone)
-        if code != 0:
-            failures.append(
-                f"例 15 失败：格内写合法转义的竖线不该判红（切分要与 split_row 一套口径，原单 ㈤(b)），实际 rc={code}\n{output}"
-            )
-        idx_copy.write_text(original_idx, encoding="utf-8")
+        if original_idx is None:
+            failures.append("例 15 失败：夹具前提不成立（派生索引没生成，见例 14）")
+        else:
+            idx_lines = original_idx.splitlines()
+            row_at = sep_at + 1
+            cells = idx_lines[row_at].split("|")
+            cells[2] = cells[2] + chr(92) + "| 浏览器"
+            idx_lines[row_at] = "|".join(cells)
+            idx_copy.write_text("\n".join(idx_lines) + "\n", encoding="utf-8")
+            code, output = run([], clone)
+            if code != 0:
+                failures.append(
+                    f"例 15 失败：格内写合法转义的竖线不该判红（切分要与 split_row 一套口径，原单 ㈤(b)），实际 rc={code}\n{output}"
+                )
+            idx_copy.write_text(original_idx, encoding="utf-8")
+
         # 例 16（㈥）·取格兜底：索引行缺一格 ⇒ 打印已收集的诊断 + 「格数不足」，不许 IndexError
         total += 1
-        idx_lines = original_idx.splitlines()
-        cells = idx_lines[row_at].split("|")
-        del cells[2]
-        idx_lines[row_at] = "|".join(cells)
-        idx_copy.write_text("\n".join(idx_lines) + "\n", encoding="utf-8")
-        code, output = run([], clone)
-        if code == 0:
-            failures.append(f"例 16 失败：索引行缺一格应判红（原单 ㈥）\n{output}")
-        elif "Traceback" in output or "IndexError" in output:
-            failures.append(
-                f"例 16 失败：缺一格时崩了（IndexError / traceback）—— 已收集的诊断全丢\n{output}"
-            )
-        elif "格数不足 3" not in output or "❌ 表格校验失败" not in output:
-            failures.append(
-                f"例 16 失败：判红了但没有报「格数不足 3」/ 没有把人读的失败清单打出来\n{output}"
-            )
-        idx_copy.write_text(original_idx, encoding="utf-8")
+        if original_idx is None:
+            failures.append("例 16 失败：夹具前提不成立（派生索引没生成，见例 14）")
+        else:
+            idx_lines = original_idx.splitlines()
+            cells = idx_lines[sep_at + 1].split("|")
+            del cells[2]
+            idx_lines[sep_at + 1] = "|".join(cells)
+            idx_copy.write_text("\n".join(idx_lines) + "\n", encoding="utf-8")
+            code, output = run([], clone)
+            if code == 0:
+                failures.append(f"例 16 失败：索引行缺一格应判红（原单 ㈥）\n{output}")
+            elif "Traceback" in output or "IndexError" in output:
+                failures.append(
+                    f"例 16 失败：缺一格时崩了（IndexError / traceback）—— 已收集的诊断全丢\n{output}"
+                )
+            elif "格数不足 3" not in output or "❌ 表格校验失败" not in output:
+                failures.append(
+                    f"例 16 失败：判红了但没有报「格数不足 3」/ 没有把人读的失败清单打出来\n{output}"
+                )
+            idx_copy.write_text(original_idx, encoding="utf-8")
 
         # 例 17（㈡）·在场下限：删掉一份 tracked 文档（不在 .gitignore 名单里）⇒ 本件自己判红并点名
         total += 1
@@ -1210,15 +1232,37 @@ def run_self_test() -> int:
                 )
             else:
                 skipped.append(
-                    "例 4（真仓库 69 份命名文档全在、实跑 70 个文件、无跳过行）："
+                    "例 4（真仓库命名文档全在、无跳过行；份数由盘上现算）："
                     f"{len(absent_host_ledgers)} 份本机台账不在盘上（干净克隆 / 并行工作树 / 另一平台）"
                 )
         elif "跳过" in output:
-            failures.append(f"例 4 失败：真仓库 69 份命名文档应全在（不得出现跳过行）\n{output}")
-        elif "ℹ️ 本机台账通配：Docs/开发记录-*.md → 本机 1 份" not in output:
-            failures.append(f"例 4 失败：主开发机上开发记录应为 1 份（通配匹配数异常 ⇒ 文件被删或路径写错）\n{output}")
-        elif "✅ 表格校验通过（70 个文件）" not in output:
-            failures.append(f"例 4 失败：收尾行应为 70 个文件（69 份命名 + 1 份通配）\n{output}")
+            failures.append(f"例 4 失败：真仓库命名文档应全在（不得出现跳过行）\n{output}")
+        else:
+            # 2026-11-02：原先这里硬钉「主开发机 → 1 份」。开发记录在 2026-10-26 的清根里进了
+            # `Docs/archive/root-20261026/`，Docs 根再没有活的 `开发记录-*.md`（本机实测 0 份）——
+            # 硬钉 1 份的例 4 因此长期判红，而门禁自己的口径写的是「通配匹配 0 份**不判红**，
+            # 只显式打印份数」。改成断言**打印出来的份数 == 盘上实际匹配数**（这才是这一例真正
+            # 要防的东西：通配是个哑字符串、打印的数是别处抄来的旧值）。
+            printed = re.search(r"ℹ️ 本机台账通配：Docs/开发记录-\*\.md → 本机 (\d+) 份", output)
+            actual_sites = sorted(glob.glob("Docs/开发记录-*.md"))
+            if printed is None:
+                failures.append(f"例 4 失败：没有打印通配匹配份数（L-41）\n{output}")
+            elif int(printed.group(1)) != len(actual_sites):
+                failures.append(
+                    f"例 4 失败：打印 {printed.group(1)} 份、盘上实际 {len(actual_sites)} 份 "
+                    f"（{actual_sites[:3]}）—— 份数不是现算的\n{output}"
+                )
+            elif "✅ 表格校验通过（" not in output:
+                failures.append(f"例 4 失败：没有收尾的「表格校验通过（N 个文件）」行\n{output}")
+            else:
+                # 收尾行那份数 = 命名清单 + 通配匹配数（当前 74 份命名 + 0 份通配 = 74）
+                counted = re.search(r"✅ 表格校验通过（(\d+) 个文件）", output)
+                named = len(DEFAULT_TARGETS)
+                if counted and int(counted.group(1)) != named + len(actual_sites):
+                    failures.append(
+                        f"例 4 失败：收尾行写 {counted.group(1)} 个文件，"
+                        f"应为 {named} 份命名 + {len(actual_sites)} 份通配 = {named + len(actual_sites)}\n{output}"
+                    )
         if before != after:
             failures.append("例 4 失败：自检动了真仓库的文档（逐字节不一致）")
 
