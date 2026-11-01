@@ -1,185 +1,250 @@
-# 已停用（2026-10-28）：队列唯一来源改为 Docs/Doyah产品开发计划任务清单-macOS端.md
-# 理由：台账才是单一活书；本文件的 T* 队列停在 3632 基线时代，读它会拿旧账当新活。
-# 保留原文仅作历史；循环读 .agent/loop-card.md。
-# 计划队列（唯一事实源）· Doyah Studio macOS 端收口
-
-project: Doyah Studio · macOS 端收口（详设 v1.1 §9.2 待写用例 + §10.1 未实现位点 + §5.3 六态 + 收口出包）
-updated: 2026-10-24T18:20
-baseline:
-  core_tests: 3632          # 真值 = bash Scripts/verify-core.sh → .build/core-test-count.txt
-  verify_all: unknown       # 首次 T4.2 跑后回填 rc
-  build_app: unknown
-
-policy:
-  one_slice_per_tick: true
-  swarm_size: 1             # 一次只认领一项
-  forbid_ask: 除四出口外的提问一律禁止
-
-milestones:
-  - id: M1
-    title: 待写用例补齐（详设 §9.2）
-  - id: M2
-    title: 未实现位点补齐（详设 §10.1 / §6 五码族）
-  - id: M3
-    title: 界面六态点验（§5.3 / UI-5.3-01）
-  - id: M4
-    title: 全量门禁 + 出包 + 文档跟版
-
+# v0.3.0 数据库运维面 · 执行队列（**派生草稿**）
+# 唯一事实源 = Docs/Doyah产品开发计划任务清单-macOS.md（活书台账）。
+# 本文件只做「下一跳」排序，不许反向改台账；台账一改，本文件按 README 里的生成命令重出。
+# 生成于 2026-11-01，源 = 台账中 35 条未闭 DB 行。
 tasks:
-  - id: T0.1
-    goal: 存量红修复 —— `check-core-localization.py` 棘轮 B：`Core/AgentGitFacts.swift:68` 的 `No commits yet on` 写死英文展示文案（非本片引入，HEAD 上已红）
-    done_when: "cd /Users/alex/dev/doyah/lead/studio && python3 Scripts/check-core-localization.py 2>&1 | grep -Eq '✅|全部通过'"
-    est: 0.5h
-    status: done
-    evidence: .agent/evidence/2026-10-24-T0.1.md
-    deps: []
-  - id: T1.1
-    goal: 空 SQL ⇒ 装配层专门错误码（`EXEC_EMPTY_SQL` 从「无专门类型」变「有落点」）+ 用例
-    done_when: "cd /Users/alex/dev/doyah/lead/studio && DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test --filter ExecutionScopeTests 2>&1 | tail -3 | grep -Eq 'with 0 failures' && DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test --filter ExecutionScopeTests 2>&1 | grep -q 'testEmptySQLMapsToEmptySQLError'"
-    est: 1h
-    status: done
-    evidence: .agent/evidence/2026-10-24-T1.1.md
-    commit: pending
-    deps: []
-  - id: T1.2
-    goal: 连接状态机正例 + 反例用例（未连接→连接中→已连接；失败不可直跳已连接）
-    done_when: "cd /Users/alex/dev/doyah/lead/studio && DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test --filter ConnectionStateTests 2>&1 | tail -3 | grep -Eq 'Executed [3-9][0-9]* tests, with 0 failures'"
-    est: 1.5h
-    status: done
-    evidence: .agent/evidence/2026-10-24-M1-M3.md
-    deps: []
-  - id: T1.3
-    goal: 执行中关闭页签 ⇒ 被拒并给理由（装配层用例）
-    done_when: "cd /Users/alex/dev/doyah/lead/studio && DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test --filter CloseTabTests 2>&1 | tail -3 | grep -Eq 'Executed [1-9][0-9]* tests, with 0 failures'"
-    est: 1.5h
-    status: done
-    evidence: .agent/evidence/2026-10-24-M1-M3.md
-    deps: []
-  - id: T1.4
-    goal: 未保存关闭 ⇒ 确认后进快照（装配层用例）
-    done_when: "cd /Users/alex/dev/doyah/lead/studio && DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test --filter UnsavedCloseTests 2>&1 | tail -3 | grep -Eq 'Executed [1-9][0-9]* tests, with 0 failures'"
-    est: 1.5h
-    status: done
-    evidence: .agent/evidence/2026-10-24-M1-M3.md
-    deps: []
-  - id: T2.1
-    goal: 行编辑两码落地：`DATA_NO_PK`（无主键不给行编辑）与 `DATA_WRITE_CONFLICT`（影响 0 行）+ 用例
-    done_when: "cd /Users/alex/dev/doyah/lead/studio && DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test --filter RowEditErrorTests 2>&1 | tail -3 | grep -Eq 'Executed [2-9][0-9]* tests, with 0 failures'"
-    est: 4h
-    status: done
-    evidence: .agent/evidence/2026-10-24-M1-M3.md
-    deps: [T1.2]
-  - id: T2.2
-    goal: 结构脚本预览闸 `DDL_PREVIEW_REQUIRED`（未预览不得执行）+ 用例
-    done_when: "cd /Users/alex/dev/doyah/lead/studio && DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test --filter DDLPreviewGateTests 2>&1 | tail -3 | grep -Eq 'Executed [1-9][0-9]* tests, with 0 failures'"
-    est: 3h
-    status: done
-    evidence: .agent/evidence/2026-10-24-M1-M3.md
-    deps: [T1.2]
-  - id: T2.3
-    goal: 导入导出两码：`IO_TARGET_EXISTS`（目标存在必询问）与 `IO_PARTIAL`（部分失败汇总）+ 用例
-    done_when: "cd /Users/alex/dev/doyah/lead/studio && DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test --filter ImportExportErrorTests 2>&1 | tail -3 | grep -Eq 'Executed [2-9][0-9]* tests, with 0 failures'"
-    est: 4h
-    status: done
-    evidence: .agent/evidence/2026-10-24-M1-M3.md
-    deps: [T1.2]
-  - id: T2.4
-    goal: 会话终止 `SESS_KILL_DENIED`（二次确认 + 权限原话 + 刷新列表）+ 用例
-    done_when: "cd /Users/alex/dev/doyah/lead/studio && DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test --filter SessionKillTests 2>&1 | tail -3 | grep -Eq 'Executed [1-9][0-9]* tests, with 0 failures'"
-    est: 3h
-    status: done
-    evidence: .agent/evidence/2026-10-24-M1-M3.md
-    deps: [T1.2]
-  - id: T2.5
-    goal: 授权能力位 `LIC_NO_CAPABILITY`（缺哪个位、怎么给；禁灰色诱导）+ 用例
-    done_when: "cd /Users/alex/dev/doyah/lead/studio && DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test --filter LicenseCapabilityTests 2>&1 | tail -3 | grep -Eq 'Executed [1-9][0-9]* tests, with 0 failures'"
-    est: 3h
-    status: done
-    evidence: .agent/evidence/2026-10-24-M1-M3.md
-    deps: [T1.2]
-  - id: T3.1
-    goal: 六态落点核对（加载中/空数据/错误/权限不足/提交中/部分失败）—— 缺哪态补哪态，禁渲染项复查
-    done_when: "cd /Users/alex/dev/doyah/lead/studio && DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test --filter SixStateTests 2>&1 | tail -3 | grep -Eq 'Executed [6-9][0-9]* tests, with 0 failures'"
-    est: 3h
-    status: done
-    evidence: .agent/evidence/2026-10-24-M1-M3.md
-    deps: [T2.1, T2.3, T2.4, T2.5]
-  - id: T3.2
-    goal: 六态人工点验（`UI-5.3-01`）—— 真界面上六态各出现一次，禁渲染项不出现
-    done_when: "test -f .agent/evidence/2026-10-24-T3.2-ui-walk.md && grep -c '六态' .agent/evidence/2026-10-24-T3.2-ui-walk.md | grep -Eq '^[6-9]'"
-    est: 1h
-    status: blocked
-    blocked_reason: 需在真界面上把六态各触发一次（加载/空/错误/权限不足/提交中/部分失败）并核对禁渲染项 —— 无桌面交互环境下做不了
-    next_try: 人工点验一轮（约 10 分钟）后按约定写 .agent/evidence/2026-10-24-T3.2-ui-walk.md
-    deps: [T3.1]
-  - id: T5.1
-    goal: 行编辑 guard 接到写回路径（`AppState` 行写回 → `RowWriteGuard`，无主键禁入口、0 行报冲突）
-    done_when: "cd /Users/alex/dev/doyah/lead/studio && grep -q 'RowWriteGuard' App/AppState.swift && DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift build --target DoyahStudioApp 2>&1 | grep -q 'Build complete'"
-    est: 3h
-    status: blocked
-    blocked_reason: 行编辑写回路径在本端**不存在**（不是缺接线）—— AppState 无表格编辑入口、无主键探测；概设 §4.6 已定行为但 macOS 端从未实现 UI
-    next_try: 需先定「macOS 端是否做表格行编辑 UI」；不做则应改概设 §4.6 为「本端表格只读」
-    deps: [T2.1]
-  - id: T5.2
-    goal: DDL 预览闸接到结构脚本执行入口（未预览/预览过期一律拒绝并给 `DDL_PREVIEW_REQUIRED`）
-    done_when: "cd /Users/alex/dev/doyah/lead/studio && grep -q 'DDLPreviewGate' App/AppState.swift && DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift build --target DoyahStudioApp 2>&1 | grep -q 'Build complete'"
-    est: 2h
-    status: done
-    evidence: .agent/evidence/2026-10-24-T5.2.md
-    deps: [T2.2]
-  - id: T5.3
-    goal: 导入导出 guard 接到导出/导入调用点（目标存在必询问、部分失败汇总呈现）
-    done_when: "cd /Users/alex/dev/doyah/lead/studio && grep -q 'ImportExportGuard' App/AppState.swift && DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift build --target DoyahStudioApp 2>&1 | grep -q 'Build complete'"
-    est: 3h
-    status: blocked
-    blocked_reason: 导出走 NSSavePanel（系统级覆盖确认已满足「目标存在必询问」）；**导入功能本端不存在** ⇒ `IO_PARTIAL` 无害主
-    next_try: 若做导入，先建导入入口再挂 ImportExportGuard
-    deps: [T2.3]
-  - id: T5.4
-    goal: 会话终止接 `DatabaseAdmin` + 界面二次确认（拒绝时给服务端原话）
-    done_when: "cd /Users/alex/dev/doyah/lead/studio && grep -q 'SessionKillGuard' App/AppState.swift && DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift build --target DoyahStudioApp 2>&1 | grep -q 'Build complete'"
-    est: 2h
-    status: done
-    evidence: .agent/evidence/2026-10-24-T5.4.md
-    deps: [T2.4]
-  - id: T5.5
-    goal: 授权能力位接到入口判定（缺位不许展示内容/不许灰色诱导，文案点名能力位）
-    done_when: "cd /Users/alex/dev/doyah/lead/studio && grep -q 'CapabilityGate' App/AppState.swift && DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift build --target DoyahStudioApp 2>&1 | grep -q 'Build complete'"
-    est: 2h
-    status: blocked
-    blocked_reason: LicenseCapabilities 已有，但本端无「需能力位」的入口（内嵌浏览器/插件装载/云同步只有文件名无详设章）⇒ 无挂点
-    next_try: 等概设补这三处的行为定义后再挂 CapabilityGate
-    deps: [T2.5]
-  - id: T6.1
-    progress: 2026-10-24 · 已清 5/6：编辑器行号（三本书补锚点）· 网络出口登记（Tests/LLMStreamingAuthTests）· 工程过期（xcodegen）· 三仓副本台账（实测值 + 自测 20/20）· 语言登记/路径归属（本片引入，已修）
-    evidence: .agent/evidence/2026-10-24-T6.1.md
-    remaining: `check-board-parity` —— 判据过期 + 看板数据过期（项数 290 vs 真源 379；Studio 域 15 vs 24；全产品域 73）；需按证据文件 §建议 新写 `Scripts/gen-platform-board.py` 一次重生成
-    finding: board-parity 的根因**不是**文档缺标记，而是**判据过期** —— 状态矩阵 2026-10-20 已从 SRS §10.10 迁到《开发计划书》§5（gen-platform-parity --check ✅ 379 条 / 4 平台列），但 check-board-parity 仍只读 SRS；实测改指 计划书 后域重算全为 None（两份表结构不同：计划书表无 `**域**（N 条…）` 标题行）⇒ 需要先定「判据读哪份、按哪个表形解析」再改，不能只换路径
-    goal: 存量红清零（6 项）—— 文档锚点/标记补齐：编辑器行号口径 3 处（概设/需求书/能力书）· platform-parity 标记（需求书 §10.10）· board-parity · panel-root-frames · terminal-tabs · result-scroll-ledger · agent-provider-presets · markdown-single-source · browser-tab-ownership · tri-repo-parity · release-version（工程过期需 xcodegen）
-    done_when: "cd /Users/alex/dev/doyah/lead/studio && bash Scripts/verify-all.sh --keep-going > /tmp/va3.log 2>&1; grep -cE '^⚠️  第|⛔' /tmp/va3.log | grep -qx 0"
-    est: 6h
+  - id: FR-STD-DB-RES-006
+    goal: "复制为多种格式：复制即带表头，或直接是 Markdown / INSERT 文本（不"
+    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-RES-006 | grep -q '✅'"
+    layer: "常用增强"
+    prio: "中"
     status: todo
-    deps: []
-  - id: T4.1
-    goal: 全量核心门禁（真值计数）+ 五个相关 check 脚本
-    done_when: "cd /Users/alex/dev/doyah/lead/studio && bash Scripts/verify-core.sh 2>&1 | tail -5 | grep -Eq 'with 0 failures' && python3 Scripts/check-core-localization.py >/dev/null && python3 Scripts/check-design-tokens.py >/dev/null"
-    est: 2h
-    status: done
-    evidence: .agent/evidence/2026-10-24-T4.1.md
-    deps: [T1.1, T1.3, T1.4, T3.1, T3.2, T5.1, T5.2, T5.3, T5.4, T5.5]
-  - id: T4.2
-    goal: 全仓门禁 `Scripts/verify-all.sh` 全绿
-    done_when: "cd /Users/alex/dev/doyah/lead/studio && bash Scripts/verify-all.sh > /tmp/verify-all.log 2>&1; echo rc=$?; tail -3 /tmp/verify-all.log | grep -v '❌'"
-    est: 1h
-    status: blocked
-    evidence: .agent/evidence/2026-10-24-T4.2-verify-all.md
-    blocked_reason: 全仓 18 项里 8 项红；其中 **2 项由本片引入已修复**（语言登记面 / 路径归属）；另 6 项为**存量红**，均为文档面缺锚点或工程过期，与 macOS 端代码改动无关
-    next_try: 见 T6.1；存量红清零后重跑 verify-all 应转绿
-    deps: [T4.1]
-  - id: T4.3
-    goal: 出包（`build-app.sh` 打印字节数与 sha256 前缀）+ 详设 §6/§9/§10 状态回写 + 文档四门禁
-    done_when: "cd /Users/alex/dev/doyah/lead/studio && bash Scripts/build-app.sh 2>&1 | tail -3 | grep -Eq 'sha256|bytes' && for s in check-doc-versions check-doc-tables check-doc-numbers check-req-ids; do python3 Scripts/$s.py >/dev/null || exit 1; done"
-    est: 2h
-    status: done
-    evidence: .agent/evidence/2026-10-25-T4.3.md
-    deps: [T4.2]
+    evidence: ""
+  - id: FR-STD-DB-RES-007
+    goal: "客户端排序：点表头按列排序，支持多列（次要排序键）、升降序切换、NULL 位置固定"
+    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-RES-007 | grep -q '✅'"
+    layer: "常用增强"
+    prio: "中"
+    status: todo
+    evidence: ""
+  - id: FR-STD-DB-RES-008
+    goal: "客户端筛选：每列可加条件（包含 / 不包含 / 等于 / 大于 / 小于 / 为空"
+    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-RES-008 | grep -q '✅'"
+    layer: "常用增强"
+    prio: "中"
+    status: todo
+    evidence: ""
+  - id: FR-STD-DB-RES-009
+    goal: "分页控制条：选择每页行数（50 / 100 / 200 / 500 / 1000），"
+    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-RES-009 | grep -q '✅'"
+    layer: "常用增强"
+    prio: "中"
+    status: todo
+    evidence: ""
+  - id: FR-STD-DB-RES-011
+    goal: "结果集分页 / 虚拟滚动超大数据量"
+    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-RES-011 | grep -q '✅'"
+    layer: "常用增强"
+    prio: "中"
+    status: todo
+    evidence: ""
+  - id: FR-STD-DB-RES-013
+    goal: "超大结果集流式落盘：导出直接写文件，不把全量结果驻留内存"
+    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-RES-013 | grep -q '✅'"
+    layer: "进阶可选"
+    prio: "低"
+    status: todo
+    evidence: ""
+  - id: FR-STD-DB-RES-014
+    goal: "结果集导出 Excel（.xlsx）"
+    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-RES-014 | grep -q '✅'"
+    layer: "进阶可选"
+    prio: "低"
+    status: todo
+    evidence: ""
+  - id: FR-STD-DB-META-002
+    goal: "GBase 8a 树形结构：服务器 → Database → Table → Col"
+    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-META-002 | grep -q '✅'"
+    layer: "常用增强"
+    prio: "中"
+    status: todo
+    evidence: ""
+  - id: FR-STD-DB-META-006
+    goal: "对象树必须支持持续下钻：从服务器节点开始，Database → Schema → T"
+    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-META-006 | grep -q '✅'"
+    layer: "基线必备"
+    prio: "高"
+    status: todo
+    evidence: ""
+  - id: FR-STD-DB-META-007
+    goal: "跨数据库浏览：服务器节点展开后列出当前用户可连接的数据库"
+    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-META-007 | grep -q '✅'"
+    layer: "基线必备"
+    prio: "高"
+    status: todo
+    evidence: ""
+  - id: FR-STD-DB-META-008
+    goal: "对象树按类型 / schema 分组视图：可在「层级视图」与「按类型分组」之间切换"
+    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-META-008 | grep -q '✅'"
+    layer: "进阶可选"
+    prio: "低"
+    status: todo
+    evidence: ""
+  - id: FR-STD-DB-META-011
+    goal: "查看对象 DDL：表 / 视图 / 函数节点右键「查看 DDL」，展示等价建对象语句"
+    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-META-011 | grep -q '✅'"
+    layer: "常用增强"
+    prio: "中"
+    status: todo
+    evidence: ""
+  - id: FR-STD-DB-META-015
+    goal: "全库对象搜索：输入名称片段即跨 schema / 跨库匹配表、视图、列、函数，命中结"
+    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-META-015 | grep -q '✅'"
+    layer: "常用增强"
+    prio: "中"
+    status: todo
+    evidence: ""
+  - id: FR-STD-DB-IO-002
+    goal: "客户端侧整表 / 整库导出：走 COPY <表> TO STDOUT 流式写文件"
+    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-IO-002 | grep -q '✅'"
+    layer: "常用增强"
+    prio: "中"
+    status: todo
+    evidence: ""
+  - id: FR-STD-DB-IO-003
+    goal: "备份 / 恢复：封装 pg_dump / pg_restore（plain / cu"
+    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-IO-003 | grep -q '✅'"
+    layer: "常用增强"
+    prio: "中"
+    status: todo
+    evidence: ""
+  - id: FR-STD-DB-IO-004
+    goal: "备份文件恢复到指定库（pg_restore 的 --clean / --sectio"
+    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-IO-004 | grep -q '✅'"
+    layer: "进阶可选"
+    prio: "低"
+    status: todo
+    evidence: ""
+  - id: FR-STD-DB-IO-006
+    goal: "CSV / JSON 导入：COPY … FROM STDIN 流式导入 + 列映射"
+    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-IO-006 | grep -q '✅'"
+    layer: "进阶可选"
+    prio: "低"
+    status: todo
+    evidence: ""
+  - id: FR-STD-DB-IO-007
+    goal: "Excel（.xlsx）导入映射向导"
+    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-IO-007 | grep -q '✅'"
+    layer: "进阶可选"
+    prio: "低"
+    status: todo
+    evidence: ""
+  - id: FR-STD-DB-DATA-002
+    goal: "表行数统计与条件过滤入口：一键 count(*)"
+    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-DATA-002 | grep -q '✅'"
+    layer: "常用增强"
+    prio: "中"
+    status: todo
+    evidence: ""
+  - id: FR-STD-DB-DATA-005
+    goal: "单行详情 / 单元格值编辑器：宽表与长 JSON 竖排查看，JSON 值格式化显示"
+    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-DATA-005 | grep -q '✅'"
+    layer: "进阶可选"
+    prio: "低"
+    status: todo
+    evidence: ""
+  - id: FR-STD-DB-DATA-006
+    goal: "外键引用导航：由单元格 / 行跳转到被引用表并自动带入条件"
+    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-DATA-006 | grep -q '✅'"
+    layer: "进阶可选"
+    prio: "低"
+    status: todo
+    evidence: ""
+  - id: FR-STD-DB-SESS-002
+    goal: "服务器会话列表：展示当前实例的会话（进程号 / 用户 / 数据库 / 客户端地址 /"
+    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-SESS-002 | grep -q '✅'"
+    layer: "常用增强"
+    prio: "中"
+    status: todo
+    evidence: ""
+  - id: FR-STD-DB-SESS-003
+    goal: "取消 / 终止会话：对选中会话执行「取消当前语句」（PG pg_cancel_bac"
+    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-SESS-003 | grep -q '✅'"
+    layer: "常用增强"
+    prio: "中"
+    status: todo
+    evidence: ""
+  - id: FR-STD-DB-SESS-004
+    goal: "服务器级对象管理：数据库 / 角色 / 表空间 / 扩展的浏览与创建（DBA 日常）"
+    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-SESS-004 | grep -q '✅'"
+    layer: "进阶可选"
+    prio: "低"
+    status: todo
+    evidence: ""
+  - id: FR-STD-DB-TASK-001
+    goal: "**一句话 → 一条可执行任务**：任务定义落在连接上（目标库、只读 / 可写、影响行数上限、是否需审批），保存后可复用；定义与实际执行参数不一致时拒绝执行。"
+    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-TASK-001 | grep -q '✅'"
+    layer: "常用增强"
+    prio: "中"
+    status: todo
+    evidence: ""
+  - id: FR-STD-DB-TASK-002
+    goal: "**高危任务执行前逐条列出**：将要执行的语句、目标库、预估影响范围，等人工确认；确认才发送，拒绝即中止并留痕。"
+    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-TASK-002 | grep -q '✅'"
+    layer: "基线必备"
+    prio: "高"
+    status: todo
+    evidence: ""
+  - id: FR-STD-DB-TASK-003
+    goal: "**执行回执**：记录成功 / 失败、影响行数、耗时、错误原文与执行时刻，挂在会话上可作为审计依据；回执不含口令与敏感字面量。"
+    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-TASK-003 | grep -q '✅'"
+    layer: "基线必备"
+    prio: "中"
+    status: todo
+    evidence: ""
+  - id: FR-STD-DB-CONN-012
+    goal: "连接分组 / 文件夹：连接可归入自定义分组，侧边栏按组折叠展示，便于按「项目 / 环"
+    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-CONN-012 | grep -q '✅'"
+    layer: "常用增强"
+    prio: "中"
+    status: todo
+    evidence: ""
+  - id: FR-STD-DB-CONN-020
+    goal: "SSH 隧道：通过 SSH 跳板连接不可直连的数据库（密码 / 私钥两种方式）"
+    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-CONN-020 | grep -q '✅'"
+    layer: "常用增强"
+    prio: "中"
+    status: todo
+    evidence: ""
+  - id: FR-STD-DB-DDL-003
+    goal: "表结构编辑器：可视化增删列、改类型、加索引与约束，并实时对照将要执行的 DDL （v"
+    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-DDL-003 | grep -q '✅'"
+    layer: "常用增强"
+    prio: "中"
+    status: todo
+    evidence: ""
+  - id: FR-STD-DB-DDL-004
+    goal: "Schema 对比与同步：对比两个库 / 两个连接的结构差异并生成同步脚本"
+    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-DDL-004 | grep -q '✅'"
+    layer: "进阶可选"
+    prio: "低"
+    status: todo
+    evidence: ""
+  - id: FR-STD-DB-DIAG-003
+    goal: "慢查询排行：pg_stat_statements 按总耗时 / 平均耗时 / 调用次"
+    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-DIAG-003 | grep -q '✅'"
+    layer: "进阶可选"
+    prio: "低"
+    status: todo
+    evidence: ""
+  - id: FR-STD-DB-DIAG-004
+    goal: "数据库统计面板：表大小、索引命中率、连接数、缓存命中率等 pg_stat_* 指标"
+    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-DIAG-004 | grep -q '✅'"
+    layer: "进阶可选"
+    prio: "低"
+    status: todo
+    evidence: ""
+  - id: FR-STD-DB-DIAG-006
+    goal: "—"
+    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-DIAG-006 | grep -q '✅'"
+    layer: "常用增强"
+    prio: "中"
+    status: todo
+    evidence: ""
+  - id: FR-STD-DB-DRV-009
+    goal: "GBase 8a 驱动实现（复用 MySQL 协议系的协议实现，具体库属平台实现）"
+    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-DRV-009 | grep -q '✅'"
+    layer: "进阶可选"
+    prio: "低（排期最后）"
+    status: todo
+    evidence: ""
