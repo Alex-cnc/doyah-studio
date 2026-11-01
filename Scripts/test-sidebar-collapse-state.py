@@ -175,12 +175,17 @@ def main() -> int:
     )
 
     # 7) 未分组那一段被加了折叠（兜底容器：折起来等于把没归类的连接藏了）
+    #    注入口只钉在 `if section.isUngrouped {` 这一行上，**不再连带下一行** ——
+    #    上一版把「下一行是 `Text(title)`」也写进了夹具前提，B7 把那一行换成
+    #    `groupHeader(title:count:id:)` 之后这条在 `edit()` 里断言崩掉，整套负例
+    #    停在第 7 条（第 8、9 条空跑防护从此一次都没跑过）。分支首行本身才是
+    #    本门禁的判据输入（`UNGROUPED_GUARD`），比它下面调哪个视图构造函数稳定。
     tree = make_tree()
     edit(
         tree,
         VIEW,
-        VIEW_STATE_CHECK + "\n            Text(title)",
-        VIEW_STATE_CHECK + "\n            DisclosureGroup(title) {\n                rows(section)\n            }\n            Text(title)",
+        VIEW_STATE_CHECK,
+        VIEW_STATE_CHECK + "\n            DisclosureGroup(title) {\n                rows(section)\n            }",
     )
     code, output = run(tree)
     record(
@@ -197,6 +202,37 @@ def main() -> int:
         code != 0 and "判据输入缺失" in output,
         "`App/AppState.swift` 不在 ⇒ 判红（空跑不许通过）",
         output.strip()[-300:],
+    )
+
+    # 10) 行号必须指向声明本身，一条声明只报一条（2026-11-02 实测的踩坑形状：`AgentChatView`
+    #     里 `copiedMessageID` 与 `collapsedToolBlocks` 上下相邻，旧的「3 行窗口」把集合名记到了
+    #     上一行的行号上 ⇒ 同一条报两遍、其中一遍点错了位置；照那个行号去改会改到无关代码）
+    tree = make_tree()
+    fixture = tree / "App/Views/AgentChatFixtureView.swift"
+    fixture.write_text(
+        "import SwiftUI\n"
+        "\n"
+        "struct AgentChatFixtureView: View {\n"
+        "    @State private var copiedMessageID: UUID?\n"
+        "    @State private var collapsedToolBlocks: Set<UUID> = []\n"
+        "    @State private var\n"
+        "        foldedBlocks: Set<UUID> = []\n"
+        "}\n",
+        encoding="utf-8",
+    )
+    code, output = run(tree)
+    single_each = (
+        output.count("视图里出现 `@State` 折叠状态 `collapsedToolBlocks`") == 1
+        and output.count("视图里出现 `@State` 折叠状态 `foldedBlocks`") == 1
+    )
+    lines_ok = (
+        "AgentChatFixtureView.swift:5" in output
+        and "AgentChatFixtureView.swift:7" in output
+    )
+    record(
+        code != 0 and single_each and lines_ok and "AgentChatFixtureView.swift:4" not in output,
+        "相邻两条 `@State`：一条声明只报一条、行号指向声明那行（折行的按 `var` 那行）⇒ 判红且不误报",
+        output.strip()[-400:],
     )
 
     # 9) 空跑防护：视图形状变了（`sectionView` 改名 ⇒ 分支解析不到）

@@ -147,16 +147,31 @@ def declaration_window(lines: list[str], needle: str) -> tuple[int, str] | None:
 
 
 def view_local_collections(lines: list[tuple[int, str]]) -> list[tuple[int, str]]:
-    """视图里「`@State` + 集合类型」的声明（允许折行）⇒ `(行号, 属性名)`。"""
+    """视图里「`@State` + 集合类型」的声明（允许折行）⇒ `(行号, 属性名)`。
+
+    行号必须是**声明真正落的那一行**，不是窗口的起始行：2026-11-02 实测本函数把
+    `AgentChatView` 里相邻两条声明报成 `:67`（那是上一行 `copiedMessageID` 的行号）
+    与 `:69`（真行号）—— 同一条声明报两遍、其中一遍点错位置。照那个行号去改，
+    会改到一行无关代码上。改法：折行只向下拼，**遇到下一条 `@State` 就停**
+    （那是另一条声明，不属于本条的窗口），命中时取 `probe` 那一行。
+    """
     hits: list[tuple[int, str]] = []
     texts = [text for _number, text in lines]
+    pattern = rf"\bvar\s+(\w+)\s*:\s*{COLLECTION_TYPE_PATTERN}"
     for index, text in enumerate(texts):
         if "@State" not in text:
             continue
-        window = " ".join(part.strip() for part in texts[index : index + WINDOW])
-        match = re.search(rf"\bvar\s+(\w+)\s*:\s*{COLLECTION_TYPE_PATTERN}", window)
-        if match:
-            hits.append((index + 1, match.group(1)))
+        for offset in range(WINDOW):
+            probe = index + offset
+            if probe >= len(texts):
+                break
+            if offset and "@State" in texts[probe]:
+                break
+            joined = " ".join(part.strip() for part in texts[index : probe + 1])
+            match = re.search(pattern, joined)
+            if match:
+                hits.append((probe + 1, match.group(1)))
+                break
     return hits
 
 
