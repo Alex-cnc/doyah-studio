@@ -9,6 +9,11 @@
   ③ 待拍板队列的条目号（`Q<数字>`）在《项目管理规范》里唯一。
 
 用法：`python3 Scripts/check-doc-versions.py`（exit 0 = 通过）；`--self-test` 跑成对自检。
+
+判据自己的证据（8 例）：`--self-test` 里 7 个文件样本（好 / 非三段 / 超上限 / 带变更记录 / 引旧文件 /
+999 未冻结 / 998 免检）+ 1 个「999 已冻结 ⇒ 绿」，收尾自己报 `负例 N/N 达到预期`，由
+`Scripts/self-test-counts.json` 的 `doc-versions` 族逐行对账（2026-11-02：这段被 2026-10-26 的整段
+重写删掉了，台账里还留着旧版本的 28 例 —— 判据看不见「runner 不再报数」这类漂移，现补回）。
 """
 from __future__ import annotations
 
@@ -177,13 +182,6 @@ def self_test() -> int:
             "998": ("| 版本 | **v1.0.998** |\n\n正文\n", True),
         }
         cases.update(rollover_cases)
-        for name, (body, should_pass) in cases.items():
-            path = pathlib.Path(tmp) / f"{name}.md"
-            path.write_text(body, encoding="utf-8")
-            if name == "999未冻结":
-                found = check_doc(path, frozen_dir=frozen)
-            else:
-                found = check_doc(path, frozen_dir=frozen)
         # 补一例：999 且冻结件在 ⇒ 绿
         path999 = pathlib.Path(tmp) / "有件.md"
         path999.write_text("| 版本 | **v1.0.999** |\n\n正文\n", encoding="utf-8")
@@ -204,6 +202,11 @@ def self_test() -> int:
                 ok = False
             detail = "" if passed else f" ← {found[0][:70]}"
             print(f"  {mark} 样本「{name}」：{'绿' if passed else '红'}{detail}")
+    total = len(cases) + 1          # + 「999已冻结」
+    # 例数必须**自己报出来**并且是计数的（2026-11-02）：`Scripts/self-test-counts.json` 的
+    # `countRegex` 读的是这一行 —— 2026-10-26 废止「变更记录」时 self_test 被整段重写，尾巴只剩
+    # 一句「自检通过」，台账里那 28 例（旧版本累积值）从此没人对得上，而判据**看不见**这件事。
+    print(f"负例 {total}/{total} 达到预期" if ok else f"负例 0/{total} 达到预期（有失败）")
     print("自检通过" if ok else "自检失败")
     return 0 if ok else 1
 

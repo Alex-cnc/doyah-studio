@@ -644,6 +644,10 @@ def main() -> int:
         for problem in problems:
             print("   · " + problem)
         return 1
+    if arguments.no_run:
+        # 口径：未执行 ≠ 通过（`--no-run` 只对账台账与锚点，一个 runner 都没跑）
+        print("⚠️ 台账与锚点全部对上，但 `--no-run` **没有真跑**各族 runner —— 未执行 ≠ 通过")
+        return 0
     print("✅ 全部通过：每一族的负例都真跑了一遍（exit 0）、例数与台账一致、文档里的现状声明逐处对上")
     return 0
 

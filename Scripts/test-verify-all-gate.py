@@ -17,6 +17,8 @@
 断言的都是「它说了什么」这件事本身：
 
   例 1 绿对照（默认）· 例 2 默认跑法第 3 项红 ⇒ 点名第 3 项 + **未执行**逐项列出且不谎报
+        （例 1 另判**侧名词表**：第 16 项的越界判据必须按**演员名**调用 —— 桩件本来跑不出这一类错，
+         2026-11-02 实测它让「契约所有者改三书」在全量验收里永远判红；桩现在把 argv 记进 `.stub-argv`）
   例 3 默认跑法第 1 项红 ⇒ 未执行从第 2 项起、**不含第 1 项**
   例 4 `DOYAH_PLATFORM=linux` + 第 16 项红 ⇒ 未执行里**不许**出现被跳过的第 1 / 11 项
   例 5 `--keep-going` + 第 3 项红 ⇒ **第 4 项到第 18 项真的跑了**（输出里有它们的项块头）
@@ -47,7 +49,12 @@ TARGET = "Scripts/verify-all.sh"
 STUB_PY = """#!/usr/bin/env python3
 import pathlib, sys
 name = pathlib.Path(__file__).name
-fail = pathlib.Path(__file__).resolve().parent.parent / ".stub-failures"
+root = pathlib.Path(__file__).resolve().parent.parent
+# 记录被调用时的实参：侧名词表这类「传进去的名字对不对」的错，桩不记 argv 就永远看不见
+# （2026-11-02 实测：第 16 项传平台名给认演员名的判据 ⇒ 契约所有者自己改三书判红，而桩测试全绿）
+with open(root / ".stub-argv", "a", encoding="utf-8") as fh:
+    fh.write(name + " " + " ".join(sys.argv[1:]) + "\\n")
+fail = root / ".stub-failures"
 listed = fail.read_text(encoding="utf-8").split() if fail.is_file() else []
 if name in listed:
     print(f"[stub] 故意失败：{name}（夹具注入）", file=sys.stderr)
@@ -57,6 +64,7 @@ sys.exit(0)
 
 STUB_SH = """#!/bin/bash
 name="$(basename "$0")"
+echo "${name} $*" >> "$(dirname "$0")/../.stub-argv"
 fail="$(dirname "$0")/../.stub-failures"
 if [ -f "${fail}" ] && grep -qx "${name}" "${fail}" >/dev/null 2>&1; then
   echo "[stub] 故意失败：${name}（夹具注入）" >&2
@@ -90,6 +98,7 @@ def run_gate(root: pathlib.Path, failures: tuple[str, ...] = (),
              args: tuple[str, ...] = (), platform: str = "macos") -> tuple[int, str]:
     """跑夹具里的**真脚本**。failures = 要注入失败的桩名（= 让那一项红）。"""
     (root / ".stub-failures").write_text("\n".join(failures) + "\n", encoding="utf-8")
+    (root / ".stub-argv").write_text("", encoding="utf-8")
     environment = os.environ.copy()
     environment["DOYAH_PLATFORM"] = platform
     completed = subprocess.run(
@@ -113,9 +122,16 @@ def main() -> int:
         results.append((name, ok, detail))
 
     rc, out = run_gate(root)
-    case("例 1 绿对照（默认跑法）⇒ rc=0 且报「十八项全过」",
-         rc == 0 and "✅ 验证闭环全部通过（十八项）" in out and "未执行" not in out,
-         f"rc={rc}")
+    # 侧名词表（2026-11-02）：第 16 项把**平台名**传给认**演员名**的判据 ⇒ 契约所有者自己改三书被判越界
+    # （与 pre-commit 的 `--mine hugehippo` 相反判定）。桩跑不出来的正是这一类「传进去的名字对不对」——
+    # 所以桩把 argv 记进 `.stub-argv`，这里逐条核对：越界判据每次调用都必须带当前的演员名。
+    argv_lines = [ln for ln in (root / ".stub-argv").read_text(encoding="utf-8").splitlines()
+                  if ln.startswith("check-exclusive-sections.py ")]
+    side_ok = bool(argv_lines) and all("--mine hugehippo" in ln for ln in argv_lines) \
+        and not any("--mine macos" in ln for ln in argv_lines)
+    case("例 1 绿对照（默认跑法）⇒ rc=0 + 「十八项全过」+ 第 16 项按**演员名**调用判据",
+         rc == 0 and "✅ 验证闭环全部通过（十八项）" in out and "未执行" not in out and side_ok,
+         f"rc={rc} side_ok={side_ok} argv={' | '.join(argv_lines[:3])}")
 
     rc, out = run_gate(root, failures=("check-effective-language.py",))
     line = unexecuted_line(out)

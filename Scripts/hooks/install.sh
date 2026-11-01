@@ -14,7 +14,7 @@ set -e
 HOOKS="$(git rev-parse --git-path hooks)"
 SRC="$(dirname "$0")/pre-commit"
 
-[ -f "$SRC" ] || { echo "找不到 $SRC（请在本仓根目录执行）"; exit 2; }
+[ -f "${SRC}" ] || { echo "找不到 ${SRC}（请在本仓根目录执行）"; exit 2; }
 
 mkdir -p "$HOOKS"
 cp "$SRC" "$HOOKS/pre-commit"
