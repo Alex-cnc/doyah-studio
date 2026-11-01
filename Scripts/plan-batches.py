@@ -27,13 +27,17 @@ OUT = ROOT / ".agent" / "batches.yaml"
 BATCHES: list[dict] = [
     dict(
         id="B1",
-        title="快速收口：老底子齐了的 5 条",
+        title="快速收口：老底子齐了的 5 条（第一片 TASK-003 已收口，余 4 条）",
         est_min=35,
         match=["FR-STD-DB-TASK-001", "FR-STD-DB-TASK-002", "FR-STD-DB-TASK-003",
                "FR-STD-DB-IO-002", "FR-STD-DB-META-006"],
         why="Core + 测试 + App 引用三件已齐（TASK 三条）或只有测试差接线（IO-002 / META-006）"
-            " ⇒ 只补点验与接线，不重写功能",
-        exit="5 行两列全 ✅；证据一段式",
+            " ⇒ 只补点验与接线，不重写功能。**第一片实测纠正了这句的一半**：TASK 三条的入口"
+            "（工具栏菜单 / 审批单 / 回执页三枚动作）是 SwiftUI 控件，离屏宿主里不落 `NSButton`、"
+            "无障碍树也不构建 ⇒ 点不到就量不到，收口前得先把入口换成真 AppKit 控件"
+            "（TASK-003 已按 `PanelIconButton` 办完）；IO-002 的入口是生产右键菜单（AppKit，已有探针），"
+            "META-006 的「重试」还是 SwiftUI 文字按钮",
+        exit="余 4 行两列全 ✅；证据一段式（第一片：`.agent/evidence/2026-11-01-B1-TASK-003.md`）",
     ),
     dict(
         id="B2",

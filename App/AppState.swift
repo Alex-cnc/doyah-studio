@@ -1486,6 +1486,11 @@ final class AppState: ObservableObject {
 
     /// 导出成 JSON 文件（验收 ②「可导出」）。写出去的是**结构里那些已脱敏字段** ——
     /// 导出路径上没有任何一处能碰到 SQL 原文（它在 `ExecutionReceipt.init` 里就没进来）。
+    ///
+    /// 分两半写：这一半只管**问路径**（`NSSavePanel`），落盘那一半是 `writeReceipts(_:to:)`。
+    /// 为什么拆开：面板是模态的，探针点不动它（也不该在无人值守的机器上弹窗）；
+    /// 而「写出去的那份 JSON 里到底有没有原文」是这条验收里唯一能把住的一环，
+    /// 拆开之后探针能拿**同一个函数**、只把路径换成一个临时文件来判 —— 不另开一条写盘路。
     func exportReceipts(for tabID: UUID) -> Bool {
         guard let tab = tabs.first(where: { $0.id == tabID }), !tab.receiptLog.isEmpty else {
             statusMessage = L(.receiptExportEmpty)
@@ -1500,10 +1505,17 @@ final class AppState: ObservableObject {
         }
         guard panel.runModal() == .OK, let url = panel.url else { return false }
 
+        return writeReceipts(tab.receiptLog, to: url)
+    }
+
+    /// 落盘那一半（**唯一**写盘出口，面板与探针共用）：成功返回真、并把「N 条 → 文件名」写进状态栏，
+    /// 失败给可读原因并返回假（不写半截文件：`.atomic` 由这里统一给）。
+    @discardableResult
+    func writeReceipts(_ log: ExecutionReceiptLog, to url: URL) -> Bool {
         do {
-            let data = try tab.receiptLog.exportData()
+            let data = try log.exportData()
             try data.write(to: url, options: [.atomic])
-            statusMessage = L(.receiptExported, tab.receiptLog.count, url.lastPathComponent)
+            statusMessage = L(.receiptExported, log.count, url.lastPathComponent)
             return true
         } catch {
             errorMessage = L(.receiptExportFailed, ErrorPresenter.message(for: error))

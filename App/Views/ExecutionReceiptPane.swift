@@ -60,35 +60,25 @@ struct ExecutionReceiptPane: View {
 
             // 三枚动作**常驻**（空数据时可点并给一句理由 —— 与「外发日志」那一档同一处置；
             // 藏起来会让「为什么这里没有复制」多一次提问）。图标 + 提示（`NFR-UI-01`）。
-            Button {
+            //
+            // 是**真 `NSButton`**（`PanelIconButton`，不是 SwiftUI `Button`）：这三枚是验收要点里
+            // 写着要点的动作，而 SwiftUI `Button` 在离屏宿主里不落成 `NSButton`、无障碍树也不构建
+            // ⇒ 探针一次都点不到、只能靠人点（口径与 `ResultFilterPopup` / `TitleBarSearchBox` 同源）。
+            PanelIconButton(systemName: "doc.on.doc", help: L(.receiptCopyAll), label: L(.receiptCopyAll)) {
                 if let tab { appState.copyReceipts(for: tab.id) }
-            } label: {
-                Image(systemName: "doc.on.doc")
-                    .font(Theme.font(.caption))
             }
-            .buttonStyle(.borderless)
-            .help(L(.receiptCopyAll))
-            .accessibilityLabel(Text(L(.receiptCopyAll)))
 
-            Button {
+            PanelIconButton(
+                systemName: "square.and.arrow.down",
+                help: L(.receiptExport),
+                label: L(.receiptExport)
+            ) {
                 if let tab { _ = appState.exportReceipts(for: tab.id) }
-            } label: {
-                Image(systemName: "square.and.arrow.down")
-                    .font(Theme.font(.caption))
             }
-            .buttonStyle(.borderless)
-            .help(L(.receiptExport))
-            .accessibilityLabel(Text(L(.receiptExport)))
 
-            Button {
+            PanelIconButton(systemName: "trash", help: L(.receiptClear), label: L(.receiptClear)) {
                 if let tab { appState.clearReceipts(for: tab.id) }
-            } label: {
-                Image(systemName: "trash")
-                    .font(Theme.font(.caption))
             }
-            .buttonStyle(.borderless)
-            .help(L(.receiptClear))
-            .accessibilityLabel(Text(L(.receiptClear)))
         }
         .padding(.horizontal, Spacing.s)
         .padding(.vertical, Spacing.xs)

@@ -8,3 +8,6 @@
 - 2026-11-01 · Shift 点击不靠 AppKit 的 `sortDescriptors` 认列，改由 `SortableHeaderView` 自己记那一击 · 理由：AppKit 把新列追加在后面（`first` 还是老主键），且实测 macOS 27 离屏窗口里 Shift 点击它干脆不派发 ⇒ 只靠它，多列排序静默失效 · 影响：`super` 仍要调（列宽拖动 / 换列排序），过滤条件 = 「没派发过 + 没拖动 + 不在分界线上 + 单击」
 - 2026-11-01 · 表格「显示内容变了没有」从首末行摘要改成逐行比对 · 理由：取消排序回到服务端顺序时末行常与降序那份相同 ⇒ 摘要不变 ⇒ 不重载 ⇒ 界面上留着旧顺序（探针实测） · 影响：`ResultGrid.Coordinator` 每次 update 做一次 O(行数) 早退比较
 - 2026-11-01 `FR-STD-DB-RES-008`：把筛选条里的列 / 运算符从 SwiftUI `Menu` 换成真 `NSPopUpButton`（`ResultFilterPopup`）—— 理由：`Menu` 的菜单项只在弹出那一刻才建（实测 `itemTitles == []`、`menu.update()` 与 `menuNeedsUpdate` 都填不进），换列 / 换运算符在离屏探针里量不到；与 `TitleBarSearchField` 那次「要能量就得是真控件」的换法同源。
+- 2026-11-01 `FR-STD-DB-TASK-003`（B1 第一片）：把回执页三枚动作从 SwiftUI `Button` 换成真 `NSButton`（新 `App/Views/PanelIconButton.swift`）—— 理由：SwiftUI 按钮在离屏宿主里不落 `NSButton`、无障碍树也不构建（本机实测：合成鼠标事件投进去 action 不动、`accessibilityChildren()` = 0），三枚正是验收要点里要点的动作，不换就只能靠人点；与 `ResultFilterPopup` / `TitleBarSearchBox` 的换法同源。
+- 2026-11-01 `FR-STD-DB-TASK-003`：导出拆成两半（`exportReceipts(for:)` 只问路径，`writeReceipts(_:to:)` 落盘）—— 理由：模态 `NSSavePanel` 无人值守不该弹窗、探针也不该去点它，而「写出去的字节里有没有原文」是这条验收唯一能把住的一环；拆开之后探针拿**同一个函数**只换路径，不另开一条写盘路。
+- 2026-11-01 B1 批次的划分前提有一半不成立：`batches.yaml` 原写「只补点验与接线」，实测 TASK-001/002 的入口（工具栏任务菜单 / 审批单）也是 SwiftUI ⇒ 先要把入口换成真 AppKit 控件才量得到。已写进 `plan-batches.py` 的 B1 说明，本跳只收口 TASK-003，余 4 条留给下一跳。

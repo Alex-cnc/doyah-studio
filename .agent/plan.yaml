@@ -190,8 +190,8 @@ tasks:
     done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-TASK-003 | grep -q '✅'"
     layer: "基线必备"
     prio: "中"
-    status: todo
-    evidence: ""
+    status: done
+    evidence: ".agent/evidence/2026-11-01-B1-TASK-003.md"
   - id: FR-STD-DB-CONN-012
     goal: "连接分组 / 文件夹：连接可归入自定义分组，侧边栏按组折叠展示，便于按「项目 / 环"
     done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-CONN-012 | grep -q '✅'"

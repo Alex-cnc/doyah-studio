@@ -1,14 +1,13 @@
 # 检查点
 
-- 队列：`.agent/plan.yaml`（35 项，源自台账 35 条未闭 DB 行，2026-11-01 生成）
-- 已完成：3 / 35
-- **下一项：`FR-STD-DB-RES-009`**（结果面·分页控制条：每页行数 50 / 100 / 200 / 500 / 1000；Core 的 `ResultGridState.setPageSize` 与 `ResultPage` 已有单测，缺口同 007 / 008：界面点击一次都没量过 —— 分页条上的控件同样要先确认是「真控件」才量得到）
-- 底座：`Scripts/ledger-row.py`（所有 done_when 共用）已落盘
-- 本跳提交：`9097fac0`（已推送 `origin/master`）
-- 本跳完成：`FR-STD-DB-RES-008`（客户端筛选）—— 台账两列双 ✅，证据 `.agent/evidence/2026-11-01-FR-STD-DB-RES-008.md`
-  - 同批修两处真缺陷：筛选条只在 `isClientViewActive` 时才渲染（「+ 加条件」入口成死路）· 点「+」当场清空整张表（`contains ""` 不匹配任何行）
-  - 列 / 运算符从 SwiftUI `Menu` 换成真 `NSPopUpButton`（`Menu` 的菜单项只在弹出那一刻才建，探针量不到）
-  - `verify-ui-interactions.sh` 现 **35 条**（七批）全绿 / 无跳过 / 源锚点全在；全量单测 `Executed 5059 tests … 0 failures`（13 条 skipped = 端上探针默认 XCTSkip）；八道文档门禁全 rc=0
-- 未验证：无
-- 未执行（≠ 通过）：`Scripts/build-app.sh` 出包（本跳改 App/Core 源码与探针，没有重建 `dist/`；下跳若要求出包需补）
-- 覆盖边界（008）：真鼠标点开菜单的弹出动画 / 拖选文本证不住；条右侧「清空全部条件 / 生成 WHERE」两颗仍是 SwiftUI `.plain` 按钮，点击量不到（规则有 Core 单测）
+- 队列：`.agent/batches.yaml`（7 批 / 31 条待办，源自台账 35 条未闭 DB 行，2026-11-01 重出；`plan-batches.py --check` 已过）
+- 已完成：**4 / 35**
+- **下一批：`B1` 余 4 条**（`FR-STD-DB-TASK-001` 任务定义 / `FR-STD-DB-TASK-002` 高危审批 / `FR-STD-DB-IO-002` 整表·整库导出 / `FR-STD-DB-META-006` 对象树下钻重试）
+  - 第一片已收口 `FR-STD-DB-TASK-003`（回执页三枚动作 + 复制 / 清空 / 导出全链），证据 `.agent/evidence/2026-11-01-B1-TASK-003.md`
+  - **下一跳先做的事**（第一片量到的）：TASK-001 的工具栏「任务」菜单、TASK-002 的审批单、META-006 的「重试」文字按钮**都还是 SwiftUI 控件** ⇒ 离屏里点不到；收口前先按 `PanelIconButton` 的办法把入口换成真 AppKit 控件（TASK-003 已示范一次）。IO-002 的入口是生产右键菜单（AppKit，已有探针），缺的是「真跑一次导出落文件」（要真库 / 本机 PG 档）
+- 底座：`Scripts/ledger-row.py`（所有 done_when 共用）+ `Scripts/plan-batches.py`（批次派生）
+- 本跳提交：见 `.agent/evidence/2026-11-01-B1-TASK-003.md`（代码 + 台账 + 队列 + 探针 + 证据）
+- 本跳读数：`verify-ui-interactions.sh` **42 条全绿 / 无跳过 / 源锚点全在**（35 → 42）；`verify-core` **5059 例 / 0 失败**（13 skipped = 端上探针默认 XCTSkip）；八道文档门禁 rc=0
+- 覆盖边界（TASK-003）：模态保存面板没点（由人承担）· 回执正文逐字判不到（SwiftUI `Text` 不落 `NSTextField`）· 真鼠标拖选不在验收要点里
+- 未验证 / 未执行（≠ 通过）：`Scripts/build-app.sh` 出包（本跳改了 App 源码，`dist/` 未重建）；`Scripts/verify-all.sh` 全量 18 项未跑
+- 存量红（不是本跳引入）：`Scripts/check-doc-layout.py` 报三书自审 18 条（全在 `Docs/Doyah产品概要设计说明书.md` 的 §14 交叉引用解析不到）

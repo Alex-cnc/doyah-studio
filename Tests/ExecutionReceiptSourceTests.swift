@@ -114,8 +114,13 @@ final class ExecutionReceiptSourceTests: XCTestCase {
                       "复制单条没有走 render（那等于绕开脱敏）")
         XCTAssertTrue(body.contains("tab.receiptLog.exportText(labels: receiptLabels)"),
                       "复制全部没有走 exportText")
-        XCTAssertTrue(body.contains("try tab.receiptLog.exportData()"),
+        // 2026-11-01（B1 批次第一片）：导出拆成「问路径」与「落盘」两半之后，JSON 出口在
+        // `writeReceipts(_:to:)` 里 —— 锚点跟着挪到新形状，盯的还是同一件事：
+        // 写出去的那份字节必须由回执册自己出（不是视图或别处另拼一份）。
+        XCTAssertTrue(body.contains("try log.exportData()"),
                       "导出没有走回执册的 JSON 出口")
+        XCTAssertTrue(body.contains("func writeReceipts(_ log: ExecutionReceiptLog, to url: URL) -> Bool {"),
+                      "落盘不再是一个独立出口（面板与探针会各写一份 JSON）")
         // 反向：不许出现「把原始 SQL 拼进导出文本」的旁路。
         XCTAssertFalse(body.contains("receipt.rawSQL"), "回执不该有原文出口")
     }

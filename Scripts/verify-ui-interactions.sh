@@ -124,6 +124,31 @@ set -euo pipefail
 #   · 点「+」当场把整张表清空：新条件默认 `contains ""`，而 Foundation 里 `"abc".contains("") == false`
 #     ⇒ 一条还没填值的条件筛掉了所有行。现按 `ResultFilter.isPending` 跳过，也进不了生成的 WHERE。
 #
+# ## 第八批（B1 批次第一片）：`FR-STD-DB-TASK-003` 执行回执页
+#
+# `TestsUISnapshot/ExecutionReceiptPaneProbeTests.swift` 判这一行的**交付面**（台账备注原文是
+# 「差人工点一次」）：挂真 `ExecutionReceiptPane` 进离屏真窗口 → 从视图树里取出真 `NSButton`
+# （本片把三枚动作从 SwiftUI `Button` 换成 `PanelIconButton`：SwiftUI 按钮在离屏宿主里不落
+# `NSButton`、无障碍树也不构建 —— 本机实测合成鼠标事件投进去 action 不动、AX 子节点 0 个）
+# → `performClick(nil)` → 读真 `NSPasteboard`、读 `tab.receiptLog`、读状态栏那句话。七条：
+#   ① 三枚动作都在、各带各的提示、提示互不相同（按提示认按钮，不写死次序）；
+#   ② 复制：剪贴板 = 整本回执（旧 → 新）逐字节等于 Core 渲染，四项读数与执行时刻都在；
+#   ③ 复制不含口令原文、但留下 `***`（复制绕过 render 的那次事故的回归钉）；
+#   ④ 空态：点复制 / 清空都不动剪贴板，只给一句理由；
+#   ⑤ 清空：册子真空了、面板回空态（前后两张图内容占比必须不同）；
+#   ⑥ 导出：`writeReceipts(_:to:)`（面板之后那一半，按钮点的也是它）写出的字节与
+#      `exportData()` 逐字节相同、能解回两条、原文口令不在里面、错误原文还在；
+#   ⑦ 三条回执的画面比一条多（证明每条都画了，不是只画一条）。
+# **证不住**：导出按钮后面那个模态保存面板（无人值守的机器上不该弹窗，由人承担）；
+# 回执正文逐字（SwiftUI `Text` 不落 `NSTextField`，那一面归 `Tests/ExecutionReceiptTests`）；
+# 真鼠标拖选正文（输入设备行为）。
+#
+# **本批在这条路上改了一件结构**：三枚动作由 SwiftUI `Button` 换成真 `NSButton`
+# （`App/Views/PanelIconButton.swift`）—— 换的理由只有「量得到」，与 `ResultFilterPopup`
+# 换 `NSPopUpButton`、`TitleBarSearchBox` 整框换 AppKit 同源。
+# 反例五段（复制接错页签 / 空态不给理由 / 清空不清册子 / 导出另拼一份漏脱敏 / 按钮不带提示）
+# 各判红后逐字节还原，shasum 一致。
+
 # **源锚点归位（开发循环第 113 轮，队列 `L-103`）**：2026-09-29 23:25–23:36 那个会话把行渲染搬进
 # `ObjectTreeRowContent.swift`、把右键改由**行的 AppKit 捕获器**自己给出（`ObjectTreeRightClick.swift`
 # → `ObjectTreeAppKitMenu.build(object: row.object…)`），附录里原先钉的三条（`.contextMenu {` /
@@ -147,7 +172,7 @@ SWIFT="${DEVELOPER_DIR}/Toolchains/XcodeDefault.xctoolchain/usr/bin/swift"
 SCRATCH="${ROOT}/.build"
 CACHE="${ROOT}/.build-cache"
 OUT="${SCRATCH}/ui-interactions"
-FILTER="TerminalInteractionProbeTests|MultiCursorProbeTests|ObjectTreeContextMenuProbeTests|TitleBarSearchClickProbeTests|ResultCopyProbeTests|ResultSortProbeTests|ResultFilterProbeTests"
+FILTER="TerminalInteractionProbeTests|MultiCursorProbeTests|ObjectTreeContextMenuProbeTests|TitleBarSearchClickProbeTests|ResultCopyProbeTests|ResultSortProbeTests|ResultFilterProbeTests|ExecutionReceiptPaneProbeTests"
 while [ $# -gt 0 ]; do
     case "${1}" in
         --filter) FILTER="${2:-}"; shift 2 ;;
@@ -211,13 +236,15 @@ else:
     total, failed, unexpected = max(executed, key=lambda row: int(row[0]))
     if int(failed) or int(unexpected):
         failures.append(f"汇总非零失败：{failed} 失败 / {unexpected} 意外")
-    if int(total) < 35:
+    if int(total) < 42:
         failures.append(
-            f"只跑了 {total} 条 —— 七批三十五条（鼠标上报 / DECCKM / 右键归属 / ⌥⌘D 多光标 /"
+            f"只跑了 {total} 条 —— 八批四十二条（鼠标上报 / DECCKM / 右键归属 / ⌥⌘D 多光标 /"
             " ⌥⌘↑↓ 加光标 / ⌥ 拖拽列选 / 逐行菜单内容 / 菜单作用行 / 菜单确定性与跟随行 /"
             " 点击地图 / 留白点给键盘 / 清空按钮三态 + 回车接线 / 打字后回车交词 / 修前对照 / 整框源锚点 /"
             " 复制四档格式与默认 TSV / 排序三档与 NULL / Shift 次要键 / 筛选条默认在场 /"
-            " 换列与换运算符 / 逐字打值 / 大小写开关 / 多条件 AND 与删条件）应当都跑到"
+            " 换列与换运算符 / 逐字打值 / 大小写开关 / 多条件 AND 与删条件 /"
+            " 回执三枚动作都在且各带各的提示 / 复制整本进剪贴板 / 口令不在剪贴板里 /"
+            " 空态给理由不动剪贴板 / 清空后回空态 / 导出字节与结构一致 / 每条回执都画出来）应当都跑到"
         )
 
 expected = [
@@ -258,6 +285,14 @@ expected = [
     "testTypedValueFiltersLiveAndKeepsTheEditingSession",
     "testCaseSensitiveToggleChangesWhichRowsMatch",
     "testMultipleConditionsAreAndedAndRemovingThemRestoresServerOrder",
+    # 第八批（B1 批次第一片 · FR-STD-DB-TASK-003）：执行回执页
+    "testTheThreeActionsAreRealButtonsWithTheirOwnHints",
+    "testCopyReachesTheSystemPasteboardWithEveryReceiptNewestFirst",
+    "testCopyNeverCarriesThePasswordLiteral",
+    "testEmptyPaneExplainsItselfAndLeavesThePasteboardAlone",
+    "testClearEmptiesTheLogAndThePaneFallsBackToItsEmptyState",
+    "testExportWritesExactlyWhatTheStructureHoldsAndNoSecret",
+    "testMoreReceiptsPaintMoreOfThePane",
 ]
 for name in expected:
     if name not in log:
@@ -272,7 +307,7 @@ if failures:
     for item in failures:
         print(f"✗ {item}")
     sys.exit(1)
-print(f"✓ {total} 条都真跑过（七批）、都以 passed 收尾、没有跳过")
+print(f"✓ {total} 条都真跑过（八批）、都以 passed 收尾、没有跳过")
 PY
 
 echo
@@ -388,6 +423,24 @@ anchors = {
         ("case (true, false):\n                        return descriptor.nullsFirst",
          "NULL 的先后不再只由 nullsFirst 决定 ⇒ 降序时 NULL 会跑到最前面（NULL 位置固定这条就没钉住）"),
     ),
+    # 第八批（`FR-STD-DB-TASK-003`）：三枚动作必须是**真 `NSButton`**、必须落到 `AppState` 的方法上；
+    # 写盘那条路只有一条（面板与探针共用）。钉住这几条，判据才不会在控件退回 SwiftUI 时变白绿。
+    "App/Views/ExecutionReceiptPane.swift": (
+        ("PanelIconButton(systemName: \"doc.on.doc\", help: L(.receiptCopyAll)",
+         "复制那枚退回 SwiftUI `Button` ⇒ 离屏宿主里不落 `NSButton`，探针只能量到 0 枚（又得靠人点）"),
+        ("appState.copyReceipts(for: tab.id)", "复制不再落到 `AppState` 的整本复制（视图里另拼了一份文本）"),
+        ("appState.exportReceipts(for: tab.id)", "导出不再走 `AppState`（写盘那半条出口被绕开）"),
+        ("appState.clearReceipts(for: tab.id)", "清空不再落到 `AppState`（册子还留着，界面看着清了）"),
+    ),
+    "App/Views/PanelIconButton.swift": (
+        ("button.toolTip = help", "图标按钮不带悬停提示 ⇒ 用户看不出这枚是干什么的（也是探针认按钮的依据）"),
+        ("button.setAccessibilityLabel(label ?? help)", "图标按钮没有读屏标签 ⇒ 读屏只会念「按钮」"),
+    ),
+    "App/AppState.swift": (
+        ("func writeReceipts(_ log: ExecutionReceiptLog, to url: URL) -> Bool {",
+         "落盘那一半不再是单独一个出口 ⇒ 面板与探针会各写一份 JSON（脱敏就能在其中一条上失效）"),
+        ("let data = try log.exportData()", "导出不再用结构自己的 `exportData()` ⇒ 复制/导出/界面三处可能不是同一份"),
+    ),
     "App/Views/TitleBarSearchField.swift": (
         ("final class TitleBarSearchBoxView: NSView",
          "整框不再是 AppKit 视图 ⇒ 命中测试又会被 SwiftUI 那层接走，可见框里的留白重新点不动（T-20261002-027 二次复测打回后的结构性换法）"),
@@ -413,7 +466,7 @@ for relative, needles in anchors.items():
 
 for probe in ("TerminalInteractionProbeTests", "MultiCursorProbeTests", "ObjectTreeContextMenuProbeTests",
               "TitleBarSearchClickProbeTests", "ResultCopyProbeTests", "ResultSortProbeTests",
-              "ResultFilterProbeTests"):
+              "ResultFilterProbeTests", "ExecutionReceiptPaneProbeTests"):
     if not os.path.exists(os.path.join(root, f"TestsUISnapshot/{probe}.swift")):
         failures.append(f"TestsUISnapshot/{probe}.swift 不在盘上")
 
@@ -444,4 +497,5 @@ echo "    · §1 FR-STD-WS-UI-006 打字之后按回车那个词真的交出去�
 echo "    · §1 FR-STD-WS-UI-006 修前对照（装饰参与命中测试的那份框必须判红 —— 这条判据量得出来）"
 echo "    · §3.4 FR-STD-DB-RES-006 复制为多格式（真视图 + 真菜单 + 真系统剪贴板：四档格式都在菜单里、默认 ⌘C = 带表头 TSV、转义不乱、只复制选中的行、INSERT 指向正在浏览的表、空选中不动剪贴板、不落文件）"
 echo "    · §3.4 FR-STD-DB-RES-008 客户端筛选（真控件点击 + 真字段编辑器打字：条默认在场、加条件不丢行、换列换运算符、逐字打值、大小写开关、多条件 AND、删光条件后入口仍在）"
+echo "    · §3.4 FR-STD-DB-TASK-003 执行回执（真 AppKit 按钮 performClick + 真系统剪贴板：三枚动作都在且各带提示、复制整本新的在前且口令已抹、空态给理由不动剪贴板、清空后回空态、导出字节与结构一致、三条比一条画得多）"
 echo "    · §3.4 FR-STD-DB-RES-007 客户端排序（真表头点击 + 真 AppKit 跟踪循环：升 → 降 → 取消三档、数值按数值比、NULL 两种方向都留末尾、Shift 加 / 翻 / 删次要键、点空白处不动、排序不改列宽）"
