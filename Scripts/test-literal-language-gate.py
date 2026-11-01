@@ -146,14 +146,14 @@ def main() -> int:
         if rc == 0 or " C " not in out.replace("\n", " "):
             failures.append(f"例 5（丢了 language: 形参）应判红且含 C 判据，实测 rc={rc}：\n{out}")
 
-        # 例 6（判据 C · 界面侧）：面板不再把 effectiveLanguage 传下去。
+        # 例 6（判据 C · 界面侧）：提示词那一处不再拿 effectiveLanguage —— 面板里另外两处
+        # （摘要行 / 读数行）还带着同一个词，所以钉的是**调用点实参**，不是文件级子串。
         copy = fresh()
         cases += 1
         patch(
             copy / "App/Views/DiagnosisPanel.swift",
-            "language: LocalizationManager.shared.effectiveLanguage",
-            "language: LocalizationManager.shared.language",
-            required=False,
+            "boundedPromptText(\n            language: LocalizationManager.shared.effectiveLanguage",
+            "boundedPromptText(\n            language: LocalizationManager.shared.language",
         )
         rc, out = run(copy)
         if rc == 0 or "DiagnosisPanel.swift" not in out:

@@ -11825,7 +11825,9 @@ final class AppState: ObservableObject {
         // 从对象树唤起时**不要求有语句**：列 / 函数 / 库这类节点本来就没有「那条语句」，
         // 它们的取证是对象统计 + 最近一次执行的读数（没有就如实记「未取到」）。
         // 老入口（诊断编辑器里那条语句）仍然要求语句非空 —— 空语句取不到任何执行计划。
-        if trimmed.isEmpty, objectDiagnosisScope == nil {
+        // 写成 `guard` 而不是 `if … { return }`：空数据按钮对账门禁（`Scripts/check-empty-action-buttons.py`）
+        // 只扫 `guard` 形态，写成 `if` 这一处就从对账里消失了（2026-11-02 实测：台账条目被报陈旧）。
+        guard !trimmed.isEmpty || objectDiagnosisScope != nil else {
             diagnosisMessage = L(.diagnosisEmpty)
             return
         }

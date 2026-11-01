@@ -34,6 +34,11 @@ E **空跑防护**：扫到 0 条守卫、台账 0 条、`App/Views/` 一个文�
 
 ## 做不到什么（如实写）
 
+**覆盖范围：只扫 `guard … else` 形态。** 同一处「空就早退」写成 `if X.isEmpty { … return }` 时
+本门禁**看不见**（判据 A 的扫描器只认 `guard`）。已知一处曾这样漏掉
+（`AppState.gatherDiagnosisEvidence` 于 2026-10-26 改成 `if trimmed.isEmpty, objectDiagnosisScope == nil`），
+2026-11-02 改回等价的 `guard` 写法让它继续被咬；新写空早退**请用 `guard`**，否则本门禁记「未知」。
+
 `form = "internal"` 那一档是**人判登记 + 理由必填**，门禁不判它的语义：区分"按钮的前置条件"
 与"函数内部的解析早退"（如 `erDiagram` 里逐行取列名）需要语义判断 —— 假装判住比不判更糟。
 这一档的门禁价值在于**棘轮**：每新增一处空守卫都必须被有意识地归类一次。
@@ -78,6 +83,7 @@ MESSAGE_ASSIGN_RE = re.compile(
     r"(=\s*L\(|=\s*ErrorPresenter|=\s*CLIFailureText|=\s*LocalizationManager"
     r"|\bthrow\b"
     r"|\b(?:statusMessage|errorMessage|failureReason)\s*="
+    r"|(?:title|text)\s*:\s*L\("
     r"|\b\w*(?:Message|Error|Notice)\s*=\s*\S)"
 )
 
@@ -474,7 +480,7 @@ def self_test(repo: Path) -> int:
 
     @case("视图本地锚点被删（SaveQuerySheet 不再灰着）")
     def _drop_local_anchor(tmp: Path) -> str | None:
-        rewrite(tmp / "App/Views/SaveQuerySheet.swift", ".disabled(trimmedName.isEmpty)", "")
+        rewrite(tmp / "App/Views/SaveQuerySheet.swift", "isEnabled: !trimmedName.isEmpty", "isEnabled: true")
         return None if Checker(tmp).run() == 1 else "视图本地处置被删，门禁没说话"
 
     @case("判据属性出现第二处定义")

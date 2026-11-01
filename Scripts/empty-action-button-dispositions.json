@@ -155,9 +155,9 @@
     },
     {
       "func": "gatherDiagnosisEvidence",
-      "guard": "!trimmed.isEmpty",
+      "guard": "!trimmed.isEmpty || objectDiagnosisScope != nil",
       "form": "explain",
-      "reason": "诊断取证：语句为空时给 `diagnosisEmpty`（视图侧另有 `disabled`）。"
+      "reason": "诊断取证：老入口（诊断编辑器里那条语句）为空时给 `diagnosisEmpty`；从对象树唤起（`objectDiagnosisScope != nil`）时本来就没有「那条语句」，照样取证。 2026-11-02：原文写成 `if trimmed.isEmpty, objectDiagnosisScope == nil { … return }`，门禁只扫 `guard` 形态 ⇒ 这一处对账看不见了；改回等价的 guard 写法（德摩根）让棘轮继续咬。"
     },
     {
       "func": "saveDiagnosisNote",
@@ -248,6 +248,48 @@
       "guard": "let index = tabs.firstIndex(where: { $0.id == tabID }), !tabs[index].receiptLog.isEmpty",
       "form": "explain",
       "reason": "执行回执的「清空」：没有回执时给 `receiptClearEmpty`。注意它与「清空输出日志」是两枚按钮（日志是流水、回执是审计读数），所以不吃 `clearLowerPaneLog` 那枚 trash。"
+    },
+    {
+      "func": "exportDatabase",
+      "guard": "!plan.isEmpty",
+      "form": "explain",
+      "reason": "「导出整个库」：候选算出来是空的时候不静默早退 —— 面板给 `tableExportFailedTitle` + `.tableExportNoTables`（库里没有可导出的表）。按钮照常可点：要连上库、展开过树才知道有没有表。"
+    },
+    {
+      "func": "redoAgentBatchRevert",
+      "guard": "let redo = agentBatchRedo, !redo.isEmpty",
+      "form": "internal",
+      "reason": "「撤销这次撤回」：按钮只在 `state.redoPending > 0` 时才渲染（`AgentChatView.batchRevertRow`），账空时够不着按钮；这句是宿主侧第二道（没有反向批次就 `.failure`）。"
+    },
+    {
+      "func": "resolveAgentApproval",
+      "guard": "let fingerprint, !fingerprint.isEmpty",
+      "form": "internal",
+      "reason": "审批决议的内部路由：界面点了「批准 / 拒绝」才进来，没有等待者（例如重放旧卡片）就什么都不做；不是按钮前置，也没有可灰的按钮。"
+    },
+    {
+      "func": "revertAgentBatch",
+      "guard": "!edits.isEmpty",
+      "form": "internal",
+      "reason": "「整批撤回」：按钮只在 `state.pending > 0` 时渲染（`AgentChatView.batchRevertRow`），账空时够不着按钮；这句是宿主侧第二道（一条都不可撤 ⇒ `.failure`）。"
+    },
+    {
+      "func": "saveAgentWebSearchKey",
+      "guard": "!trimmed.isEmpty",
+      "form": "internal",
+      "reason": "空串不是「空状态」而是**指令**：清空输入框再保存 = 删掉 Tavily key 并回一句「已清除 Tavily key」（设置页照显返回值）。有意的语义，不是静默早退。"
+    },
+    {
+      "func": "streamTable",
+      "guard": "let first = try await fetcher.nextPage(), !first.rows.isEmpty",
+      "form": "explain",
+      "reason": "整表导出：游标第一页就是 0 行 ⇒ `throw TableExportEmptyTable()` —— 面板说出来，而且**不落一个只有表头的文件**（验收要点 ③）。只判 nil 会把空表当成功，所以判据必须同时看 `rows.isEmpty`。"
+    },
+    {
+      "func": "syncWishDelivery",
+      "guard": "!edits.isEmpty || wishDeliveryValidation != nil",
+      "form": "internal",
+      "reason": "交付面的内部同步（private）：账空、也没有验证读数 ⇒ 清单置 `nil`，界面不留空壳；没有按钮入口，由账变化与命令收尾两处调它。"
     }
   ]
 }

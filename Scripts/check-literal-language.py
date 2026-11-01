@@ -727,8 +727,21 @@ def check(root: pathlib.Path, report_only: bool = False) -> int:
     panel = root / "App/Views/DiagnosisPanel.swift"
     if not panel.exists():
         failures.append("C 文件消失：App/Views/DiagnosisPanel.swift")
-    elif "effectiveLanguage" not in read(panel):
-        failures.append("C App/Views/DiagnosisPanel.swift 没把 effectiveLanguage 传下去（界面语言又会与提示词脱钩）")
+    else:
+        # 钉到**那一个调用点**的实参上：面板里 `effectiveLanguage` 出现好几处（摘要行 / 读数行 /
+        # 提示词），原先只查「文件里还有没有这个词」⇒ 把提示词那一处换成 `shared.language`，
+        # 文件里另外两处还带着 ⇒ 判据照样绿（2026-11-02 自测例 6 实测 rc=0）。改成钉 `boundedPromptText(`。
+        panel_text = read(panel)
+        call = "boundedPromptText("
+        start = panel_text.find(call)
+        paren = panel_text.find("(", start) if start != -1 else -1
+        end = balanced(panel_text, paren) if paren != -1 else None
+        if start == -1:
+            failures.append(f"C App/Views/DiagnosisPanel.swift 里找不到 {call}（改名了？判据取不到输入）")
+        elif end is None:
+            failures.append(f"C App/Views/DiagnosisPanel.swift 的 {call} 实参括号不配对 —— 判据取不到输入")
+        elif "language: LocalizationManager.shared.effectiveLanguage" not in panel_text[paren:end]:
+            failures.append("C App/Views/DiagnosisPanel.swift 没把 effectiveLanguage 传给 boundedPromptText（界面语言又会与提示词脱钩）")
 
     # C′ **「一句话只有一个出处」**（队列 L-65 收掉的那处重复实现）：许可状态那一句
     # 曾经在界面里被抄过一份（因为 Core 那份写死中文），而抄的那一份**会漂移** ——
