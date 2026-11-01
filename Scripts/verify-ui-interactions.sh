@@ -68,6 +68,35 @@ set -euo pipefail
 # **证不住**：把这段文本粘进 Excel / 飞书之后长什么样（外部软件行为，与 `DB-RES-014` 同边界）。
 # 反例三段（默认格式改成 markdown / INSERT 不带来源表 / 菜单少放一档格式）各判红后逐字节还原。
 #
+# ## 第六批（v0.3.0 数据库运维面·第二跳）：`FR-STD-DB-RES-007` 客户端排序
+#
+# `TestsUISnapshot/ResultSortProbeTests.swift` 判这一行的**交付面**（台账备注原文是
+# 「界面点击待人工点验」）：挂真 `ResultTableView`（生产里自己持有 `ResultGridState` 的那个视图）
+# 进离屏真窗口 → 取出真 `NSTableView` → 取**真表头**（`tableView.headerView`）→ 用那一列的
+# 中间点造 `NSEvent`，把 `mouseUp` 投进 `NSApplication` 的事件队列，再把 `mouseDown` **直接交给
+# 表头自己的 `mouseDown(with:)`** —— 用户点一下走的就是这条 AppKit 路径（跟踪循环、指示器、
+# `sortDescriptorsDidChange` 都在里面）。判据读**表格里真的显示成什么**（逐行取
+# `NSTableCellView.textField.stringValue`）+ 表头指示器（`tableView.sortDescriptors`）。六条：
+#   ① 每列都带排序原型（没有它 AppKit 不画指示器、也不派发变化，点上去等于点死木头），
+#      且点这一列的中点命中的就是这一列（点 A 排 B 的那种错行）；
+#   ② 升 → 降 → 取消三档，取消后回到服务端顺序、指示器清空，且点表头不改列宽；
+#   ③ 数值按数值比（`9` 排在 `10` 前）、**NULL 在两种方向下都留在末尾**（早期实现按方向取反、
+#      降序时 NULL 跑到最前的那次事故的回归钉）；
+#   ④ Shift 点第二列 = 追加次要键，主键不丢；
+#   ⑤ Shift 再点同一个次要键先翻方向、第三下只删这一键（主键留着）；
+#   ⑥ 负例：点表头**空白处**什么都不发生（不许凭空清掉排序）。
+# **证不住**：真鼠标在真屏幕上的手感（双击节奏、拖几像素才算拖列）—— 输入设备行为，不在本行验收要点里。
+# 反例三段（派发退回 `sortDescriptors.first` / 让 NULL 跟着方向翻 / 显示变更退回「首末行摘要」）
+# 各判红后逐字节还原。
+#
+# **本批在这条路上抓出两个真缺陷并修掉**（不是只补判据）：
+#   · Shift 加次要键时派发读 `tableView.sortDescriptors.first`，而 AppKit 把新列**追加**在后面
+#     ⇒ 第一个仍是被点的老主键，多列排序永远加不上新列（`SortableHeaderView` 改为自己记
+#     「点的是哪一列、有没有按 Shift」，一次点击只派发一档）；
+#   · 表格「显示内容变了没有」原先用「行数 + 首行 + 末行」摘要判 —— 取消排序回到服务端顺序时
+#     末行往往与降序那份的末行相同 ⇒ 摘要不变 ⇒ 不重载 ⇒ 界面上还留着旧的排序结果
+#     （现改为逐行比对 `lastDisplayedRows`）。
+#
 # **源锚点归位（开发循环第 113 轮，队列 `L-103`）**：2026-09-29 23:25–23:36 那个会话把行渲染搬进
 # `ObjectTreeRowContent.swift`、把右键改由**行的 AppKit 捕获器**自己给出（`ObjectTreeRightClick.swift`
 # → `ObjectTreeAppKitMenu.build(object: row.object…)`），附录里原先钉的三条（`.contextMenu {` /
@@ -91,7 +120,7 @@ SWIFT="${DEVELOPER_DIR}/Toolchains/XcodeDefault.xctoolchain/usr/bin/swift"
 SCRATCH="${ROOT}/.build"
 CACHE="${ROOT}/.build-cache"
 OUT="${SCRATCH}/ui-interactions"
-FILTER="TerminalInteractionProbeTests|MultiCursorProbeTests|ObjectTreeContextMenuProbeTests|TitleBarSearchClickProbeTests|ResultCopyProbeTests"
+FILTER="TerminalInteractionProbeTests|MultiCursorProbeTests|ObjectTreeContextMenuProbeTests|TitleBarSearchClickProbeTests|ResultCopyProbeTests|ResultSortProbeTests"
 while [ $# -gt 0 ]; do
     case "${1}" in
         --filter) FILTER="${2:-}"; shift 2 ;;
@@ -155,11 +184,12 @@ else:
     total, failed, unexpected = max(executed, key=lambda row: int(row[0]))
     if int(failed) or int(unexpected):
         failures.append(f"汇总非零失败：{failed} 失败 / {unexpected} 意外")
-    if int(total) < 22:
+    if int(total) < 29:
         failures.append(
-            f"只跑了 {total} 条 —— 五批二十二条（鼠标上报 / DECCKM / 右键归属 / ⌥⌘D 多光标 /"
+            f"只跑了 {total} 条 —— 六批二十九条（鼠标上报 / DECCKM / 右键归属 / ⌥⌘D 多光标 /"
             " ⌥⌘↑↓ 加光标 / ⌥ 拖拽列选 / 逐行菜单内容 / 菜单作用行 / 菜单确定性与跟随行 /"
-            " 点击地图 / 留白点给键盘 / 清空按钮三态 + 回车接线 / 打字后回车交词 / 修前对照 / 整框源锚点）应当都跑到"
+            " 点击地图 / 留白点给键盘 / 清空按钮三态 + 回车接线 / 打字后回车交词 / 修前对照 / 整框源锚点 /"
+            " 复制四档格式与默认 TSV / 排序三档与 NULL / Shift 次要键）应当都跑到"
         )
 
 expected = [
@@ -186,6 +216,13 @@ expected = [
     "testInsertCopyWithoutASourceTableSaysPlaceholderInsteadOfGuessing",
     "testEmptySelectionLeavesThePasteboardUntouched",
     "testCopyNeverLeavesAFileOnDisk",
+    # 第六批（v0.3.0 数据库运维面第二跳 · FR-STD-DB-RES-007）：客户端排序
+    "testEveryHeaderCellIsSortableAndAClickLandsOnItsOwnColumn",
+    "testClickingTheHeaderCyclesAscendingDescendingAndBackToServerOrder",
+    "testNullsStayAtTheEndInBothDirections",
+    "testShiftClickAddsASecondaryKeyWithoutLosingThePrimary",
+    "testShiftClickOnTheSecondaryKeyFlipsThenRemovesOnlyThatKey",
+    "testClickingTheEmptyHeaderAreaChangesNothing",
 ]
 for name in expected:
     if name not in log:
@@ -200,7 +237,7 @@ if failures:
     for item in failures:
         print(f"✗ {item}")
     sys.exit(1)
-print(f"✓ {total} 条都真跑过（五批）、都以 passed 收尾、没有跳过")
+print(f"✓ {total} 条都真跑过（六批）、都以 passed 收尾、没有跳过")
 PY
 
 echo
@@ -270,6 +307,8 @@ anchors = {
          "「哪些节点类型该有右键菜单」不再在 Core 里单点定义（漏一个就判不出来了）"),
     ),
     # 第五批（`FR-STD-DB-RES-006`）：探针点的必须是**产品那份菜单与那条写剪贴板的路**。
+    # 第六批（`FR-STD-DB-RES-007`）：再加表头点击那条路 —— 同一个文件，**一个键**（重复的键会让
+    #   Python 字典静默丢掉先出现的那一份，第五批三条判据就白钉了）。
     "App/Views/ResultGrid.swift": (
         ("for format in ResultClipboard.Format.allCases {",
          "「复制为…」子菜单不再按格式枚举现建 ⇒ 少一档格式用户就点不到，探针也就量成了别的菜单"),
@@ -277,10 +316,25 @@ anchors = {
          "复制不再写系统剪贴板（改成落文件 / 只打日志，用户粘贴到的就是旧内容）"),
         ("tableName: copySourceTable?.name ?? ResultClipboard.placeholderTableName,",
          "复制的 INSERT 不再用来源表名 ⇒ 贴回库里的语句指向 table_name 这张不存在的表"),
+        ("final class SortableHeaderView: NSTableHeaderView",
+         "表头退回裸 `NSTableHeaderView` ⇒ 认不出「点的是哪一列、有没有按 Shift」，多列排序又会退回读 `sortDescriptors.first`"),
+        ("if let header = tableView.headerView as? SortableHeaderView, let click = header.takeClick()",
+         "派发不再问表头记下的那一击 ⇒ Shift 加次要键时翻的是老主键（多列排序加不上新列）"),
+        ("onClick?(column, clickedAdditively)",
+         "表头认得出列号却不派发 ⇒ 表头点击只剩 AppKit 那条随版本飘的路"),
+        ("lastDisplayedRows != rows",
+         "显示内容变更退回「首末行摘要」判断 ⇒ 取消排序后表格不重载，界面上留着旧顺序"),
     ),
     "App/Views/ResultTableView.swift": (
         ("copySourceTable: sourceTable",
          "结果区不再把来源表交给表格 ⇒ 复制 INSERT 只能落占位表名（而来源表本来就是它手里的事实）"),
+        # 第六批（`FR-STD-DB-RES-007`）：表头点击真的接到状态层。
+        ("gridState.toggleSort(columnIndex: columnIndex, additive: additive)",
+         "表头点击不再交给状态层（排序循环只活在 Core 里，点表头会变成「什么都没发生」）"),
+    ),
+    "Core/ResultView.swift": (
+        ("case (true, false):\n                        return descriptor.nullsFirst",
+         "NULL 的先后不再只由 nullsFirst 决定 ⇒ 降序时 NULL 会跑到最前面（NULL 位置固定这条就没钉住）"),
     ),
     "App/Views/TitleBarSearchField.swift": (
         ("final class TitleBarSearchBoxView: NSView",
@@ -306,7 +360,7 @@ for relative, needles in anchors.items():
             failures.append(f"{relative} 里「{needle}」不见了：{why}")
 
 for probe in ("TerminalInteractionProbeTests", "MultiCursorProbeTests", "ObjectTreeContextMenuProbeTests",
-              "TitleBarSearchClickProbeTests", "ResultCopyProbeTests"):
+              "TitleBarSearchClickProbeTests", "ResultCopyProbeTests", "ResultSortProbeTests"):
     if not os.path.exists(os.path.join(root, f"TestsUISnapshot/{probe}.swift")):
         failures.append(f"TestsUISnapshot/{probe}.swift 不在盘上")
 
@@ -320,7 +374,7 @@ PY
 
 echo
 echo "==> 完成：证据日志在 ${OUT}/"
-echo "    本入口判住的十五条："
+echo "    本入口判住的十六条："
 echo "    · §1 FR-STD-WS-TOOL-001 鼠标上报（真 PTY 上的 SGR 报文：右下角点击列行变大、拖动 32、滚轮 64、⌥ 归本机）"
 echo "    · §1 FR-STD-WS-TOOL-001 方向键 DECCKM（?1h 时 ^[OA、复位后 ^[[B）"
 echo "    · §1 FR-STD-WS-TOOL-001 右键菜单（五项齐备且指向产品自己的动作、接管 + ⌥ 时按钮码 10 转发）"
@@ -336,3 +390,4 @@ echo "    · §1 FR-STD-WS-UI-006 清空按钮三态（空词隐藏 / 有词显�
 echo "    · §1 FR-STD-WS-UI-006 打字之后按回车那个词真的交出去（打字不许把 AppKit 的编辑会话收掉 —— 2026-10-02 晚的真缺陷）"
 echo "    · §1 FR-STD-WS-UI-006 修前对照（装饰参与命中测试的那份框必须判红 —— 这条判据量得出来）"
 echo "    · §3.4 FR-STD-DB-RES-006 复制为多格式（真视图 + 真菜单 + 真系统剪贴板：四档格式都在菜单里、默认 ⌘C = 带表头 TSV、转义不乱、只复制选中的行、INSERT 指向正在浏览的表、空选中不动剪贴板、不落文件）"
+echo "    · §3.4 FR-STD-DB-RES-007 客户端排序（真表头点击 + 真 AppKit 跟踪循环：升 → 降 → 取消三档、数值按数值比、NULL 两种方向都留末尾、Shift 加 / 翻 / 删次要键、点空白处不动、排序不改列宽）"

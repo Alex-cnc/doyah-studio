@@ -15,8 +15,8 @@ tasks:
     done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-RES-007 | grep -q '✅'"
     layer: "常用增强"
     prio: "中"
-    status: todo
-    evidence: ""
+    status: done
+    evidence: ".agent/evidence/2026-11-01-FR-STD-DB-RES-007.md"
   - id: FR-STD-DB-RES-008
     goal: "客户端筛选：每列可加条件（包含 / 不包含 / 等于 / 大于 / 小于 / 为空"
     done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-RES-008 | grep -q '✅'"

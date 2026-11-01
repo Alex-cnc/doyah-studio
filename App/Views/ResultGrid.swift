@@ -102,7 +102,13 @@ struct ResultGrid: NSViewRepresentable {
         tableView.usesAlternatingRowBackgroundColors = false
         tableView.backgroundColor = Theme.nsColor(Surface.content)
         tableView.style = .plain
-        tableView.headerView = NSTableHeaderView()
+        // 表头点击要认「点的是哪一列、有没有按 Shift」：交给 `SortableHeaderView` 自己记，
+        // 不能事后读 `sortDescriptors.first`（Shift 加次要键时第一个还是老主键）。
+        let header = SortableHeaderView()
+        header.onClick = { [weak coordinator = context.coordinator] column, additive in
+            coordinator?.dispatchHeaderClick(column: column, additive: additive)
+        }
+        tableView.headerView = header
 
         let menu = NSMenu()
         let copyItem = NSMenuItem(title: L(.commonCopy), action: #selector(CopyableTableView.copy(_:)), keyEquivalent: "c")
@@ -211,10 +217,15 @@ struct ResultGrid: NSViewRepresentable {
         /// 当前显示的行（可能是筛选 / 排序 / 分页后的子集）。
         private var rows: [[String?]] = []
         private var lastResultID: UUID?
-        /// 以「结果 id + 行数 + 首行 + 末行」判断显示内容是否变了。
+        /// 上一次真正画出来的那些行（外加它属于哪个结果集）。
         ///
         /// 只看 `result.id` 不够：排序、翻页都不换结果 id，但显示的行完全不同。
-        private var lastDisplaySignature: String = ""
+        /// 也**不能**只看「行数 + 首行 + 末行」这种摘要：排序前后首末行恰好相同的场合不少
+        /// （取消排序回到服务端顺序时，末行往往正是降序那份的末行），摘要相同 ⇒ 不重载
+        /// ⇒ 表格还留着旧顺序，用户以为排序没取消（FR-STD-DB-RES-007 的探针实测到的那次）。
+        /// 逐行比对是 O(行数) 的早退比较，结果集本来就已经在内存里。
+        private var lastDisplayedRows: [[String?]]?
+        private var lastDisplayedResultID: UUID?
         /// 回调由 SwiftUI 每次更新时刷新（闭包不是值类型，不能靠相等判断）。
         private var onToggleSort: ((Int, Bool) -> Void)?
         /// 选中行变化回调（同上，每次更新时刷新）。
@@ -296,9 +307,10 @@ struct ResultGrid: NSViewRepresentable {
             }
 
             // 显示内容没变就不重载：SwiftUI 每次刷新都重载会让滚动位置与选中态跳动。
-            let signature = "\(result.id)|\(rows.count)|\(rows.first ?? [])|\(rows.last ?? [])"
-            if signature != lastDisplaySignature {
-                lastDisplaySignature = signature
+            // 「变了没有」按**逐行比对**判，不用首末行摘要（见 `lastDisplayedRows` 的说明）。
+            if result.id != lastDisplayedResultID || lastDisplayedRows != rows {
+                lastDisplayedResultID = result.id
+                lastDisplayedRows = rows
                 // 显示的行换了（翻页 / 改每页条数 / 改筛选 / 改排序）：同一个行号从此指向**另一行**，
                 // 旧的选中态就是假的 —— 无论它是被 ⌘C 复制还是被行详情侧栏读取。
                 //
@@ -354,15 +366,28 @@ struct ResultGrid: NSViewRepresentable {
             isSyncingSortDescriptors = false
         }
 
+        /// 表头点击的唯一出口：`(列号, 是否按住 Shift)` —— 一次点击只翻一档，
+        /// 翻的是**用户点的那一列**。
+        func dispatchHeaderClick(column: Int, additive: Bool) {
+            guard column >= 0 else { return }
+            onToggleSort?(column, additive)
+        }
+
         /// 表头点击 → 交给状态层循环（升序 → 降序 → 取消）。
         func tableView(_ tableView: NSTableView, sortDescriptorsDidChange oldDescriptors: [NSSortDescriptor]) {
             guard !isSyncingSortDescriptors else { return }
+            // 点的是哪一列，问表头自己记下的那一击 —— 不读 `sortDescriptors.first`：
+            // Shift 加次要键时 AppKit 把新列**追加**在后面，第一个仍是被点的老主键，
+            // 照它派发等于「Shift 点了没反应」（多列排序永远加不上新列）。
+            if let header = tableView.headerView as? SortableHeaderView, let click = header.takeClick() {
+                dispatchHeaderClick(column: click.column, additive: click.additive)
+                return
+            }
+            // 不是表头点击引起的（程序化设值等）：按第一排序键照旧派发。
             guard let descriptor = tableView.sortDescriptors.first,
                   let key = descriptor.key,
                   let columnIndex = Int(key) else { return }
-            // Shift 按住时是「追加次要排序键」而不是替换。
-            let additive = NSEvent.modifierFlags.contains(.shift)
-            onToggleSort?(columnIndex, additive)
+            dispatchHeaderClick(column: columnIndex, additive: NSEvent.modifierFlags.contains(.shift))
         }
 
         // MARK: 行视图（斑马纹 / 选中态 / 发丝线都自己画）
@@ -712,6 +737,92 @@ private final class ResultHeaderCell: NSTableHeaderCell {
             width: cellFrame.width,
             height: Metrics.hairline
         ).fill()
+    }
+}
+
+// MARK: - 表头（排序点击的唯一入口）
+
+/// 结果表的表头：**点的是哪一列、有没有按 Shift** 由它自己记（FR-STD-DB-RES-007）。
+///
+/// 为什么不直接信 AppKit 的 `tableView.sortDescriptors`：
+///   · Shift 加次要键时新列是**追加**在后面的，`sortDescriptors.first` 仍是被点的老主键 ——
+///     照它派发，多列排序永远加不上新列（界面上表现为「Shift 点了没反应」）；
+///   · AppKit 对 Shift 点击的处置随系统版本不同（实测 macOS 27 的离屏窗口里它干脆不派发
+///     `sortDescriptorsDidChange`）—— 只靠它派发，多列排序会变成一片静默失效。
+///
+/// 所以：按下时先记下这一击 → 交给 `super` 走它的跟踪循环（列宽拖动、换列排序都得留着）→
+/// 跟踪循环回来后，若 AppKit 没有派发排序变化、而且这一击没拖动任何列，就由我们自己派发一次。
+/// `hasDispatched` 保证**一次点击只翻一档**（AppKit 先派过就绝不重复）。
+final class SortableHeaderView: NSTableHeaderView {
+
+    /// 表头点击的唯一出口：`(列号, 是否按住 Shift)`。
+    var onClick: ((Int, Bool) -> Void)?
+
+    /// 这一击点在哪个列（`-1` = 表头空白处）。
+    private(set) var clickedColumn: Int?
+    /// 这一击按下时有没有按 Shift（取**按下那一刻**的修饰键，不读派发时的实时键盘状态）。
+    private(set) var clickedAdditively = false
+    /// 这一击有没有被派发过。
+    private var hasDispatched = false
+
+    /// 分界线附近的点击留给「拖列宽」，不当排序点击：鼠标差几个点就会把一次瞄准分界线的
+    /// 按下变成「悄悄换了个排序」，那种「我没点排序，它自己排了」最难解释。
+    private static let dividerSlop: CGFloat = 2
+
+    /// 取走这一击。AppKit 的 `sortDescriptorsDidChange` 先到时会调它；取过一次就作废
+    /// （同一击不许翻两档）。
+    func takeClick() -> (column: Int, additive: Bool)? {
+        guard let clickedColumn, !hasDispatched else { return nil }
+        hasDispatched = true
+        return (clickedColumn, clickedAdditively)
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        let point = convert(event.locationInWindow, from: nil)
+        let column = column(at: point)
+        clickedColumn = isOnDivider(point) ? nil : column
+        clickedAdditively = event.modifierFlags.contains(.shift)
+        hasDispatched = false
+        let layoutBefore = layoutSignature()
+
+        // 列宽拖动 / 换列排序都在 AppKit 的跟踪循环里，不能吞掉（FR-STD-DB-RES-002）。
+        super.mouseDown(with: event)
+
+        // 跟踪循环回来了：AppKit 没派发排序变化（Shift 点击 / 部分系统），且这一击没拖动列
+        // ⇒ 由我们自己派发。拖动过（宽度 / 次序变了）或双连击一律不派发。
+        guard !hasDispatched,
+              event.clickCount <= 1,
+              layoutSignature() == layoutBefore,
+              let column = clickedColumn, column >= 0
+        else {
+            clickedColumn = nil
+            return
+        }
+        hasDispatched = true
+        onClick?(column, clickedAdditively)
+    }
+
+    /// 这一下点在不在两列之间的分界线上（含表头左 / 右端）。
+    ///
+    /// 表头与表格横向滚动是同步的：表头自己的 x 加回滚动量，才是表格坐标系里的 x
+    /// （`rect(ofColumn:)` 给的是表格坐标，未滚动的）。
+    private func isOnDivider(_ point: NSPoint) -> Bool {
+        guard let tableView else { return false }
+        let tableX = point.x + tableView.visibleRect.minX
+        for index in 0..<tableView.numberOfColumns {
+            let frame = tableView.rect(ofColumn: index)
+            if abs(tableX - frame.maxX) <= Self.dividerSlop { return true }
+            if abs(tableX - frame.minX) <= Self.dividerSlop { return true }
+        }
+        return false
+    }
+
+    /// 列次序 + 列宽。拖动会改它、排序点击不会 —— 用它区分「点了一下」与「拖了一下」。
+    private func layoutSignature() -> String {
+        guard let tableView else { return "" }
+        return tableView.tableColumns
+            .map { "\($0.identifier.rawValue):\(Int($0.width))" }
+            .joined(separator: ",")
     }
 }
 
