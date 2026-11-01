@@ -507,6 +507,19 @@ final class AppState: ObservableObject {
     // 与 Core 的分工：这里只负责"把证据取回来、把回答交出去解读"，判据全在 Core。
     @Published var isDiagnosisPresented = false
 
+    /// 连接上下文里的诊断入口（`FR-STD-DB-DIAG-006`）：从对象树右键带进来的作用域。
+    ///
+    /// `nil` = 这一轮诊断是从编辑器那条语句发起的（老入口），作用域与以前完全一样。
+    /// 有值 = 连接 / 库 / 对象 / 最近一次执行的读数都已带进上下文，取证按**对象**取。
+    @Published var objectDiagnosisScope: DiagnosisScope?
+
+    /// 结论里点对象名 → 树上那个节点的一次**跳转请求**（`FR-STD-DB-DIAG-006` ②）。
+    ///
+    /// 展开状态住在树视图本地（`ObjectTreeView.expandedIDs`），面板够不到，所以面板只发请求；
+    /// 树在 `onChange` 里展开路径、选中节点，然后把请求清掉（一次性，不重放）。
+    @Published var treeJumpRequest: ObjectTreeJumpRequest?
+
+
     // 维护任务编排（FR-AI-04）：计划文本、审阅结果与执行状态。
     @Published var isMaintenancePresented = false
 
@@ -11675,7 +11688,13 @@ final class AppState: ObservableObject {
     // MARK: - 对话式诊断（FR-AI-03）
 
     /// 打开诊断面板：SQL 取**当前页签**的（用户正看着的那条）。
+    ///
+    /// 这个入口同时负责**把上一轮的对象作用域清掉**：它代表「诊断编辑器里这条语句」，
+    /// 而「从对象树唤起」那一路（`beginObjectDiagnosis`）在调它之后立刻把作用域写回 ——
+    /// 于是「面板开着、作用域却是上一个对象」这种漂移不可能发生
+    /// （与 `selectTreeObject` 「唯一写入口」同一条口径）。
     func openDiagnosis() {
+        objectDiagnosisScope = nil
         diagnosisQuestion = L(.diagnosisQuestionField)
         diagnosisEvidence = []
         diagnosisReport = nil
@@ -11683,9 +11702,54 @@ final class AppState: ObservableObject {
         isDiagnosisPresented = true
     }
 
-    /// 当前页签的 SQL（诊断的默认对象）。
+    /// 从对象树右键唤起诊断（`FR-STD-DB-DIAG-006` ①）：
+    /// 连接 / 库 / 对象 / **最近一次执行的读数**一并带进上下文。
+    ///
+    /// 「最近一次执行」的来源只有一处 = 页签上的 `ExecutionReceiptLog`；哪几种结局算真的执行过
+    /// 由 Core 的 `DiagnosisScope.LastExecution(receipt:)` 判（被拒 / 未发出的不算）。
+    func beginObjectDiagnosis(for object: DatabaseObject) {
+        let scope = DiagnosisScope(
+            object: object,
+            connectionLabel: selectedConnection.map { "\($0.username)@\($0.endpointDescription)" } ?? "",
+            database: selectedTab?.database ?? selectedConnection?.database,
+            lastExecution: selectedTab?.receiptLog.receipts.last
+        )
+        openDiagnosis()          // 清上一轮证据（它也会把作用域清空）
+        objectDiagnosisScope = scope
+        diagnosisQuestion = L(.diagnosisScopeQuestion, scope.qualifiedName)
+        statusMessage = L(.diagnosisScopeOpened, scope.qualifiedName)
+    }
+
+    /// 诊断的默认语句：有作用域时按**对象**给（表 / 视图是自己那条浏览语句），否则取当前页签。
     var diagnosisTargetSQL: String {
-        selectedTab?.sql ?? ""
+        if let scope = objectDiagnosisScope {
+            return scope.targetSQL(dialect: diagnosisDialect) ?? ""
+        }
+        return selectedTab?.sql ?? ""
+    }
+
+    /// 这一轮诊断用的方言。
+    private var diagnosisDialect: any SQLDialect {
+        SQLDialectFactory.make(for: selectedConnection?.dbType ?? .postgresql)
+    }
+
+    /// 结论里可点的对象名（本片只有作用域那一个 —— 见 `DiagnosisScope.linkTargets` 那段理由）。
+    var diagnosisLinkTargets: [DiagnosisObjectLinker.Target] {
+        objectDiagnosisScope?.linkTargets ?? []
+    }
+
+    /// 结论里点了对象名：发一次跳转请求并收起面板（`FR-STD-DB-DIAG-006` ②）。
+    ///
+    /// 面板**不直接改树**：展开状态是树视图本地的，直接改选中项只会跳到一个没展开的节点上
+    /// （用户看到的是「什么都没发生」）。请求交给树，由它展开路径再选中。
+    func jumpToDiagnosisObject(_ target: DiagnosisObjectLinker.Target) {
+        treeJumpRequest = ObjectTreeJumpRequest(
+            kind: target.kind,
+            name: target.name,
+            schema: target.schema,
+            database: objectDiagnosisScope?.database ?? selectedTab?.database
+        )
+        isDiagnosisPresented = false
     }
 
     /// 取证：对真实库跑执行计划 / 锁 / 统计，取不到的那几条**如实记下原因**。
@@ -11694,7 +11758,10 @@ final class AppState: ObservableObject {
     /// 而"取哪几种证据、怎么标注"是规则 —— 规则在 Core，取数在这儿。
     func gatherDiagnosisEvidence(sql: String) async {
         let trimmed = sql.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else {
+        // 从对象树唤起时**不要求有语句**：列 / 函数 / 库这类节点本来就没有「那条语句」，
+        // 它们的取证是对象统计 + 最近一次执行的读数（没有就如实记「未取到」）。
+        // 老入口（诊断编辑器里那条语句）仍然要求语句非空 —— 空语句取不到任何执行计划。
+        if trimmed.isEmpty, objectDiagnosisScope == nil {
             diagnosisMessage = L(.diagnosisEmpty)
             return
         }
@@ -11714,29 +11781,53 @@ final class AppState: ObservableObject {
         var collected: [DiagnosisEvidence] = []
         do {
             let service = try await ensureService(for: configuration, database: tab.database)
-            let plan = DiagnosisContextBuilder.evidencePlan(for: trimmed, dialect: dialect)
+            // 有作用域（从对象树唤起）= 按**对象**取；没有 = 按语句取（老入口，计划一个字都没变）。
+            let plan: [DiagnosisScope.Planned]
+            if let scope = objectDiagnosisScope {
+                plan = scope.plannedEvidence(dialect: dialect, language: language)
+            } else {
+                plan = DiagnosisContextBuilder.evidencePlan(for: trimmed, dialect: dialect)
+                    .map { DiagnosisScope.Planned(kind: $0.kind, sql: $0.sql) }
+            }
             for (index, item) in plan.enumerated() {
                 let id = DiagnosisContextBuilder.evidenceID(index: index)
                 if item.kind == .statement {
                     collected.append(
                         DiagnosisContextBuilder.makeEvidence(
-                            id: id, kind: .statement, sql: item.sql, rows: [], language: language
+                            id: id, kind: .statement, sql: item.sql ?? trimmed, rows: [], language: language
+                        )
+                    )
+                    continue
+                }
+                // 「最近一次执行」不是一条查询：读数从作用域来，没有就**明说未取到**（判据 ③）。
+                if item.kind == .lastExecution {
+                    collected.append(lastExecutionEvidence(id: id, language: language))
+                    continue
+                }
+                guard let statement = item.sql else {
+                    // 没有查询可跑（这一级没有统计视图 / 方言不支持 / 名字不是合法标识符）：
+                    // 记一条**取不到**的证据并写清为什么 —— 不给空表（空表会被读成「没扫过」）。
+                    collected.append(
+                        DiagnosisContextBuilder.makeEvidence(
+                            id: id, kind: item.kind, sql: "", rows: nil,
+                            language: language,
+                            failureReason: item.unavailableReason ?? L(.diagnosisStatsNoDialect)
                         )
                     )
                     continue
                 }
                 do {
-                    let rows = try await runDiagnosisQuery(item.sql, on: service)
+                    let rows = try await runDiagnosisQuery(statement, on: service)
                     collected.append(
                         DiagnosisContextBuilder.makeEvidence(
-                            id: id, kind: item.kind, sql: item.sql, rows: rows, language: language
+                            id: id, kind: item.kind, sql: statement, rows: rows, language: language
                         )
                     )
                 } catch {
                     // 取不到就是取不到：把服务端说的话带上（"扩展没装"和"权限不够"要分得开）。
                     collected.append(
                         DiagnosisContextBuilder.makeEvidence(
-                            id: id, kind: item.kind, sql: item.sql, rows: nil,
+                            id: id, kind: item.kind, sql: statement, rows: nil,
                             language: language,
                             failureReason: error.localizedDescription
                         )
@@ -11747,6 +11838,28 @@ final class AppState: ObservableObject {
         } catch {
             diagnosisMessage = ErrorPresenter.message(for: error)
         }
+    }
+
+    /// 「最近一次执行」那条证据：有读数就是一行（语句 / 耗时 / 行数 / 影响行数 / 结局）；
+    /// 没有就**明说未取到**，不拿 0 行 0 ms 冒充一跑（判据 ③）。
+    private func lastExecutionEvidence(id: String, language: AppLanguage) -> DiagnosisEvidence {
+        guard let reading = objectDiagnosisScope?.lastExecution else {
+            return DiagnosisEvidence(
+                id: id,
+                kind: .lastExecution,
+                sql: "",
+                note: L(.diagnosisLastExecutionNone),
+                isAvailable: false
+            )
+        }
+        return DiagnosisEvidence(
+            id: id,
+            kind: .lastExecution,
+            sql: reading.statement,
+            rows: [reading.evidenceRow(language: language)],
+            note: reading.readingLine(language: language),
+            isAvailable: true
+        )
     }
 
     private func runDiagnosisQuery(_ sql: String, on service: any DatabaseService) async throws -> [[String?]] {
@@ -11761,9 +11874,17 @@ final class AppState: ObservableObject {
 
     /// 当前的诊断上下文（提示词与解读共用同一份，**不许各拼一份**）。
     var diagnosisContext: DiagnosisContext {
-        DiagnosisContext(
+        // 目标这一段必须把**库与对象**写进去（`FR-STD-DB-DIAG-006` 判据 ①）：
+        // 只写「谁@哪台机」，模型没法知道说的是这个库里的这张表。
+        let target: String
+        if let scope = objectDiagnosisScope {
+            target = scope.promptTarget
+        } else {
+            target = selectedConnection.map { "\($0.username)@\($0.endpointDescription)" } ?? ""
+        }
+        return DiagnosisContext(
             question: diagnosisQuestion,
-            target: selectedConnection.map { "\($0.username)@\($0.endpointDescription)" } ?? "",
+            target: target,
             evidence: diagnosisEvidence
         )
     }

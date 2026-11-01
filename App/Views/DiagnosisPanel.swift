@@ -25,6 +25,7 @@ struct DiagnosisPanel: View {
             Divider()
             ScrollView {
                 VStack(alignment: .leading, spacing: Spacing.l) {
+                    scopeSection
                     questionSection
                     evidenceSection
                     promptSection
@@ -89,6 +90,55 @@ struct DiagnosisPanel: View {
         .padding(Spacing.l)
     }
 
+    // MARK: 诊断上下文（从对象树带进来）
+
+    /// 连接 / 库 / 对象 / 最近一次执行的读数（`FR-STD-DB-DIAG-006` ①）。
+    ///
+    /// 只有「从对象树右键唤起」才有这一段：老入口（诊断编辑器里那条语句）的作用域是页签，
+    /// 它已经把语句显示在下面了，再列一遍「对象」只会让人以为选错了东西。
+    @ViewBuilder
+    private var scopeSection: some View {
+        if let scope = appState.objectDiagnosisScope {
+            VStack(alignment: .leading, spacing: Spacing.xs) {
+                Text(L(.diagnosisScopeSection))
+                    .font(Theme.font(.title))
+                Text(scope.summary(language: LocalizationManager.shared.effectiveLanguage))
+                    .font(Theme.font(.caption))
+                    .foregroundStyle(Theme.text(.secondary))
+                    .textSelection(.enabled)
+                lastExecutionRow(scope)
+            }
+            .padding(Spacing.s)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Theme.surface(.raised))
+            .clipShape(RoundedRectangle(cornerRadius: 6))
+        }
+    }
+
+    /// 最近一次执行的读数；**没有就说没有**（判据 ③：明说「未取到」，不编）。
+    @ViewBuilder
+    private func lastExecutionRow(_ scope: DiagnosisScope) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: Spacing.s) {
+            Text(L(.diagnosisLastExecutionSection))
+                .font(Theme.font(.caption))
+                .foregroundStyle(Theme.text(.secondary))
+            if let reading = scope.lastExecution {
+                Text(reading.statement)
+                    .font(Theme.font(.mono))
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                Text(reading.readingLine(language: LocalizationManager.shared.effectiveLanguage))
+                    .font(Theme.font(.caption))
+                    .foregroundStyle(reading.outcome == .failed ? Theme.status(.warning) : Theme.text(.secondary))
+            } else {
+                Text(L(.diagnosisLastExecutionNone))
+                    .font(Theme.font(.caption))
+                    .foregroundStyle(Theme.status(.warning))
+            }
+            Spacer(minLength: 0)
+        }
+    }
+
     // MARK: 问题与语句
 
     private var questionSection: some View {
@@ -113,7 +163,13 @@ struct DiagnosisPanel: View {
                 ) {
                     Task { await appState.gatherDiagnosisEvidence(sql: sql) }
                 }
-                .disabled(appState.diagnosisIsGathering || sql.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                // 从对象树唤起时不需要语句（对象统计 + 最近一次执行的读数就够了）——
+                // 老入口仍然要求先有一条语句。
+                .disabled(
+                    appState.diagnosisIsGathering
+                        || (appState.objectDiagnosisScope == nil
+                            && sql.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                )
                 Spacer()
             }
         }
@@ -246,6 +302,14 @@ struct DiagnosisPanel: View {
         VStack(alignment: .leading, spacing: Spacing.s) {
             Text(L(.diagnosisAdviceSection))
                 .font(Theme.font(.title))
+            // 这一批结论里出现了可点的对象名才提示 —— 没有链接时摆一句「可以点」等于骗人。
+            if report.items.contains(where: {
+                DiagnosisObjectLinker.hasLinks(in: $0.conclusion, targets: appState.diagnosisLinkTargets)
+            }) {
+                Text(L(.diagnosisLinkedHint))
+                    .font(Theme.font(.caption))
+                    .foregroundStyle(Theme.text(.secondary))
+            }
             if report.items.isEmpty {
                 Text(L(.diagnosisRejectionsSection))
                     .font(Theme.font(.caption))
@@ -256,9 +320,14 @@ struct DiagnosisPanel: View {
                     HStack(spacing: Spacing.s) {
                         Text("●")
                             .foregroundStyle(decisionTone(item.decision))
-                        Text(item.conclusion)
-                            .font(Theme.font(.body))
-                        Spacer()
+                        // 结论里的对象名可点（`FR-STD-DB-DIAG-006` ②）：
+                        // 点了发一次跳转请求、收起面板，树那边展开路径并选中。
+                        DiagnosisLinkedText(
+                            text: item.conclusion,
+                            targets: appState.diagnosisLinkTargets,
+                            onOpen: { appState.jumpToDiagnosisObject($0) }
+                        )
+                        Spacer(minLength: Spacing.s)
                         Text(decisionLabel(item.decision))
                             .font(Theme.font(.caption))
                             .foregroundStyle(decisionTone(item.decision))

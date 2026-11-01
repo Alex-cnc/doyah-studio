@@ -235,12 +235,12 @@ tasks:
     status: done
     evidence: ".agent/evidence/2026-11-01-B5.md"
   - id: FR-STD-DB-DIAG-006
-    goal: "—"
+    goal: "连接上下文里的诊断入口：从对象树右键唤起，连接 / 库 / 对象 / 最近一次执行读数一并带进上下文；结论里的对象名可点回节点；没有统计读数时明说未取到"
     done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-DIAG-006 | grep -q '✅'"
     layer: "常用增强"
     prio: "中"
-    status: todo
-    evidence: ""
+    status: done
+    evidence: ".agent/evidence/2026-11-02-B5.md"
   - id: FR-STD-DB-DRV-009
     goal: "GBase 8a 驱动实现（复用 MySQL 协议系的协议实现，具体库属平台实现）"
     done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-DRV-009 | grep -q '✅'"

@@ -243,6 +243,20 @@ set -euo pipefail
 # 列名写死 13+（2 红）· 扩展没装也当空排行（1 红）。
 # 边界：不是真数据库（217 真库那一段本跳连接超时 ⇒ 记「未知」）；面板版面与按钮灰显归快照层；
 # 真鼠标点一行由人承担。
+#
+# ## 第十五批（B5 批次余项）：`FR-STD-DB-DIAG-006` 连接上下文里的诊断入口
+#
+# `TestsUISnapshot/ObjectDiagnosisProbeTests` 判这一行的三条判据（台账备注此前一直是「目标列 —」）：
+#   ① 从对象树右键可唤起且**上下文自动带入** —— 两套渲染（AppKit 生产路径 / SwiftUI 那份）都在，
+#      点下去 `objectDiagnosisScope` 里连接 / 库 / 对象 / 最近一次执行的读数齐备，提示词里也带上了；
+#   ② 结论里的对象名**可点击跳到对应节点** —— 切段是 Core 的纯函数（长名优先 + 词边界），
+#      链接解回身份后发出的跳转请求逐字段对上（类型 / 名字 / schema / 库）；
+#   ③ 无统计读数时**明说「未取到」，不编** —— 列 / 视图 / 函数 / 非 PG 方言各自的理由，
+#      且一条语句都不发（不给空表：空表会被读成「这张表从来没被扫过」）。
+# 反例三段（各判红后 `shasum -a 256` 逐字节还原）：统计不按对象收窄（2 红）· 去掉词边界（1 红）·
+# 被拒的那一跑当成执行读数（1 红）。
+# 边界：不是真数据库（217 连不通 ⇒ 真统计读数记「未知」）；真鼠标点一下链接由人承担；
+# 树的展开 / 选中是视图内部状态（判的是「请求里是什么」）。
 
 ROOT="$(cd "$(dirname "${0}")/.." && pwd -P)"
 DEVELOPER_DIR="${DEVELOPER_DIR:-/Applications/Xcode.app/Contents/Developer}"
@@ -250,7 +264,7 @@ SWIFT="${DEVELOPER_DIR}/Toolchains/XcodeDefault.xctoolchain/usr/bin/swift"
 SCRATCH="${ROOT}/.build"
 CACHE="${ROOT}/.build-cache"
 OUT="${SCRATCH}/ui-interactions"
-FILTER="TerminalInteractionProbeTests|MultiCursorProbeTests|ObjectTreeContextMenuProbeTests|TitleBarSearchClickProbeTests|ResultCopyProbeTests|ResultSortProbeTests|ResultFilterProbeTests|ResultPagingProbeTests|ResultStreamExportProbeTests|ResultXLSXExportProbeTests|ExecutionReceiptPaneProbeTests|SQLTaskMenuProbeTests|TableExportStreamProbeTests|AgentApprovalDecisionProbeTests|ObjectTreeRetryProbeTests|BackupRestoreImportProbeTests|SessionDiagnosticsProbeTests"
+FILTER="TerminalInteractionProbeTests|MultiCursorProbeTests|ObjectTreeContextMenuProbeTests|TitleBarSearchClickProbeTests|ResultCopyProbeTests|ResultSortProbeTests|ResultFilterProbeTests|ResultPagingProbeTests|ResultStreamExportProbeTests|ResultXLSXExportProbeTests|ExecutionReceiptPaneProbeTests|SQLTaskMenuProbeTests|TableExportStreamProbeTests|AgentApprovalDecisionProbeTests|ObjectTreeRetryProbeTests|BackupRestoreImportProbeTests|SessionDiagnosticsProbeTests|ObjectDiagnosisProbeTests"
 while [ $# -gt 0 ]; do
     case "${1}" in
         --filter) FILTER="${2:-}"; shift 2 ;;
@@ -314,9 +328,9 @@ else:
     total, failed, unexpected = max(executed, key=lambda row: int(row[0]))
     if int(failed) or int(unexpected):
         failures.append(f"汇总非零失败：{failed} 失败 / {unexpected} 意外")
-    if int(total) < 85:
+    if int(total) < 106:
         failures.append(
-            f"只跑了 {total} 条 —— 十四批八十五条（鼠标上报 / DECCKM / 右键归属 / ⌥⌘D 多光标 /"
+            f"只跑了 {total} 条 —— 十五批一百零六条（鼠标上报 / DECCKM / 右键归属 / ⌥⌘D 多光标 /"
             " ⌥⌘↑↓ 加光标 / ⌥ 拖拽列选 / 逐行菜单内容 / 菜单作用行 / 菜单确定性与跟随行 /"
             " 点击地图 / 留白点给键盘 / 清空按钮三态 + 回车接线 / 打字后回车交词 / 修前对照 / 整框源锚点 /"
             " 复制四档格式与默认 TSV / 排序三档与 NULL / Shift 次要键 / 筛选条默认在场 /"
@@ -334,7 +348,10 @@ else:
             " 分页六档与页码字面 / 换档位回第 1 页 / 四枚箭头各自到头 / 越界页码夹取 /"
             " 分页后只复制当前页的行 / 十万行只物化一页 / 标注只对已加载行分页 /"
             " 十二万行游标顺序落盘且无 LIMIT·OFFSET / 分块落盘与进度 / 中途失败不留残件且能重试 /"
-            " xlsx 是标准 ZIP 六件齐 / 数值与文本类型映射 / 行列数与逐字节一致 / 不引第三方 xlsx 库）应当都跑到"
+            " xlsx 是标准 ZIP 六件齐 / 数值与文本类型映射 / 行列数与逐字节一致 / 不引第三方 xlsx 库 /"
+            " 诊断上下文（连接·库·对象·最近一次执行读数）带入 / 右键入口点在同一条收口上 /"
+            " 对象统计按对象收窄 / 没有统计视图时明说未取到且不发查询 /"
+            " 结论里的对象名带链接且解得回身份 / 词中间不许认出短名 / 提示词带齐上下文）应当都跑到"
         )
 
 expected = [
@@ -434,6 +451,15 @@ expected = [
     "testClickingRetryClearsTheErrorBeforeReloading",
     "testInFlightRowDrawsNoEntry",
     "testObjectTreeUsesThatRowAndCoreJudgement",
+    # 第十五批（B5 批次余项 · FR-STD-DB-DIAG-006）：连接上下文里的诊断入口
+    "testScopeCarriesConnectionDatabaseObjectAndLastExecutionReadings",
+    "testRefusedOrMissingReceiptReadsAsNotAvailableInsteadOfZero",
+    "testTableScopeGathersScopedStatisticsAndTheLastReadingInOrder",
+    "testObjectWithoutStatisticsSaysNotAvailableAndSendsNoQuery",
+    "testDiagnoseEntryIsInBothRenderingsAndCarriesTheContext",
+    "testClickedObjectNameBecomesALinkAndJumpsToThatNode",
+    "testNamesInsideLongerIdentifiersAreNotLinked",
+    "testPromptCarriesTheContextForTheModel",
 ]
 for name in expected:
     if name not in log:
@@ -448,7 +474,7 @@ if failures:
     for item in failures:
         print(f"✗ {item}")
     sys.exit(1)
-print(f"✓ {total} 条都真跑过（十二批）、都以 passed 收尾、没有跳过")
+print(f"✓ {total} 条都真跑过（十五批）、都以 passed 收尾、没有跳过")
 PY
 
 echo
@@ -629,6 +655,13 @@ anchors = {
          "备份执行器又不可注入 ⇒ 备份 / 逐段恢复只能靠人手点一次"),
         ("if let importServiceOverride",
          "导入的服务又不可注入 ⇒ 「值有没有串列」只能靠人点一次"),
+        # 第十五批（`FR-STD-DB-DIAG-006`）：上下文带入的唯一收口 / 跳转请求 / 按对象取证。
+        ("func beginObjectDiagnosis(for object: DatabaseObject)",
+         "对象诊断的上下文不再有一处收口 ⇒ 菜单与面板各拼一份「连接 / 库 / 对象」，迟早对不上"),
+        ("plan = scope.plannedEvidence(dialect: dialect, language: language)",
+         "取证不再按作用域取计划 ⇒ 又回到「按页签那条语句」那条路，对象统计根本不取"),
+        ("objectDiagnosisScope?.linkTargets ?? []",
+         "可点对象名的候选集不再来自作用域 ⇒ 结论里随便一个同名词都会被拿去树上猜"),
     ),
     # 第九批（`FR-STD-DB-TASK-001`）：菜单内容只许有一处判定、铺设只许走 AppKit 那份。
     "App/Views/SQLTaskAppKitMenu.swift": (
@@ -681,6 +714,36 @@ anchors = {
         ("public static func apply(",
          "两步执行（先清错误、再取数）不再有唯一出口 ⇒ 顺序又只有视图自己知道"),
     ),
+    # 第十五批（B5 批次余项 · `FR-STD-DB-DIAG-006`）：两套渲染都要有诊断入口，统计必须按对象收窄，
+    # 词边界必须真的判（否则「长名里认出短名」会跳到别的对象），链接必须由本层收口（不弹浏览器）。
+    "App/Views/ObjectTreeContextMenu.swift": (
+        ("L(.treeActionDiagnose)",
+         "SwiftUI 那份右键菜单少了诊断入口（第七十批的老毛病：只改了一份，用户点的是另一份）"),
+        ("appState.beginObjectDiagnosis(for: object)",
+         "SwiftUI 那份菜单自己拼上下文 ⇒ 与 AppKit 那条路不是同一份"),
+    ),
+    "App/Views/ObjectTreeAppKitMenu.swift": (
+        ("appState.beginObjectDiagnosis(for: object)",
+         "生产右键（AppKit）不再接同一条收口 ⇒ 点下去面板里的上下文是空的"),
+    ),
+    "Core/DiagnosisScope.swift": (
+        ("WHERE s.relname = \\(Self.literal(objectName))\\(schemaFilter)",
+         "表级统计不再按对象收窄 ⇒ 拿整库排行冒充「这张表」"),
+        ("case .cancelled, .refused: return nil",
+         "被拒 / 取消的那一跑被当成执行读数 ⇒ 上下文里会写出「0 行 0 ms」这种编出来的读数"),
+        ("public func statisticsQuery(dialect: any SQLDialect) -> String? {",
+         "对象统计查询不再是可判的一处 ⇒ 判据只能去读界面文案"),
+    ),
+    "Core/DiagnosisObjectLinks.swift": (
+        ("if isBoundary(before), isBoundary(after) {",
+         "词边界不再判 ⇒ 长名（orders_archive）里认出短名，点了跳到别的对象"),
+        ("piece.link = url",
+         "对象名不再带链接属性 ⇒ 判据 ② 的入口整块消失（只剩一句「可以点」的提示）"),
+    ),
+    "App/Views/DiagnosisLinkedText.swift": (
+        ("OpenURLAction { url in",
+         "点了链接不再由本层收口 ⇒ 会交给系统浏览器（一个 doyah-object:// 的地址）"),
+    ),
     "App/Views/TitleBarSearchField.swift": (
         ("final class TitleBarSearchBoxView: NSView",
          "整框不再是 AppKit 视图 ⇒ 命中测试又会被 SwiftUI 那层接走，可见框里的留白重新点不动（T-20261002-027 二次复测打回后的结构性换法）"),
@@ -711,7 +774,7 @@ for probe in ("TerminalInteractionProbeTests", "MultiCursorProbeTests", "ObjectT
               "AgentApprovalDecisionProbeTests", "ObjectTreeRetryProbeTests",
               "ResultPagingProbeTests", "ResultStreamExportProbeTests",
               "ResultXLSXExportProbeTests", "BackupRestoreImportProbeTests",
-              "SessionDiagnosticsProbeTests"):
+              "SessionDiagnosticsProbeTests", "ObjectDiagnosisProbeTests"):
     if not os.path.exists(os.path.join(root, f"TestsUISnapshot/{probe}.swift")):
         failures.append(f"TestsUISnapshot/{probe}.swift 不在盘上")
 
@@ -725,7 +788,7 @@ PY
 
 echo
 echo "==> 完成：证据日志在 ${OUT}/"
-echo "    本入口判住的十九条："
+echo "    本入口判住的各条（按批）："
 echo "    · §1 FR-STD-WS-TOOL-001 鼠标上报（真 PTY 上的 SGR 报文：右下角点击列行变大、拖动 32、滚轮 64、⌥ 归本机）"
 echo "    · §1 FR-STD-WS-TOOL-001 方向键 DECCKM（?1h 时 ^[OA、复位后 ^[[B）"
 echo "    · §1 FR-STD-WS-TOOL-001 右键菜单（五项齐备且指向产品自己的动作、接管 + ⌥ 时按钮码 10 转发）"
@@ -747,4 +810,5 @@ echo "    · §3.4 FR-STD-DB-IO-002 整表 / 整库导出（假服务应答游�
 echo "    · §3.4 FR-STD-DB-TASK-001 工具栏「任务」菜单（真 NSMenu 按行派发：行文案四段、空册子给理由、「保存」跟着语句走、点载入切语句·库·连接并绑上、点解绑松开页签、点删除册子与盘上各少一条、工具栏走同一份判定）"
 echo "    · §3.4 FR-STD-DB-TASK-002 审批单两枚动作（真 NSButton performClick：两枚都在且各带提示 / 在途全灰 / 点拒绝后队列清空、历史与盘上都是已拒绝且一条都没执行 / 覆盖写入两条各带目标库、拒绝交空表）"
 echo "    · §3.4 FR-STD-DB-META-006 失败那一行「重试」（真 NSButton performClick：按钮在且点得动 / 四档不出逐档零按钮 / 先清旧错误再取数 / 在途时入口消失）"
+echo "    · §3.4 FR-STD-DB-DIAG-006 连接上下文里的诊断入口（两套右键渲染都在、点下去连接 / 库 / 对象 / 最近一次执行读数齐备、对象统计按对象收窄、没有统计视图时明说不发查询、结论里的对象名带链接且解得回身份、词中间不许认出短名、提示词带齐上下文）"
 echo "    · §3.4 FR-STD-DB-RES-007 客户端排序（真表头点击 + 真 AppKit 跟踪循环：升 → 降 → 取消三档、数值按数值比、NULL 两种方向都留末尾、Shift 加 / 翻 / 删次要键、点空白处不动、排序不改列宽）"

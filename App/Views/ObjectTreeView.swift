@@ -167,6 +167,12 @@ struct ObjectTreeView: View {
         ) {
             await reloadRoot()
         }
+        // 诊断结论里点了对象名 → 展开路径并选中那个节点（`FR-STD-DB-DIAG-006` ②）。
+        // 请求是**一次性**的：处理完就在 `revealObject` 里清掉，切连接 / 重建视图都不会重放。
+        .onChange(of: appState.treeJumpRequest) { _, request in
+            guard let request else { return }
+            Task { await revealObject(request) }
+        }
         // 注：10 个 `.sheet` **不在这里** —— 它们挂在 `ConnectionListView` 那个唯一的 `List` 上。
         //
         // 原因（2026-09-24 修「编辑表结构」取消时连续闪烁）：修饰符挂在 `Group` 上会被
@@ -386,6 +392,81 @@ struct ObjectTreeView: View {
             StartupLog.write("对象树加载失败：\(object.kind.rawValue) \(object.name)（id=\(object.id)）→ \(message)")
         }
         loadingIDs.remove(object.id)
+    }
+
+    // MARK: - 从诊断结论跳回来（`FR-STD-DB-DIAG-006` ②）
+
+    /// 把树上那条路径展开、选中那个节点。
+    ///
+    /// 为什么不是「直接写选中项」：选中项只决定高亮，**展开状态是本地 `expandedIDs`** ——
+    /// 不展开路径的话，用户看到的是「面板关了，树上什么都没变」。
+    /// 每一级都走用户手点时的那条取数路（`loadMetadataChildren`），于是缓存 / 错误 /
+    /// 「空结果不算查过」三条口径不会分叉。
+    private func revealObject(_ request: ObjectTreeJumpRequest) async {
+        defer { appState.treeJumpRequest = nil }
+        guard appState.selectedConnection != nil else { return }
+
+        // 服务器节点：它就是根，选中即到。
+        if request.kind == .server {
+            if let server = roots.first(where: { $0.kind == .server }) {
+                appState.selectTreeObject(server)
+            } else {
+                appState.statusMessage = L(.diagnosisJumpMissing)
+            }
+            return
+        }
+
+        // 库：请求带了库名就用它；没带就退回「当前正在用的库」。
+        guard let databaseName = request.database
+                ?? appState.selectedTab?.database
+                ?? appState.selectedConnection?.database,
+              let database = roots.first(where: { $0.kind == .database && $0.name == databaseName })
+        else {
+            appState.statusMessage = L(.diagnosisJumpMissing)
+            return
+        }
+
+        if request.kind == .database {
+            expandedIDs.insert(database.id)
+            appState.selectTreeObject(database)
+            return
+        }
+
+        expandedIDs.insert(database.id)
+        var children = await childrenOf(database)
+
+        // schema：请求带了 schema 才下钻（表 / 视图 / 函数都住在某个 schema 下）。
+        if let schemaName = request.schema, !schemaName.isEmpty {
+            guard let schema = children.first(where: { $0.kind == .schema && $0.name == schemaName }) else {
+                appState.statusMessage = L(.diagnosisJumpMissing)
+                return
+            }
+            expandedIDs.insert(schema.id)
+            children = await childrenOf(schema)
+        }
+
+        guard let target = children.first(where: { matches($0, request) }) else {
+            // 找不到就**如实说找不到**：把状态栏写成「没找到」，而不是把选中项挪到一个近似节点上。
+            appState.statusMessage = L(.diagnosisJumpMissing)
+            return
+        }
+        if target.isExpandable { expandedIDs.insert(target.id) }
+        appState.selectTreeObject(target)
+    }
+
+    /// 取一个节点的子节点（缓存优先；空的缓存不算「查过了」，与手点同一条规则）。
+    private func childrenOf(_ object: DatabaseObject) async -> [DatabaseObject] {
+        if let cached = childrenCache[object.id], !cached.isEmpty { return cached }
+        guard let loaded = try? await appState.loadMetadataChildren(of: object) else { return [] }
+        childrenCache[object.id] = loaded
+        return loaded
+    }
+
+    private func matches(_ object: DatabaseObject, _ request: ObjectTreeJumpRequest) -> Bool {
+        guard object.kind == request.kind, object.name == request.name else { return false }
+        guard let schema = request.schema, !schema.isEmpty else { return true }
+        guard let nodeSchema = object.schema, !nodeSchema.isEmpty else { return true }
+        return nodeSchema == schema
     }
 
     private func reloadRoot() async {

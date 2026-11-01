@@ -2,19 +2,11 @@
 #
 # 唯一事实源 = Docs/Doyah产品开发计划任务清单-macOS.md（活书台账）。
 # 本文件只决定「一跳做哪几条」，不许反向改台账。
-# 生成于 2026-11-02，源 = plan.yaml 里 9 条 status: todo（已收口 26 条：RES-006, RES-007, RES-008, RES-009, RES-011, RES-013, RES-014, META-002, META-006, META-007, META-008, META-011, META-015, IO-002, IO-003, IO-004, IO-006, IO-007, SESS-002, SESS-003, SESS-004, TASK-001, TASK-002, TASK-003, DIAG-003, DIAG-004）
+# 生成于 2026-11-02，源 = plan.yaml 里 8 条 status: todo（已收口 27 条：RES-006, RES-007, RES-008, RES-009, RES-011, RES-013, RES-014, META-002, META-006, META-007, META-008, META-011, META-015, IO-002, IO-003, IO-004, IO-006, IO-007, SESS-002, SESS-003, SESS-004, TASK-001, TASK-002, TASK-003, DIAG-003, DIAG-004, DIAG-006）
 #
 # 生成命令：python3 Scripts/plan-batches.py --write   （--check 只比对不写盘）
 
 batches:
-
-  - id: B5
-    title: "会话与诊断：会话列表 / 取消终止 / 服务器级对象 / 慢查询 / 统计面板 / DIAG-006"
-    status: todo
-    est_min: 70
-    items: [FR-STD-DB-DIAG-006]
-    why: "全部走 pg_stat_* / pg_cancel_backend 一类系统视图，查询层同构；DIAG-006 是唯一 ⬜，同批补需求定义"
-    exit: "6 行两列全 ✅；DIAG-006 先补定义行再判"
 
   - id: B6
     title: "数据编辑与表结构：count(*) / 单元格编辑器 / 外键导航 / 结构编辑器 / Schema 对比"
@@ -32,5 +24,5 @@ batches:
     why: "连接层同一处改：分组是配置结构、SSH 隧道是连接前段、GBase 是协议族复用"
     exit: "3 行两列全 ✅；SSH 隧道允许只落「本机无跳板机」的如实未知"
 
-# 合计 9 条，覆盖 plan.yaml 全部 todo。
-# 粗估 175 分钟 ≈ 2.9 小时（原一格一条的节奏按 20 分钟/条算）。
+# 合计 8 条，覆盖 plan.yaml 全部 todo。
+# 粗估 105 分钟 ≈ 1.8 小时（原一格一条的节奏按 20 分钟/条算）。

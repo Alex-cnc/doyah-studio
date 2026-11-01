@@ -46,7 +46,7 @@ enum ObjectTreeAppKitMenu {
     ) -> NSMenu {
         let menu = NSMenu()
         if object.kind == .server {
-            appendServerItems(to: menu, appState: appState, onEdit: onEdit)
+            appendServerItems(to: menu, object: object, appState: appState, onEdit: onEdit)
         } else {
             appendObjectItems(to: menu, object: object, appState: appState)
         }
@@ -61,6 +61,17 @@ enum ObjectTreeAppKitMenu {
 
     private static func appendObjectItems(to menu: NSMenu, object: DatabaseObject, appState: AppState) {
         let kind = object.kind
+
+        // 连接上下文里的诊断入口（`FR-STD-DB-DIAG-006` ①）：**每一类节点**都能唤起。
+        // 上下文（连接 / 库 / 对象 / 最近一次执行的读数）由 `beginObjectDiagnosis` 一处带入 ——
+        // 菜单只负责点名「诊断谁」，不自己拼上下文（拼两份迟早对不上）。
+        let diagnose = ClosureMenuItem(title: L(.treeActionDiagnose)) {
+            appState.selectTreeObject(object)
+            appState.beginObjectDiagnosis(for: object)
+        }
+        diagnose.isEnabled = appState.isObjectTreeConnected
+        menu.addItem(diagnose)
+        menu.addItem(.separator())
 
         // 「新建表」（FR-DDL-03）：入口挂在**数据库 / schema** 节点上。
         if kind == .database || kind == .schema {
@@ -162,6 +173,7 @@ enum ObjectTreeAppKitMenu {
 
     private static func appendServerItems(
         to menu: NSMenu,
+        object: DatabaseObject,
         appState: AppState,
         onEdit: ((ConnectionConfig) -> Void)?
     ) {
@@ -217,12 +229,19 @@ enum ObjectTreeAppKitMenu {
         locks.isEnabled = isConnected
         menu.addItem(locks)
 
-        // 服务器会话（FR-SESS-01 / 02）。
+        // 服务器会话（`FR-SESS-01 / 02`）。
         let session = ClosureMenuItem(title: L(.sessionTitle) + "…") {
             appState.isSessionCommandPresented = true
         }
         session.isEnabled = isConnected
         menu.addItem(session)
+
+        // 连接上下文里的诊断入口（`FR-STD-DB-DIAG-006` ①）：服务器节点 = 「当前连接」那一级。
+        let diagnose = ClosureMenuItem(title: L(.treeActionDiagnose)) {
+            appState.beginObjectDiagnosis(for: object)
+        }
+        diagnose.isEnabled = isConnected
+        menu.addItem(diagnose)
 
         menu.addItem(.separator())
 

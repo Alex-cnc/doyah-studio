@@ -99,7 +99,7 @@ enum ObjectTreeContextMenu {
     ) -> some View {
         if let object {
             if object.kind == .server {
-                serverContextMenu(appState: appState, onEdit: onEdit)
+                serverContextMenu(object: object, appState: appState, onEdit: onEdit)
             } else {
                 objectContextMenu(for: object, appState: appState)
             }
@@ -115,6 +115,16 @@ enum ObjectTreeContextMenu {
     @MainActor
     @ViewBuilder
     private static func objectContextMenu(for object: DatabaseObject, appState: AppState) -> some View {
+        // 连接上下文里的诊断入口（`FR-STD-DB-DIAG-006` ①）：每一类节点都能唤起；
+        // 上下文由 `beginObjectDiagnosis` 一处带入（菜单只点名「诊断谁」）。
+        Button(L(.treeActionDiagnose)) {
+            appState.selectTreeObject(object)
+            appState.beginObjectDiagnosis(for: object)
+        }
+        .disabled(!appState.isObjectTreeConnected)
+
+        Divider()
+
         // 「新建表」（FR-DDL-03）：入口挂在**数据库 / schema** 节点上。
         // 它原来嵌在下面"表相关动作"那一块里，而那一块整体被 `truncateTable` 的可用性挡着
         // （只对 `.table` 为真）—— 于是这个按钮**从来没出现过**（2026-09-24 排查右键菜单时抓到）。
@@ -255,6 +265,7 @@ enum ObjectTreeContextMenu {
     @MainActor
     @ViewBuilder
     private static func serverContextMenu(
+        object: DatabaseObject,
         appState: AppState,
         onEdit: ((ConnectionConfig) -> Void)?
     ) -> some View {
@@ -309,6 +320,12 @@ enum ObjectTreeContextMenu {
         // 所以不需要再判节点类型 —— 会话是整个实例的概念（本轮我先多写了一次判断，编译才发现）。
         Button(L(.sessionTitle) + "…") {
             appState.isSessionCommandPresented = true
+        }
+        .disabled(!isConnected)
+
+        // 连接上下文里的诊断入口（`FR-STD-DB-DIAG-006` ①）：服务器节点 = 「当前连接」那一级。
+        Button(L(.treeActionDiagnose)) {
+            appState.beginObjectDiagnosis(for: object)
         }
         .disabled(!isConnected)
 

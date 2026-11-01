@@ -894,6 +894,38 @@ public enum LKey: String, CaseIterable, Sendable {
     case diagnosisRejectedUnknown
     case diagnosisRejectedUnparsable
     case diagnosisInserted
+    // MARK: 连接上下文里的诊断入口（`FR-STD-DB-DIAG-006`）
+    case treeActionDiagnose
+    case diagnosisScopeSection
+    case diagnosisScopeConnection
+    case diagnosisScopeDatabase
+    case diagnosisScopeObject
+    case diagnosisScopeQuestion
+    case diagnosisScopeOpened
+    case diagnosisLastExecutionSection
+    case diagnosisLastExecutionNone
+    case diagnosisLastExecutionLine
+    case diagnosisLastExecutionAffected
+    case diagnosisLastExecutionFailed
+    case diagnosisReadingUnmeasured
+    case diagnosisOutcomeSucceeded
+    case diagnosisOutcomeFailed
+    case diagnosisLinkedHint
+    case diagnosisJumpMissing
+    case diagnosisStatsNoDialect
+    case diagnosisStatsBadName
+    case diagnosisStatsView
+    case diagnosisStatsFunction
+    case diagnosisStatsColumn
+    case diagnosisStatsSequence
+    case diagnosisKindServer
+    case diagnosisKindDatabase
+    case diagnosisKindSchema
+    case diagnosisKindTable
+    case diagnosisKindView
+    case diagnosisKindColumn
+    case diagnosisKindFunction
+    case diagnosisKindSequence
     case mcpRefusedReadOnly
     case mcpApprovalTitle
     case menuMCPApprovals
@@ -4209,6 +4241,38 @@ public enum LocalizedStrings {
         .diagnosisRejectedUnknown: [.simplifiedChinese: "引用了不存在的证据：%@", .english: "cites unknown evidence: %@"],
         .diagnosisRejectedUnparsable: [.simplifiedChinese: "没看懂这一行", .english: "this line could not be parsed"],
         .diagnosisInserted: [.simplifiedChinese: "已放进编辑器（未执行）", .english: "Put in the editor (not executed)"],
+        // 连接上下文里的诊断入口（`FR-STD-DB-DIAG-006`）
+        .treeActionDiagnose: [.simplifiedChinese: "诊断这个对象…", .english: "Diagnose this object…"],
+        .diagnosisScopeSection: [.simplifiedChinese: "诊断上下文（从对象树带进来）", .english: "Diagnosis context (carried in from the object tree)"],
+        .diagnosisScopeConnection: [.simplifiedChinese: "连接：%@", .english: "Connection: %@"],
+        .diagnosisScopeDatabase: [.simplifiedChinese: "库：%@", .english: "Database: %@"],
+        .diagnosisScopeObject: [.simplifiedChinese: "对象：%@ %@", .english: "Object: %@ %@"],
+        .diagnosisScopeQuestion: [.simplifiedChinese: "这个对象有什么问题：%@", .english: "What is wrong with this object: %@"],
+        .diagnosisScopeOpened: [.simplifiedChinese: "诊断上下文已带入：%@", .english: "Diagnosis context carried in: %@"],
+        .diagnosisLastExecutionSection: [.simplifiedChinese: "最近一次执行（本会话）", .english: "Last execution (this session)"],
+        .diagnosisLastExecutionNone: [.simplifiedChinese: "未取到：本次会话还没有真正执行过语句（被拒绝 / 没发出去的那几条不算执行）", .english: "Not available: nothing has really been executed in this session (refused or never-sent runs do not count)"],
+        .diagnosisLastExecutionLine: [.simplifiedChinese: "耗时 %@ ms · 返回 %@ 行", .english: "%@ ms · %@ rows returned"],
+        .diagnosisLastExecutionAffected: [.simplifiedChinese: " · 影响 %@ 行", .english: " · %@ rows affected"],
+        .diagnosisLastExecutionFailed: [.simplifiedChinese: "这一跑失败了（错误原文在回执里）", .english: "This run failed (the error text is in the receipt)"],
+        .diagnosisReadingUnmeasured: [.simplifiedChinese: "未测到", .english: "not measured"],
+        .diagnosisOutcomeSucceeded: [.simplifiedChinese: "成功", .english: "succeeded"],
+        .diagnosisOutcomeFailed: [.simplifiedChinese: "失败", .english: "failed"],
+        .diagnosisLinkedHint: [.simplifiedChinese: "结论里的对象名可以点：点一下跳到对象树上那个节点。", .english: "Object names in the conclusions are clickable: click one to jump to that node in the object tree."],
+        .diagnosisJumpMissing: [.simplifiedChinese: "对象树里找不到这个节点（可能还没展开，或它已经被删掉）。", .english: "That node is not in the object tree (it may not be loaded yet, or it has been dropped)."],
+        .diagnosisStatsNoDialect: [.simplifiedChinese: "当前方言没有这类统计视图（未取到，不猜）", .english: "This dialect has no such statistics view (not available, nothing guessed)"],
+        .diagnosisStatsBadName: [.simplifiedChinese: "对象名不是合法标识符，不发查询（未取到）", .english: "The object name is not a valid identifier, so no query was sent (not available)"],
+        .diagnosisStatsView: [.simplifiedChinese: "视图没有自己的统计（开销记在底层表上，未取到）", .english: "A view has no statistics of its own (the cost sits on its underlying tables; not available)"],
+        .diagnosisStatsFunction: [.simplifiedChinese: "函数没有统计视图（未取到）", .english: "Functions have no statistics view (not available)"],
+        .diagnosisStatsColumn: [.simplifiedChinese: "列没有独立的统计视图（未取到：要看统计请对所属表发起诊断）", .english: "A column has no statistics view of its own (not available: diagnose the table instead)"],
+        .diagnosisStatsSequence: [.simplifiedChinese: "序列没有统计视图（未取到）", .english: "Sequences have no statistics view (not available)"],
+        .diagnosisKindServer: [.simplifiedChinese: "服务器", .english: "server"],
+        .diagnosisKindDatabase: [.simplifiedChinese: "库", .english: "database"],
+        .diagnosisKindSchema: [.simplifiedChinese: "模式", .english: "schema"],
+        .diagnosisKindTable: [.simplifiedChinese: "表", .english: "table"],
+        .diagnosisKindView: [.simplifiedChinese: "视图", .english: "view"],
+        .diagnosisKindColumn: [.simplifiedChinese: "列", .english: "column"],
+        .diagnosisKindFunction: [.simplifiedChinese: "函数", .english: "function"],
+        .diagnosisKindSequence: [.simplifiedChinese: "序列", .english: "sequence"],
         .mcpRefusedReadOnly: [.simplifiedChinese: "当前连接是只读的（或语句被判为写操作）：该调用被拒绝，批准也不能绕过", .english: "This connection is read-only (or the statement counts as a write): the call is refused and approval cannot bypass it"],
         .mcpApprovalTitle: [.simplifiedChinese: "外部调用审批", .english: "External call approvals"],
         .menuMCPApprovals: [.simplifiedChinese: "外部调用审批…", .english: "External call approvals…"],

@@ -34,6 +34,11 @@ public struct DiagnosisEvidence: Codable, Hashable, Sendable {
         case lockBlocking
         /// 表 / 索引体积与扫描统计。
         case tableStats
+        /// **对象级**统计（按节点取：这张表 / 这个 schema / 这个库 / 整个实例）——
+        /// 与 `tableStats` 的区别是作用域：那个是全库排行，这个只回答「这一个对象」。
+        case objectStats
+        /// 最近一次**真的执行过**的那一跑的读数（耗时 / 行数 / 影响行数 / 结局）。
+        case lastExecution
         /// 用户给的那条语句本身。
         case statement
 
@@ -43,6 +48,8 @@ public struct DiagnosisEvidence: Codable, Hashable, Sendable {
             case .slowQueries: return "slowQueries"
             case .lockBlocking: return "lockBlocking"
             case .tableStats: return "tableStats"
+            case .objectStats: return "objectStats"
+            case .lastExecution: return "lastExecution"
             case .statement: return "statement"
             }
         }
