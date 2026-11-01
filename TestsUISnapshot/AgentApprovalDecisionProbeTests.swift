@@ -214,8 +214,13 @@ final class AgentApprovalDecisionProbeTests: XCTestCase {
             contentsOf: root.appendingPathComponent("App/Views/AgentApprovalSheet.swift"),
             encoding: .utf8
         )
-        XCTAssertTrue(sheet.contains("AgentApprovalDecisionRow("),
-                      "审批单不再走那枚真按钮的动作行 ⇒ 离屏又点不到了")
+        // **归位（2026-11-01 B2 批次）**：上一片把这一行收进 `AgentApprovalDecisionWiring`
+        // 之后，审批单自己**不再点名** `AgentApprovalDecisionRow` —— 它只拿接线给的那一行。
+        // 原先那句「sheet 里要有 `AgentApprovalDecisionRow(`」因此变成了一条**永远判红**的陈旧钉：
+        // 它钉的是「审批单自己拼一行」这个**旧形状**，而正确形状恰恰相反（同一处产出、探针与用户点同一枚）。
+        // 所以这里改成反向钉：审批单**不许**自己构造那一行。产出那一行的地方由下面两条 + 壳里的源锚点管。
+        XCTAssertFalse(sheet.contains("AgentApprovalDecisionRow("),
+                       "审批单自己拼了一行 —— 那一行必须由 `AgentApprovalDecisionWiring` 产出，否则探针点的未必是用户点的那一枚")
         XCTAssertTrue(sheet.contains("AgentApprovalDecisionWiring.make("),
                       "审批单自己拼了一份「点了之后做什么」⇒ 探针量到的就不是用户点的那条路")
         XCTAssertTrue(sheet.contains("actions.row(isWorking: isWorking)"),

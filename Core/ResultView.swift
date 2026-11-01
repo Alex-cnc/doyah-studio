@@ -198,6 +198,15 @@ public enum ResultView {
     /// 每页行数的常用档位，供界面下拉使用。
     public static let pageSizeOptions: [Int] = [50, 100, 200, 500, 1_000]
 
+    /// 「不分页」这一档的值（界面上写作「全部」）。
+    ///
+    /// 它就是 `pageSize == 0` 的语义，不是「第 0 页」—— 单独命名是为了让界面与判据都读同一个常量，
+    /// 而不是各写一个 `0`。
+    public static let pageSizeAll = 0
+
+    /// 下拉里的全部档位（含「全部」）；顺序即界面顺序，判据按同一份顺序对照。
+    public static var pageSizeChoices: [Int] { pageSizeOptions + [pageSizeAll] }
+
     /// 依次应用筛选、排序，返回要显示的行。
     public static func rows(
         _ rows: [[String?]],

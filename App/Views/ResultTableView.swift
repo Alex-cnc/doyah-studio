@@ -569,6 +569,8 @@ struct ResultTableView: View {
                 ResultPagerBar(
                     page: page,
                     pageSize: gridState.pageSize,
+                    // RES-011 ②：客户端分页只对**已取回**的那些行生效，标注里的数字只能是它。
+                    loadedRowCount: result.rows.count,
                     onChangePageSize: { size in gridState.setPageSize(size) },
                     onGoToPage: { index in gridState.adopt(pageIndex: index) }
                 )

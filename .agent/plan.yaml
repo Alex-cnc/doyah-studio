@@ -29,29 +29,29 @@ tasks:
     done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-RES-009 | grep -q '✅'"
     layer: "常用增强"
     prio: "中"
-    status: todo
-    evidence: ""
+    status: done
+    evidence: ".agent/evidence/2026-11-01-B2.md"
   - id: FR-STD-DB-RES-011
     goal: "结果集分页 / 虚拟滚动超大数据量"
     done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-RES-011 | grep -q '✅'"
     layer: "常用增强"
     prio: "中"
-    status: todo
-    evidence: ""
+    status: done
+    evidence: ".agent/evidence/2026-11-01-B2.md"
   - id: FR-STD-DB-RES-013
     goal: "超大结果集流式落盘：导出直接写文件，不把全量结果驻留内存"
     done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-RES-013 | grep -q '✅'"
     layer: "进阶可选"
     prio: "低"
-    status: todo
-    evidence: ""
+    status: done
+    evidence: ".agent/evidence/2026-11-01-B2.md"
   - id: FR-STD-DB-RES-014
     goal: "结果集导出 Excel（.xlsx）"
     done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-RES-014 | grep -q '✅'"
     layer: "进阶可选"
     prio: "低"
-    status: todo
-    evidence: ""
+    status: done
+    evidence: ".agent/evidence/2026-11-01-B2.md"
   - id: FR-STD-DB-META-002
     goal: "GBase 8a 树形结构：服务器 → Database → Table → Col"
     done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-META-002 | grep -q '✅'"

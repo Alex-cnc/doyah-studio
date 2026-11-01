@@ -2,19 +2,11 @@
 #
 # 唯一事实源 = Docs/Doyah产品开发计划任务清单-macOS.md（活书台账）。
 # 本文件只决定「一跳做哪几条」，不许反向改台账。
-# 生成于 2026-11-01，源 = plan.yaml 里 27 条 status: todo（已收口 8 条：RES-006, RES-007, RES-008, META-006, IO-002, TASK-001, TASK-002, TASK-003）
+# 生成于 2026-11-01，源 = plan.yaml 里 23 条 status: todo（已收口 12 条：RES-006, RES-007, RES-008, RES-009, RES-011, RES-013, RES-014, META-006, IO-002, TASK-001, TASK-002, TASK-003）
 #
 # 生成命令：python3 Scripts/plan-batches.py --write   （--check 只比对不写盘）
 
 batches:
-
-  - id: B2
-    title: "结果面收尾：分页 / 筛选 / 流式落盘 / 导出 Excel"
-    status: todo
-    est_min: 50
-    items: [FR-STD-DB-RES-009, FR-STD-DB-RES-011, FR-STD-DB-RES-013, FR-STD-DB-RES-014]
-    why: "同属 ResultView 一族，探针共用同一套视图夹具，一起改一次跑；RES-006/007/008 刚在这条线上做过，上下文还热"
-    exit: "4 行两列全 ✅；结果面视图探针一批跑完"
 
   - id: B3
     title: "元数据面：跨库浏览 / 分组视图 / 对象搜索 / 查看 DDL"
@@ -56,5 +48,5 @@ batches:
     why: "连接层同一处改：分组是配置结构、SSH 隧道是连接前段、GBase 是协议族复用"
     exit: "3 行两列全 ✅；SSH 隧道允许只落「本机无跳板机」的如实未知"
 
-# 合计 27 条，覆盖 plan.yaml 全部 todo。
-# 粗估 335 分钟 ≈ 5.6 小时（原一格一条的节奏按 20 分钟/条算）。
+# 合计 23 条，覆盖 plan.yaml 全部 todo。
+# 粗估 285 分钟 ≈ 4.8 小时（原一格一条的节奏按 20 分钟/条算）。

@@ -15,3 +15,5 @@
 - 2026-11-01 `FR-STD-DB-TASK-002`：给 `AppState` 加了 `agentAuditLogOverride`（与 `sqlTaskStoreOverride` 同形）—— 理由：验一次「点拒绝 ⇒ 历史读作已拒绝」必须读盘上那份 JSONL，而 `agentAuditLog` 原本写死 `.shared`，那等于往用户的真审计里写一行。
 - 2026-11-01 `FR-STD-DB-META-006`（B1 第四片）：失败那一行的两步执行从视图 `performRetry` 搬进 `Core/ObjectTreeRetry.apply` —— 理由：顺序（先清错误、再取数）原先只活在 `@State` 上，除人点一次没有第二条路能读；搬进 Core 之后探针把两个回调接成记账状态就能判顺序。
 - 2026-11-01 `verify-ui-interactions.sh` 源锚点字典里 `"App/AppState.swift"` 登记了两次（第八批 + 第十批）⇒ Python 字典静默丢掉先出现那份，第八批两条判据两批以来是死的。已合成一个键并在原地加注「一个文件只许一个键」。这是坏判据（红线 #2/#14），不是本片引入。
+- 2026-11-01 B2 批次：分页条整条换成 AppKit 控件（不是「加一枚隐藏按钮」）—— 理由 = 离屏宿主里 SwiftUI `Picker` / `Button` 不落可点控件，四枚箭头与六档位在自动化里一次都量不到；换法沿用 `ResultFilterPopup` / `PanelIconButton` 两条既有先例。
+- 2026-11-01 B2 批次：`AgentApprovalDecisionProbeTests` 与源锚点里「审批单里要有 `AgentApprovalDecisionRow(`」改成反向钉（审批单**不许**自己构造那一行）—— 该钉子钉的是上一片之前那个旧形状，保留它等于保留一条永远判红的判据；产出者的锚点仍在 `AgentApprovalDecisionRow.swift` 那块。

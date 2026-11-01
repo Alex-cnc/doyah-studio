@@ -1634,6 +1634,7 @@ public enum LKey: String, CaseIterable, Sendable {
     case resultPagePrevious
     case resultPageNext
     case resultPageLast
+    case resultPageClientOnlyNote
 
     // 按条件浏览 / 统计行数（FR-DATA-02）
     case browseSheetTitle
@@ -4960,6 +4961,7 @@ public enum LocalizedStrings {
         .resultPagePrevious: [.simplifiedChinese: "上一页", .english: "Previous page"],
         .resultPageNext: [.simplifiedChinese: "下一页", .english: "Next page"],
         .resultPageLast: [.simplifiedChinese: "最后一页", .english: "Last page"],
+        .resultPageClientOnlyNote: [.simplifiedChinese: "仅对已加载的 %d 行分页（客户端分页）", .english: "Paging applies to the %d loaded rows only (client-side)"],
 
         .browseSheetTitle: [.simplifiedChinese: "按条件浏览：%@", .english: "Browse with a condition: %@"],
         .browseSheetServerSideNote: [.simplifiedChinese: "这里的条件会发给数据库执行（与结果区里的客户端筛选不同 —— 那个只在已取回的行上生效）", .english: "These conditions are sent to the database (unlike the client-side filter in the result area, which only applies to rows already fetched)"],

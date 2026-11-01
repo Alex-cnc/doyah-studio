@@ -2380,6 +2380,47 @@ final class AppState: ObservableObject {
             errorMessage = L(.exportFailed, AppError.notConnected.localizedDescription)
             return false
         }
+        let database = tab.database?.isEmpty == false
+            ? tab.database!
+            : queryDatabase(for: configuration)
+        let dialect = SQLDialectFactory.make(for: configuration.dbType)
+        do {
+            let service = try await ensureService(for: configuration, database: database)
+            return await exportResultStreaming(
+                tab: tab,
+                fallbackColumns: fallbackColumns,
+                format: format,
+                url: url,
+                baseName: baseName,
+                encoding: encoding,
+                dialect: dialect,
+                service: service
+            )
+        } catch {
+            errorMessage = L(.exportFailed, ErrorPresenter.message(for: error))
+            return false
+        }
+    }
+
+    /// 流式导出的**唯一落地口**（取数与写盘那一段）。
+    ///
+    /// 为什么把 service / dialect 提成形参：与 `streamTable` 同一条口径 —— 「服务从哪来」由调用方
+    /// 决定，于是探针能拿假服务把这条链**真跑一遍**（真 `CursorFetcher` 逐页取、真
+    /// `ResultStreamWriter` 逐页写盘），而不是只能靠人在保存面板上点一次。
+    ///
+    /// - Parameter onReport: 写盘结束后的读数（行数 / 字节数 / 落盘次数）。生产调用不传；
+    ///   判据拿它证明「确实是分块落盘」而不是「攒到最后一次写出去」。
+    func exportResultStreaming(
+        tab: QueryTab,
+        fallbackColumns: [ColumnMeta],
+        format: ResultExportFormat,
+        url: URL,
+        baseName: String,
+        encoding: ResultExportEncoding = .utf8,
+        dialect: any SQLDialect,
+        service: any DatabaseService,
+        onReport: ((ResultStreamWriter.Report) -> Void)? = nil
+    ) async -> Bool {
         let plan: CursorPagingPlan
         switch CursorPaging.plan(query: tab.sql, pageSize: Self.streamingExportPageSize) {
         case .success(let value): plan = value
@@ -2388,14 +2429,7 @@ final class AppState: ObservableObject {
             return false
         }
 
-        let database = tab.database?.isEmpty == false
-            ? tab.database!
-            : queryDatabase(for: configuration)
-        let dialect = SQLDialectFactory.make(for: configuration.dbType)
-
         do {
-            let service = try await ensureService(for: configuration, database: database)
-
             // `BEGIN` / `DECLARE` / `CLOSE` / `COMMIT` 都**没有结果集**，所以不能走
             // `runSingleQuery`（它把"没有结果集"当错误）—— 与 CLI 一样只取最后一个结果集，没有就空着。
             let fetcher = CursorFetcher(plan: plan, execute: { [self] sql in
@@ -2435,6 +2469,7 @@ final class AppState: ObservableObject {
                     )
                 }
                 let report = try writer.finish()
+                onReport?(report)
                 reportTabStatus(
                     L(
                         .exportStreamSucceeded,

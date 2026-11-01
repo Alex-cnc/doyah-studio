@@ -226,7 +226,7 @@ SWIFT="${DEVELOPER_DIR}/Toolchains/XcodeDefault.xctoolchain/usr/bin/swift"
 SCRATCH="${ROOT}/.build"
 CACHE="${ROOT}/.build-cache"
 OUT="${SCRATCH}/ui-interactions"
-FILTER="TerminalInteractionProbeTests|MultiCursorProbeTests|ObjectTreeContextMenuProbeTests|TitleBarSearchClickProbeTests|ResultCopyProbeTests|ResultSortProbeTests|ResultFilterProbeTests|ExecutionReceiptPaneProbeTests|SQLTaskMenuProbeTests|TableExportStreamProbeTests|AgentApprovalDecisionProbeTests|ObjectTreeRetryProbeTests"
+FILTER="TerminalInteractionProbeTests|MultiCursorProbeTests|ObjectTreeContextMenuProbeTests|TitleBarSearchClickProbeTests|ResultCopyProbeTests|ResultSortProbeTests|ResultFilterProbeTests|ResultPagingProbeTests|ResultStreamExportProbeTests|ResultXLSXExportProbeTests|ExecutionReceiptPaneProbeTests|SQLTaskMenuProbeTests|TableExportStreamProbeTests|AgentApprovalDecisionProbeTests|ObjectTreeRetryProbeTests"
 while [ $# -gt 0 ]; do
     case "${1}" in
         --filter) FILTER="${2:-}"; shift 2 ;;
@@ -290,9 +290,9 @@ else:
     total, failed, unexpected = max(executed, key=lambda row: int(row[0]))
     if int(failed) or int(unexpected):
         failures.append(f"汇总非零失败：{failed} 失败 / {unexpected} 意外")
-    if int(total) < 62:
+    if int(total) < 76:
         failures.append(
-            f"只跑了 {total} 条 —— 十二批六十二条（鼠标上报 / DECCKM / 右键归属 / ⌥⌘D 多光标 /"
+            f"只跑了 {total} 条 —— 十三批七十六条（鼠标上报 / DECCKM / 右键归属 / ⌥⌘D 多光标 /"
             " ⌥⌘↑↓ 加光标 / ⌥ 拖拽列选 / 逐行菜单内容 / 菜单作用行 / 菜单确定性与跟随行 /"
             " 点击地图 / 留白点给键盘 / 清空按钮三态 + 回车接线 / 打字后回车交词 / 修前对照 / 整框源锚点 /"
             " 复制四档格式与默认 TSV / 排序三档与 NULL / Shift 次要键 / 筛选条默认在场 /"
@@ -306,7 +306,11 @@ else:
             " 审批单两枚真按钮且各自带提示 / 点拒绝一条都没发且历史读作已拒绝 /"
             " 覆盖写入逐条带目标库且拒绝交空表 / 审批单走同一份接线 /"
             " 失败行一枚真重试按钮且点得动 / 四档不出逐档无按钮 / 先清旧错误再取数 /"
-            " 在途时入口消失 / 树的占位行走这一份）应当都跑到"
+            " 在途时入口消失 / 树的占位行走这一份 /"
+            " 分页六档与页码字面 / 换档位回第 1 页 / 四枚箭头各自到头 / 越界页码夹取 /"
+            " 分页后只复制当前页的行 / 十万行只物化一页 / 标注只对已加载行分页 /"
+            " 十二万行游标顺序落盘且无 LIMIT·OFFSET / 分块落盘与进度 / 中途失败不留残件且能重试 /"
+            " xlsx 是标准 ZIP 六件齐 / 数值与文本类型映射 / 行列数与逐字节一致 / 不引第三方 xlsx 库）应当都跑到"
         )
 
 expected = [
@@ -373,6 +377,23 @@ expected = [
     "testClickingRejectSendsNothingAndLeavesRejectedInHistory",
     "testOverwritePlanListsTwoStatementsWithTheirOwnTargetAndRejectionSendsNone",
     "testTheSheetUsesThatRowAndWiring",
+    # 第十三批（B2 批次 · FR-STD-DB-RES-009 / 011）：分页控制条与大结果集分页
+    "testPagerOffersEveryPageSizeAndSaysWhichPageOfHowMany",
+    "testChangingPageSizeGoesBackToTheFirstPage",
+    "testFirstPreviousNextAndLastEachLandOnTheirPage",
+    "testOutOfRangePageIndexIsClampedNotShownAsPageTenOfThree",
+    "testCopyAfterPagingTakesOnlyTheRowsOnTheCurrentPage",
+    "testLargeResultPagesOnePageAtATimeAndStaysResponsive",
+    "testPagerSaysItOnlyPagesTheLoadedRows",
+    # 第十三批（B2 批次 · FR-STD-DB-RES-013）：超大结果集流式落盘
+    "testLargeResultSetStreamsThroughACursorWithoutLimitOrOffset",
+    "testStreamedWriteIsChunkedAndReportsProgressPerPage",
+    "testCancelMidwayLeavesNoFileAndReleasesTheCursor",
+    # 第十三批（B2 批次 · FR-STD-DB-RES-014）：导出 Excel（.xlsx）
+    "testWorkbookIsARealZipWithEveryPartInside",
+    "testNumericAndTextCellsAreTypedTheWayTheResultSays",
+    "testEveryRowLandsOnceAndTheSameInputExportsIdenticalBytes",
+    "testTheWriterDoesNotPullAThirdPartyXLSXLibrary",
     # 第十二批（B1 批次第四片 · FR-STD-DB-META-006）：失败那一行的「重试」
     "testFailureRowDrawsARealRetryButtonAndClickingItRunsOnce",
     "testCoreJudgementDecidesWhetherTheEntryIsDrawn",
@@ -496,6 +517,29 @@ anchors = {
          "筛选条退回 `isClientViewActive` 才渲染 ⇒ 没排过序的用户永远加不了第一个筛选条件（死路）"),
         ("isClientViewActive: gridState.isClientViewActive,",
          "条拿不到「现在有没有客户端操作」⇒ 提示要么不出现、要么一进来就喊"),
+        # 第十三批（`FR-STD-DB-RES-009` / `RES-011` / `RES-014`）：分页条要拿到「已取回多少行」，
+        # xlsx 导出那一项必须在菜单里 —— 两件事都在这一个文件里，所以都钉在这一块。
+        ("loadedRowCount: result.rows.count,",
+         "分页条不再拿到「已取回的行数」⇒ RES-011 ② 那句标注要么消失、要么写了个别的数"),
+        ("Button(L(.exportXLSX)) { onExport(.xlsx, .utf8) }",
+         "导出菜单里没有「导出为 Excel（.xlsx）」这一项 ⇒ 能力在 Core 里、用户却点不到"),
+    ),
+    # 第十三批（`FR-STD-DB-RES-009` / `RES-011`）：分页条必须是**真 AppKit 控件**、标注必须由
+    # 「已取回的行数」算出来。退回 SwiftUI `Picker` / `Button` 时离屏宿主里只会剩下 0 枚控件，
+    # 判据立刻变白绿（这正是这两行原先只能靠人点的原因）。
+    "App/Views/ResultPagerBar.swift": (
+        ("final class ResultPagerControlsView: NSView",
+         "分页条退回 SwiftUI 控件 ⇒ 离屏宿主里不落 NSPopUpButton / NSButton，四枚箭头与档位又只能靠人点"),
+        ("sizePopup.selectItem(at: index)",
+         "下拉不再跟着生效的档位走 ⇒ 用户看到「100」、实际按 200 切"),
+        ("loadedNote.stringValue = isPaged ? L(.resultPageClientOnlyNote, loadedRowCount) : \"\"",
+         "RES-011 ② / R-21 那句「仅对已加载的 N 行分页」消失或脱离已取回行数 ⇒ 用户会以为翻页在查服务端"),
+        ("button.toolTip = help",
+         "箭头没有各自的提示 ⇒ 四枚同形图标分不出谁是谁（也是探针认按钮的依据）"),
+    ),
+    "Core/ResultView.swift": (
+        ("public static var pageSizeChoices: [Int] { pageSizeOptions + [pageSizeAll] }",
+         "档位清单不再是一处 ⇒ 界面与判据各写一份，少一档「全部」用户就切不回分页"),
     ),
     "App/Views/ResultClientViewBar.swift": (
         ("ResultFilterPopup(",
@@ -540,6 +584,11 @@ anchors = {
          "整库逐表落盘那一半又被塞回面板闭包里 ⇒ 它只能靠人点一次来验"),
         ("var agentAuditLogOverride: AgentAuditLog?",
          "审计落点不可注入 ⇒ 验一次「点拒绝」就得往用户的真审计里写一行（探针只能靠人手点）"),
+        # 第十三批（`FR-STD-DB-RES-013` / `RES-014`）：流式导出的服务注入点、xlsx 的一次性分支。
+        ("service: any DatabaseService,\n        onReport: ((ResultStreamWriter.Report) -> Void)? = nil",
+         "流式导出不再有「服务可注入」的落地口 ⇒ 十二万行那条链只能靠人在保存面板上点一次"),
+        ("if format.isBinary {",
+         "xlsx 不再走「一次性写完」那条分支 ⇒ 二进制工作簿被塞进逐页写入器（要么报错、要么写出坏文件）"),
     ),
     # 第九批（`FR-STD-DB-TASK-001`）：菜单内容只许有一处判定、铺设只许走 AppKit 那份。
     "App/Views/SQLTaskAppKitMenu.swift": (
@@ -571,8 +620,11 @@ anchors = {
          "按钮没有 target/action ⇒ 点了什么都不发生"),
     ),
     "App/Views/AgentApprovalSheet.swift": (
-        ("AgentApprovalDecisionRow(",
-         "审批单不再走那枚真按钮的动作行 ⇒ 离屏又点不到"),
+        # 归位（2026-11-01 B2 批次）：上一片把这一行收进 `AgentApprovalDecisionWiring` 之后，
+        # 审批单自己**不再点名**行类型，只拿接线产出的那一行 ⇒ 旧钉子成了永远判红的陈旧钉。
+        # 现在钉「动作区还在、且从接线取那一行」；「产出那一行的地方」由 `AgentApprovalDecisionRow.swift` 那块管。
+        ("private var decisionRow: some View {",
+         "审批单的动作区不见了（两枚决策入口整块消失）"),
         ("AgentApprovalDecisionWiring.make(",
          "审批单自己拼了一份接线 ⇒ 探针量到的不是用户点的那条路"),
         ("actions.row(isWorking: isWorking)",
@@ -616,7 +668,9 @@ for probe in ("TerminalInteractionProbeTests", "MultiCursorProbeTests", "ObjectT
               "TitleBarSearchClickProbeTests", "ResultCopyProbeTests", "ResultSortProbeTests",
               "ResultFilterProbeTests", "ExecutionReceiptPaneProbeTests",
               "SQLTaskMenuProbeTests", "TableExportStreamProbeTests",
-              "AgentApprovalDecisionProbeTests", "ObjectTreeRetryProbeTests"):
+              "AgentApprovalDecisionProbeTests", "ObjectTreeRetryProbeTests",
+              "ResultPagingProbeTests", "ResultStreamExportProbeTests",
+              "ResultXLSXExportProbeTests"):
     if not os.path.exists(os.path.join(root, f"TestsUISnapshot/{probe}.swift")):
         failures.append(f"TestsUISnapshot/{probe}.swift 不在盘上")
 
