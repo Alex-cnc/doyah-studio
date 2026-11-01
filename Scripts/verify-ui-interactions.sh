@@ -264,7 +264,7 @@ SWIFT="${DEVELOPER_DIR}/Toolchains/XcodeDefault.xctoolchain/usr/bin/swift"
 SCRATCH="${ROOT}/.build"
 CACHE="${ROOT}/.build-cache"
 OUT="${SCRATCH}/ui-interactions"
-FILTER="TerminalInteractionProbeTests|MultiCursorProbeTests|ObjectTreeContextMenuProbeTests|TitleBarSearchClickProbeTests|ResultCopyProbeTests|ResultSortProbeTests|ResultFilterProbeTests|ResultPagingProbeTests|ResultStreamExportProbeTests|ResultXLSXExportProbeTests|ExecutionReceiptPaneProbeTests|SQLTaskMenuProbeTests|TableExportStreamProbeTests|AgentApprovalDecisionProbeTests|ObjectTreeRetryProbeTests|BackupRestoreImportProbeTests|SessionDiagnosticsProbeTests|ObjectDiagnosisProbeTests|TableEditDDLProbeTests"
+FILTER="TerminalInteractionProbeTests|MultiCursorProbeTests|ObjectTreeContextMenuProbeTests|TitleBarSearchClickProbeTests|ResultCopyProbeTests|ResultSortProbeTests|ResultFilterProbeTests|ResultPagingProbeTests|ResultStreamExportProbeTests|ResultXLSXExportProbeTests|ExecutionReceiptPaneProbeTests|SQLTaskMenuProbeTests|TableExportStreamProbeTests|AgentApprovalDecisionProbeTests|ObjectTreeRetryProbeTests|BackupRestoreImportProbeTests|SessionDiagnosticsProbeTests|ObjectDiagnosisProbeTests|TableEditDDLProbeTests|UISnapshotSidebarStateTests"
 while [ $# -gt 0 ]; do
     case "${1}" in
         --filter) FILTER="${2:-}"; shift 2 ;;
@@ -328,9 +328,9 @@ else:
     total, failed, unexpected = max(executed, key=lambda row: int(row[0]))
     if int(failed) or int(unexpected):
         failures.append(f"汇总非零失败：{failed} 失败 / {unexpected} 意外")
-    if int(total) < 115:
+    if int(total) < 116:
         failures.append(
-            f"只跑了 {total} 条 —— 十六批一百一十五条（鼠标上报 / DECCKM / 右键归属 / ⌥⌘D 多光标 /"
+            f"只跑了 {total} 条 —— 十七批一百一十六条（鼠标上报 / DECCKM / 右键归属 / ⌥⌘D 多光标 /"
             " ⌥⌘↑↓ 加光标 / ⌥ 拖拽列选 / 逐行菜单内容 / 菜单作用行 / 菜单确定性与跟随行 /"
             " 点击地图 / 留白点给键盘 / 清空按钮三态 + 回车接线 / 打字后回车交词 / 修前对照 / 整框源锚点 /"
             " 复制四档格式与默认 TSV / 排序三档与 NULL / Shift 次要键 / 筛选条默认在场 /"
@@ -355,7 +355,8 @@ else:
             " 条件计数只发一条且多语句被拒 / 行详情列序与 JSON 竖排与空串分得开 /"
             " 外键入口要等元数据且只给有外键的列 / 跳转带值且无外键不生成语句 /"
             " 新列不带默认类型且空类型整批拒绝 / 结构变更先预览再按固定顺序执行 /"
-            " 结构对比默认不动目标多出的表且被跳过的如实列出）应当都跑到"
+            " 结构对比默认不动目标多出的表且被跳过的如实列出 /"
+            " 折叠状态活过一次活动栏切换（连接分组：折叠到像素上、视图树重建后逐字节相同））应当都跑到"
         )
 
 expected = [
@@ -474,6 +475,8 @@ expected = [
     "testDesignSheetStartsNewColumnsWithoutAGuessedType",
     "testAlterPlanRunsOnlyAfterItsPreviewAndInTheFixedOrder",
     "testSchemaDiffScriptsOnlyTickedChangesAndNeverDropsByDefault",
+    # 第十七批（B7 批次 · FR-STD-DB-CONN-012）：连接分组的折叠状态要活过活动栏切换
+    "testGroupCollapseSurvivesActivityBarSwitch",
 ]
 for name in expected:
     if name not in log:
@@ -488,7 +491,7 @@ if failures:
     for item in failures:
         print(f"✗ {item}")
     sys.exit(1)
-print(f"✓ {total} 条都真跑过（十六批）、都以 passed 收尾、没有跳过")
+print(f"✓ {total} 条都真跑过（十七批）、都以 passed 收尾、没有跳过")
 PY
 
 echo
@@ -823,7 +826,7 @@ for probe in ("TerminalInteractionProbeTests", "MultiCursorProbeTests", "ObjectT
               "ResultPagingProbeTests", "ResultStreamExportProbeTests",
               "ResultXLSXExportProbeTests", "BackupRestoreImportProbeTests",
               "SessionDiagnosticsProbeTests", "ObjectDiagnosisProbeTests",
-              "TableEditDDLProbeTests"):
+              "TableEditDDLProbeTests", "UISnapshotSidebarStateTests"):
     if not os.path.exists(os.path.join(root, f"TestsUISnapshot/{probe}.swift")):
         failures.append(f"TestsUISnapshot/{probe}.swift 不在盘上")
 
@@ -860,4 +863,5 @@ echo "    · §3.4 FR-STD-DB-TASK-001 工具栏「任务」菜单（真 NSMenu �
 echo "    · §3.4 FR-STD-DB-TASK-002 审批单两枚动作（真 NSButton performClick：两枚都在且各带提示 / 在途全灰 / 点拒绝后队列清空、历史与盘上都是已拒绝且一条都没执行 / 覆盖写入两条各带目标库、拒绝交空表）"
 echo "    · §3.4 FR-STD-DB-META-006 失败那一行「重试」（真 NSButton performClick：按钮在且点得动 / 四档不出逐档零按钮 / 先清旧错误再取数 / 在途时入口消失）"
 echo "    · §3.4 FR-STD-DB-DIAG-006 连接上下文里的诊断入口（两套右键渲染都在、点下去连接 / 库 / 对象 / 最近一次执行读数齐备、对象统计按对象收窄、没有统计视图时明说不发查询、结论里的对象名带链接且解得回身份、词中间不许认出短名、提示词带齐上下文）"
+echo "    · §3.4 FR-STD-DB-CONN-012 连接分组的折叠（离屏真渲染：折叠到像素上、切活动栏回来状态还在、视图树重建后逐字节相同）"
 echo "    · §3.4 FR-STD-DB-RES-007 客户端排序（真表头点击 + 真 AppKit 跟踪循环：升 → 降 → 取消三档、数值按数值比、NULL 两种方向都留末尾、Shift 加 / 翻 / 删次要键、点空白处不动、排序不改列宽）"

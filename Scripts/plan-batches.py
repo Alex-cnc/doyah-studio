@@ -123,7 +123,8 @@ def assign(todos: list[str]) -> list[tuple[dict, list[str]]]:
 
 
 def render(batches: list[tuple[dict, list[str]]], todos: list[str]) -> str:
-    done = [i for i, s in read_plan() if s != "todo"]
+    done = [i for i, s in read_plan() if s == "done"]
+    blocked = [i for i, s in read_plan() if s == "blocked"]
     total = sum(len(items) for _, items in batches)
     est = sum(spec["est_min"] for spec, items in batches if items)
     lines = [
@@ -133,7 +134,8 @@ def render(batches: list[tuple[dict, list[str]]], todos: list[str]) -> str:
         "# 本文件只决定「一跳做哪几条」，不许反向改台账。",
         f"# 生成于 {__import__('datetime').date.today().isoformat()}，"
         f"源 = plan.yaml 里 {len(todos)} 条 status: todo"
-        + (f"（已收口 {len(done)} 条：{', '.join(x.split('-')[-2] + '-' + x.split('-')[-1] for x in done)}）" if done else ""),
+        + (f"（已收口 {len(done)} 条：{', '.join(x.split('-')[-2] + '-' + x.split('-')[-1] for x in done)}）" if done else "")
+        + (f"（另有 {len(blocked)} 条 blocked，不在批次里：{', '.join(blocked)}）" if blocked else ""),
         "#",
         "# 生成命令：python3 Scripts/plan-batches.py --write   （--check 只比对不写盘）",
         "",

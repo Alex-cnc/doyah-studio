@@ -197,15 +197,15 @@ tasks:
     done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-CONN-012 | grep -q '✅'"
     layer: "常用增强"
     prio: "中"
-    status: todo
-    evidence: ""
+    status: done
+    evidence: ".agent/evidence/2026-11-02-B7.md"
   - id: FR-STD-DB-CONN-020
     goal: "SSH 隧道：通过 SSH 跳板连接不可直连的数据库（密码 / 私钥两种方式）"
     done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-CONN-020 | grep -q '✅'"
     layer: "常用增强"
     prio: "中"
-    status: todo
-    evidence: ""
+    status: done
+    evidence: ".agent/evidence/2026-11-02-B7.md"
   - id: FR-STD-DB-DDL-003
     goal: "表结构编辑器：可视化增删列、改类型、加索引与约束，并实时对照将要执行的 DDL （v"
     done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-DDL-003 | grep -q '✅'"
@@ -246,5 +246,5 @@ tasks:
     done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-DRV-009 | grep -q '✅'"
     layer: "进阶可选"
     prio: "低（排期最后）"
-    status: todo
-    evidence: ""
+    status: done
+    evidence: ".agent/evidence/2026-11-02-B7.md"

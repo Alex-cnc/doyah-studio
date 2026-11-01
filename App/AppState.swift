@@ -9485,7 +9485,11 @@ final class AppState: ObservableObject {
         } catch {
             // 取消同样留痕（`succeeded: false` + 可读原因），不再"什么都不记"。
             let cancelled = Task.isCancelled || error is CancellationError
-            let message = cancelled ? L(.stateCancelled) : ErrorPresenter.message(for: error)
+            // FR-CONN-18 判据 ②：隧道断了要**指明是隧道问题**，不能只报「连接已断开」——
+            // 归因与「作废这条连接」都在 `tunnelAwareMessage` 一处（判据在 `SSHTunnelDiagnosis`）。
+            let message = cancelled
+                ? L(.stateCancelled)
+                : tunnelAwareMessage(ErrorPresenter.message(for: error), configuration: configuration)
             updateTab(tabID) {
                 if cancelled {
                     $0.statusMessage = message
@@ -9725,6 +9729,32 @@ final class AppState: ObservableObject {
                 statusMessage = L(.startupSQLFailed, statement, ErrorPresenter.message(for: error))
             }
         }
+    }
+
+    /// 查询失败时按隧道状态改写那句人话（FR-CONN-18 判据 ②）。
+    ///
+    /// 三件事一次做完，顺序不能反：
+    /// 1. **先如实改判**（`markDeadIfExited`）：进程没了但状态还停在 `.ready` 时，先把它改成 `.failed`；
+    /// 2. **再决定说不说**（`SSHTunnelDiagnosis.annotate`）：只有「配置了隧道 + 隧道真的死了」才加话，
+    ///    直连与隧道好好的两种情况下，一个字节都不改；
+    /// 3. **最后收掉这条连接**：死隧道 + 挂在它上面的连接一起作废，下一次执行重建 ——
+    ///    否则会一直复用一条已经断掉的连接，报出来的又是看不懂的连接错误。
+    private func tunnelAwareMessage(_ message: String, configuration: ConnectionConfig) -> String {
+        guard let tunnel = sshTunnels[configuration.id] else { return message }
+        let language = LocalizationManager.shared.effectiveLanguage
+        _ = tunnel.markDeadIfExited(language: language)
+        let state = tunnel.currentState
+        let annotated = SSHTunnelDiagnosis.annotate(
+            message: message,
+            tunnel: configuration.sshTunnel,
+            state: state,
+            language: language
+        )
+        guard SSHTunnelDiagnosis.shouldRebuild(state: state, tunnel: configuration.sshTunnel) else {
+            return annotated
+        }
+        invalidateService(for: configuration.id)
+        return annotated
     }
 
     /// 按需建/复用 SSH 隧道（FR-CONN-18）；没配隧道时返回 `nil`。

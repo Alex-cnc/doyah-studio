@@ -1064,6 +1064,10 @@ public enum LKey: String, CaseIterable, Sendable {
     case sshTunnelFailed
     case sshTunnelReady
     case sshTunnelStopped
+    /// 查询失败时的归因：隧道已经没了（判据 ② 要「指明是隧道问题而非库问题」）。
+    case sshTunnelDroppedDuringQuery
+    /// `.stopped` 这一档没有「为什么停」的原文时用的中性理由（不是失败原因）。
+    case sshTunnelStoppedWithoutReason
     case sshTunnelNoFreePort
     case sshSectionTitle
     case sshSectionSubtitle
@@ -4410,6 +4414,8 @@ public enum LocalizedStrings {
         .sshTunnelFailed: [.simplifiedChinese: "SSH 隧道建立失败（%@）：%@", .english: "Could not bring up the SSH tunnel (%@): %@"],
         .sshTunnelReady: [.simplifiedChinese: "SSH 隧道已就绪，本机端口 %@", .english: "SSH tunnel is ready on local port %@"],
         .sshTunnelStopped: [.simplifiedChinese: "SSH 隧道已断开（%@）", .english: "SSH tunnel closed (%@)"],
+        .sshTunnelDroppedDuringQuery: [.simplifiedChinese: "SSH 隧道已中断（%@）：%@ —— 这是隧道的问题，不是数据库拒绝", .english: "The SSH tunnel dropped (%@): %@ — the failure is in the tunnel, not the database"],
+        .sshTunnelStoppedWithoutReason: [.simplifiedChinese: "隧道已关闭", .english: "the tunnel was closed"],
         .sshTunnelNoFreePort: [.simplifiedChinese: "找不到空闲的本地端口给 SSH 隧道用", .english: "No free local port is available for the SSH tunnel"],
         .sshSectionTitle: [.simplifiedChinese: "SSH 隧道", .english: "SSH tunnel"],
         .sshSectionSubtitle: [.simplifiedChinese: "数据库只允许内网访问时，先连跳板机，再由跳板机转发到数据库。", .english: "When the database is only reachable from inside, connect to a jump host first and let it forward to the database."],

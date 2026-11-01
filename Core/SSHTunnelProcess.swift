@@ -63,6 +63,44 @@ public final class SSHTunnelProcess: @unchecked Sendable {
         return state
     }
 
+    /// 转发进程还活着吗 —— 「隧道还在」的**唯一硬证据**是那个进程在，不是我们上次记下的状态。
+    public var isAlive: Bool {
+        lock.lock(); defer { lock.unlock() }
+        return process?.isRunning ?? false
+    }
+
+    /// 转发进程号（诊断 / 测试用；没起来时为 `nil`）。
+    public var processIdentifier: Int32? {
+        lock.lock(); defer { lock.unlock() }
+        guard let process, process.isRunning else { return nil }
+        return process.processIdentifier
+    }
+
+    /// **进程已经没了、状态却还停在 `.ready`** 的如实改判（返回是否发生了改判）。
+    ///
+    /// 为什么需要它：`ssh` 被外部杀掉（跳板机踢人 / 用户自己 `kill` / 系统休眠后连接没了）时，
+    /// 没有任何回调会来告诉我们；状态若一直停在 `.ready`，用户看到的就只是
+    /// 「查询失败：连接已断开」—— 而真因在隧道（FR-CONN-18 判据 ②）。
+    @discardableResult
+    public func markDeadIfExited(language: AppLanguage) -> Bool {
+        lock.lock()
+        let current = state
+        let running = process?.isRunning ?? false
+        lock.unlock()
+
+        guard case .ready = current, !running else { return false }
+        let diagnostic = diagnosticText
+        let reason = diagnostic.isEmpty
+            ? LocalizedStrings.text(.sshTunnelProcessExitedSilently, language: language)
+            : LocalizedStrings.format(.sshTunnelProcessExited, language: language, diagnostic)
+        lock.lock()
+        process = nil
+        lock.unlock()
+        cleanUpTemporaryFiles()
+        setState(.failed(reason))
+        return true
+    }
+
     /// `ssh` 的 stderr 尾巴（出错时说人话的依据）；口令若意外出现会被抹掉。
     public var diagnosticText: String {
         lock.lock()
