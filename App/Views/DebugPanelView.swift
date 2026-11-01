@@ -61,7 +61,7 @@ struct DebugPanelView: View {
         VStack(alignment: .leading, spacing: Spacing.xs) {
             Text(L(.debugBreakpoints)).font(Theme.font(.title))
             if model.breakpoints.isEmpty {
-                Text(L(.debugEmptyBreakpoints, caretLineValue))
+                Text(L(.debugEmptyBreakpoints, 1))
                     .font(Theme.font(.caption))
                     .foregroundStyle(Theme.text(TextTone.secondary))
             } else {
@@ -158,13 +158,13 @@ struct DebugPanelView: View {
         .padding(Spacing.m)
     }
 
-    /// 空清单那句提示里的行号（没有光标时给 1，句子仍然成立）。
-    private var caretLineValue: Int { 1 }
+    /// 「正在启动调试：」那一行里的程序路径（单独取出来，别把成员表达式塞进格式实参）。
+    private var runningProgram: String { model.program }
 
     private var stateLine: String {
         switch model.phase {
         case .idle: return ""
-        case .running: return L(.debugStarting, model.program)
+        case .running: return L(.debugStarting, runningProgram)
         case .stopped(let file, let line): return L(.debugStoppedAt, file, line)
         case .finished(let reason): return L(.debugFinished, reason)
         case .failed(let reason): return reason

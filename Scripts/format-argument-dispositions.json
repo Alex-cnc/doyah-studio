@@ -584,6 +584,54 @@
    "kind": "text",
    "maxSites": 1,
    "reason": "2026-10-29 第五十八批（存量补齐）：`App/WorkspaceStore.swift:405` 的 `L(.workspaceUndoRename, entry.originalURL?.lastPathComponent ?? \"\")` —— `URL?.lastPathComponent ?? \"\"` 是 String，模板收 `%@`。同 R52 那片，形状一直没登记。"
+  },
+  {
+   "shape": "<target>",
+   "kind": "unverified",
+   "maxSites": 1,
+   "reason": "2026-11-01 v0.2.0 收口片：`FR-STD-WS-TOOL-003`（调试器面板）与 `FR-STD-WS-AI-001`（编辑区 AI 辅助）新增的界面文案实参全部是 `String` / `Int`（程序路径、秒数、DAP 命令名、错误原文、模型名、端点）—— 门禁解析不到裸标识符的静态类型，按既有做法只登记形状与处数棘轮，不做槽位交叉检查。"
+  },
+  {
+   "shape": "<seconds>",
+   "kind": "unverified",
+   "maxSites": 3,
+   "reason": "2026-11-01 v0.2.0 收口片：`FR-STD-WS-TOOL-003`（调试器面板）与 `FR-STD-WS-AI-001`（编辑区 AI 辅助）新增的界面文案实参全部是 `String` / `Int`（程序路径、秒数、DAP 命令名、错误原文、模型名、端点）—— 门禁解析不到裸标识符的静态类型，按既有做法只登记形状与处数棘轮，不做槽位交叉检查。"
+  },
+  {
+   "shape": "<command>",
+   "kind": "unverified",
+   "maxSites": 2,
+   "reason": "2026-11-01 v0.2.0 收口片：`FR-STD-WS-TOOL-003`（调试器面板）与 `FR-STD-WS-AI-001`（编辑区 AI 辅助）新增的界面文案实参全部是 `String` / `Int`（程序路径、秒数、DAP 命令名、错误原文、模型名、端点）—— 门禁解析不到裸标识符的静态类型，按既有做法只登记形状与处数棘轮，不做槽位交叉检查。"
+  },
+  {
+   "shape": "<why>",
+   "kind": "unverified",
+   "maxSites": 1,
+   "reason": "2026-11-01 v0.2.0 收口片：`FR-STD-WS-TOOL-003`（调试器面板）与 `FR-STD-WS-AI-001`（编辑区 AI 辅助）新增的界面文案实参全部是 `String` / `Int`（程序路径、秒数、DAP 命令名、错误原文、模型名、端点）—— 门禁解析不到裸标识符的静态类型，按既有做法只登记形状与处数棘轮，不做槽位交叉检查。"
+  },
+  {
+   "shape": "<runningProgram>",
+   "kind": "unverified",
+   "maxSites": 1,
+   "reason": "2026-11-01 v0.2.0 收口片：`FR-STD-WS-TOOL-003`（调试器面板）与 `FR-STD-WS-AI-001`（编辑区 AI 辅助）新增的界面文案实参全部是 `String` / `Int`（程序路径、秒数、DAP 命令名、错误原文、模型名、端点）—— 门禁解析不到裸标识符的静态类型，按既有做法只登记形状与处数棘轮，不做槽位交叉检查。"
+  },
+  {
+   "shape": "<file>",
+   "kind": "unverified",
+   "maxSites": 1,
+   "reason": "2026-11-01 v0.2.0 收口片：`FR-STD-WS-TOOL-003`（调试器面板）与 `FR-STD-WS-AI-001`（编辑区 AI 辅助）新增的界面文案实参全部是 `String` / `Int`（程序路径、秒数、DAP 命令名、错误原文、模型名、端点）—— 门禁解析不到裸标识符的静态类型，按既有做法只登记形状与处数棘轮，不做槽位交叉检查。"
+  },
+  {
+   "shape": "<modelText>",
+   "kind": "unverified",
+   "maxSites": 1,
+   "reason": "2026-11-01 v0.2.0 收口片：`FR-STD-WS-TOOL-003`（调试器面板）与 `FR-STD-WS-AI-001`（编辑区 AI 辅助）新增的界面文案实参全部是 `String` / `Int`（程序路径、秒数、DAP 命令名、错误原文、模型名、端点）—— 门禁解析不到裸标识符的静态类型，按既有做法只登记形状与处数棘轮，不做槽位交叉检查。"
+  },
+  {
+   "shape": "<endpointText>",
+   "kind": "unverified",
+   "maxSites": 1,
+   "reason": "2026-11-01 v0.2.0 收口片：`FR-STD-WS-TOOL-003`（调试器面板）与 `FR-STD-WS-AI-001`（编辑区 AI 辅助）新增的界面文案实参全部是 `String` / `Int`（程序路径、秒数、DAP 命令名、错误原文、模型名、端点）—— 门禁解析不到裸标识符的静态类型，按既有做法只登记形状与处数棘轮，不做槽位交叉检查。"
   }
  ],
  "exceptions": []

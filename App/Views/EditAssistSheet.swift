@@ -28,6 +28,10 @@ struct EditAssistSheet: View {
 
     // MARK: - 头（动作名 + 模型 + 端点）
 
+    /// 「模型：」/「端点：」那两行的值：**空就写「未配置」**（不编默认值，契约 ②）。
+    private var modelText: String { model.modelName.isEmpty ? L(.editAssistNotConfigured) : model.modelName }
+    private var endpointText: String { model.endpointName.isEmpty ? L(.editAssistNotConfigured) : model.endpointName }
+
     private var header: some View {
         VStack(alignment: .leading, spacing: Spacing.xs) {
             HStack {
@@ -39,10 +43,10 @@ struct EditAssistSheet: View {
                 Button(L(.commonClose), role: .cancel) { model.dismiss(); dismiss() }
             }
             // 契约 ②：说得出用的是哪个模型与端点（空 = 未配置，照实说，不编默认值）。
-            Text(L(.editAssistModelLine, model.modelName.isEmpty ? L(.editAssistNotConfigured) : model.modelName))
+            Text(L(.editAssistModelLine, modelText))
                 .font(Theme.font(.caption))
                 .foregroundStyle(Theme.text(TextTone.secondary))
-            Text(L(.editAssistEndpointLine, model.endpointName.isEmpty ? L(.editAssistNotConfigured) : model.endpointName))
+            Text(L(.editAssistEndpointLine, endpointText))
                 .font(Theme.font(.caption))
                 .foregroundStyle(Theme.text(TextTone.secondary))
         }
