@@ -15,15 +15,20 @@
 2. **能机械复算的必须复算** —— 本判据不看台账的自述：**把每一族 runner 真跑一遍**，
    要求 `exit 0`（崩了 = 这一族的负例没跑），再从它的输出里按台账登记的 `countRegex` 抓例数。
    抓不到 ⇒ 判红（**不许静默跳过**：收尾行格式被改坏本身就是「证据坏了」）。
-3. **文档对账**：台账登记的每一处「现状声明」（精确上下文正则 + 捕获组 + `minSites`）
+3. **每族有独立墙钟上限**（默认 300s，台账可用家族的 `timeout` 覆写）：超时**判红**，
+   不是「跳过」。`2026-11-02` 现场：默认 900s 时某个 runner 卡在 `communicate` 的
+   `selectors.select` 上（父进程早退、孙进程握着管道），全跑只能记「未知」；
+   现在超时**整组 SIGKILL**（`start_new_session` + `killpg`），且每族起跑/收尾各打一行
+   进度（卡住时最后一行就是卡住的那一族）。
+4. **文档对账**：台账登记的每一处「现状声明」（精确上下文正则 + 捕获组 + `minSites`）
    捕获到的数字必须等于 `cases`；写错 / 数字被删光都判红。
    `expect` 用于「同一格同时写着历史值与现状值」的写法（§6 的 `17 → 27 例`）。
-4. **没有锚点要有理由**：`noAnchorReason` 必须写明（「没有锚点」与「没人看过」不是一回事）。
-5. **静态棘轮**（可选 `sourceRatchet`）：例数在 runner 里是 `len()` 算出来、源码里没有字面量的族
+5. **没有锚点要有理由**：`noAnchorReason` 必须写明（「没有锚点」与「没人看过」不是一回事）。
+6. **静态棘轮**（可选 `sourceRatchet`）：例数在 runner 里是 `len()` 算出来、源码里没有字面量的族
    （`--check-anchors` 那一族），按正则数脚本里的用例定义条数，必须 == `cases`（否则「删掉一个用例」
    在 runner 那一侧只是数字变小）。
-6. **空跑防护**：族数 / 例数合计 / 锚点命中处数三条下限，低于即判红。
-7. **本机台账不在盘上时，那几族自检如实跳过**（2026-10-08 · 任务 `t_004a679b`）：有的族的
+7. **空跑防护**：族数 / 例数合计 / 锚点命中处数三条下限，低于即判红。
+8. **本机台账不在盘上时，那几族自检如实跳过**（2026-10-08 · 任务 `t_004a679b`）：有的族的
    `--self-test` 要读**真仓库那几份本机台账**（`.gitignore` 内、只在主开发机上）—— 如
    `check-doc-q-series` / `check-queue-needs-user` 要 `design/开发循环-任务队列.md` 与
    `智能体助手-开发规范.md`。干净克隆 / 并行工作树 / 另一平台**没有它们** ⇒ 那几族如实打印
@@ -45,7 +50,8 @@
     python3 Scripts/check-self-test-counts.py                # 本仓（默认）
     python3 Scripts/check-self-test-counts.py --root <目录>   # 夹具仓（自测用）
     python3 Scripts/check-self-test-counts.py --no-run       # 只做台账/锚点对账（调试用，不跑 runner）
-    python3 Scripts/check-self-test-counts.py --self-test    # 判据自己的证据（9 例）
+    python3 Scripts/check-self-test-counts.py --self-test    # 判据自己的证据（12 例）
+    python3 Scripts/check-self-test-counts.py --family-timeout 60   # 单族墙钟上限（默认 300s）
 
 退出码：0 = 全绿；1 = 有判红项。
 """
@@ -54,12 +60,15 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import pathlib
 import re
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
+import time
 
 REPO = pathlib.Path(__file__).resolve().parent.parent
 LEDGER_REL = "Scripts/self-test-counts.json"
@@ -230,26 +239,90 @@ def validate_ledger(ledger: dict, root: pathlib.Path) -> list[str]:
     return problems
 
 
-def run_family(root: pathlib.Path, family: dict, problems: list, notes: list, timeout: int) -> None:
-    """真跑一遍 runner，要求 exit 0，再按 countRegex 抓例数并与台账比对。"""
+def _kill_tree(process: subprocess.Popen) -> None:
+    """整组 SIGKILL。
+
+    **为什么不能只 `process.kill()`**（2026-11-02 实测）：`capture_output` 是一条管道，
+    runner 若自己起了子进程（或 shell 套 shell）而那个孙进程继承了 stdout，父进程被杀之后
+    管道**仍然有人握着** —— `subprocess.run` 的超时分支会再调一次 `communicate()`，于是
+    `timeout=` 形同虚设，整条链卡死在 `selectors.select`（实测 8 分钟 0% CPU、无子进程，
+    全跑记「未知」）。`start_new_session=True` 让 runner 自成一组，这里按组杀，孙进程一起收。
+    """
+    try:
+        os.killpg(os.getpgid(process.pid), signal.SIGKILL)
+    except (ProcessLookupError, PermissionError):
+        try:
+            process.kill()
+        except ProcessLookupError:
+            pass
+
+
+def run_family(
+    root: pathlib.Path,
+    family: dict,
+    problems: list,
+    notes: list,
+    timeout: int,
+    progress: str = "",
+) -> None:
+    """真跑一遍 runner，要求 exit 0，再按 countRegex 抓例数并与台账比对。
+
+    `timeout` = 这一族的墙钟上限（台账可用 `timeout` 字段逐族覆写）：超时**判红**，
+    不静默跳过 —— 「没跑完」与「跑过并通过」是两件事。
+    """
     key = family["key"]
     if not family.get("countRegex"):
         # 结构问题已在 validate_ledger 里报过；这里不再崩，只跳过实跑。
         return
     script = root / family["script"]
     command = [sys.executable, str(script), *(family.get("args") or [])]
+    limit = family.get("timeout") if isinstance(family.get("timeout"), int) else timeout
+    # 先打印「正在跑谁」：卡住时最后一行就是卡住的那一族（不然只有一片沉默）。
+    if progress:
+        print(f"   {progress} {key} …", file=sys.stderr, flush=True)
+    started = time.monotonic()
     try:
-        completed = subprocess.run(
-            command, cwd=str(root), capture_output=True, text=True, timeout=timeout
+        process = subprocess.Popen(
+            command,
+            cwd=str(root),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            start_new_session=True,
         )
-    except subprocess.TimeoutExpired:
-        problems.append(f"[{key}] runner 超时（{timeout}s）：{' '.join(command)}")
+    except OSError as error:
+        problems.append(f"[{key}] runner 起不来：{error}")
         return
-    output = completed.stdout + completed.stderr
-    if completed.returncode != 0:
+    try:
+        output = process.communicate(timeout=limit)[0] or ""
+        returncode = process.returncode
+    except subprocess.TimeoutExpired:
+        _kill_tree(process)
+        # 杀完整组后再等一次，但**必须有限**：孙进程若已脱离该组（例如自己 setsid 守护化），
+        # 管道仍可能不关；这时宁可丢掉输出也要返回「超时」，不许把判据自己挂死。
+        try:
+            output = process.communicate(timeout=5)[0] or ""
+        except subprocess.TimeoutExpired:
+            output = ""
+            try:
+                if process.stdout is not None:
+                    process.stdout.close()
+            except OSError:
+                pass
+            process.wait(timeout=5)
+        elapsed = time.monotonic() - started
+        tail = "\n".join(output.strip().splitlines()[-6:])
+        problems.append(
+            f"[{key}] runner 超时（{limit}s，已整组 SIGKILL，实际 {elapsed:.1f}s）：{' '.join(command)}"
+            + (f"\n超时前输出尾部：\n{tail}" if tail else "\n超时前无输出")
+        )
+        return
+    if progress:
+        print(f"   {progress} {key} 完 ({time.monotonic() - started:.1f}s)", file=sys.stderr, flush=True)
+    if returncode != 0:
         tail = "\n".join(output.strip().splitlines()[-12:])
         problems.append(
-            f"[{key}] runner 退出码 {completed.returncode}（必须 0）—— 这一族的负例**根本没跑**。"
+            f"[{key}] runner 退出码 {returncode}（必须 0）—— 这一族的负例**根本没跑**。"
             f"输出尾部：\n{tail}"
         )
         return
@@ -348,7 +421,7 @@ def scan_anchors(root: pathlib.Path, family: dict, problems: list) -> int:
     return hits_total
 
 
-def check(root: pathlib.Path, run_runners: bool = True, timeout: int = 900):
+def check(root: pathlib.Path, run_runners: bool = True, timeout: int = 300):
     problems: list[str] = []
     notes: list[str] = []
     ledger_path = root / LEDGER_REL
@@ -369,12 +442,15 @@ def check(root: pathlib.Path, run_runners: bool = True, timeout: int = 900):
 
     anchor_hits = 0
     cases_total = 0
+    runnable = sum(1 for f in families if isinstance(f.get("cases"), int) and f.get("countRegex"))
+    seen = 0
     for family in families:
         if not isinstance(family.get("cases"), int):
             continue
         cases_total += family["cases"]
         if run_runners:
-            run_family(root, family, problems, notes, timeout)
+            seen += 1
+            run_family(root, family, problems, notes, timeout, progress=f"[{seen}/{runnable}]")
         else:
             notes.append(f"[{family.get('key')}] 跳过实跑（--no-run）：只做台账与锚点对账")
         scan_source_ratchet(root, family, problems)
@@ -401,8 +477,9 @@ def check(root: pathlib.Path, run_runners: bool = True, timeout: int = 900):
 
 
 # ── 判据自己的证据 ───────────────────────────────────────────────────────────
-# 九例：好情况全绿 / runner 非零退出 / 例数漂移 / 收尾行解析不到 / 锚点值写错 /
+# 十二例：好情况全绿 / runner 非零退出 / 例数漂移 / 收尾行解析不到 / 锚点值写错 /
 # 锚点被删（minSites 不满足）/ 台账结构错（重复 key、缺 countRegex）/ 空跑防护 /
+# 静态棘轮（对齐 + 用例被删）/ runner 卡住不放（判红 + 及时返回 + 孙进程一起收）/
 # 末例核对真仓库逐字节未变。夹具一律在临时目录里（真仓库一个字节都不动）。
 
 FIXTURE_SCRIPTS = {
@@ -411,6 +488,16 @@ FIXTURE_SCRIPTS = {
     "drift.py": 'print("✅ 例子 4/4 达到预期")\n',
     "unparsable.py": 'print("✅ 都过了")\n',
     "cases.py": 'print("case 1")\nprint("case 2")\nprint("✅ 全部 2 个负例的夹具锚点都在位")\n',
+    # 例 10 的夹具：**卡住不放**的 runner —— 父进程睡 60s，同时起一个继承 stdout 的孙进程，
+    # 并把孙进程 pid 写进 argv[1]。这正是真实现场的形状（父已死、孙进程还握着管道 ⇒
+    # `communicate` 停在 `selectors.select` 等 EOF）。
+    "hang.py": (
+        "import subprocess, sys, time\n"
+        'child = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(60)"])\n'
+        "open(sys.argv[1], \"w\").write(str(child.pid))\n"
+        'print("✅ 例子 3/3 达到预期", flush=True)\n'
+        "time.sleep(60)\n"
+    ),
 }
 
 GOOD_FAMILY = {
@@ -597,6 +684,39 @@ def run_self_test() -> int:
             code == 1 and "用例定义有 1 条、台账是 2 条" in output,
             output.strip().splitlines()[-1] if output else "",
         )
+
+        # 例 10·runner 卡住不放 ⇒ 判红，且**判据自己不许跟着挂**
+        # （2026-11-02：全跑实测卡在 `communicate` 8 分钟 0% CPU ⇒ 全跑只能记「未知」。
+        #   修法 = 每族独立短超时 + 整组 SIGKILL；这里钉住「卡住的族必须判红且及时返回」。）
+        pid_file = scratch / "e10-child.pid"
+        hang = dict(
+            GOOD_FAMILY,
+            key="hang",
+            script="Scripts/hang.py",
+            args=[str(pid_file)],
+            noAnchorReason="自测夹具：卡住的 runner",
+        )
+        root = write_fixture(scratch / "e10", fixture_ledger([hang]))
+        started = time.monotonic()
+        code, output = run_gate(root, ["--family-timeout", "1"])
+        elapsed = time.monotonic() - started
+        orphan = "夹具没写出孙进程 pid"
+        try:
+            pid = int(pid_file.read_text(encoding="utf-8").strip())
+            try:
+                os.kill(pid, 0)
+                orphan = f"孙进程 {pid} 还活着（握管道不放 ⇒ 下一次 communicate 还会挂）"
+            except ProcessLookupError:
+                orphan = ""
+        except (OSError, ValueError) as error:
+            orphan = f"夹具没写出孙进程 pid：{error}"
+        record(
+            "例 10 runner 卡住 ⇒ 判红、及时返回、孙进程一起收",
+            code == 1 and "[hang] runner 超时" in output and elapsed < 30 and not orphan,
+            f"rc={code} 用时 {elapsed:.1f}s（要求 <30s，夹具自身要睡 60s）"
+            + (f"；{orphan}" if orphan else "")
+            + f"；{output.strip().splitlines()[-1] if output else ''}",
+        )
     finally:
         shutil.rmtree(scratch, ignore_errors=True)
 
@@ -623,13 +743,22 @@ def main() -> int:
     parser.add_argument("--root", default=None, help="仓根（默认：脚本所在仓）")
     parser.add_argument("--no-run", action="store_true", help="不跑 runner，只做台账与锚点对账")
     parser.add_argument("--self-test", action="store_true", help="跑判据自己的证据")
+    parser.add_argument(
+        "--family-timeout",
+        type=int,
+        default=300,
+        help="单族 runner 墙钟上限（秒，默认 300；台账可用家族里的 `timeout` 字段逐族覆写）。"
+        "超时判红，不静默跳过",
+    )
     arguments = parser.parse_args()
 
     if arguments.self_test:
         return run_self_test()
 
     root = pathlib.Path(arguments.root).resolve() if arguments.root else REPO
-    problems, notes, stats = check(root, run_runners=not arguments.no_run)
+    problems, notes, stats = check(
+        root, run_runners=not arguments.no_run, timeout=arguments.family_timeout
+    )
 
     print(f"== 自检例数台账（{LEDGER_REL}）· 仓根 {root.name} ==")
     for note in notes:

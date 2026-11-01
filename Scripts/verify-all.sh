@@ -532,8 +532,10 @@ python3 Scripts/check-pending-agenda.py --self-test
 #   docstring；写错、数字被删光都判红）+ D 可选静态棘轮（`sourceRatchet`：例数只在 runner 里用
 #   `len()` 算出来的族，另按正则数脚本里的用例条数）+ E 空跑防护（族数 / 例数合计 / 锚点命中
 #   处数三条下限）+ F 边界如实打印（无锚点但写了理由的族数）。
-# 负例 `--self-test` 11 例（好情况 / runner 非零退出 / 例数漂移 / 收尾行解析不到 / 锚点值写错 /
-# 锚点被删 / 台账结构错 / 空跑防护 / 静态棘轮 / 末例核对真仓库逐字节未变），夹具一律在临时目录。
+# 负例 `--self-test` 12 例（好情况 / runner 非零退出 / 例数漂移 / 收尾行解析不到 / 锚点值写错 /
+# 锚点被删 / 台账结构错 / 空跑防护 / 静态棘轮 / runner 卡住不放（判红 + 及时返回 + 孙进程一起收）/
+# 末例核对真仓库逐字节未变），夹具一律在临时目录。每族另有独立墙钟上限（默认 300s，
+# `--family-timeout` 可改）：超时判红，不是跳过。
 python3 Scripts/check-self-test-counts.py
 python3 Scripts/check-self-test-counts.py --self-test
 
