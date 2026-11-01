@@ -307,4 +307,62 @@ final class TableDesignCreatePlanTests: XCTestCase {
         XCTAssertTrue(plan[0].contains("`id`"), "MySQL 用反引号：\(plan[0])")
         XCTAssertFalse(plan.joined().contains("ADD COLUMN"))
     }
+
+    // MARK: 不许猜列类型（FR-DDL-03 的负例：故意违规就必须判红）
+
+    /// 使用者把类型清空 ⇒ **整批拒绝**，不许生成 `ALTER TABLE t ALTER COLUMN c TYPE ;`。
+    ///
+    /// 反例（本跳实测判红）：把 `statements(...)` 里那句 `guard columnChanges.allSatisfy`
+    /// 去掉 ⇒ 本条拿到一条语法都不成立的语句（`XCTAssertTrue(statements.isEmpty)` 失败）。
+    func testChangeTypeWithNoTypeIsRefusedInsteadOfGuessed() {
+        let original = [column("note", type: "text")]
+        let edited = [column("note", type: "")]
+        let change = TableDesignChangeSet(originalColumns: original, editedColumns: edited)
+        XCTAssertTrue(change.hasChanges, "类型被清空必须算「改过」，否则连拒绝都不会发生")
+        let statements = TableDesignChangeSet.statements(for: change, table: "t", schema: nil, dialect: pg)
+        XCTAssertTrue(
+            statements.isEmpty,
+            "类型是空的就不许生成语句（不许替人猜 text）：\(statements)"
+        )
+    }
+
+    /// 新增列没填类型 ⇒ 同样整批拒绝（`ADD COLUMN "x" ;` 是废语句）。
+    func testAddColumnWithNoTypeIsRefused() {
+        let original = [column("id", type: "integer", pk: true)]
+        let edited = original + [TableColumnDefinition(name: "extra")]
+        let statements = TableDesignChangeSet.statements(
+            for: TableDesignChangeSet(originalColumns: original, editedColumns: edited),
+            table: "t",
+            schema: nil,
+            dialect: pg
+        )
+        XCTAssertTrue(statements.isEmpty, "\(statements)")
+    }
+
+    /// 建表计划同样不猜：任何一列类型为空 ⇒ 计划为空（不是"少一列"的 CREATE TABLE）。
+    func testCreatePlanRefusesColumnsWithNoType() {
+        let columns = [column("id", type: "integer", pk: true), TableColumnDefinition(name: "extra")]
+        let plan = TableDesignChangeSet.createTablePlan(
+            table: "t",
+            columns: columns,
+            schema: nil,
+            extras: nil,
+            dialect: pg
+        )
+        XCTAssertTrue(plan.isEmpty, "\(plan)")
+    }
+
+    /// 判据自己的负例：类型都在时不能连正常变更也拒掉（否则上面三条是"永远绿"的假判据）。
+    func testExplicitTypesStillGenerateTheirStatements() {
+        let original = [column("id", type: "integer", pk: true), column("note", type: "text")]
+        let edited = [original[0], column("note", type: "varchar(80)")]
+        let statements = TableDesignChangeSet.statements(
+            for: TableDesignChangeSet(originalColumns: original, editedColumns: edited),
+            table: "t",
+            schema: nil,
+            dialect: pg
+        )
+        XCTAssertEqual(statements.count, 1)
+        XCTAssertTrue(statements[0].contains("TYPE varchar(80)"), statements[0])
+    }
 }

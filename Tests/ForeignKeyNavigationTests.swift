@@ -141,4 +141,44 @@ final class ForeignKeyNavigationTests: XCTestCase {
         let sql = ForeignKeyNavigation.query(option: option, value: "O'Brien", typeName: "text", dialect: dialect)
         XCTAssertTrue(sql.contains("'O''Brien'"), sql)
     }
+
+    // MARK: 入口可见性（需求原文：存在外键元数据时才呈现入口）
+
+    /// 只有「本表真的挂着外键」的列才进集合：别的表的边、别的 schema 的边都不许混进来。
+    func testForwardColumnsOnlyCollectsThisTablesForeignKeyColumns() {
+        let local = ForeignKeyNavigation.Edge(
+            fromTable: "order_items", fromSchema: "public",
+            columns: ["order_id", "sku"], toTable: "orders", toSchema: "public",
+            referencedColumns: ["id", "sku"]
+        )
+        let otherSchema = ForeignKeyNavigation.Edge(
+            fromTable: "order_items", fromSchema: "archive",
+            columns: ["ghost_id"], toTable: "orders", toSchema: "archive",
+            referencedColumns: ["id"]
+        )
+        let incoming = ForeignKeyNavigation.Edge(
+            fromTable: "refunds", fromSchema: "public",
+            columns: ["item_id"], toTable: "order_items", toSchema: "public",
+            referencedColumns: ["id"]
+        )
+        let columns = ForeignKeyNavigation.forwardColumns(
+            table: "ORDER_ITEMS",
+            edges: [local, otherSchema, incoming],
+            schema: "public"
+        )
+        XCTAssertEqual(columns, ["order_id", "sku"])
+    }
+
+    /// 元数据没读到（nil）⇒ 不露；读到了但这一列没有外键 ⇒ 不露；有 ⇒ 露。
+    func testEntryIsVisibleOnlyWhenThatColumnHasAForeignKey() {
+        XCTAssertFalse(ForeignKeyNavigation.entryVisible(jumpable: nil, clickedColumn: "order_id"))
+        XCTAssertFalse(ForeignKeyNavigation.entryVisible(jumpable: [], clickedColumn: "order_id"))
+        XCTAssertFalse(ForeignKeyNavigation.entryVisible(jumpable: ["order_id"], clickedColumn: nil))
+        XCTAssertFalse(ForeignKeyNavigation.entryVisible(jumpable: ["order_id"], clickedColumn: "note"))
+        XCTAssertTrue(ForeignKeyNavigation.entryVisible(jumpable: ["order_id"], clickedColumn: "order_id"))
+        XCTAssertTrue(
+            ForeignKeyNavigation.entryVisible(jumpable: ["order_id"], clickedColumn: "Order_ID"),
+            "列名比较必须与 options(...) 同口径（大小写不敏感）"
+        )
+    }
 }

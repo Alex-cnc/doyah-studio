@@ -768,6 +768,13 @@ final class AppState: ObservableObject {
     @Published var isServerObjectsPresented = false
 
     /// 多个外键目标时的待选择请求（FR-DATA-06）。
+    /// 结果来源表上**真的挂着外键的列**（FR-DATA-06 的入口判定用）。
+    ///
+    /// key = `DatabaseObjectRef.qualifiedName`；值 = 正向可跳转的列名。
+    /// 没有 key = **还没读到**（界面据此不露入口），有 key 但是空集 = 读到了、这张表没有外键。
+    @Published private(set) var foreignKeyColumns: [String: Set<String>] = [:]
+    /// 正在读的表（避免同一张表被几次刷新同时查询）。
+    private var loadingForeignKeyTables: Set<String> = []
     @Published var pendingForeignKeyJump: ForeignKeyJumpRequest?
 
     /// 活动栏当前选中的视图（FR-EDIT-32）。未知值回退到数据库视图，界面永远起得来。
@@ -8039,6 +8046,33 @@ final class AppState: ObservableObject {
             return
         }
         Task { await resolveForeignKeyJump(source: source, column: column, value: trimmed) }
+    }
+
+    /// 「跳到被引用行…」这一格露不露面的依据（FR-DATA-06）。
+    ///
+    /// `nil` = 这张表的元数据还没读到 ⇒ 不露；空集 = 读到了、没有外键 ⇒ 也不露。
+    /// 两条都归 `ForeignKeyNavigation.entryVisible` 判，视图不自己写一遍。
+    func jumpableColumns(for table: DatabaseObjectRef?) -> Set<String>? {
+        guard let table else { return nil }
+        return foreignKeyColumns[table.qualifiedName]
+    }
+
+    /// 读一张表「哪些列真的挂着外键」；读到就缓存，读不到**不缓存**（下次挂载再试）。
+    ///
+    /// 为什么先读再露：需求原文的验收是「存在外键元数据时才呈现入口」。以前这个入口
+    /// 常驻，点下去才说「这一列没有外键」—— 那是把「没做」画成「做了」。
+    /// 只读本表的约束（正向）；反向（谁引用我）需要扫整个 schema，属后续版本，不在这里假装。
+    func ensureForeignKeyColumns(for table: DatabaseObjectRef) async {
+        let key = table.qualifiedName
+        if foreignKeyColumns[key] != nil || loadingForeignKeyTables.contains(key) { return }
+        loadingForeignKeyTables.insert(key)
+        defer { loadingForeignKeyTables.remove(key) }
+        guard let edges = try? await foreignKeyEdges(table: table) else { return }
+        foreignKeyColumns[key] = ForeignKeyNavigation.forwardColumns(
+            table: table.name,
+            edges: edges,
+            schema: table.schema
+        )
     }
 
     private func resolveForeignKeyJump(source: DatabaseObjectRef, column: String, value: String) async {

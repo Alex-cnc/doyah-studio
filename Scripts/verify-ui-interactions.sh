@@ -264,7 +264,7 @@ SWIFT="${DEVELOPER_DIR}/Toolchains/XcodeDefault.xctoolchain/usr/bin/swift"
 SCRATCH="${ROOT}/.build"
 CACHE="${ROOT}/.build-cache"
 OUT="${SCRATCH}/ui-interactions"
-FILTER="TerminalInteractionProbeTests|MultiCursorProbeTests|ObjectTreeContextMenuProbeTests|TitleBarSearchClickProbeTests|ResultCopyProbeTests|ResultSortProbeTests|ResultFilterProbeTests|ResultPagingProbeTests|ResultStreamExportProbeTests|ResultXLSXExportProbeTests|ExecutionReceiptPaneProbeTests|SQLTaskMenuProbeTests|TableExportStreamProbeTests|AgentApprovalDecisionProbeTests|ObjectTreeRetryProbeTests|BackupRestoreImportProbeTests|SessionDiagnosticsProbeTests|ObjectDiagnosisProbeTests"
+FILTER="TerminalInteractionProbeTests|MultiCursorProbeTests|ObjectTreeContextMenuProbeTests|TitleBarSearchClickProbeTests|ResultCopyProbeTests|ResultSortProbeTests|ResultFilterProbeTests|ResultPagingProbeTests|ResultStreamExportProbeTests|ResultXLSXExportProbeTests|ExecutionReceiptPaneProbeTests|SQLTaskMenuProbeTests|TableExportStreamProbeTests|AgentApprovalDecisionProbeTests|ObjectTreeRetryProbeTests|BackupRestoreImportProbeTests|SessionDiagnosticsProbeTests|ObjectDiagnosisProbeTests|TableEditDDLProbeTests"
 while [ $# -gt 0 ]; do
     case "${1}" in
         --filter) FILTER="${2:-}"; shift 2 ;;
@@ -328,9 +328,9 @@ else:
     total, failed, unexpected = max(executed, key=lambda row: int(row[0]))
     if int(failed) or int(unexpected):
         failures.append(f"汇总非零失败：{failed} 失败 / {unexpected} 意外")
-    if int(total) < 106:
+    if int(total) < 115:
         failures.append(
-            f"只跑了 {total} 条 —— 十五批一百零六条（鼠标上报 / DECCKM / 右键归属 / ⌥⌘D 多光标 /"
+            f"只跑了 {total} 条 —— 十六批一百一十五条（鼠标上报 / DECCKM / 右键归属 / ⌥⌘D 多光标 /"
             " ⌥⌘↑↓ 加光标 / ⌥ 拖拽列选 / 逐行菜单内容 / 菜单作用行 / 菜单确定性与跟随行 /"
             " 点击地图 / 留白点给键盘 / 清空按钮三态 + 回车接线 / 打字后回车交词 / 修前对照 / 整框源锚点 /"
             " 复制四档格式与默认 TSV / 排序三档与 NULL / Shift 次要键 / 筛选条默认在场 /"
@@ -351,7 +351,11 @@ else:
             " xlsx 是标准 ZIP 六件齐 / 数值与文本类型映射 / 行列数与逐字节一致 / 不引第三方 xlsx 库 /"
             " 诊断上下文（连接·库·对象·最近一次执行读数）带入 / 右键入口点在同一条收口上 /"
             " 对象统计按对象收窄 / 没有统计视图时明说未取到且不发查询 /"
-            " 结论里的对象名带链接且解得回身份 / 词中间不许认出短名 / 提示词带齐上下文）应当都跑到"
+            " 结论里的对象名带链接且解得回身份 / 词中间不许认出短名 / 提示词带齐上下文 /"
+            " 条件计数只发一条且多语句被拒 / 行详情列序与 JSON 竖排与空串分得开 /"
+            " 外键入口要等元数据且只给有外键的列 / 跳转带值且无外键不生成语句 /"
+            " 新列不带默认类型且空类型整批拒绝 / 结构变更先预览再按固定顺序执行 /"
+            " 结构对比默认不动目标多出的表且被跳过的如实列出）应当都跑到"
         )
 
 expected = [
@@ -460,6 +464,16 @@ expected = [
     "testClickedObjectNameBecomesALinkAndJumpsToThatNode",
     "testNamesInsideLongerIdentifiersAreNotLinked",
     "testPromptCarriesTheContextForTheModel",
+    # 第十六批（B6 批次 · FR-STD-DB-DATA-002 / 005 / 006 · DDL-003 / 004）：数据编辑与表结构
+    "testCountEntrySendsOneCountStatementAndOpensItInATab",
+    "testCountRefusesMultiStatementAndSendsNothing",
+    "testRowDetailPanelModelKeepsOrderAndFormatsLongJSON",
+    "testJumpEntryNeedsForeignKeyMetadataBeforeItIsShown",
+    "testJumpOpensTheReferencedTableWithTheValueBakedIn",
+    "testJumpWithoutForeignKeySaysSoAndOpensNothing",
+    "testDesignSheetStartsNewColumnsWithoutAGuessedType",
+    "testAlterPlanRunsOnlyAfterItsPreviewAndInTheFixedOrder",
+    "testSchemaDiffScriptsOnlyTickedChangesAndNeverDropsByDefault",
 ]
 for name in expected:
     if name not in log:
@@ -474,7 +488,7 @@ if failures:
     for item in failures:
         print(f"✗ {item}")
     sys.exit(1)
-print(f"✓ {total} 条都真跑过（十五批）、都以 passed 收尾、没有跳过")
+print(f"✓ {total} 条都真跑过（十六批）、都以 passed 收尾、没有跳过")
 PY
 
 echo
@@ -662,6 +676,11 @@ anchors = {
          "取证不再按作用域取计划 ⇒ 又回到「按页签那条语句」那条路，对象统计根本不取"),
         ("objectDiagnosisScope?.linkTargets ?? []",
          "可点对象名的候选集不再来自作用域 ⇒ 结论里随便一个同名词都会被拿去树上猜"),
+        # 第十六批（B6 批次 · FR-STD-DB-DATA-006）：入口可见性只有一处判定、元数据读到才放行。
+        ("func ensureForeignKeyColumns(for table: DatabaseObjectRef) async {",
+         "外键元数据不再有唯一读取口 ⇒ 菜单要露不露只能靠视图自己猜（又回到常驻入口）"),
+        ("func jumpableColumns(for table: DatabaseObjectRef?) -> Set<String>? {",
+         "「这张表能跳哪几列」不再从一处读 ⇒ 面板与探针各拿一份"),
     ),
     # 第九批（`FR-STD-DB-TASK-001`）：菜单内容只许有一处判定、铺设只许走 AppKit 那份。
     "App/Views/SQLTaskAppKitMenu.swift": (
@@ -744,6 +763,35 @@ anchors = {
         ("OpenURLAction { url in",
          "点了链接不再由本层收口 ⇒ 会交给系统浏览器（一个 doyah-object:// 的地址）"),
     ),
+    # 第十六批（B6 批次）：计数 / 外键入口 / 表结构编辑器的三处**结构性**落点。
+    "App/Views/ResultGrid.swift": (
+        ("item.isHidden = !ForeignKeyNavigation.entryVisible(",
+         "右键外键入口不再问 Core 那条判定 ⇒ 没有外键的列也会露出（点下去才说没有）"),
+        ("clickedColumn: clickedColumnName",
+         "入口判定不再看**右键点的那一格** ⇒ 露出的是选中列而不是用户点的列"),
+    ),
+    "App/Views/ResultTableView.swift": (
+        ("jumpableColumns: appState.jumpableColumns(for: sourceTable)",
+         "结果视图不再把「有外键的列」交给表格 ⇒ 菜单只能靠猜"),
+        (".task(id: sourceTable?.qualifiedName) {",
+         "外键元数据不再随结果视图挂载读取 ⇒ 入口永远不露（判据会变成永远绿的空判据）"),
+    ),
+    "Core/ForeignKeyNavigation.swift": (
+        ("public static func entryVisible(jumpable: Set<String>?, clickedColumn: String?) -> Bool {",
+         "入口可见性不再是可判的纯函数 ⇒ 判据只能去读界面"),
+    ),
+    "Core/TableDesign.swift": (
+        ("guard columnChanges.allSatisfy({ $0.hasExplicitType }) else { return [] }",
+         "列类型为空也照发 DDL ⇒ 生成 `ALTER TABLE t ALTER COLUMN c TYPE ;`（不许猜列类型这条失效）"),
+        ("public static func blankColumn() -> TableColumnDefinition {",
+         "新增列的初始定义不再有唯一构造口 ⇒ 界面又能悄悄预填一个类型"),
+        ("guard columns.allSatisfy({ !$0.typeName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) else {",
+         "建表计划不再拒空类型 ⇒ 替人猜一个类型建出错误的列"),
+    ),
+    "App/Views/TableDesignSheet.swift": (
+        ("columns.append(TableDesign.blankColumn())",
+         "新增列又被预填了默认类型 ⇒ 使用者没选过的类型被写进 DDL"),
+    ),
     "App/Views/TitleBarSearchField.swift": (
         ("final class TitleBarSearchBoxView: NSView",
          "整框不再是 AppKit 视图 ⇒ 命中测试又会被 SwiftUI 那层接走，可见框里的留白重新点不动（T-20261002-027 二次复测打回后的结构性换法）"),
@@ -774,7 +822,8 @@ for probe in ("TerminalInteractionProbeTests", "MultiCursorProbeTests", "ObjectT
               "AgentApprovalDecisionProbeTests", "ObjectTreeRetryProbeTests",
               "ResultPagingProbeTests", "ResultStreamExportProbeTests",
               "ResultXLSXExportProbeTests", "BackupRestoreImportProbeTests",
-              "SessionDiagnosticsProbeTests", "ObjectDiagnosisProbeTests"):
+              "SessionDiagnosticsProbeTests", "ObjectDiagnosisProbeTests",
+              "TableEditDDLProbeTests"):
     if not os.path.exists(os.path.join(root, f"TestsUISnapshot/{probe}.swift")):
         failures.append(f"TestsUISnapshot/{probe}.swift 不在盘上")
 

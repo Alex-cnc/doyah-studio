@@ -93,6 +93,21 @@ public enum TableDesign {
             case .add, .setNotNull, .dropNotNull, .setDefault, .dropDefault: return false
             }
         }
+
+        /// 这一条变更里的列类型是不是**使用者明确给的**。
+        ///
+        /// 只有 `<type>` 真的出现在语句里的两种变更需要判：新增列与改类型。
+        /// 空类型 = 没给 = 不许生成（`statements(...)` 整批返回空），不替人猜一个默认类型。
+        public var hasExplicitType: Bool {
+            switch self {
+            case .add(let column):
+                return !column.typeName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            case .changeType(_, let typeName):
+                return !typeName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            case .drop, .setNotNull, .dropNotNull, .setDefault, .dropDefault:
+                return true
+            }
+        }
     }
 
     /// 比较两个类型写法是否等价。
@@ -196,6 +211,15 @@ public enum TableDesign {
             column.defaultValue.trimmingCharacters(in: .whitespaces),
             column.isPrimaryKey ? "pk" : ""
         ].joined(separator: "|")
+    }
+
+    /// 「加一列」时给的那一份初始定义：**只有身份与空类型**（名称 / 类型 / 默认值都留空）。
+    ///
+    /// 唯一构造口的存在理由：以前界面里写死了 `typeName: "text"`，那等于替使用者猜类型 ——
+    /// 猜错的代价是一条把列建成错误类型的 DDL。判据要能钉住「没有预填」，就必须有一处可判的
+    /// 产品函数（视图里那句 `append` 由源锚点钉）。
+    public static func blankColumn() -> TableColumnDefinition {
+        TableColumnDefinition()
     }
 
     public static func validate(tableName: String, columns: [TableColumnDefinition]) -> [Issue] {
@@ -378,6 +402,10 @@ public struct TableDesignChangeSet: Equatable, Sendable {
         extras: TableDesignChangeSet?,
         dialect: any SQLDialect
     ) -> [String] {
+        // 列类型为空同样算「生成不出来」（**不许猜列类型**：不替人填 `text`）。
+        guard columns.allSatisfy({ !$0.typeName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) else {
+            return []
+        }
         let wanted = (extras ?? TableDesignChangeSet()).createTableExtras
         let create = SQLGenerator.createTable(table: table, columns: columns, schema: schema, dialect: dialect)
         guard !wanted.isEmpty else { return [create] }
@@ -417,6 +445,9 @@ public struct TableDesignChangeSet: Equatable, Sendable {
             original: changeSet.originalColumns,
             edited: changeSet.editedColumns
         )
+        // **不许猜列类型**：新增列 / 改类型的类型必须是使用者自己给的；空类型整批返回空，
+        // 绝不替人填 `text`（那会生成 `ALTER TABLE t ALTER COLUMN c TYPE ;`）。
+        guard columnChanges.allSatisfy({ $0.hasExplicitType }) else { return [] }
         statements.append(contentsOf: SQLGenerator.alterTableStatements(
             table: table,
             schema: schema,

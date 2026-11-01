@@ -2,19 +2,11 @@
 #
 # 唯一事实源 = Docs/Doyah产品开发计划任务清单-macOS.md（活书台账）。
 # 本文件只决定「一跳做哪几条」，不许反向改台账。
-# 生成于 2026-11-02，源 = plan.yaml 里 8 条 status: todo（已收口 27 条：RES-006, RES-007, RES-008, RES-009, RES-011, RES-013, RES-014, META-002, META-006, META-007, META-008, META-011, META-015, IO-002, IO-003, IO-004, IO-006, IO-007, SESS-002, SESS-003, SESS-004, TASK-001, TASK-002, TASK-003, DIAG-003, DIAG-004, DIAG-006）
+# 生成于 2026-11-02，源 = plan.yaml 里 3 条 status: todo（已收口 32 条：RES-006, RES-007, RES-008, RES-009, RES-011, RES-013, RES-014, META-002, META-006, META-007, META-008, META-011, META-015, IO-002, IO-003, IO-004, IO-006, IO-007, DATA-002, DATA-005, DATA-006, SESS-002, SESS-003, SESS-004, TASK-001, TASK-002, TASK-003, DDL-003, DDL-004, DIAG-003, DIAG-004, DIAG-006）
 #
 # 生成命令：python3 Scripts/plan-batches.py --write   （--check 只比对不写盘）
 
 batches:
-
-  - id: B6
-    title: "数据编辑与表结构：count(*) / 单元格编辑器 / 外键导航 / 结构编辑器 / Schema 对比"
-    status: todo
-    est_min: 60
-    items: [FR-STD-DB-DATA-002, FR-STD-DB-DATA-005, FR-STD-DB-DATA-006, FR-STD-DB-DDL-003, FR-STD-DB-DDL-004]
-    why: "都围绕表/列的元数据读写，DDL 生成器一条链；DDL-003 与 DDL-004 共用同一份差异模型"
-    exit: "5 行两列全 ✅；DDL 生成用例含「不许猜列类型」反例"
 
   - id: B7
     title: "连接与驱动：连接分组 / SSH 隧道 / GBase 8a 驱动"
@@ -24,5 +16,5 @@ batches:
     why: "连接层同一处改：分组是配置结构、SSH 隧道是连接前段、GBase 是协议族复用"
     exit: "3 行两列全 ✅；SSH 隧道允许只落「本机无跳板机」的如实未知"
 
-# 合计 8 条，覆盖 plan.yaml 全部 todo。
-# 粗估 105 分钟 ≈ 1.8 小时（原一格一条的节奏按 20 分钟/条算）。
+# 合计 3 条，覆盖 plan.yaml 全部 todo。
+# 粗估 45 分钟 ≈ 0.8 小时（原一格一条的节奏按 20 分钟/条算）。

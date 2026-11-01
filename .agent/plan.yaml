@@ -134,22 +134,22 @@ tasks:
     done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-DATA-002 | grep -q '✅'"
     layer: "常用增强"
     prio: "中"
-    status: todo
-    evidence: ""
+    status: done
+    evidence: ".agent/evidence/2026-11-02-B6.md"
   - id: FR-STD-DB-DATA-005
     goal: "单行详情 / 单元格值编辑器：宽表与长 JSON 竖排查看，JSON 值格式化显示"
     done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-DATA-005 | grep -q '✅'"
     layer: "进阶可选"
     prio: "低"
-    status: todo
-    evidence: ""
+    status: done
+    evidence: ".agent/evidence/2026-11-02-B6.md"
   - id: FR-STD-DB-DATA-006
     goal: "外键引用导航：由单元格 / 行跳转到被引用表并自动带入条件"
     done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-DATA-006 | grep -q '✅'"
     layer: "进阶可选"
     prio: "低"
-    status: todo
-    evidence: ""
+    status: done
+    evidence: ".agent/evidence/2026-11-02-B6.md"
   - id: FR-STD-DB-SESS-002
     goal: "服务器会话列表：展示当前实例的会话（进程号 / 用户 / 数据库 / 客户端地址 /"
     done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-SESS-002 | grep -q '✅'"
@@ -211,15 +211,15 @@ tasks:
     done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-DDL-003 | grep -q '✅'"
     layer: "常用增强"
     prio: "中"
-    status: todo
-    evidence: ""
+    status: done
+    evidence: ".agent/evidence/2026-11-02-B6.md"
   - id: FR-STD-DB-DDL-004
     goal: "Schema 对比与同步：对比两个库 / 两个连接的结构差异并生成同步脚本"
     done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-DDL-004 | grep -q '✅'"
     layer: "进阶可选"
     prio: "低"
-    status: todo
-    evidence: ""
+    status: done
+    evidence: ".agent/evidence/2026-11-02-B6.md"
   - id: FR-STD-DB-DIAG-003
     goal: "慢查询排行：pg_stat_statements 按总耗时 / 平均耗时 / 调用次"
     done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-DIAG-003 | grep -q '✅'"

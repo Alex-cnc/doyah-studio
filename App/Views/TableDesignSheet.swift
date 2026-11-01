@@ -92,7 +92,10 @@ struct TableDesignSheet: View {
                 Text(L(.tableDesignColumns)).font(.subheadline).bold()
                 Spacer()
                 DialogActionButton(systemName: "plus", title: L(.tableDesignAddColumn)) {
-                    columns.append(TableColumnDefinition(typeName: "text"))
+                    // 新列**不带默认类型**：类型是使用者的事，替人预填一个 `text` 就是猜 ——
+                    // 猜错的代价是一条把列建成错误类型的 DDL。空类型会被 `TableDesign.validate`
+                    // 报出来、提交按钮随之变灰。
+                    columns.append(TableDesign.blankColumn())
                 }
                 .disabled(isLoading)
             }

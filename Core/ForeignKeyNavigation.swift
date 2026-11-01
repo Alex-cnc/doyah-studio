@@ -202,6 +202,30 @@ public enum ForeignKeyNavigation {
         !options(table: table, column: column, edges: edges, schema: schema).isEmpty
     }
 
+    /// 某张表上**真的挂着外键**的列（正向：本表引用别人）。
+    ///
+    /// 界面拿它决定「跳到被引用行…」露不露面：表名 / schema 都按大小写不敏感比，
+    /// 与 `options(...)` 同一口径 —— 两处各判一套，就会出现「菜单露了但点下去说没有」。
+    public static func forwardColumns(table: String, edges: [Edge], schema: String? = nil) -> Set<String> {
+        func matches(_ lhs: String, _ rhs: String) -> Bool { lhs.caseInsensitiveCompare(rhs) == .orderedSame }
+        var columns: Set<String> = []
+        for edge in edges where matches(edge.fromTable, table) {
+            if let schema, let edgeSchema = edge.fromSchema, !matches(edgeSchema, schema) { continue }
+            columns.formUnion(edge.columns)
+        }
+        return columns
+    }
+
+    /// 右键入口露不露面的**唯一判定**。
+    ///
+    /// 三条「不露」：① 元数据还没读到（`jumpable == nil`）；② 右键那一格取不到列名；
+    /// ③ 这一列不在「有外键的列」里。宁可少一个入口，也不给一个点下去只会说
+    /// 「这一列没有外键」的菜单项 —— 那是把「没做」画成「做了」。
+    public static func entryVisible(jumpable: Set<String>?, clickedColumn: String?) -> Bool {
+        guard let jumpable, let clickedColumn else { return false }
+        return jumpable.contains { $0.caseInsensitiveCompare(clickedColumn) == .orderedSame }
+    }
+
     // MARK: 生成跳转查询
 
     /// 生成跳转用的查询：带 `LIMIT`（跳过去看的是"这一行的引用对象"，不是整表导出）。

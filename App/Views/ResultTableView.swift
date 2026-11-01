@@ -183,6 +183,12 @@ struct ResultTableView: View {
                         }
                     }
                 }
+                // 外键元数据（FR-DATA-06）：结果视图一出现就读一次「这张表哪些列挂着外键」。
+                // 读到了菜单才露那一项；`id:` 换结果集 / 换来源表时重读。
+                .task(id: sourceTable?.qualifiedName) {
+                    guard let sourceTable else { return }
+                    await appState.ensureForeignKeyColumns(for: sourceTable)
+                }
                 // 换结果集（重新执行 / 切结果集页签）时把客户端视图归零：
                 // 上一批数据上的筛选条件套到新数据上，只会让人以为"查询结果不对"。
                 .onChange(of: result.id) { _, _ in
@@ -556,7 +562,9 @@ struct ResultTableView: View {
                 // 「复制为 INSERT」要知道这是哪张表（FR-STD-DB-RES-006）：与内联编辑
                 // 同一条事实来源 —— `QueryTab.sourceTable`。手写 SQL 的结果没有它，
                 // 那里落占位表名（不猜）。
-                copySourceTable: sourceTable
+                copySourceTable: sourceTable,
+                // 外键入口的可见性（FR-DATA-06）：由 AppState 读一次元数据，菜单只问这份集合。
+                jumpableColumns: appState.jumpableColumns(for: sourceTable)
             )
 
             // **只要结果里有行就给出分页条**，包括"每页 = 全部"这一档。

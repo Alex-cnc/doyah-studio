@@ -80,6 +80,11 @@ struct ResultGrid: NSViewRepresentable {
     /// 手写 SQL 的结果没有来源表，那时复制出来的 INSERT 落占位表名
     /// （`ResultClipboard.placeholderTableName`），而不是悄悄指向某个「看起来像」的表。
     var copySourceTable: DatabaseObjectRef?
+    /// 来源表上「真的挂着外键」的列（FR-DATA-06）：`nil` = 元数据还没读到 ⇒ 入口不露。
+    ///
+    /// 这个判定必须由调用方给（AppState 读一次元数据），视图不自己查库 ——
+    /// 菜单要同步给结果，异步查询只能提前做。
+    var jumpableColumns: Set<String>? = nil
 
     func makeCoordinator() -> Coordinator {
         Coordinator()
@@ -181,6 +186,7 @@ struct ResultGrid: NSViewRepresentable {
             onCommitCellEdit: onCommitCellEdit,
             onToggleRowDeletion: onToggleRowDeletion,
             copySourceTable: copySourceTable,
+            jumpableColumns: jumpableColumns,
             tableView: tableView
         )
 
@@ -207,6 +213,7 @@ struct ResultGrid: NSViewRepresentable {
             onCommitCellEdit: onCommitCellEdit,
             onToggleRowDeletion: onToggleRowDeletion,
             copySourceTable: copySourceTable,
+            jumpableColumns: jumpableColumns,
             tableView: tableView
         )
     }
@@ -238,6 +245,8 @@ struct ResultGrid: NSViewRepresentable {
         private var onToggleRowDeletion: ((Int, Bool) -> Void)?
         /// 这段结果的来源表（复制为 INSERT 时用；nil = 不知道，落占位表名）。
         private var copySourceTable: DatabaseObjectRef?
+        /// 有外键的列（FR-DATA-06 的入口判定，nil = 还没读到）。
+        private var jumpableColumns: Set<String>?
         /// 上一次的编辑态渲染签名：编辑态 / 待提交覆盖值变了要重画，但**不必**作废选中态。
         private var lastEditingSignature = ""
         /// 表格本体（右键菜单的可用性要知道用户点在哪一行）。
@@ -272,6 +281,7 @@ struct ResultGrid: NSViewRepresentable {
             onCommitCellEdit: ((Int, Int, String) -> Void)?,
             onToggleRowDeletion: ((Int, Bool) -> Void)?,
             copySourceTable: DatabaseObjectRef?,
+            jumpableColumns: Set<String>?,
             tableView: NSTableView
         ) {
             self.result = result
@@ -283,6 +293,7 @@ struct ResultGrid: NSViewRepresentable {
             self.onCommitCellEdit = onCommitCellEdit
             self.onToggleRowDeletion = onToggleRowDeletion
             self.copySourceTable = copySourceTable
+            self.jumpableColumns = jumpableColumns
             self.boundTableView = tableView
             syncSortDescriptors(sortDescriptors, tableView: tableView)
 
@@ -546,8 +557,20 @@ struct ResultGrid: NSViewRepresentable {
             let row = tableView.clickedRow
             let inRange = row >= 0 && rows.indices.contains(row)
             let isDeleted = inRange && editing.deletedRows.contains(row)
+            let clickedColumnName: String? = {
+                guard let result, tableView.clickedColumn >= 0,
+                      result.columns.indices.contains(tableView.clickedColumn) else { return nil }
+                return result.columns[tableView.clickedColumn].name
+            }()
             for item in menu.items {
-                if item.action == #selector(CopyableTableView.markRowForDeletion(_:)) {
+                if item.action == #selector(CopyableTableView.jumpToReferencedRow(_:)) {
+                    // 需求原文的验收：**存在外键元数据时才呈现入口**。判定只有一处
+                    //（`ForeignKeyNavigation.entryVisible`），视图不另写一套。
+                    item.isHidden = !ForeignKeyNavigation.entryVisible(
+                        jumpable: jumpableColumns,
+                        clickedColumn: clickedColumnName
+                    )
+                } else if item.action == #selector(CopyableTableView.markRowForDeletion(_:)) {
                     item.isHidden = !editing.isActive
                     item.isEnabled = editing.isActive && inRange && !isDeleted
                 } else if item.action == #selector(CopyableTableView.unmarkRowForDeletion(_:)) {
