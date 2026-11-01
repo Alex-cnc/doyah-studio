@@ -74,7 +74,7 @@ $ python3 Scripts/check-self-test-counts.py        # 最终树上全跑（≈9 �
   `AGENT-SPEC.md` §6）全改成当日实测值。
 - `AGENT-SPEC.md` §6 两行（`q-series` 例数与 `doc-tables` 份数）同步。
 
-提交：<填>
+提交：`14eb86cb`
 未验证：全量 `verify-all.sh` 未复跑（本片只改 `Scripts/` + `AGENT-SPEC.md`，未碰 App/Core/Tests ⇒
 代码套件记「未执行」，不是「通过」）；`check-self-test-counts` **全跑未跑**（读数为 `--no-run` 口径）；
 真机点验 0 次；217 真库 0 次。
