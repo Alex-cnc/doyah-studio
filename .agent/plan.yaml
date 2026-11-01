@@ -57,7 +57,7 @@ tasks:
     done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-META-002 | grep -q '✅'"
     layer: "常用增强"
     prio: "中"
-    status: todo
+    status: blocked
     evidence: ""
   - id: FR-STD-DB-META-006
     goal: "对象树必须支持持续下钻：从服务器节点开始，Database → Schema → T"
@@ -71,28 +71,28 @@ tasks:
     done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-META-007 | grep -q '✅'"
     layer: "基线必备"
     prio: "高"
-    status: todo
+    status: done
     evidence: ""
   - id: FR-STD-DB-META-008
     goal: "对象树按类型 / schema 分组视图：可在「层级视图」与「按类型分组」之间切换"
     done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-META-008 | grep -q '✅'"
     layer: "进阶可选"
     prio: "低"
-    status: todo
+    status: done
     evidence: ""
   - id: FR-STD-DB-META-011
     goal: "查看对象 DDL：表 / 视图 / 函数节点右键「查看 DDL」，展示等价建对象语句"
     done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-META-011 | grep -q '✅'"
     layer: "常用增强"
     prio: "中"
-    status: todo
+    status: done
     evidence: ""
   - id: FR-STD-DB-META-015
     goal: "全库对象搜索：输入名称片段即跨 schema / 跨库匹配表、视图、列、函数，命中结"
     done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-META-015 | grep -q '✅'"
     layer: "常用增强"
     prio: "中"
-    status: todo
+    status: done
     evidence: ""
   - id: FR-STD-DB-IO-002
     goal: "客户端侧整表 / 整库导出：走 COPY <表> TO STDOUT 流式写文件"

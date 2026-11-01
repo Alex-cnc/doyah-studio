@@ -396,7 +396,7 @@ SANDBOX_MARK="com.doyah.manual-verification-probe"
 #   文件行悬停 2 簇、移开 0 簇、行宽 496 像素两档逐点相同、分组标题未悬停 0 簇 / 悬停 1 簇；
 #   反例三段（`isVisible` 恒真 / 文件行也三枚 / 行按内容收紧）各判红后逐字节还原。
 # `--filter` 传的是**正则**，所以这里用 `|` 连接。
-FILTER="ManualVerificationProbeTests|PaletteWiringProbeTests|AppearanceFontProbeTests|TerminalInterruptProbeTests|TerminalTabsProbeTests|TerminalSubToolbarProbeTests|LargeResultScrollProbeTests|CrossDatabaseBrowseProbeTests|GroupedViewProbeTests|NoteSearchProbeTests|BrowserTabDownloadProbeTests|MySQLFormProbeTests|ObjectTreeRefreshProbeTests|TerminalInteractionProbeTests|MultiCursorProbeTests|ObjectTreeContextMenuProbeTests|NotesEditorSaveProbeTests|SQLLineNumberProbeTests|PerfTypingProbeTests|WorkspaceChromeHeightProbeTests|MarkdownPreviewProbeTests|TitleBarSearchProbeTests|WorkspaceFileRoutingProbeTests|NebulaSkinProbeTests|TitleBarSearchClickProbeTests|FormatMenuWiringProbeTests|NotesLayoutProbeTests|QueryHistoryPaneProbeTests|TodoCalendarEntriesProbeTests|TodoDetailSearchProbeTests|LunarSubtitleProbeTests|NotesEditorFormatProbeTests|RetroHostProbeTests|WorkspaceSessionCursorProbeTests|AccountSyncSheetProbeTests|NotesSearchRevealProbeTests|NotesCrudIconSpacingProbeTests|NotesShelfProbeTests|NotesTitleAreaProbeTests|AgentChatTUILookProbeTests|AutoPairingKeyProbeTests|MarkdownEditingKeyProbeTests|WorkspaceTabStripOverflowProbeTests|EditorSurfaceTokenParityProbeTests|RowActionRevealProbeTests"
+FILTER="ManualVerificationProbeTests|PaletteWiringProbeTests|AppearanceFontProbeTests|TerminalInterruptProbeTests|TerminalTabsProbeTests|TerminalSubToolbarProbeTests|LargeResultScrollProbeTests|CrossDatabaseBrowseProbeTests|GroupedViewProbeTests|NoteSearchProbeTests|BrowserTabDownloadProbeTests|MySQLFormProbeTests|ObjectTreeRefreshProbeTests|TerminalInteractionProbeTests|MultiCursorProbeTests|ObjectTreeContextMenuProbeTests|MetadataDeliveryProbeTests|NotesEditorSaveProbeTests|SQLLineNumberProbeTests|PerfTypingProbeTests|WorkspaceChromeHeightProbeTests|MarkdownPreviewProbeTests|TitleBarSearchProbeTests|WorkspaceFileRoutingProbeTests|NebulaSkinProbeTests|TitleBarSearchClickProbeTests|FormatMenuWiringProbeTests|NotesLayoutProbeTests|QueryHistoryPaneProbeTests|TodoCalendarEntriesProbeTests|TodoDetailSearchProbeTests|LunarSubtitleProbeTests|NotesEditorFormatProbeTests|RetroHostProbeTests|WorkspaceSessionCursorProbeTests|AccountSyncSheetProbeTests|NotesSearchRevealProbeTests|NotesCrudIconSpacingProbeTests|NotesShelfProbeTests|NotesTitleAreaProbeTests|AgentChatTUILookProbeTests|AutoPairingKeyProbeTests|MarkdownEditingKeyProbeTests|WorkspaceTabStripOverflowProbeTests|EditorSurfaceTokenParityProbeTests|RowActionRevealProbeTests"
 while [ $# -gt 0 ]; do
     case "$1" in
         --filter) FILTER="${2:-}"; shift 2 ;;
@@ -461,6 +461,9 @@ export DOYAH_PROBE_PGOTHER="${PROBE_PG_OTHER}"
 export DOYAH_PROBE_PGMISSING="${PROBE_PG_MISSING}"
 export DOYAH_PROBE_PGMARKER_CURRENT="${PROBE_MARKER_CURRENT}"
 export DOYAH_PROBE_PGMARKER_OTHER="${PROBE_MARKER_OTHER}"
+# 元数据交付面那条（B3 批次）：探针**自己**建库 / 造 schema / 拆库（换一台集群也能复跑），
+# 脚本只给一个专属库名 —— 名字只在这一处出现。
+export DOYAH_PROBE_PGMETA="$(doyah_test_env_scratch_name meta_delivery)"
 echo "  · 跨库探针：当前库 ${PROBE_PG_CURRENT}（有 ${PROBE_MARKER_CURRENT}）"
 echo "              非当前库 ${PROBE_PG_OTHER}（有 ${PROBE_MARKER_OTHER}）｜不存在的库 ${PROBE_PG_MISSING}"
 
@@ -740,6 +743,68 @@ if failures:
     sys.exit(1)
 print("✓ 两遍都真跑过：两种视图的行集合一致 / 计数与真库相符 / 真点击两档都到得了（中英各一遍）")
 PY
+
+echo
+echo "==> 元数据交付面那两条：两遍都**真跑过**了吗（跳过 ≠ 通过）"
+python3 - "${OUT_PLAIN}" "${OUT_SANDBOX}" <<'PYEOF'
+import json
+import os
+import sys
+
+
+def load(directory, case):
+    path = os.path.join(directory, f"metadata-delivery-evidence-{case}.json")
+    if not os.path.exists(path):
+        return None
+    with open(path, encoding="utf-8") as handle:
+        return json.load(handle)
+
+
+failures = []
+for directory in sys.argv[1:]:
+    base = os.path.basename(directory)
+
+    # 011：右键「查看 DDL」落进页签的那三段文本
+    ddl = load(directory, "ddl")
+    if ddl is None:
+        failures.append(f"{base}：没有 ddl 的证据文件 —— 查看 DDL 那条没跑（跳过不算通过）")
+    else:
+        view_tab = ddl.get("viewTab") or ""
+        function_tab = ddl.get("functionTab") or ""
+        table_tab = ddl.get("tableTab") or ""
+        if not view_tab.startswith("CREATE OR REPLACE VIEW"):
+            failures.append(f"{base}/ddl：视图页签不是建视图语句：{view_tab[:80]!r}")
+        if '"."' not in view_tab:
+            failures.append(f"{base}/ddl：视图语句没有限定名：{view_tab[:80]!r}")
+        signatures = function_tab.count("CREATE OR REPLACE FUNCTION")
+        if signatures != 2:
+            failures.append(f"{base}/ddl：函数页签里的重载段数不是 2：{signatures}")
+        if not table_tab.startswith("CREATE TABLE"):
+            failures.append(f"{base}/ddl：表页签不是建表语句：{table_tab[:80]!r}")
+
+    # 015：搜索命中（跨 schema）与「浏览」那一下落下的语句
+    search = load(directory, "search")
+    if search is None:
+        failures.append(f"{base}：没有 search 的证据文件 —— 对象搜索那条没跑（跳过不算通过）")
+    else:
+        matches = search.get("matches") or []
+        schemas = {name.split(".")[0] for name in matches if "." in name}
+        if len(matches) < 5:
+            failures.append(f"{base}/search：命中条数少于现场的五个对象：{matches}")
+        if len(schemas) < 2:
+            failures.append(f"{base}/search：命中没有跨 schema：{sorted(schemas)}")
+        browse_tab = search.get("browseTab") or ""
+        if '"."' not in browse_tab:
+            failures.append(f"{base}/search：浏览语句没有带 schema 的限定名：{browse_tab[:120]!r}")
+        if "LIMIT 200" not in browse_tab.upper():
+            failures.append(f"{base}/search：浏览语句没有 200 行上限：{browse_tab[:120]!r}")
+
+if failures:
+    for item in failures:
+        print(f"✗ {item}")
+    sys.exit(1)
+print("✓ 两遍都真跑过：查看 DDL 三段都落进页签（视图 / 函数两重载 / 表）· 搜索跨 schema 命中 · 浏览语句指对表并带上限")
+PYEOF
 
 echo
 echo "==> 分组视图那四条：源锚点（行模型是纯函数 / 分组只有一处来源 / 那台开关两档齐备 / **生产路径的接线本身**）"

@@ -101,7 +101,10 @@ step "5) 清理现场"
 
 echo ""
 if [ "$fail" -eq 0 ]; then
-    echo "全部通过：视图 / 函数 DDL 在真机 18.6 上取回并装配成功"
+    # 版本号不许写死：本机档是 16.x、远程档是 18.6 —— 写死一处就会把 16 的读数说成 18.6 的（2026-11-01 实测到）。
+    SERVER_VERSION="$("${DOYAH_TEST_PG_BIN}/psql" -h "${PGHOST}" -p "${PGPORT}" -U "${PGUSER}" -d "${PGDATABASE}" \
+        -tAc "SHOW server_version" 2>/dev/null | tr -d "[:space:]")"
+    echo "全部通过：视图 / 函数 DDL 在真机 ${SERVER_VERSION:-未知版本} 上取回并装配成功"
 else
     echo "有失败项，见上"
 fi

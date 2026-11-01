@@ -17,3 +17,5 @@
 - 2026-11-01 `verify-ui-interactions.sh` 源锚点字典里 `"App/AppState.swift"` 登记了两次（第八批 + 第十批）⇒ Python 字典静默丢掉先出现那份，第八批两条判据两批以来是死的。已合成一个键并在原地加注「一个文件只许一个键」。这是坏判据（红线 #2/#14），不是本片引入。
 - 2026-11-01 B2 批次：分页条整条换成 AppKit 控件（不是「加一枚隐藏按钮」）—— 理由 = 离屏宿主里 SwiftUI `Picker` / `Button` 不落可点控件，四枚箭头与六档位在自动化里一次都量不到；换法沿用 `ResultFilterPopup` / `PanelIconButton` 两条既有先例。
 - 2026-11-01 B2 批次：`AgentApprovalDecisionProbeTests` 与源锚点里「审批单里要有 `AgentApprovalDecisionRow(`」改成反向钉（审批单**不许**自己构造那一行）—— 该钉子钉的是上一片之前那个旧形状，保留它等于保留一条永远判红的判据；产出者的锚点仍在 `AgentApprovalDecisionRow.swift` 那块。
+- 2026-11-01 B3 批次：`FR-STD-DB-META-002` 判 `blocked` 而不是 ✅ —— 本机没有 GBase 8a 实例，端到端 0 次；层级映射只有假服务的 5 例单测。拿 MySQL 假服务器（`Scripts/mysql-stub`）冒充 GBase 8a 端到端属于「判据由被判方提供」（红线 #3），宁可留 🟡 并写 next_try。
+- 2026-11-01 B3 批次：`FR-STD-DB-META-011` / `015` 的「界面那一跳」用**真 AppState + 真集群读页签文本**判（`MetadataDeliveryProbeTests`），不加探针专用旁路 —— 理由：这两行缺的正是「点下去之后页签里究竟是什么」，`performTreeAction` / `searchObjects` / `browseSearchHit` 本身就是生产入口，多包一层只会让判据离开产品那条线。

@@ -2,19 +2,11 @@
 #
 # 唯一事实源 = Docs/Doyah产品开发计划任务清单-macOS.md（活书台账）。
 # 本文件只决定「一跳做哪几条」，不许反向改台账。
-# 生成于 2026-11-01，源 = plan.yaml 里 23 条 status: todo（已收口 12 条：RES-006, RES-007, RES-008, RES-009, RES-011, RES-013, RES-014, META-006, IO-002, TASK-001, TASK-002, TASK-003）
+# 生成于 2026-11-01，源 = plan.yaml 里 18 条 status: todo（已收口 17 条：RES-006, RES-007, RES-008, RES-009, RES-011, RES-013, RES-014, META-002, META-006, META-007, META-008, META-011, META-015, IO-002, TASK-001, TASK-002, TASK-003）
 #
 # 生成命令：python3 Scripts/plan-batches.py --write   （--check 只比对不写盘）
 
 batches:
-
-  - id: B3
-    title: "元数据面：跨库浏览 / 分组视图 / 对象搜索 / 查看 DDL"
-    status: todo
-    est_min: 60
-    items: [FR-STD-DB-META-002, FR-STD-DB-META-007, FR-STD-DB-META-008, FR-STD-DB-META-011, FR-STD-DB-META-015]
-    why: "五条都在对象树上（层级 / 分组 / 搜索 / 下钻 / 取 DDL），同一棵树改一次比拆五次省一半"
-    exit: "5 行两列全 ✅；对象树探针一批跑完"
 
   - id: B4
     title: "导入导出：pg_dump/restore / 恢复到指定库 / CSV·JSON 导入 / xlsx 向导"
@@ -48,5 +40,5 @@ batches:
     why: "连接层同一处改：分组是配置结构、SSH 隧道是连接前段、GBase 是协议族复用"
     exit: "3 行两列全 ✅；SSH 隧道允许只落「本机无跳板机」的如实未知"
 
-# 合计 23 条，覆盖 plan.yaml 全部 todo。
-# 粗估 285 分钟 ≈ 4.8 小时（原一格一条的节奏按 20 分钟/条算）。
+# 合计 18 条，覆盖 plan.yaml 全部 todo。
+# 粗估 225 分钟 ≈ 3.8 小时（原一格一条的节奏按 20 分钟/条算）。
