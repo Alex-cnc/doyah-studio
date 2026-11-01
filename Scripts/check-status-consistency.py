@@ -3,7 +3,7 @@
 
 为什么改：状态列已从需求书正文与索引**整批迁出**（人类主人：本文件不写状态），索引也外置
 成独立文件、只剩「编号 / 域 / 层次」三列 ⇒ 旧口径（索引 ↔ 定义行）的输入不存在了。
-现在**状态唯一源 = 计划书 §3 台账**；本判据守的是「其它文档随手括注一个旧状态」（会让人
+现在**状态唯一源 = 一单 §3 台账**；本判据守的是「其它文档随手括注一个旧状态」（会让人
 以为"还没做"）这一面 —— 编号集合相等那半由 `check-plan-coverage.py` 守。
 
 2026-10-14 修（合册 T-20261013-027 · 原单 T-20261010-032 · 第 400 轮判据面缺口样本 37）：
@@ -25,7 +25,7 @@
        （`FR-AGT-PLAN-PLAN-003（🟡 待验证）`）**不在本判据范围** —— 放宽会把路线图表里「alpha 不含 ⬜」
        这类语义当状态括注误判（实测规划书 §7 六行），故按原单口径**只改面、不改形状**
        （此处登记，不许继续无声）。
-    ⑤ 2026-10-20：解析物由「§10.1 索引 + 正文定义行」换成「《开发计划书》§3 台账」（状态唯一源迁出）；
+    ⑤ 2026-10-20：解析物由「§10.1 索引 + 正文定义行」换成「一单 §3 台账」（状态唯一源迁出）；
        扫描面与空跑防护不变，另加台账条数下限 `LEDGER_FLOOR`（取不到输入照样判红）。
 
 判据自己的证据：`--self-test` **12 例**（一律在临时夹具树上写坏，真仓零改动）。
@@ -78,7 +78,7 @@ def face_files(root: pathlib.Path) -> list[pathlib.Path]:
 
 
 def parse_ledger(lines: list[str]) -> dict[str, tuple[str, int]]:
-    """《开发计划书》§3「需求状态台账」：| 编号 | 一句话 | 领域 | 层次 | 优先级 | 状态 | 状态原值 |
+    """一单§3「需求状态台账」：| 编号 | 一句话 | 领域 | 层次 | 优先级 | 状态 | 状态原值 |
 
     2026-10-20 起**状态只有一个源**：需求书正文与索引都不再写状态，整批迁入本表
     （原 §10.1 索引状态列已摘除）。所以本判据的对账物从「索引 ↔ 定义行」改为
@@ -100,7 +100,7 @@ def cross_document_problems(root: pathlib.Path, ledger: dict[str, tuple[str, int
                             face_floor: int = FACE_FLOOR) -> list[str]:
     """非台账文档里写「编号（状态标记）」时，必须与台账一致。
 
-    为什么补这条：状态是单一事实来源（《开发计划书》§3 台账），但其它文档（发布方案 /
+    为什么补这条：状态是单一事实来源（一单 §3 台账），但其它文档（发布方案 /
     设计说明 / 评审记录…）会**随手括注一个旧状态** —— 实测抓到旧例（规划书里 FR-AGT-UX-CONV-001 /
     FR-AGT-PLAN-PLAN-003 仍写 ⬜，而实际早已 🟡），这类括注会让人以为"还没做"。要引用**历史**状态时
     改写措辞（例如「当时标为 ⬜」而不要写成 `（⬜）`），否则本门禁会拦。
@@ -137,7 +137,7 @@ def run(root: pathlib.Path, face_floor: int = FACE_FLOOR,
         ledger_floor: int = LEDGER_FLOOR) -> int:
     plan = root / PLAN_REL
     if not plan.is_file():
-        print(f"❌ 找不到开发计划书：{PLAN_REL}（仓根 {root}）—— 状态的真值源不在，判据取不到输入")
+        print(f"❌ 找不到一单：{PLAN_REL}（仓根 {root}）—— 状态的真值源不在，判据取不到输入")
         return 1
     ledger = parse_ledger(plan.read_text(encoding="utf-8").split("\n"))
 
@@ -155,7 +155,7 @@ def run(root: pathlib.Path, face_floor: int = FACE_FLOOR,
         print(f"❌ 状态一致性校验失败（{len(problems)} 处）：")
         for item in problems:
             print(f"   {item}")
-        print("\n提示：状态只在《开发计划书》§3 台账改；其它文档要引用**历史**状态时改写措辞，"
+        print("\n提示：状态只在一单 §3 台账改；其它文档要引用**历史**状态时改写措辞，"
               "别写成 `编号（⬜）` 这种会被当成现行状态的括注。")
         return 1
 
@@ -163,7 +163,7 @@ def run(root: pathlib.Path, face_floor: int = FACE_FLOOR,
     return 0
 
 
-FIXTURE_PLAN = """# 开发计划书（夹具）
+FIXTURE_PLAN = """# 一单（夹具）
 
 ## 3 需求状态台账
 
@@ -288,7 +288,7 @@ def run_self_test() -> int:
     # 这一例改钉「台账缺了 / 被删了不许静默打绿」——判据取不到输入时必须红）
     def check_ledger_missing():
         where = fixture("ledger-missing")
-        (where / PLAN_REL).write_text("# 开发计划书（夹具）\n\n## 3 需求状态台账\n\n| 编号 | 一句话 | 领域 | 层次 | 优先级 | 状态 | 状态原值 |\n|---|---|---|---|---|---|---|\n\n## 4 里程碑\n", encoding="utf-8")
+        (where / PLAN_REL).write_text("# 一单（夹具）\n\n## 3 需求状态台账\n\n| 编号 | 一句话 | 领域 | 层次 | 优先级 | 状态 | 状态原值 |\n|---|---|---|---|---|---|---|\n\n## 4 里程碑\n", encoding="utf-8")
         return red(where, ("--face-floor", "1", "--ledger-floor", "1"), "一条状态都解析不到")
     case("台账被掏空（§3 里一条状态都没有）⇒ 判红（取不到输入不许当通过）", check_ledger_missing)
 

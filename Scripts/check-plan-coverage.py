@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""《开发计划书》台账 ↔ 《需求规格说明书》索引 的覆盖判据。
+"""一单台账 ↔ 《需求规格说明书》索引 的覆盖判据。
 
-为什么需要：2026-10-20 起状态从需求规格说明书迁到开发计划书（人类主人令：
-「需求规格说明书里不需要状态，而是开发计划书里需要状态和进展情况」）。
+为什么需要：2026-10-20 起状态从需求规格说明书迁到一单（人类主人令：
+「需求规格说明书里不需要状态，而是一单里需要状态和进展情况」（原话里的文档名按现行口径改写））。
 两边一旦漂移，就会重新出现「状态写了但条目不存在」「条目存在但没人管状态」。
 
 判据三条：
-  A **编号集合相等**：计划书 §3 台账的编号集合 == 需求分析 §10.1 索引的编号集合（不多不少）。
+  A **编号集合相等**：一单 §3 台账的编号集合 == 需求分析 §10.1 索引的编号集合（不多不少）。
   B **状态合法**：台账每一行的状态是 ⬜ / 🟡 / ✅ / ➖ 之一。
   C **需求分析不写状态**：正文（变更记录之前）不出现状态符号。
 
@@ -86,7 +86,7 @@ def srs_status_leaks() -> list[str]:
 
 def main() -> int:
     if not SRS.exists() or not PLAN.exists():
-        print("❌ 缺文件：SRS 或 计划书 不在盘上")
+        print("❌ 缺文件：SRS 或 一单 不在盘上")
         return 1
 
     a, b = srs_ids(), plan_rows()
@@ -95,9 +95,9 @@ def main() -> int:
     missing = sorted(a - set(b))
     extra = sorted(set(b) - a)
     if missing:
-        problems.append(f"计划书缺 {len(missing)} 条（需求分析书里有、台账里没有）：{missing[:6]}")
+        problems.append(f"一单缺 {len(missing)} 条（需求分析书里有、台账里没有）：{missing[:6]}")
     if extra:
-        problems.append(f"计划书多 {len(extra)} 条（台账里有、需求分析书没有）：{extra[:6]}")
+        problems.append(f"一单多 {len(extra)} 条（台账里有、需求分析书没有）：{extra[:6]}")
 
     bad = [f"{k}={v}" for k, v in b.items() if not any(v.startswith(m) for m in MARKS)]
     if bad:
@@ -107,7 +107,7 @@ def main() -> int:
     if leaks:
         problems.append(f"需求规格说明书正文仍有 {len(leaks)} 处状态符号：{leaks[:4]}")
 
-    print(f"— 需求分析索引 {len(a)} 条 · 计划书台账 {len(b)} 条")
+    print(f"— 需求分析索引 {len(a)} 条 · 一单台账 {len(b)} 条")
     if problems:
         print("\n❌ 计划覆盖校验失败：")
         for p in problems:

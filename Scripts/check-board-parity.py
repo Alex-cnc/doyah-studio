@@ -3,9 +3,9 @@
 """《任务清单 · 按平台》的派生计数判据（派单 `T-20261014-025` · 人类主人令 2026-10-14）。
 
 为什么有这条判据：`.build/derived/任务清单-按平台.md` 是**派生视图**（人读的完成度面），真值源 =
-《开发计划书》§5 平台等价矩阵（由 `Scripts/gen-platform-parity.py` 机械生成；2026-10-20 从
+《Doyah产品开发计划任务清单-<端>》§3 台账（矩阵见 `.build/derived/平台矩阵.md`）（由 `Scripts/gen-platform-parity.py` 机械生成；2026-10-20 从
 SRS §10.10 迁来）+ `Docs/平台实现状态.json` + 需求编号索引（`Doyah产品需求规格说明书-需求索引.md`，
-macOS 状态在计划书 §3 台账）。派生视图的通病是「真值改了、视图没跟」—— 而它**恰恰是人看的那一面**
+macOS 状态在一单 §3 台账）。派生视图的通病是「真值改了、视图没跟」—— 而它**恰恰是人看的那一面**
 （会照着它说「各家完成度多少」）。「矩阵 ↔ 台账」那一对已由 `gen-platform-parity.py --check` 守着，
 但「**视图 ↔ 矩阵**」这一对原先零护栏 ⇒ 本判据补上。
 
@@ -232,7 +232,7 @@ def finish_model(platforms: list[str], rows: list[dict], groups: list[dict], sou
 
 
 def parse_matrix() -> dict:
-    """先读 SRS §10.10 区块；标记不在盘（2026-10-20 迁到《开发计划书》§5）⇒ 回退到真源重算。"""
+    """先读 SRS §10.10 区块；标记不在盘（2026-10-20 迁到一单 §3 台账）⇒ 回退到真源重算。"""
     text = SRS.read_text(encoding="utf-8")
     if BEGIN in text and END in text:
         return model_from_block(text.split(BEGIN, 1)[1].split(END, 1)[0])
@@ -512,7 +512,7 @@ def main() -> int:
         return 1
     problems = compare(matrix, board)
     if matrix["source"] == "recomputed":
-        print("ℹ️ 判据源：SRS §10.10 标记不在盘（2026-10-20 已迁《开发计划书》§5）⇒ 按 "
+        print("ℹ️ 判据源：SRS §10.10 标记不在盘（2026-10-20 已迁一单 §3 台账）⇒ 按 "
               "`gen-platform-parity` 的 `load_rows()` / `load_ledger()` **回退**重算；判据 A/B/C/D/E 一条不减，"
               "判据 F 无主体（矩阵自身漂移由 `gen-platform-parity.py --check` 守）")
     if problems:
@@ -581,7 +581,7 @@ def build_cases() -> list[dict]:
         return setup
 
     def wipe_status_ledger(work: pathlib.Path) -> None:
-        """《开发计划书》§3 状态台账的标题改坏 ⇒ 回退路径读到 0 条，必须判红（不许零命中=通过）。"""
+        """一单§3 状态台账的标题改坏 ⇒ 回退路径读到 0 条，必须判红（不许零命中=通过）。"""
         _edit(work / "Docs/Doyah产品开发计划任务清单-macOS端.md", "## 3 需求状态台账", "## 3x 需求状态台账")
 
     # 夹具里的数字**一律现读**（不写死）：真值源多一域 / 改一个数，夹具自己跟着走。
@@ -725,7 +725,14 @@ def self_test() -> int:
         base = pathlib.Path(tmp) / "base"
         (base / "Docs").mkdir(parents=True)
         for path in needed:
-            shutil.copy2(path, base / "Docs" / path.name)
+            # 派生件（看板 / 矩阵）落 `.build/derived/`，不进 Docs —— 底座按真实位置摆，
+            # 否则夹具一动手就 FileNotFoundError（2026-10-31 修）。
+            if path.parent.name == "Docs":
+                target = base / "Docs" / path.name
+            else:
+                target = base / ".build" / "derived" / path.name
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(path, target)
         for index, case in enumerate(cases, 1):
             work = pathlib.Path(tmp) / f"case{index:02d}"
             shutil.copytree(base, work)

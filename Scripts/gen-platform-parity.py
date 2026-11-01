@@ -47,8 +47,8 @@ import tempfile
 ROOT = pathlib.Path(os.environ.get("DOYAH_ROOT", "."))
 SRS = ROOT / "Docs/Doyah产品需求规格说明书.md"
 INDEX = doc_index.path()
-# 2026-10-20：状态矩阵（原 §10.10）迁到《开发计划书》§5 —— 读仍从 SRS 取（索引与摘要），
-# 写改到计划书；否则本脚本会在 SRS 里找不到标记而报错。
+# 2026-10-20：状态矩阵（原 §10.10）迁到一单 §3 台账 —— 读仍从 SRS 取（索引与摘要），
+# 写改到一单；否则本脚本会在 SRS 里找不到标记而报错。
 PLAN = ROOT / "Docs/Doyah产品开发计划任务清单-macOS端.md"   # 台账真值源（2026-10-26 起按端分册）
 # 平台等价矩阵是**派生视图**（台账 + 平台实现状态.json 算出来的），不进 Docs：人类主人只认「四书一单」，
 # 一单与详设同构按端分册 ⇒ 跨端矩阵没有「书」的身份，落 .build/derived/。
@@ -152,7 +152,7 @@ def load_rows() -> list[tuple[str, str, str]]:
     index_lines = INDEX.read_text(encoding="utf-8").splitlines()
     body_lines = lines[: next((i for i, line in enumerate(lines) if line.startswith("# 第九章")), len(lines))]
 
-    # 2026-10-20：状态列迁到《开发计划书》§3 台账 ⇒ macOS 基线状态从那里取；
+    # 2026-10-20：状态列迁到一单 §3 台账 ⇒ macOS 基线状态从那里取；
     # 编号集合仍以 SRS §10.1 为准（两边由 `check-plan-coverage.py` 钉死相等）。
     index: dict[str, str] = {}
     summaries: dict[str, str] = {}
@@ -427,9 +427,9 @@ def build_cases() -> list[dict]:
     def drop_column(root: pathlib.Path) -> None:
         """只改矩阵区块里的表（正文定义行不是本门禁的判据面）。
 
-        2026-10-20：矩阵从 SRS §10.10 迁到《开发计划书》§5 ⇒ 夹具跟着搬（写坏仍是临时副本）。
+        2026-10-20：矩阵从 SRS §10.10 迁到一单 §3 台账 ⇒ 夹具跟着搬（写坏仍是临时副本）。
         """
-        path = root / "Docs/Doyah产品开发计划任务清单.md"
+        path = root / ".build/derived/平台矩阵.md"
         text = path.read_text(encoding="utf-8")
         head, rest = text.split(BEGIN, 1)
         block, tail = rest.split(END, 1)
@@ -444,12 +444,12 @@ def build_cases() -> list[dict]:
         path.write_text(f"{head}{BEGIN}\n" + "\n".join(lines) + f"{END}{tail}", encoding="utf-8")
 
     def drop_marker(root: pathlib.Path) -> None:
-        path = root / "Docs/Doyah产品开发计划任务清单.md"
+        path = root / ".build/derived/平台矩阵.md"
         path.write_text(path.read_text(encoding="utf-8").replace(BEGIN, "", 1), encoding="utf-8")
 
     def windows_snapshot(root: pathlib.Path) -> None:
         """正向：台账里的状态必须真的到表上，且分域「与基线一致」计数跟着走。"""
-        text = (root / "Docs/Doyah产品开发计划任务清单.md").read_text(encoding="utf-8")
+        text = (root / ".build/derived/平台矩阵.md").read_text(encoding="utf-8")
         block = text.split(BEGIN, 1)[1].split(END, 1)[0]
         row = re.search(r"^\| FR-STD-DB-CONN-007 \|.*$", block, re.MULTILINE)
         if row is None:
@@ -569,8 +569,10 @@ def run_script(root: pathlib.Path, argv: list[str]) -> subprocess.CompletedProce
 
 
 def self_test() -> int:
-    # 2026-10-20 矩阵迁版后：状态读计划书 §5 / §3，编号集合读独立成文的需求索引 ⇒ 四份都要在场
-    sources = (SRS, PLAN, STATUS, INDEX)
+    # 2026-10-20 矩阵迁版后：状态读平台矩阵 / §3，编号集合读独立成文的需求索引 ⇒ 四份都要在场
+    # 派生矩阵进自测底座：夹具改的是**矩阵里的表**（BEGIN/END 夹在它里面），
+    # 少了它，每个"写坏一处"的负例都会先撞 FileNotFoundError（2026-10-31 修）。
+    sources = (SRS, PLAN, STATUS, INDEX, MATRIX)
     absent = [str(path) for path in sources if not path.exists()]
     if absent:
         print(f"❌ 自检需要真实的真源文件，缺：{absent}")
@@ -582,7 +584,9 @@ def self_test() -> int:
         base = pathlib.Path(tmp) / "base"
         (base / "Docs").mkdir(parents=True)
         for path in sources:
-            shutil.copy2(path, base / "Docs" / path.name)
+            target = base / "Docs" / path.name if path.parent.name == "Docs" else base / ".build" / "derived" / path.name
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(path, target)
 
         cases = build_cases()
         for index, case in enumerate(cases, 1):
@@ -674,7 +678,7 @@ def main() -> int:
     MATRIX.write_text(updated, encoding="utf-8")   # 2026-10-26：矩阵落 .build/derived（派生件）
     detail = "、".join(f"{platform['label']} {len(platform['overrides'])} 条" for platform in platforms)
     print(
-        f"✅ 已重写《计划书》§5 平台等价矩阵（{len(rows)} 条；"
+        f"✅ 已重写《平台矩阵》（{len(rows)} 条；"
         f"平台列 {'/'.join(platform['label'] for platform in platforms)}；台账显式状态 {detail}）"
     )
     return 0

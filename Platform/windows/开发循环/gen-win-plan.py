@@ -6,7 +6,7 @@
 
 读：
   · `Docs/Doyah产品能力规划说明书.md`  —— 三级标题 = 能力条目（按章节归属产品面）
-  · `Docs/Doyah产品开发计划书.md`        —— §5 平台等价矩阵（FR 行 + 四端状态列）
+  · `Docs/Doyah产品开发计划任务清单-macOS端.md`        —— §5 平台等价矩阵（FR 行 + 四端状态列）
   · `Docs/平台实现状态.json`             —— 各端台账（Windows 的显式登记）
 写：
   · `Platform/windows/开发计划-Windows.md`
@@ -22,7 +22,7 @@ import sys
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 CAP = os.path.join(ROOT, "Docs", "Doyah产品能力规划说明书.md")
-PLAN = os.path.join(ROOT, "Docs", "Doyah产品开发计划书.md")
+PLAN = os.path.join(ROOT, ".build", "derived", "平台矩阵.md")
 LEDGER = os.path.join(ROOT, "Docs", "平台实现状态.json")
 OUT = os.path.join(ROOT, "Platform", "windows", "开发计划-Windows.md")
 
@@ -119,7 +119,7 @@ def build():
     lines.append("# Windows 开发计划（派生件 · 勿手改）")
     lines.append("")
     lines.append("> **这份文件是派生品**：能力条目数与 FR 状态全部由 "
-                 "`Platform/windows/开发循环/gen-win-plan.py` 现读现算（来源 = 能力规划说明书 / 开发计划书 §5 / 平台实现状态台账）。")
+                 "`Platform/windows/开发循环/gen-win-plan.py` 现读现算（来源 = 能力规划说明书 / 平台矩阵 / 平台实现状态台账）。")
     lines.append("> 三书或台账一改，重跑生成器即同步；手改会在 `--check` 时被判红。")
     lines.append("")
     in_column = {name for name, _d, flag in SURFACES if flag}

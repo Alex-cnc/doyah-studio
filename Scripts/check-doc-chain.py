@@ -75,7 +75,7 @@ OUTLET_RULES: dict[str, dict] = {
     "平台矩阵": {"only_prefix": "FR", "exclude_substr": ("-ALL-DATA-", "-ALL-IFACE-"),
                  "source": "gen-platform-parity.py：§5 矩阵只表功能需求，设计层不进"},
     "按平台清单": {"only_prefix": "FR",
-                   "source": "gen-platform-board.py 从《开发计划书》§5 机械派生（真值源不在盘 ⇒ 见 R5）"},
+                   "source": "gen-platform-board.py 从一单 §3 台账 机械派生（真值源不在盘 ⇒ 见 R5）"},
 }
 
 

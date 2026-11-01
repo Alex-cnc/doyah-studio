@@ -3,14 +3,14 @@
 """重生成《任务清单 · 按平台》（`PC-BOARD-001`）的 §1 / §2 / §3 —— 从真源，不手写。
 
 为什么要有生成器（而不是让判据一直红着）：
-    2026-10-20 状态矩阵从《需求规格说明书》§10.10 迁到《开发计划书》§5、需求索引独立成文
+    2026-10-20 状态矩阵从《需求规格说明书》§10.10 迁到一单 §3 台账、需求索引独立成文
     （`Docs/Doyah产品需求规格说明书-需求索引.md`）之后，本文件的三节仍是按旧矩阵手抄的读数
     （290 项 / macOS 130✅70🟡90⬜ / §2 15 个域），而 `check-board-parity.py` 从真源逐列重算
     ⇒ 第 7 项**持续红**。红得久了只剩两个结局：判据被删，或者人学会忽略它。逐格手跟版也走不通
     （真源一动就得重抄 30 多格 + 149 个编号），所以这里把「抄」这一半也机械掉。
 
 真源（唯一，两处，都由 `Scripts/gen-platform-parity.py` 提供 —— 本脚本不另读任何表）：
-    · `load_rows()` → [(编号, macOS 状态, 需求摘要)]（编号集合 = 需求索引；macOS 状态 = 计划书 §3 台账）
+    · `load_rows()` → [(编号, macOS 状态, 需求摘要)]（编号集合 = 需求索引；macOS 状态 = 一单 §3 台账）
     · `load_ledger(known_ids)` → (default, platforms, not_platforms)，每平台带 `label` / `overrides`
     · `DOMAIN_LABEL`：`FR-<域码>` → 中文域名（缺项**照原域码**写，不编域名）
 
@@ -59,7 +59,7 @@ SECTION_HEAD = re.compile(r"^## (?P<number>[1-5])\. ")
 VERSION_ROW = re.compile(r"^\| 版本 \| \*\*v(?P<version>[0-9.]+)\*\* \|$")
 VERSION_MARK = "**按真源重生成（项数 290 → 379）**"
 VERSION_NOTE = (
-    "| v1.5 | 2026-10-20 | **按真源重生成（项数 290 → 379）**：状态矩阵已迁《开发计划书》§5、"
+    "| v1.5 | 2026-10-20 | **按真源重生成（项数 290 → 379）**：状态矩阵已迁一单 §3 台账、"
     "需求索引独立成文 ⇒ §1 / §2 / §3 改由新脚本 `Scripts/gen-platform-board.py` 从 "
     "`gen-platform-parity` 的 `load_rows` / `load_ledger` 机械重写（三节由一对 HTML 注释标记夹住、"
     "`--check` 判漂移），手抄这一半就此退役；"
@@ -177,7 +177,7 @@ def render_overview(model: dict) -> str:
     columns = model["columns"]
     labels = " / ".join(columns)
     out = [
-        "## 1. 一览（机械计数 · 派生自《开发计划书》§5 平台等价矩阵的四列）",
+        "## 1. 一览（机械计数 · 派生自《Doyah产品开发计划任务清单-<端>》§3 台账（矩阵见 `.build/derived/平台矩阵.md`）的四列）",
         "",
         f"共 **{len(model['ids'])}** 条功能需求（逐端同一个分母）· 端：{labels}。",
         "",
@@ -276,7 +276,7 @@ def render_remnants(model: dict) -> str:
             out.append("  - （本列没有残项）")
         out.append("")
     out.extend([
-        "> 要开工哪一条，改的是真值源（`Docs/平台实现状态.json` 的 `overrides` / 《开发计划书》§3 状态台账）"
+        "> 要开工哪一条，改的是真值源（`Docs/平台实现状态.json` 的 `overrides` / 一单§3 状态台账）"
         "⇒ 跑 `python3 Scripts/gen-platform-parity.py` 重写 §5 矩阵 ⇒ 跑 "
         "`python3 Scripts/gen-platform-board.py` 重写本节。",
         "",
@@ -389,6 +389,21 @@ def _flip_ledger(setting: str):
     return setup
 
 
+def _total_cell() -> str:
+    """看板 §1 里 macOS 那一行的「项数」格（如 `| 405 |`）—— 现读现算，不写死。"""
+    import re as _re
+    text = BOARD.read_text(encoding="utf-8")
+    m = _re.search(r"^\| macOS \|[^|]*\|\s*(\d+)\s*\|", text, _re.MULTILINE)
+    if not m:
+        return "| 0 |"
+    return f"| {m.group(1)} |"
+
+
+def _bump_down(cell: str) -> str:
+    number = int(cell.strip().strip("|").strip())
+    return f"| {number - 1} |"
+
+
 def build_cases() -> list[dict]:
     def drop_section(root: pathlib.Path) -> None:
         path = root / ".build/derived/任务清单-按平台.md"
@@ -407,7 +422,8 @@ def build_cases() -> list[dict]:
         {"name": "① 基线：生成一次后 --check 必须一致", "steps": [([], 0, "已重写"), (["--check"], 0, "一致")]},
         {
             "name": "② §1 的一格被手改 ⇒ --check 报红",
-            "setup": _edit_board("| 379 |", "| 378 |"),
+            # 锚点**从看板现读**，不写死项数（写死 379 那次就是这么烂的：真源涨到 405，夹具失效）。
+            "setup": _edit_board(_total_cell(), _bump_down(_total_cell())),
             "steps": [(["--check"], 1, "不一致")],
         },
         {
@@ -476,7 +492,14 @@ def self_test() -> int:
         base = pathlib.Path(tmp) / "base"
         (base / "Docs").mkdir(parents=True)
         for path in needed:
-            shutil.copy2(path, base / "Docs" / path.name)
+            # 派生件（看板 / 矩阵）落 `.build/derived/`，不进 Docs —— 底座按真实位置摆，
+            # 否则夹具一动手就 FileNotFoundError（2026-10-31 修）。
+            if path.parent.name == "Docs":
+                target = base / "Docs" / path.name
+            else:
+                target = base / ".build" / "derived" / path.name
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(path, target)
         for index, case in enumerate(cases, 1):
             work = pathlib.Path(tmp) / f"case{index:02d}"
             shutil.copytree(base, work)

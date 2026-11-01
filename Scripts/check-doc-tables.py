@@ -563,7 +563,7 @@ def check_requirement_counts() -> list[str]:
         return problems
 
     # 2) 索引表本体
-    # 2026-10-20：状态列迁出到《开发计划书》⇒ 索引表头不再带「状态」。
+    # 2026-10-20：状态列迁出到一单⇒ 索引表头不再带「状态」。
     # 两种形状都认（带 / 不带状态），免得改口径时判据自己先崩。
     candidates = ["| 编号 | 所属域 / 章节 | 层次 | 状态 |", "| 编号 | 所属域 / 章节 | 层次 |"]
     header = next((c for c in candidates if c in lines), None)

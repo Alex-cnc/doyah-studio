@@ -3,7 +3,7 @@
 
 **本件身份：派生视图（非契约）**。真值源只有四处，本脚本**只读**、一字不写：
     ① `Docs/Doyah产品需求规格说明书-需求索引.md` 的编号索引（编号 / 所属域 / 层次）—— 行集合与行序；
-    ② 《开发计划书》§3 需求状态台账的「状态」列 —— macOS 基线状态（**唯一来源**；
+    ② 一单§3 需求状态台账的「状态」列 —— macOS 基线状态（**唯一来源**；
        2026-10-20 从 SRS §10.1 索引迁来，状态不再写在索引里）；
     ③ `Docs/Doyah产品需求规格说明书-追溯表.md`（「实现位置」列）—— 落点索引
        （2026-10-20 从 SRS §10.2 整体移出）；
@@ -18,7 +18,7 @@
 
 **口径（写死在下面这些函数里，改口径先改本段）**：
     · 行序 = 需求索引的行序，一条需求一行（索引几条 → 几行，一行不少）；
-    · `macOS` 列 = 计划书 §3 台账状态列的**首个取值**（✅ / 🟡 / ⬜）；取不到合法取值即判红；
+    · `macOS` 列 = 一单 §3 台账状态列的**首个取值**（✅ / 🟡 / ⬜）；取不到合法取值即判红；
     · `macOS 落点` 列 = 追溯表该条所在行的**反引号片段**（前 3 个 + 「等 N 处」）；
       - 格内转义竖线 `\\|` 按**字面**处理、不当列分隔符（一次性快照正是在这里错了一行）；
       - 同一编号出现在多行时**取最后一行**（后写的行是更准的登记）；
@@ -46,7 +46,7 @@ import doc_index  # noqa: E402  （派生件位置：.build/derived；缺文件�
 
 ROOT = pathlib.Path(os.environ.get("DOYAH_ROOT", "."))
 INDEX = doc_index.path()
-PLAN = ROOT / "Docs/Doyah产品开发计划任务清单.md"
+PLAN = ROOT / "Docs/Doyah产品开发计划任务清单-macOS端.md"
 TRACE = ROOT / "Docs/changelog/Doyah产品需求规格说明书-追溯表.md"  # 2026-10-26 已废（人类主人：「以四书一单为唯一根据」），文件不存在时落点列全给 —
 STATUS = ROOT / "Docs/平台实现状态.json"
 # 2026-10-20：真值源搬迁前的落点（SRS §10.1 索引 / §10.2 追溯表）；现在 SRS 里已无这两节，
@@ -139,8 +139,8 @@ def read_lines(path: pathlib.Path, label: str) -> list[str]:
 
 
 def load_status() -> dict[str, str]:
-    """《开发计划书》§3 需求状态台账 → {编号: 状态}（macOS 基线的唯一来源）。"""
-    lines = read_lines(PLAN, "计划书：§3 状态台账")
+    """一单§3 需求状态台账 → {编号: 状态}（macOS 基线的唯一来源）。"""
+    lines = read_lines(PLAN, "一单：§3 状态台账")
     rows = first_table(lines, ("编号", "状态"), 9)
     problems: list[str] = []
     status: dict[str, str] = {}
@@ -150,11 +150,11 @@ def load_status() -> dict[str, str]:
             continue
         value = status_token(cells[5])
         if value not in ALLOWED_STATUS:
-            problems.append(f"计划书 §3 台账 {identifier} 的状态格取值非法（{cells[5]!r}）")
+            problems.append(f"一单 §3 台账 {identifier} 的状态格取值非法（{cells[5]!r}）")
             continue
         status[identifier] = value
     if not status:
-        problems.append("计划书 §3 台账一条状态都没读到（锚点或表格形态变了）")
+        problems.append("一单 §3 台账一条状态都没读到（锚点或表格形态变了）")
     if problems:
         raise SourceError(problems)
     return status
@@ -182,7 +182,7 @@ def load_index(status: dict[str, str]) -> tuple[list[tuple[str, str, str, str]],
             continue
         seen.add(identifier)
         if identifier not in status:
-            problems.append(f"需求索引有 {identifier}，而计划书 §3 台账没有它的状态（两处必须一一对应）")
+            problems.append(f"需求索引有 {identifier}，而一单 §3 台账没有它的状态（两处必须一一对应）")
             continue
         prefix = identifier.split("-")[0]
         if prefix != "FR":
@@ -193,7 +193,7 @@ def load_index(status: dict[str, str]) -> tuple[list[tuple[str, str, str, str]],
         problems.append("需求索引一条都没读到（锚点或表格形态变了）")
     extra = sorted(set(status) - seen)
     if extra:
-        problems.append(f"计划书 §3 台账有 {len(extra)} 条不在需求索引里（如 {extra[:3]}）")
+        problems.append(f"一单 §3 台账有 {len(extra)} 条不在需求索引里（如 {extra[:3]}）")
     if problems:
         raise SourceError(problems)
     return index, others.get("NFR", 0), others.get("AC", 0)
@@ -230,7 +230,10 @@ def load_trace(known: set[str]) -> tuple[dict[str, str], int, int]:
     （数量如实印在产出件头部，不假装它们不存在）。
     """
     if not TRACE.exists():
-        return {}
+        # 追溯表已于 2026-10-26 废止（人类主人令：四书一单为唯一根据，落点只写在本端一单证据列）
+        # ⇒ 返回**三件空值**，让调用方按「落点未知」出件；改这一行前它就是 return {}，
+        # 调用方解包三个值直接 ValueError —— 生成器整个跑不起来，比没有落点更糟。
+        return {}, 0, 0
     lines = read_lines(TRACE, "追溯表：实现位置")
     rows = first_table(lines, ("需求", "实现位置"), 3)
     trace: dict[str, str] = {}
@@ -332,7 +335,7 @@ def render(
     out.append("")
     out.append(
         "> **本件身份：派生视图（非契约）** —— 真值源 = `Docs/Doyah产品需求规格说明书-需求索引.md`（编号 / 域 / 层次）"
-        "+ 《开发计划书》§3（macOS 状态）+ `Docs/Doyah产品需求规格说明书-追溯表.md`（落点）"
+        "+ 一单§3（macOS 状态）+ `Docs/Doyah产品需求规格说明书-追溯表.md`（落点）"
         "+ `Docs/平台实现状态.json`（其他平台状态）。"
     )
     out.append(
@@ -361,7 +364,7 @@ def render(
     )
     out.append(">")
     out.append(
-        "> **口径**：`macOS` 列 = 计划书 §3 台账状态格的**第一个取值**；`macOS 落点` = 追溯表该条所在行的"
+        "> **口径**：`macOS` 列 = 一单 §3 台账状态格的**第一个取值**；`macOS 落点` = 追溯表该条所在行的"
         "**反引号片段**（前 3 个 + 「等 N 处」；同一编号出现在多行时取**最后一行**；范围行展开到每一条）。"
         "**无追溯行写 `—`、有行未标路径写「（追溯表有行、未标路径）」—— 两种都不编落点**。"
     )

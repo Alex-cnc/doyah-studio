@@ -34,7 +34,11 @@
       },
       {
         "script": "Scripts/check-plan-coverage.py",
-        "reason": "2026-10-20 新增（状态迁出《开发计划书》后的覆盖判据）。闭环 `Scripts/verify-all.sh` 的项数与项号是**多处硬编码**（`AGENT-SPEC.md` / doc-numbers 台账 / 脚本注释三处同步），迁移当轮不动闭环清单，先在本台账登记；**下一轮把它接进 `Scripts/verify-all.sh` 第 1 项之后并同步项数三处**（已登记为待办，不是长期豁免）。"
+        "reason": "2026-10-20 新增（状态迁出一单之后的覆盖判据）。闭环 `Scripts/verify-all.sh` 的项数与项号是**多处硬编码**（`AGENT-SPEC.md` / doc-numbers 台账 / 脚本注释三处同步），迁移当轮不动闭环清单，先在本台账登记；**下一轮把它接进 `Scripts/verify-all.sh` 第 1 项之后并同步项数三处**（已登记为待办，不是长期豁免）。"
+      },
+      {
+        "script": "Scripts/check-doc-chain.py",
+        "reason": "四书一单**层间引用链**的普查件（R1 不得凭空 / R2 不得漏落 / R3 能力书不引下游编号 / R4 编号形制）。**尚未配必红负例 ⇒ 按铁律 #14 不许入闸**，故不进 verify-all；配齐四条负例并各自跑红之后再加进闭环。"
       }
     ],
     "testGlob": "Scripts/test-*.py",

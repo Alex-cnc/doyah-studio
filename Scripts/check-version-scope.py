@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""版本范围校验：《开发计划书》§3 台账的「版本 / 版本口径」两列。
+"""版本范围校验：一单 §3 台账的「版本 / 版本口径」两列。
 
 为什么要这道判据（2026-10-20 人类主人令）：**"哪个版本做哪些需求"由版本计划说清**，
 不需要在需求书正文里逐条写 `[alpha 不含]` 括注。旧做法（`Scripts/check-alpha-fr-dispositions.py`
@@ -141,7 +141,7 @@ def check(lines: list[str], floor_rows: int = FLOOR_ROWS, floor_alpha: int = FLO
 def run(root: pathlib.Path, floor_rows: int, floor_alpha: int) -> int:
     plan = root / PLAN_REL
     if not plan.is_file():
-        print(f"❌ 找不到《开发计划书》：{PLAN_REL}（仓根 {root}）")
+        print(f"❌ 找不到一单：{PLAN_REL}（仓根 {root}）")
         return 1
     lines = plan.read_text(encoding="utf-8").split("\n")
     problems = check(lines, floor_rows, floor_alpha)
@@ -164,7 +164,7 @@ def run(root: pathlib.Path, floor_rows: int, floor_alpha: int) -> int:
 
 # ---------------------------------------------------------------- 自检
 
-FIXTURE_OK = """# 开发计划书（夹具）
+FIXTURE_OK = """# 一单（夹具）
 
 ## 3 需求状态台账
 
