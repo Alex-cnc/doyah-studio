@@ -44,5 +44,5 @@ test-verify-all-gate 8/8 rc=0 · check-exclusive-sections --self-test 44/44 · c
 check-doc-versions --self-test 负例 8/8 rc=0 · test-sidebar-collapse-state 24/24 rc=0
 ```
 
-提交：`<sha>`
+提交：`cff49c6c`（改动）+ `6baa2c52`（检查点/决定）
 未验证：① `check-self-test-counts` **不带 `--no-run` 的全跑未完成** —— 卡在某族 runner 的 `subprocess.communicate`（faulthandler 栈：`selectors.select` ← `subprocess.run` ← `run_family:242`，`timeout` 默认 900s），实测 8 分钟 0% CPU 无子进程 ⇒ 记「未知」，不记「通过」；② 同一探针（各族 20s 上限）显示**大量族存量红**（夹具锚点失效 / 干净副本判红），与本片无关，见 `.agent/decisions.md` 一行；③ 第 16 项 Linux/Windows 分支只经桩件（`test-verify-all-gate` 例 4 用 `platform=linux`），未在真机跑；真机点验 0 次 · 217 真库 0 次。
