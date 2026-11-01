@@ -52,4 +52,4 @@ $ python3 Scripts/check-self-test-counts.py
   `network-egress` · `palette-wiring` · `panel-root-frames` · `release-version` · `result-scroll-ledger` · `script-portability` ·
   `terminal-tabs` · `tri-repo-parity`）
 
-提交：见下方补记
+提交：`da2d4bfb`（证据补记 = 下一个提交）
