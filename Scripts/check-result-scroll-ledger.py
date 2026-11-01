@@ -17,6 +17,9 @@
      `Scripts/run-manual-verification-probes.sh` 的 `FILTER=` 清单里，否则必须在豁免表里写明理由 ——
      第 96 轮实测过「新用例没接进 `--filter` ⇒ 一个都跑不到」，本判据把这句话变成机械检查
      （落地当轮就抓出 `AppearanceAxesProbeTests` 自 2026-09-29 起没有任何脚本跑它）。
+     **2026-11-02 补接线**：盘上 32 份探针（结果面 / 对象面 / 工作区面 / 编辑器面 / 代理面）从未进过
+     `FILTER=` ⇒ 一律点名判红；逐份核上下文后接进取证脚本（`AppearanceAxesProbeTests` 仍豁免，理由见下），
+     面下限随之 40 → 78。这一族红不是夹具漂移 —— 是「写了用例没人叫它」本身。
      **2026-10-14 收口**（合册 `T-20261013-027` · 原单 `T-20261010-034`）：判定物由
      「整份脚本的**全文**子串命中」改成 **`FILTER="…"` 赋值行**，并加**反向**校验（清单成员必须在
      盘上有对应文件 ⇒ 僵尸条目判红）、`FILTER=` 行解析不到 ⇒ 判红（空跑防护）、清单条数与
@@ -173,8 +176,9 @@ FILTER_RE = re.compile(r'^FILTER="([^"]*)"', re.M)
 
 # 面下限（空跑防护）：低于即判红 —— 防「面被掏空 ⇒ 零命中 = 通过」。
 # 2026-10-14 实测：TestsUISnapshot/*ProbeTests.swift 40 份 / FILTER= 成员 39 条（豁免 1 份）。
+# 2026-11-02 实测：盘上 79 份 / FILTER= 成员 78 条（豁免 1 份 = `AppearanceAxesProbeTests`）。
 # 清单条数不另设下限：面完整时「正向逐份点名」已经保证清单至少 39 条（少一条就点那条的名字）。
-PROBE_FLOOR = 40
+PROBE_FLOOR = 78
 
 
 def filter_members(probes_text: str) -> tuple[list[str] | None, str | None]:
