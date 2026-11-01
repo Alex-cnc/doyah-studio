@@ -35,8 +35,11 @@ L0_BOOKS = [
 ]
 # 分册仓：独立产品仓，其 Docs/ 是分册（任务清单除外，本判据不看进度）
 FASCICLES = [
-    ("Notes",  LEAD / "notes" / "Docs"),
-    ("Retro",  LEAD / "retro" / "Docs"),
+    # 只认**正式分册**（2026-11-01 起按主人令从全量四书复制生成的那几本）。
+    # Notes 仓里旧的《需求规范书 / 概要设计 / 核心契约》属历史遗留，不在分册之列 —— 它们若被扫进来，
+    # 会把实现级条目（RichEditor / hvigorw 之类）当成需求，制造假缺口（见 04e1e1ea）。
+    ("Notes",  LEAD / "notes" / "Docs", "Doyah Notes产品*.md"),
+    ("Retro",  LEAD / "retro" / "Docs", "Doyah Retro产品*.md"),
 ]
 
 ID_RE = re.compile(r"(?:FR|NFR|AC)-[A-Z]{2,4}-[A-Z]{2,8}-[A-Z]{2,8}-\d{3}")
@@ -46,10 +49,10 @@ IMPL_HINTS = re.compile(r"`[^`]+`|RichEditor|hvigorw|gradle|RDB|SQLite|Kotlin|Co
 LEGACY_RE = re.compile(r"\bIR-\d{1,3}\b")
 
 
-def collect(paths: list[pathlib.Path], recursive: bool) -> set[str]:
+def collect(paths: list[pathlib.Path], recursive: bool, pattern: str = "*.md") -> set[str]:
     out: set[str] = set()
     for p in paths:
-        files = p.rglob("*.md") if recursive else [p]
+        files = p.rglob(pattern) if recursive else [p]
         for f in files:
             if ".git" in f.parts or not f.exists():
                 continue
@@ -103,12 +106,12 @@ def run(l0_books: list[pathlib.Path], fascicles: list[tuple[str, pathlib.Path]],
         print(f"全量四书（{len(l0_books)} 本）编号：{len(l0)} 个")
 
     bad: dict[str, list[str]] = {}
-    for name, directory in fascicles:
+    for name, directory, pattern in fascicles:
         if not directory.exists():
             if not quiet:
                 print(f"ℹ️ {name} 分册目录不在盘上（{directory}）⇒ 本条对 {name} 报「未知」，不报「通过」")
             continue
-        ids = collect([directory], recursive=True)
+        ids = collect([directory], recursive=True, pattern=pattern)
         gap = sorted(ids - l0)
         legacy = legacy_ids(directory)
         if not quiet:
@@ -128,7 +131,7 @@ def run(l0_books: list[pathlib.Path], fascicles: list[tuple[str, pathlib.Path]],
     if bad:
         print("\n⚠️ 分册有、全量无 —— 不是同一类问题，分两桶看：")
         for name, gap in bad.items():
-            d = defs_of(next(x for n, x in fascicles if n == name))
+            d = defs_of(next(x for n, x, _p in fascicles if n == name))
             impl = [i for i in gap if i in d and IMPL_HINTS.search(d[i])]
             rest = [i for i in gap if i not in impl]
             print(f"  [{name}] 共 {len(gap)} 条")
@@ -164,14 +167,14 @@ def self_test() -> int:
         def rc_of(fas):
             buf = io.StringIO()
             with contextlib.redirect_stdout(buf):
-                r = run([tmp / "Docs/l0.md"], [("X", fas)], quiet=True)
+                r = run([tmp / "Docs/l0.md"], [("X", fas, "*.md")], quiet=True)
             return r, buf.getvalue()
 
         r_ok, _ = rc_of(ok_fas)
         r_bad, out_bad = rc_of(bad_fas)
         cases.append(("分册 ⊆ 全量 ⇒ 绿", r_ok == 0))
         cases.append(("分册塞野编号 ⇒ 红", r_bad == 1 and "FR-NTS-ALL-HOME-999" in out_bad))
-        cases.append(("全量书缺文件 ⇒ 红", run([tmp / "Docs/nope.md"], [("X", ok_fas)], quiet=True) == 1))
+        cases.append(("全量书缺文件 ⇒ 红", run([tmp / "Docs/nope.md"], [("X", ok_fas, "*.md")], quiet=True) == 1))
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 
