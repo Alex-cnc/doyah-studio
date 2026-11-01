@@ -176,8 +176,8 @@ tasks:
     done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-TASK-001 | grep -q '✅'"
     layer: "常用增强"
     prio: "中"
-    status: todo
-    evidence: ""
+    status: done
+    evidence: ".agent/evidence/2026-11-01-B1-TASK-001.md"
   - id: FR-STD-DB-TASK-002
     goal: "**高危任务执行前逐条列出**：将要执行的语句、目标库、预估影响范围，等人工确认；确认才发送，拒绝即中止并留痕。"
     done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-TASK-002 | grep -q '✅'"

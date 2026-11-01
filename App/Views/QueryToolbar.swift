@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 import DoyahCore
 
@@ -353,64 +354,32 @@ struct QueryToolbar: View {
     /// **取**（定义 → 当前页签，同时切连接与库）、**解绑**。
     /// 与「保存查询」并排但分开两个图标：那是书签，这是可执行任务，两者跑起来受的判定不一样。
     private var taskMenu: some View {
-        Menu {
-            Button(L(.sqlTaskSaveAction)) {
-                isTaskSheetPresented = true
-            }
-            .disabled(tab.sql.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-
-            Divider()
-
-            if appState.sqlTasks.isEmpty {
-                Text(L(.sqlTaskListEmpty))
-            } else {
-                ForEach(appState.sqlTasks) { task in
-                    Button {
-                        appState.loadSQLTask(task, into: tab.id)
-                    } label: {
-                        Text(taskLabel(for: task))
-                    }
-                }
-
-                Divider()
-
-                Menu(L(.commonDelete)) {
-                    ForEach(appState.sqlTasks) { task in
-                        Button(task.name, role: .destructive) {
-                            Task { await appState.deleteSQLTask(task) }
-                        }
-                    }
-                }
-            }
-
-            if let bound = appState.boundSQLTask(for: tab.id) {
-                Divider()
-                Text(L(.sqlTaskBoundTo, bound.name))
-                Button(L(.sqlTaskUnbind)) {
-                    appState.unbindSQLTask(from: tab.id)
-                }
-            }
-        } label: {
-            toolbarIcon("checklist")
-        }
-        .menuStyle(.borderlessButton)
-        .menuIndicator(.hidden)
-        .fixedSize()
-        .help(L(.sqlTaskMenuHelp))
+        SQLTaskMenuButton(
+            pointSize: 11,
+            help: L(.sqlTaskMenuHelp),
+            menuProvider: { taskMenuModel() }
+        )
     }
 
-    /// 菜单项一行写清「叫什么 · 哪个库 · 只读还是可写 · 上限」——
-    /// 只写任务名的话，同名不同库的两条定义在菜单里长得一模一样。
-    private func taskLabel(for task: SQLTaskDefinition) -> String {
-        var parts = [
-            task.name,
-            task.targetDatabase,
-            task.accessMode == .readOnly ? L(.sqlTaskModeReadOnly) : L(.sqlTaskModeWritable)
-        ]
-        if let limit = task.rowLimit {
-            parts.append("≤ \(limit)")
-        }
-        return parts.joined(separator: " · ")
+    /// 菜单的**单一铺法**：内容来自 `Core/SQLTaskMenuPlan`，行由 `SQLTaskAppKitMenu` 铺。
+    ///
+    /// 探针调的就是这一处（`SQLTaskMenuButton` 的 `menuProvider` 也是它）——
+    /// 判据与产品读同一份判定，不存在「探针自己拼一份菜单来对着看」。
+    @MainActor
+    func taskMenuModel() -> NSMenu {
+        let plan = SQLTaskMenuPlan.make(
+            tasks: appState.sqlTasks,
+            tabSQL: tab.sql,
+            boundTaskID: appState.boundSQLTaskIDs[tab.id]
+        )
+        return SQLTaskAppKitMenu.build(
+            plan: plan,
+            actions: SQLTaskAppKitMenu.actions(
+                appState: appState,
+                tabID: tab.id,
+                onSave: { isTaskSheetPresented = true }
+            )
+        )
     }
 
     // MARK: - 执行 / 停止 / 检查

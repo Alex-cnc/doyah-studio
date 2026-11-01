@@ -157,6 +157,23 @@ set -euo pipefail
 # 每一行有自己的捕获器、菜单由这一行现建、目标就是 `row.object`（「不许退回整树一份 + 悬停解析」
 # 那半由两份 Swift 判据的 `XCTAssertFalse` 钉住，不在这里重复）。
 
+# ## 第九批（B1 批次第二片）：`FR-STD-DB-TASK-001` 工具栏「任务」菜单
+#
+# `TestsUISnapshot/SQLTaskMenuProbeTests.swift` 判这一行的**交付面**（台账备注原文是
+# 「差人工点一次」）：菜单内容收进 `Core/SQLTaskMenuPlan`（纯值），铺设收进
+# `SQLTaskAppKitMenu.build`（真 `NSMenu`），动作接线收进 `SQLTaskAppKitMenu.actions`
+# —— 工具栏与探针读同一处。探针按文案认行、再让它走行自己的 `target/action`
+# （`NSApp.sendAction`，用户点它时 AppKit 派发的就是这一条），判据读 `AppState` 里的状态：
+#   ① 每行写清「名字 · 库 · 只读/可写 · 上限」，行序 = 册子序，删除子菜单一行一条；
+#   ② 册子空时有一句人话（灰着）「保存」跟着页签里有没有语句走，点了只叫一次表单；
+#   ③ 点「载入」⇒ 语句进页签、库与连接切到定义那一对、页签绑上；
+#   ④ 点「解除绑定」⇒ 页签松开而任务还在册子里，菜单不再写绑定关系；
+#   ⑤ 点删除子菜单那一项 ⇒ 册子里少一条、盘上也少一条（临时目录，不碰真账）；
+#   ⑥ 源锚点：工具栏走的是这一份（不许再自己写一套 SwiftUI `Menu`）。
+# **本批在这条路上改了一件结构**：菜单由 SwiftUI `Menu` 换成真 `NSButton` + 真 `NSMenu`
+# （离屏宿主里 SwiftUI 菜单不落任何可点的 AppKit 控件，只能靠人点）。
+# 边界：不真弹菜单（`popUp` 是模态的，无人值守不该弹）、保存表单的填写归 `SQLTaskDefinitionTests`。
+
 # ## 第四批（`T-20261002-027`，开发循环第 162 轮）：标题栏搜索栏**点击地图**
 #
 # `TestsUISnapshot/TitleBarSearchClickProbeTests.swift` 判「**看得见的框 = 能点的框**」这条：
@@ -172,7 +189,7 @@ SWIFT="${DEVELOPER_DIR}/Toolchains/XcodeDefault.xctoolchain/usr/bin/swift"
 SCRATCH="${ROOT}/.build"
 CACHE="${ROOT}/.build-cache"
 OUT="${SCRATCH}/ui-interactions"
-FILTER="TerminalInteractionProbeTests|MultiCursorProbeTests|ObjectTreeContextMenuProbeTests|TitleBarSearchClickProbeTests|ResultCopyProbeTests|ResultSortProbeTests|ResultFilterProbeTests|ExecutionReceiptPaneProbeTests"
+FILTER="TerminalInteractionProbeTests|MultiCursorProbeTests|ObjectTreeContextMenuProbeTests|TitleBarSearchClickProbeTests|ResultCopyProbeTests|ResultSortProbeTests|ResultFilterProbeTests|ExecutionReceiptPaneProbeTests|SQLTaskMenuProbeTests"
 while [ $# -gt 0 ]; do
     case "${1}" in
         --filter) FILTER="${2:-}"; shift 2 ;;
@@ -236,15 +253,17 @@ else:
     total, failed, unexpected = max(executed, key=lambda row: int(row[0]))
     if int(failed) or int(unexpected):
         failures.append(f"汇总非零失败：{failed} 失败 / {unexpected} 意外")
-    if int(total) < 42:
+    if int(total) < 48:
         failures.append(
-            f"只跑了 {total} 条 —— 八批四十二条（鼠标上报 / DECCKM / 右键归属 / ⌥⌘D 多光标 /"
+            f"只跑了 {total} 条 —— 九批四十八条（鼠标上报 / DECCKM / 右键归属 / ⌥⌘D 多光标 /"
             " ⌥⌘↑↓ 加光标 / ⌥ 拖拽列选 / 逐行菜单内容 / 菜单作用行 / 菜单确定性与跟随行 /"
             " 点击地图 / 留白点给键盘 / 清空按钮三态 + 回车接线 / 打字后回车交词 / 修前对照 / 整框源锚点 /"
             " 复制四档格式与默认 TSV / 排序三档与 NULL / Shift 次要键 / 筛选条默认在场 /"
             " 换列与换运算符 / 逐字打值 / 大小写开关 / 多条件 AND 与删条件 /"
             " 回执三枚动作都在且各带各的提示 / 复制整本进剪贴板 / 口令不在剪贴板里 /"
-            " 空态给理由不动剪贴板 / 清空后回空态 / 导出字节与结构一致 / 每条回执都画出来）应当都跑到"
+            " 空态给理由不动剪贴板 / 清空后回空态 / 导出字节与结构一致 / 每条回执都画出来 /"
+            " 任务菜单每行四段与删除子菜单 / 空册子给理由且保存跟着语句走 / 点载入切语句库连接 /"
+            " 点解绑松开页签 / 点删除盘上少一条 / 工具栏走同一份菜单判定）应当都跑到"
         )
 
 expected = [
@@ -293,6 +312,13 @@ expected = [
     "testClearEmptiesTheLogAndThePaneFallsBackToItsEmptyState",
     "testExportWritesExactlyWhatTheStructureHoldsAndNoSecret",
     "testMoreReceiptsPaintMoreOfThePane",
+    # 第九批（B1 批次第二片 · FR-STD-DB-TASK-001）：工具栏「任务」菜单
+    "testEachRowCarriesNameDatabaseModeAndLimit",
+    "testEmptyBookExplainsItselfAndSaveFollowsTheScript",
+    "testClickingLoadBringsScriptConnectionDatabaseAndBinding",
+    "testClickingUnbindReleasesTheTabAndKeepsTheTask",
+    "testClickingDeleteRemovesExactlyThatTask",
+    "testToolbarUsesTheSameMenuBuilder",
 ]
 for name in expected:
     if name not in log:
@@ -307,7 +333,7 @@ if failures:
     for item in failures:
         print(f"✗ {item}")
     sys.exit(1)
-print(f"✓ {total} 条都真跑过（八批）、都以 passed 收尾、没有跳过")
+print(f"✓ {total} 条都真跑过（九批）、都以 passed 收尾、没有跳过")
 PY
 
 echo
@@ -441,6 +467,24 @@ anchors = {
          "落盘那一半不再是单独一个出口 ⇒ 面板与探针会各写一份 JSON（脱敏就能在其中一条上失效）"),
         ("let data = try log.exportData()", "导出不再用结构自己的 `exportData()` ⇒ 复制/导出/界面三处可能不是同一份"),
     ),
+    # 第九批（`FR-STD-DB-TASK-001`）：菜单内容只许有一处判定、铺设只许走 AppKit 那份。
+    "App/Views/SQLTaskAppKitMenu.swift": (
+        ("static func actions(",
+         "动作接线不再是一处 ⇒ 工具栏与探针会各拼一套「点载入之后做什么」"),
+        ("menu.autoenablesItems = false",
+         "菜单交给 AppKit 自己判可用性 ⇒ 「保存」的灰与亮由 AppKit 另判一遍，与 Core 的判定不是同一句话"),
+    ),
+    "App/Views/QueryToolbar.swift": (
+        ("SQLTaskMenuPlan.make(", "工具栏不再走 Core 那份菜单判定"),
+        ("SQLTaskAppKitMenu.build(", "工具栏不再走 AppKit 那份铺设（又回到离屏点不到的 SwiftUI 菜单）"),
+        ("SQLTaskAppKitMenu.actions(", "工具栏自己拼了一份动作接线"),
+    ),
+    "Core/SQLTaskMenuPlan.swift": (
+        ("public func label(readOnlyText: String, writableText: String) -> String {",
+         "行文案不再带库 / 模式 / 上限 ⇒ 同名不同库的两条定义在菜单里长得一样"),
+        ("!tabSQL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty",
+         "「保存」不再跟着语句是否空白走 ⇒ 空脚本也能存成一条永远会被拒的定义"),
+    ),
     "App/Views/TitleBarSearchField.swift": (
         ("final class TitleBarSearchBoxView: NSView",
          "整框不再是 AppKit 视图 ⇒ 命中测试又会被 SwiftUI 那层接走，可见框里的留白重新点不动（T-20261002-027 二次复测打回后的结构性换法）"),
@@ -466,7 +510,8 @@ for relative, needles in anchors.items():
 
 for probe in ("TerminalInteractionProbeTests", "MultiCursorProbeTests", "ObjectTreeContextMenuProbeTests",
               "TitleBarSearchClickProbeTests", "ResultCopyProbeTests", "ResultSortProbeTests",
-              "ResultFilterProbeTests", "ExecutionReceiptPaneProbeTests"):
+              "ResultFilterProbeTests", "ExecutionReceiptPaneProbeTests",
+              "SQLTaskMenuProbeTests"):
     if not os.path.exists(os.path.join(root, f"TestsUISnapshot/{probe}.swift")):
         failures.append(f"TestsUISnapshot/{probe}.swift 不在盘上")
 
@@ -480,7 +525,7 @@ PY
 
 echo
 echo "==> 完成：证据日志在 ${OUT}/"
-echo "    本入口判住的十七条："
+echo "    本入口判住的十八条："
 echo "    · §1 FR-STD-WS-TOOL-001 鼠标上报（真 PTY 上的 SGR 报文：右下角点击列行变大、拖动 32、滚轮 64、⌥ 归本机）"
 echo "    · §1 FR-STD-WS-TOOL-001 方向键 DECCKM（?1h 时 ^[OA、复位后 ^[[B）"
 echo "    · §1 FR-STD-WS-TOOL-001 右键菜单（五项齐备且指向产品自己的动作、接管 + ⌥ 时按钮码 10 转发）"
@@ -498,4 +543,5 @@ echo "    · §1 FR-STD-WS-UI-006 修前对照（装饰参与命中测试的那�
 echo "    · §3.4 FR-STD-DB-RES-006 复制为多格式（真视图 + 真菜单 + 真系统剪贴板：四档格式都在菜单里、默认 ⌘C = 带表头 TSV、转义不乱、只复制选中的行、INSERT 指向正在浏览的表、空选中不动剪贴板、不落文件）"
 echo "    · §3.4 FR-STD-DB-RES-008 客户端筛选（真控件点击 + 真字段编辑器打字：条默认在场、加条件不丢行、换列换运算符、逐字打值、大小写开关、多条件 AND、删光条件后入口仍在）"
 echo "    · §3.4 FR-STD-DB-TASK-003 执行回执（真 AppKit 按钮 performClick + 真系统剪贴板：三枚动作都在且各带提示、复制整本新的在前且口令已抹、空态给理由不动剪贴板、清空后回空态、导出字节与结构一致、三条比一条画得多）"
+echo "    · §3.4 FR-STD-DB-TASK-001 工具栏「任务」菜单（真 NSMenu 按行派发：行文案四段、空册子给理由、「保存」跟着语句走、点载入切语句·库·连接并绑上、点解绑松开页签、点删除册子与盘上各少一条、工具栏走同一份判定）"
 echo "    · §3.4 FR-STD-DB-RES-007 客户端排序（真表头点击 + 真 AppKit 跟踪循环：升 → 降 → 取消三档、数值按数值比、NULL 两种方向都留末尾、Shift 加 / 翻 / 删次要键、点空白处不动、排序不改列宽）"

@@ -1608,7 +1608,11 @@ final class AppState: ObservableObject {
     /// 开发 / 验收形态需要文件实现时**显式注入**，不再靠改源码默认值。
     private let secretStore: SecretStore
     private let savedQueryStore = SavedQueryStore.shared
-    private let sqlTaskStore = SQLTaskStore.shared
+    /// 任务册子落在哪 —— 生产恒为 `SQLTaskStore.shared`；探针可以把它指到临时目录，
+    /// 免得验一次「点删除真的删掉了」就把用户真册子里那条删了。
+    var sqlTaskStoreOverride: SQLTaskStore?
+
+    private var sqlTaskStore: SQLTaskStore { sqlTaskStoreOverride ?? .shared }
     private let agentConfigurationStore = AgentConfigurationStore.shared
     /// 模型 API Key 的存储：同样是系统钥匙串（`NFR-ALL-GATE-AI-007`「密钥只进系统凭据存储」）。
     private let agentKeyStore: AgentKeyStore
