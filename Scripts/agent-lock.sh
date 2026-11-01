@@ -12,7 +12,7 @@
 set -u
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 LOCK="$ROOT/.agent/lock"
-STALE_MINUTES="${AGENT_LOCK_STALE_MINUTES:-75}"
+STALE_MINUTES="${AGENT_LOCK_STALE_MINUTES:-45}"
 cmd="${1:-status}"
 
 age_minutes() {

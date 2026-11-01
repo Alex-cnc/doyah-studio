@@ -59,7 +59,10 @@ tasks:
     prio: "中"
     status: blocked
     evidence: ""
-  - id: FR-STD-DB-META-006
+  
+    blocked_reason: "主人 2026-11-02 令：217 上没有 GBase 8a 实例，环境不具备即挂起（不是不做，是没条件验）"
+    next_try: "拿到 GBase 8a 实例（217 或其他机器，端口 5258/5050）后：连一次 8a 握手 → 抓一次 META 元数据查询 → 多版本矩阵再开；在此之前只保留离线方言推断，不标 ✅"
+- id: FR-STD-DB-META-006
     goal: "对象树必须支持持续下钻：从服务器节点开始，Database → Schema → T"
     done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-META-006 | grep -q '✅'"
     layer: "基线必备"
