@@ -16,8 +16,9 @@ import DoyahRetroUI
 ///      （`default` 会让将来新增的区**静默**落进某个分支，那正是这一片要避免的）；
 ///   ③ `LicensePresentation.activityItems(for: .all)` 含 `.retro`，且**三档都有它**
 ///      （「不挂授权 ⇒ 全档可见」，同时**不新增能力位** —— 能力位仍恰好三个）；
-///   ④ `ReportListModel.fixed()` **真读固定扫描目录**（本机两包：`2026-W41` / `2026-W40`），
-///      且 `RetroHostView()` **可构造、可布局、不崩**（视图树里真的落下列表）。
+///   ④ `ReportListModel.fixed()` **真读固定扫描目录**（期望值**从盘上现取**，不写死条数 —— 那个目录由
+///      前门**按周投放**，写死「两包」就是让判据随用户数据漂移），且 `RetroHostView()` **可构造、
+///      可布局、不崩**（视图树里真的落下列表）。
 ///
 /// ## 为什么这一族可以进「不落快照」那一档
 ///
@@ -173,22 +174,85 @@ final class RetroHostProbeTests: XCTestCase {
 
     // MARK: - 判据 ④-a 真读固定扫描目录（模型那一半）
 
+    /// 固定扫描目录里**成包**的那些目录（期望值的独立读数）。
+    ///
+    /// 为什么期望值从盘上现取、不写死「两包」：那个目录是**前门按周投放**的（现在盘上是
+    /// `2026-W40 … W44` 五包）。原先写死 2 条 + 写死两个期号 ⇒ 每多投放一期这条判据就红一次，
+    /// 红的原因还是**用户数据变了**，不是产品坏了 —— 那不是判据，是把用户目录当夹具。
+    /// 这里用 `FileManager` 直接列直接子目录（成包契约 = 有 `index.json` + `report.md` + 期号形状对），
+    /// **不经过被测的扫描器**：被测那一半仍然是模型的读数，期望那一半是盘上的事实。
+    ///
+    /// 期号形状这里用正则自己判（`YYYY-Www`），不调 Retro 侧那个 `ReportPeriod.isValid` ——
+    /// 那个类型在 `DoyahRetroCore` 里，本测试目标只直接依赖 `DoyahRetroUI`（见 `Package.swift`），
+    /// 靠传递依赖 `import` 别的模块是随时会碎的隐性依赖。形状这一层两处口径相同，严格的那层
+    /// （`index.json` 能不能解出来）仍由被测扫描器的 `issues` 那一半判。
+    private func packagesOnDisk(at root: URL) throws -> [String] {
+        let fileManager = FileManager.default
+        let names = try fileManager.contentsOfDirectory(atPath: root.path)
+        return names.filter { name in
+            let directory = root.appendingPathComponent(name, isDirectory: true)
+            var isDirectory: ObjCBool = false
+            guard fileManager.fileExists(atPath: directory.path, isDirectory: &isDirectory),
+                  isDirectory.boolValue else { return false }
+            guard name.range(of: #"^\d{4}-W\d{2}$"#, options: .regularExpression) != nil else { return false }
+            return fileManager.fileExists(atPath: directory.appendingPathComponent("index.json").path)
+                && fileManager.fileExists(atPath: directory.appendingPathComponent("report.md").path)
+        }
+    }
+
+    /// 直接从包的 `index.json` 取 `published`（**不经过扫描器**：这条判据要判的就是「顺序对不对」）。
+    private func publishedDate(inPackageAt directory: URL) throws -> String {
+        let data = try Data(contentsOf: directory.appendingPathComponent("index.json"))
+        let object = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        return try XCTUnwrap(
+            object?["published"] as? String,
+            "\(directory.lastPathComponent)/index.json 里没有 `published` ⇒ 倒序判不了"
+        )
+    }
+
     @MainActor
     func testRetroHostModelReallyReadsTheFixedScanRoot() throws {
         let root = ReportReader.fixedScanRootPath
+        let rootURL = ReportReader.fixedScanRootURL
+
+        // 固定目录不在本机 ⇒ 如实跳过（真包由前门投放，不自己造夹具顶替）；跳过 ≠ 通过。
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: root, isDirectory: &isDirectory), isDirectory.boolValue else {
+            throw XCTSkip("本机没有固定扫描目录（\(root)）—— 真包由前门投放，如实跳过，不造夹具顶替")
+        }
+        let onDisk = try packagesOnDisk(at: rootURL).sorted()
+        try XCTSkipIf(
+            onDisk.isEmpty,
+            "固定扫描目录（\(root)）里一包都没有 ⇒ 「模型列出的就是盘上那些」没有覆盖面（跳过 ≠ 通过）"
+        )
+
+        // 期望顺序 = 盘上那些按 (published 降序, 目录名降序) —— 与 `FR-R-12`「新期在前」同一口径，
+        // 但数据从每个包自己的 `index.json` 现读。
+        var dated: [(name: String, published: String)] = []
+        for name in onDisk {
+            let published = try publishedDate(
+                inPackageAt: rootURL.appendingPathComponent(name, isDirectory: true)
+            )
+            dated.append((name: name, published: published))
+        }
+        dated.sort { lhs, rhs in
+            lhs.published == rhs.published ? lhs.name > rhs.name : lhs.published > rhs.published
+        }
+        let expected: [String] = dated.map { $0.name }
+
         let model = ReportListModel.fixed()
         let order = model.state.packages.map(\.directoryName)
 
         print(
-            "READING retro fixedRoot=\(root) packages=\(model.state.packages.count)"
-                + " issues=\(model.state.issues.count) order=\(order)"
+            "READING retro fixedRoot=\(root) disk=\(expected) model=\(order)"
+                + " issues=\(model.state.issues.map(\.description))"
         )
         XCTAssertEqual(
-            model.state.packages.count, 2,
-            "固定扫描目录（\(root)）里应当恰好两包 —— 真读而不是造夹具；实测 \(model.state.packages.count) 条"
+            order, expected,
+            "模型列出的包与盘上成包的那些不是同一批 / 顺序不对 —— 真读的读数必须等于盘上的事实"
+                + "（盘上 \(expected) · 模型 \(order)）"
         )
-        XCTAssertEqual(order, ["2026-W41", "2026-W40"], "列表应为新期在前（`FR-R-12` 倒序）")
-        XCTAssertTrue(model.state.issues.isEmpty, "两包都该是成包的：\(model.state.issues.map(\.description))")
+        XCTAssertTrue(model.state.issues.isEmpty, "盘上这几包都该是成包的：\(model.state.issues.map(\.description))")
 
         // 「宿主不另传参」：模型走的是 Retro 侧那个唯一出处，不是本仓另写的一条路径。
         XCTAssertEqual(model.root.path, root, "模型扫的不是固定扫描目录 ⇒ 有两处真值")
