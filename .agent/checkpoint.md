@@ -33,3 +33,11 @@
 - 挂起依据：主人 2026-11-02 令 —— 217 无 GBase 8a 实例；实测 `192.168.5.217` ping 全丢、5258/5050/3306/5432/22 全不通；台账与 `Docs/design/剩余任务清单.md` 均把 GBase 8a 列为待提供环境
 - 下一项：**无**（`todo` 为空；后续跳自动转判据维护）
 - 恢复条件：拿到可连的 GBase 8a（见 `plan.yaml` 该项 `next_try`）
+
+## 判据维护第十片（2026-11-02 · 无台账行 · 脚本级）
+
+- **清掉取证脚本两族红，同一个根因**：`NotesSearchReveal` 与 `NotesCrudIconSpacing` 都按「宿主上缘往下 60pt」挑「左区顶部操作行」，而内容区（三栏 `NSSplitView`）从 37pt 起 —— 右栏编辑器标题框（`Untitled`，y=58…76）与左栏列表自己那排命中区（y=45…73）被算进顶栏。修法：下界取分栏面上缘（`UISnapshot.LiveHost.contentTop`，两族共用一处）。
+- 读数：两族 `Executed 7 tests, 0 failures`（入口 3 枚 / 间距 4.0/4.0 / 方差 0.000；搜索收起态 0 → 展开 1 → 收起 0）· 全量取证脚本 **418 例 / 4 skipped / 5 failures**（修前 8）· `verify-core.sh` **5078 例 / 13 skipped / 0 失败** · 文档门禁五道 rc=0 · 负例「改回宿主整高」⇒ **4 failures**（点名 4 枚入口 / 方差 227.556pt² / 收起态 1 个 `Untitled`），还原 sha256 `320e3e87…` 逐字节一致
+- **自检族存量（全跑复跑，不再是推算）**：54 族 / 1054 例 / 86 锚点 · **红 8 族** = `cli-failure-readability` · `core-localization` · `design-tokens` · `language-registry` · `network-egress` · `release-version` · `terminal-tabs` · `tri-repo-parity`（与上一片推算的 8 族逐名一致）
+- **取证脚本还剩 4 个红用例**（5 failures；下一项按此顺序）：① `QueryHistoryPaneProbeTests.testClearAndDeleteBothWaitForConfirmation` 全量里红、单跑 4/4 绿 ⇒ 判为同进程共用一份笔记库的串扰，根因未判 ② `PaletteWiringProbeTests` 6 条笔记命令无落点（`newNote`/`newNotebook`/`noteAllNotes`/`noteFavorites`/`noteSearchScope{All,Current}`）③ `NotesEditorSaveProbeTests` 失败弹了框（判据④不成立）④ `RetroHostProbeTests` 夹具钉死 `~/.dsh/notes/geopolitics-weekly/packages` 恰 2 包、实测 5 包
+- 证据 `.agent/evidence/2026-11-02-probe-band-slice10.md`

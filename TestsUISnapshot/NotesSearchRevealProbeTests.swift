@@ -142,15 +142,20 @@ final class NotesSearchRevealProbeTests: XCTestCase {
     }
 
     /// 宿主上缘往下 `band` 那一条带里所有 `NSView`（排除宿主自己）—— 读数即证据。
+    ///
+    /// **下界 = 内容区分栏面的上缘**（`UISnapshot.LiveHost.contentTop`）：顶栏是分栏面之上
+    /// 那一格，而编辑器标题框 / 列表行命中区也在上缘往下几十点之内 ⇒ 只按 `band` 挑会把它们
+    /// 当成顶栏里的搜索框（2026-11-02 实测：收起态读出 1 个占位 `Untitled` 的框）。
     @MainActor
     private func dumpActionRow(_ hosting: NSView, band: CGFloat = NotesSearchRevealProbeTests.actionRowBand) -> [Row] {
-        UISnapshot.LiveHost<Never>.findViews(ofType: NSView.self, in: hosting)
+        let lowerBound = min(band, UISnapshot.LiveHost<Never>.contentTop(in: hosting))
+        return UISnapshot.LiveHost<Never>.findViews(ofType: NSView.self, in: hosting)
             .filter { $0 !== hosting }
             .compactMap { view in
                 let rect = hosting.convert(view.bounds, from: view)
                 guard !rect.isEmpty, rect.width > 1, rect.height > 1 else { return nil }
                 let top = hosting.isFlipped ? rect.minY : hosting.bounds.height - rect.maxY
-                guard top >= -1, top <= band else { return nil }
+                guard top >= -1, top <= lowerBound else { return nil }
                 return Row(
                     className: NSStringFromClass(type(of: view)),
                     identifier: view.accessibilityIdentifier(),
@@ -167,13 +172,14 @@ final class NotesSearchRevealProbeTests: XCTestCase {
     /// 它的占位读法与输入框自己一样、矩形也贴着，混进来会让「框高」这个读数忽大忽小。
     @MainActor
     private func fieldsInActionRow(_ hosting: NSView) -> [NSTextField] {
-        UISnapshot.LiveHost<Never>.findViews(ofType: NSTextField.self, in: hosting)
+        let lowerBound = min(Self.actionRowBand, UISnapshot.LiveHost<Never>.contentTop(in: hosting))
+        return UISnapshot.LiveHost<Never>.findViews(ofType: NSTextField.self, in: hosting)
             .filter { !NSStringFromClass(type(of: $0)).contains("SimpleLabel") }
             .filter { field in
                 let rect = hosting.convert(field.bounds, from: field)
                 guard !rect.isEmpty, rect.height > 1 else { return false }
                 let top = hosting.isFlipped ? rect.minY : hosting.bounds.height - rect.maxY
-                return top >= -1 && top <= Self.actionRowBand
+                return top >= -1 && top <= lowerBound
             }
     }
 

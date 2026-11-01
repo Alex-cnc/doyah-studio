@@ -193,13 +193,17 @@ final class NotesCrudIconSpacingProbeTests: XCTestCase {
         band: CGFloat = NotesCrudIconSpacingProbeTests.actionRowBand,
         within maxX: CGFloat? = nil
     ) -> [Frame] {
-        UISnapshot.LiveHost<Never>.findViews(ofType: NSView.self, in: hosting)
+        // **下界 = 内容区分栏面的上缘**（`UISnapshot.LiveHost.contentTop`）：顶栏是分栏面之上
+        // 那一格；左栏列表自己那一排命中区就在下面几十点（实测 y=45…73，与顶栏第一枚同 x）
+        // ⇒ 只按 `band` 挑带会把它数成「第四枚入口」（间距读出 −28 / 4 / 4，2026-11-02 实测）。
+        let lowerBound = min(band, UISnapshot.LiveHost<Never>.contentTop(in: hosting))
+        return UISnapshot.LiveHost<Never>.findViews(ofType: NSView.self, in: hosting)
             .filter { NSStringFromClass(type(of: $0)).contains("FocusRingView") }
             .compactMap { view in
                 let rect = hosting.convert(view.bounds, from: view)
                 guard !rect.isEmpty, rect.width > 1, rect.height > 1 else { return nil }
                 let top = hosting.isFlipped ? rect.minY : hosting.bounds.height - rect.maxY
-                guard top >= -1, top <= band else { return nil }
+                guard top >= -1, top <= lowerBound else { return nil }
                 if let maxX, rect.maxX > maxX { return nil }
                 return Frame(className: NSStringFromClass(type(of: view)), rect: rect)
             }

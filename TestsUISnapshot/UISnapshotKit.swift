@@ -866,6 +866,23 @@ enum UISnapshot {
             Self.findViews(ofType: NSTextField.self, in: hosting)
         }
 
+        /// 「顶部操作行」那一条带的**下界**（宿主坐标，顶端为 0）= 内容区分栏面（`NSSplitView`）的上缘。
+        ///
+        /// 为什么不能只按「宿主上缘往下 N pt」挑带（2026-11-02 实测打回的坏量法）：
+        /// 分栏面里的内容也在上缘往下几十点之内 —— 笔记屏右栏编辑器的**标题输入框**
+        /// （占位 `Untitled`，实测 y=58…76）、左栏列表自己的命中区（实测 y=45…73）都会被算成
+        /// 「顶栏里的搜索框 / 增删改入口」⇒ 搜索收起态永远读出 1 个输入框、三枚入口永远读出 4 枚。
+        /// 顶栏是**分栏面之上**那一格（实测 y=0…37），所以下界取分栏面自己的上缘。
+        ///
+        /// 没有分栏面（夹具是裸 `HStack`）时返回宿主整高 —— 夹具里的东西本来就都算「那一行」。
+        static func contentTop(in hosting: NSView) -> CGFloat {
+            let tops: [CGFloat] = findViews(ofType: NSSplitView.self, in: hosting).map { split in
+                let rect = hosting.convert(split.bounds, from: split)
+                return hosting.isFlipped ? rect.minY : hosting.bounds.height - rect.maxY
+            }
+            return tops.min() ?? hosting.bounds.height
+        }
+
         static func findViews<T: NSView>(ofType type: T.Type, in view: NSView) -> [T] {
             var found: [T] = []
             if let match = view as? T { found.append(match) }
