@@ -220,13 +220,37 @@ set -euo pipefail
 # 测试，压在那层接力之上 ⇒ 第 161 轮那层「装上却没接到点击」。宿主是**手工搭的真窗口 + 工具条**
 # （与 SwiftUI 工具条项同形），进程内合成事件 ⇒ 零权限。
 
+# ## B5 批次：会话面与诊断面（`FR-STD-DB-SESS-002` · `-003` · `-004` · `FR-STD-DB-DIAG-003` · `-004`）
+#
+# `TestsUISnapshot/SessionDiagnosticsProbeTests.swift`（13 例）判这五行的**交付面**
+# （台账备注原文是「界面点击待人工点验」）。为什么以前只能人点：这五个面的服务都从
+# `AppState.ensureService` 取，而它写在私有方法里、没有注入口 ⇒ 探针只能拍到「没连接的红字」。
+# 本批开的**唯一**一处结构：`AppState.serviceOverride`（生产默认 nil = 真连接），
+# 假服务记下收到的每一条语句并按 SQL 内容回不同结果集。于是：
+#   ① 会话列表：一次刷新只发一条 `pg_stat_activity` 查询；排序「等待 → 活跃 → 空闲」
+#      （`wait_event_type=Client` 不算阻塞）；没有 pid 的行丢弃、不变成「会话号 0」；
+#   ② 取消语句发的是 `pg_cancel_backend`（不是 terminate —— 那会把整条连接掐掉），
+#      成功时状态栏说清是哪条会话；
+#   ③ 终止：自己的会话当场拒、**一条语句都不发**；服务端回 `false` 时如实说「被拒」，
+#      不许写「已终止」；
+#   ④ 服务器级对象：三类各一条查询、解析出角色 / 表空间 / 扩展；写操作**预览那一句就是
+#      发出去的那一句**（逐字、只发一次）；只读连接上在**发之前**就被拒；
+#   ⑤ 统计面板：四类各一条查询；一次都没扫过的表命中率是「无扫描数据」而不是 0%；
+#   ⑥ 慢查询排行：排序口径真的换 ORDER BY；列名按服务器主版本选
+#      （12 用 `total_time`、18 用 `total_exec_time`）；扩展没装时给可照做的安装步骤且
+#      **不发**排行查询；非 PG 方言直说「不支持」且不发语句；点一行只把原文放进编辑器、不执行。
+# 反例三段（每段判红后 `git checkout` 还原、`sha256` 逐字节比对）：取消接成终止（4 红）·
+# 列名写死 13+（2 红）· 扩展没装也当空排行（1 红）。
+# 边界：不是真数据库（217 真库那一段本跳连接超时 ⇒ 记「未知」）；面板版面与按钮灰显归快照层；
+# 真鼠标点一行由人承担。
+
 ROOT="$(cd "$(dirname "${0}")/.." && pwd -P)"
 DEVELOPER_DIR="${DEVELOPER_DIR:-/Applications/Xcode.app/Contents/Developer}"
 SWIFT="${DEVELOPER_DIR}/Toolchains/XcodeDefault.xctoolchain/usr/bin/swift"
 SCRATCH="${ROOT}/.build"
 CACHE="${ROOT}/.build-cache"
 OUT="${SCRATCH}/ui-interactions"
-FILTER="TerminalInteractionProbeTests|MultiCursorProbeTests|ObjectTreeContextMenuProbeTests|TitleBarSearchClickProbeTests|ResultCopyProbeTests|ResultSortProbeTests|ResultFilterProbeTests|ResultPagingProbeTests|ResultStreamExportProbeTests|ResultXLSXExportProbeTests|ExecutionReceiptPaneProbeTests|SQLTaskMenuProbeTests|TableExportStreamProbeTests|AgentApprovalDecisionProbeTests|ObjectTreeRetryProbeTests|BackupRestoreImportProbeTests"
+FILTER="TerminalInteractionProbeTests|MultiCursorProbeTests|ObjectTreeContextMenuProbeTests|TitleBarSearchClickProbeTests|ResultCopyProbeTests|ResultSortProbeTests|ResultFilterProbeTests|ResultPagingProbeTests|ResultStreamExportProbeTests|ResultXLSXExportProbeTests|ExecutionReceiptPaneProbeTests|SQLTaskMenuProbeTests|TableExportStreamProbeTests|AgentApprovalDecisionProbeTests|ObjectTreeRetryProbeTests|BackupRestoreImportProbeTests|SessionDiagnosticsProbeTests"
 while [ $# -gt 0 ]; do
     case "${1}" in
         --filter) FILTER="${2:-}"; shift 2 ;;
@@ -686,7 +710,8 @@ for probe in ("TerminalInteractionProbeTests", "MultiCursorProbeTests", "ObjectT
               "SQLTaskMenuProbeTests", "TableExportStreamProbeTests",
               "AgentApprovalDecisionProbeTests", "ObjectTreeRetryProbeTests",
               "ResultPagingProbeTests", "ResultStreamExportProbeTests",
-              "ResultXLSXExportProbeTests", "BackupRestoreImportProbeTests"):
+              "ResultXLSXExportProbeTests", "BackupRestoreImportProbeTests",
+              "SessionDiagnosticsProbeTests"):
     if not os.path.exists(os.path.join(root, f"TestsUISnapshot/{probe}.swift")):
         failures.append(f"TestsUISnapshot/{probe}.swift 不在盘上")
 

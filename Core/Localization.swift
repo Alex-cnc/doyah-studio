@@ -2591,6 +2591,23 @@ public enum LKey: String, CaseIterable, Sendable {
     case databaseStatsNoScans
     case databaseStatsLoading
     case databaseStatsFailure
+    // 慢查询排行面板（FR-DIAG-03）
+    case slowQueryTitle
+    case slowQueryRefresh
+    case slowQuerySortLabel
+    case slowQuerySortTotal
+    case slowQuerySortMean
+    case slowQuerySortCalls
+    case slowQueryLoading
+    case slowQueryEmpty
+    case slowQueryInserted
+    case slowQueryUnsupported
+    case slowQueryVersionUnknown
+    case slowQueryMissingTitle
+    case slowQueryHint
+    case slowQueryCalls
+    case slowQueryTotal
+    case slowQueryMean
     // 终端偏好（FR-EDIT-29 的后续）
     case appearanceTerminalSection
     case appearanceThemeSection
@@ -5608,6 +5625,22 @@ public enum LocalizedStrings {
         .databaseStatsNoScans: [.simplifiedChinese: "无扫描数据", .english: "No scan data"],
         .databaseStatsLoading: [.simplifiedChinese: "正在采集…", .english: "Collecting…"],
         .databaseStatsFailure: [.simplifiedChinese: "统计失败：%@", .english: "Could not collect statistics: %@"],
+        .slowQueryTitle: [.simplifiedChinese: "慢查询排行", .english: "Slow query ranking"],
+        .slowQueryRefresh: [.simplifiedChinese: "刷新", .english: "Refresh"],
+        .slowQuerySortLabel: [.simplifiedChinese: "排序", .english: "Sort"],
+        .slowQuerySortTotal: [.simplifiedChinese: "总耗时", .english: "Total time"],
+        .slowQuerySortMean: [.simplifiedChinese: "平均耗时", .english: "Mean time"],
+        .slowQuerySortCalls: [.simplifiedChinese: "调用次数", .english: "Calls"],
+        .slowQueryLoading: [.simplifiedChinese: "正在读取…", .english: "Reading…"],
+        .slowQueryEmpty: [.simplifiedChinese: "这个实例上还没有被统计到的语句（扩展刚装好时是正常的：要跑过语句才有行）", .english: "No statements recorded yet (normal right after installing the extension: rows appear once statements run)"],
+        .slowQueryInserted: [.simplifiedChinese: "已放进编辑器（未执行）", .english: "Put in the editor (not executed)"],
+        .slowQueryUnsupported: [.simplifiedChinese: "%@ 方言没有 pg_stat_statements 这一类语句统计", .english: "%@ has no pg_stat_statements-style statement statistics"],
+        .slowQueryVersionUnknown: [.simplifiedChinese: "拿不到服务器主版本，无法确定列名（PostgreSQL 13 起 total_time 改名为 total_exec_time）—— 先连上再刷新", .english: "Server major version unknown, so column names cannot be chosen (PostgreSQL 13 renamed total_time to total_exec_time). Connect first, then refresh"],
+        .slowQueryMissingTitle: [.simplifiedChinese: "没有装语句统计扩展", .english: "Statement statistics extension is not installed"],
+        .slowQueryHint: [.simplifiedChinese: "点任意一行把语句原文放进编辑器（不执行）", .english: "Click a row to put its statement in the editor (not executed)"],
+        .slowQueryCalls: [.simplifiedChinese: "调用 %lld 次", .english: "%lld calls"],
+        .slowQueryTotal: [.simplifiedChinese: "总耗时 %@", .english: "Total %@"],
+        .slowQueryMean: [.simplifiedChinese: "平均 %@", .english: "Mean %@"],
         .appearanceTerminalSection: [.simplifiedChinese: "终端", .english: "Terminal"],
         .appearanceThemeSection: [.simplifiedChinese: "主题", .english: "Theme"],
         .appearanceThemeHint: [.simplifiedChinese: "跟随系统时，界面随系统外观切换；锁定后整个应用固定深浅。终端配色可以单独覆盖（见下面「终端」一段）。", .english: "Follow system switches the whole app with the system appearance; locking fixes it to light or dark. The terminal palette can override this separately (see the Terminal section below)."],

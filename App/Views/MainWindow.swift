@@ -355,6 +355,11 @@ struct MainWindow: View {
             DatabaseStatsPanel()
                 .environmentObject(appState)
         }
+        // 慢查询排行（FR-DIAG-03）：三态分开（排行 / 没装扩展 / 拿不到版本）。
+        .sheet(isPresented: $appState.isSlowQueryPresented) {
+            SlowQueryPanel()
+                .environmentObject(appState)
+        }
         // 诊断这条查询（FR-AI-03）：先取证（真库跑 EXPLAIN / 锁查询），再解读模型回答。
         .sheet(isPresented: $appState.isDiagnosisPresented) {
             DiagnosisPanel()

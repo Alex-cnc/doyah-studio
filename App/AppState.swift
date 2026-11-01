@@ -500,6 +500,9 @@ final class AppState: ObservableObject {
     /// 「数据库统计」面板（FR-DIAG-04）。
     @Published var isDatabaseStatsPresented = false
 
+    /// 「慢查询排行」面板（FR-DIAG-03）。
+    @Published var isSlowQueryPresented = false
+
     // 对话式诊断（FR-AI-03）：面板状态与取证结果。
     // 与 Core 的分工：这里只负责"把证据取回来、把回答交出去解读"，判据全在 Core。
     @Published var isDiagnosisPresented = false
@@ -1652,6 +1655,14 @@ final class AppState: ObservableObject {
     @Published private(set) var transactionSessions: [ServiceKey: TransactionSession] = [:]
 
     private var services: [ServiceKey: any DatabaseService] = [:]
+
+    /// 探针缝（见 `ensureService`）：`nil` = 按连接真连（生产）。
+    ///
+    /// 为什么开在**连接的唯一收口**而不是每个只读面各开一处：会话列表 / 取消终止 /
+    /// 服务器级对象 / 统计面板 / 慢查询排行这五个面都从这里取服务 ——
+    /// 一处口子 ⇒ 五条都能从「界面按下去」量到「语句真的发出去」；
+    /// 各开一处只会让其中一条被漏掉（漏掉的那条又会以「待人工点验」的名义挂回 🟡）。
+    var serviceOverride: (any DatabaseService)?
     /// SSH 隧道（FR-CONN-18）：按连接缓存 —— 一条隧道可以被该连接的多个库共用，
     /// 断开连接时统一收掉（见 `invalidateService`）。
     private var sshTunnels: [UUID: SSHTunnelProcess] = [:]
@@ -7158,6 +7169,7 @@ final class AppState: ObservableObject {
         case "backupRestore": isBackupRestorePresented = true
         case "connectionSettings": isConnectionSettingsPresented = true
         case "databaseStats": isDatabaseStatsPresented = true
+        case "slowQuery": isSlowQueryPresented = true
         case "diagnoseQuery": openDiagnosis()
         case "maintenanceTasks": openMaintenance()
         case "mcpApprovals": openMCPApprovals()
@@ -7820,6 +7832,65 @@ final class AppState: ObservableObject {
             cacheHit: await run(.cacheHitRate),
             limit: limit
         )
+    }
+
+    // MARK: - 慢查询排行（FR-DIAG-03）
+
+    /// 慢查询排行的一次读数：**三态分开**（排行 / 没装扩展 / 没法判）。
+    ///
+    /// 为什么不是「返回空数组」：需求原文「无扩展或无权限时明确提示，不静默失败」——
+    /// 把「没装扩展」显示成「一条慢查询都没有」是这条需求点名不许做的事。
+    enum SlowQueryOutcome: Equatable {
+        case ranking([SlowQueryReport.Entry])
+        /// 扩展没装 / 关系不在：带一份可照做的安装指引（文案在 Core，不在这里另写一份）。
+        case missingExtension(String)
+        /// 方言不支持，或拿不到服务器主版本（列名 PG 13 前后不同 —— 不猜）。
+        case unsupported(String)
+    }
+
+    /// 慢查询排行：先判扩展在不在，再按口径取前 N 条。
+    ///
+    /// 排序口径与列名适配全在 `Core/SlowQueryReport`（按服务器主版本选 `total_time` /
+    /// `total_exec_time`），这里只做「取哪一经、发给谁、拿不到怎么说」。
+    func slowQueryRanking(
+        sort: SlowQueryReport.Sort = .totalTime,
+        limit: Int = 20
+    ) async throws -> SlowQueryOutcome {
+        guard let configuration = selectedConnection else { throw AppError.notConnected }
+        guard configuration.dbType == .postgresql else {
+            return .unsupported(L(.slowQueryUnsupported, configuration.dbType.displayName))
+        }
+        let dialect = SQLDialectFactory.make(for: configuration.dbType)
+        let service = try await ensureService(
+            for: configuration,
+            database: currentDatabaseName(for: configuration)
+        )
+
+        let availability = try await runSingleQuery(SlowQueryReport.extensionCheckQuery, on: service)
+        guard SlowQueryReport.isExtensionInstalled(availability) else {
+            return .missingExtension(SlowQueryReport.missingExtensionMessage)
+        }
+        // 主版本决定列名。拿不到版本时**不猜**：猜错的后果是一条「column does not exist」，
+        // 用户会以为扩展坏了 —— 那比说「不知道」更糟。
+        guard let version = serverInfos[configuration.id],
+              dialect.parseServerVersion(version.version).major > 0 else {
+            return .unsupported(L(.slowQueryVersionUnknown))
+        }
+        let major = dialect.parseServerVersion(version.version).major
+        let result = try await runSingleQuery(
+            SlowQueryReport.query(sort: sort, limit: limit, serverMajor: major),
+            on: service
+        )
+        return .ranking(SlowQueryReport.entries(from: result))
+    }
+
+    /// 排行里点一条：把它的原文放进编辑器（**不执行** —— 与诊断建议同一条口径）。
+    func putSlowQueryInEditor(_ entry: SlowQueryReport.Entry) {
+        guard let tab = selectedTab else { return }
+        if let index = tabs.firstIndex(where: { $0.id == tab.id }) {
+            tabs[index].sql = entry.query
+            statusMessage = L(.slowQueryInserted)
+        }
     }
 
     // MARK: - 服务器级对象（FR-SESS-03）
@@ -9495,6 +9566,16 @@ final class AppState: ObservableObject {
     ) async throws -> any DatabaseService {
         let requested = database?.trimmingCharacters(in: .whitespacesAndNewlines)
         let targetDatabase = (requested?.isEmpty == false) ? requested! : configuration.database
+
+        // 探针缝（见属性声明）：走的仍是**同一条收口**——版本照样落进 `serverInfos`
+        // （慢查询排行按服务器主版本选列名就靠它），只是不真的建连接。
+        if let serviceOverride {
+            if serverInfos[configuration.id] == nil || targetDatabase == configuration.database {
+                serverInfos[configuration.id] = try await serviceOverride.connect()
+            }
+            return serviceOverride
+        }
+
         let key = ServiceKey(connectionID: configuration.id, database: targetDatabase)
 
         if let service = services[key] {

@@ -155,22 +155,22 @@ tasks:
     done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-SESS-002 | grep -q '✅'"
     layer: "常用增强"
     prio: "中"
-    status: todo
-    evidence: ""
+    status: done
+    evidence: ".agent/evidence/2026-11-01-B5.md"
   - id: FR-STD-DB-SESS-003
     goal: "取消 / 终止会话：对选中会话执行「取消当前语句」（PG pg_cancel_bac"
     done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-SESS-003 | grep -q '✅'"
     layer: "常用增强"
     prio: "中"
-    status: todo
-    evidence: ""
+    status: done
+    evidence: ".agent/evidence/2026-11-01-B5.md"
   - id: FR-STD-DB-SESS-004
     goal: "服务器级对象管理：数据库 / 角色 / 表空间 / 扩展的浏览与创建（DBA 日常）"
     done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-SESS-004 | grep -q '✅'"
     layer: "进阶可选"
     prio: "低"
-    status: todo
-    evidence: ""
+    status: done
+    evidence: ".agent/evidence/2026-11-01-B5.md"
   - id: FR-STD-DB-TASK-001
     goal: "**一句话 → 一条可执行任务**：任务定义落在连接上（目标库、只读 / 可写、影响行数上限、是否需审批），保存后可复用；定义与实际执行参数不一致时拒绝执行。"
     done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-TASK-001 | grep -q '✅'"
@@ -225,15 +225,15 @@ tasks:
     done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-DIAG-003 | grep -q '✅'"
     layer: "进阶可选"
     prio: "低"
-    status: todo
-    evidence: ""
+    status: done
+    evidence: ".agent/evidence/2026-11-01-B5.md"
   - id: FR-STD-DB-DIAG-004
     goal: "数据库统计面板：表大小、索引命中率、连接数、缓存命中率等 pg_stat_* 指标"
     done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-DIAG-004 | grep -q '✅'"
     layer: "进阶可选"
     prio: "低"
-    status: todo
-    evidence: ""
+    status: done
+    evidence: ".agent/evidence/2026-11-01-B5.md"
   - id: FR-STD-DB-DIAG-006
     goal: "—"
     done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-DIAG-006 | grep -q '✅'"
