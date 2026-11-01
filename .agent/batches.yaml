@@ -2,7 +2,7 @@
 #
 # 唯一事实源 = Docs/Doyah产品开发计划任务清单-macOS.md（活书台账）。
 # 本文件只决定「一跳做哪几条」，不许反向改台账。
-# 生成于 2026-11-01，源 = plan.yaml 里 9 条 status: todo（已收口 26 条：RES-006, RES-007, RES-008, RES-009, RES-011, RES-013, RES-014, META-002, META-006, META-007, META-008, META-011, META-015, IO-002, IO-003, IO-004, IO-006, IO-007, SESS-002, SESS-003, SESS-004, TASK-001, TASK-002, TASK-003, DIAG-003, DIAG-004）
+# 生成于 2026-11-02，源 = plan.yaml 里 9 条 status: todo（已收口 26 条：RES-006, RES-007, RES-008, RES-009, RES-011, RES-013, RES-014, META-002, META-006, META-007, META-008, META-011, META-015, IO-002, IO-003, IO-004, IO-006, IO-007, SESS-002, SESS-003, SESS-004, TASK-001, TASK-002, TASK-003, DIAG-003, DIAG-004）
 #
 # 生成命令：python3 Scripts/plan-batches.py --write   （--check 只比对不写盘）
 
