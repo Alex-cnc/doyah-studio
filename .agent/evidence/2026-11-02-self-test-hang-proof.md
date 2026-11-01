@@ -30,7 +30,7 @@ check-plan-coverage · check-status-consistency 471 · check-version-scope 471 �
 check-doc-layout 三书九轮全清 · check-doc-invariants 5/5 · check-agents-index 15 条 ·
 check-doc-q-series · check-doc-versions 17 份 ⇒ 十道全 rc=0
 
-提交：ce874e0f
+提交：9505801c
 未验证：18 个红族的**内容**一个都没修（本片只把「跑不完 ⇒ 未知」变成「跑得完 ⇒ 18 红」）；
        真机点验 0 次 · 217 真库 0 次 · 全量 `verify-all.sh` 未复跑（第 16 项会吃掉本片读数，
        且其余 17 项本片未碰）。
