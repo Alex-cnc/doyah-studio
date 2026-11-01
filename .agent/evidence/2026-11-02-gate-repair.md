@@ -40,7 +40,7 @@ $ python3 Scripts/check-sidebar-collapse-state.py
 $ python3 Scripts/check-doc-tables.py / check-doc-numbers.py / check-plan-coverage.py / check-status-consistency.py / check-version-scope.py
   五道 rc=0（74 文件 · 三向一致 · 471 条 · 471 条 · 471 条）
 
-提交：见下一片「证据补记提交号」
+提交：be5f7a10
 
 未验证：
 - `AgentChatView.collapsedToolBlocks` 仍红的**那一条是真缺陷**（`WorkspaceAreaView.content` 的

@@ -38,3 +38,5 @@
 - 2026-11-02 `B7` 批次：`DRV-009` 的端到端用**假 MySQL 协议服务器**（`Scripts/test-mysql-driver.sh` 第 8 段）判，真 GBase 实例记「未知」—— 这条验的是「同族复用确实是复用一份驱动」，不冒充「能连 GBase」。
 - 2026-11-02 `B7` 批次：顺手修 `Scripts/plan-batches.py` 把 `blocked` 算进「已收口」的读数错（按 `s != "todo"` 数的）—— 队列空时它会把 `META-002` 说成已收口，派生件上写错数比不写更危险。
 - 2026-11-02 收口复核跳：checkpoint 的 `34 / 35` 只是**本版队列**分母，台账 DB 面实为 **111 条**（110 双 ✅ + `META-002` 🟡）⇒ 在 checkpoint 里加「口径护栏」两行，免得下一跳把 35 读成「DB 只剩这么多」。同时记下队列外存量 137 条（RTR 82 / NTS 24 / STD 20 / AGT 11）作为下一版选题依据；本仓 20 条未闭里 `ALL-LIC-001~005` 五条是 🟡、`WS-LIC-001` 全 ⬜。
+- 2026-11-02 空队列跳：`test-sidebar-collapse-state.py` 第 7 条夹具从「钉两行」改成「只钉 `if section.isUngrouped {`」—— 上一版把「下一行长什么样」（`Text(title)`）也写进夹具前提，B7 把那行换成 `groupHeader(title:count:id:)` 就整条断言崩，后面 16 条负例（含两条空跑防护）**从未执行**；夹具只该钉门禁自己的判据输入。
+- 2026-11-02 空队列跳：`AgentChatView.collapsedToolBlocks` **不登记豁免、也不本跳修** —— 核过是真缺陷（视图由 `WorkspaceAreaView.content` 的 `else if let tab = tabs.selectedTab` 分支创建 ⇒ 切页签回来整个重建），但修它要把三个集合（`collapsedToolBlocks` / `expandedToolBlocks` / `expandedPreview`）上移 `AppState` 并按会话淘汰，属产品改动且台账里没有对应行；登记豁免等于把「状态归零」这个真问题洗白，宁可留红待排。
