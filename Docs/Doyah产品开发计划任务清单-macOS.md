@@ -761,7 +761,7 @@
 | 里程碑 | 主题 | 条数（🟡 / ⬜） | 内容 | 出口判据 |
 |---|---|---:|---|---|
 | **v0.2.0** | 工作区闭环 | **0**（0 / 0） | 编辑器编辑面 `WS-EDIT-*`、文件 `WS-FS-*`、导航与跳转 `WS-NAV-*`、界面细节 `WS-UI-*`、内嵌 Web 预览 `WS-WEB-*`、版本控制面 `WS-VCS-*`、工作区智能体入口 `WS-AI-001`、DAP 调试 `WS-TOOL-003` | 该 0 条 —— **2026-11-01 已全部收口（32 条逐条 ✅）**；`swift test` 全绿；`check-board-parity` 该域零差异 |
-| **v0.3.0** | 数据库运维面 | **33**（32 / 1） | 连接 `DB-CONN-*`、数据编辑 `DB-DATA-*`、DDL `DB-DDL-*`、诊断 `DB-DIAG-*`（含 `DIAG-006`）、导出导入 `DB-IO-*`、元数据 `DB-META-*`、结果面 `DB-RES-*`、会话 `DB-SESS-*`、高危任务 `DB-TASK-*`、驱动 `DB-DRV-009` | 该 38 条双 ✅；真机对真实 PG 回归（含 12–18 兼容矩阵）零失败 |
+| **v0.3.0** | 数据库运维面 | **33**（32 / 1） | 连接 `DB-CONN-*`、数据编辑 `DB-DATA-*`、DDL `DB-DDL-*`、诊断 `DB-DIAG-*`（含 `DIAG-006`）、导出导入 `DB-IO-*`、元数据 `DB-META-*`、结果面 `DB-RES-*`、会话 `DB-SESS-*`、高危任务 `DB-TASK-*`、驱动 `DB-DRV-009` | 该 33 条双 ✅；真机对真实 PG 回归（含 12–18 兼容矩阵）零失败 |
 | **v0.4.0** | 笔记与任务闭环 | **14**（12 / 2） | 采集 / 附件 / 版本 / 同步 `NTS-NOTE-*`、待办 `NTS-TODO-*`、组织与私密 `NTS-NOTE-ORG-002` / `PRIVACY-001` | 该 14 条双 ✅；离线装配与同步两路各跑通一次 |
 | **v0.5.0** | 智能体进阶层 | **18**（15 / 3） | 工具面 `AGT-TOOL-*`、运维观测 `AGT-OPS-OBS-002`、同步与对话 `AGT-UX-*`、编排 `AGT-PLAN-PLAN-001`、外部接口 `AGT-LINK-EXT-*`、通道 `AGT-LINK-CHAN-003`、记忆 `AGT-KNOW-MEM-003` + `NFR-ALL-GATE-AI-004/006/007` + `AC-ALL-GATE-AI-001/04` | 该 16 条双 ✅；智能体验收两条 AC 真机走通（含越权拒绝与审计留痕） |
 | **v0.6.0** | 横切面收口 | **21**（16 / 5） | 授权与版本 `FR-STD-ALL-LIC-001`~`005` + `FR-STD-WS-LIC-001`、插件离线装配 `FR-STD-ALL-PLUG-005` / `008`、性能 `NFR-ALL-GATE-PERF-001`~`004`、兼容 `NFR-ALL-GATE-COMP-001`~`005`、界面 `NFR-ALL-GATE-UI-001`、可用性 `NFR-ALL-GATE-USE-005`、安全 `NFR-ALL-GATE-SEC-008`、国际化 `NFR-ALL-GATE-LANG-001` | 该 21 条双 ✅；四项 NFR 各出一份读数表 |
