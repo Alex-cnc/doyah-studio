@@ -30,12 +30,19 @@ public enum ResultClipboard {
 
     public static let defaultFormat: Format = .tsv
 
+    /// 不知道结果来自哪张表时，`INSERT` 文本里的表名占位。
+    ///
+    /// 为什么要一个具名常量：界面侧要能分清「有来源表」与「没有来源表」两种情形
+    /// （前者用真表名，后者才落这个占位），而占位串本身在 Core / 界面 / 用例里
+    /// 各写一份字面量迟早会分叉 —— 分叉之后「复制出来的 SQL 指向哪张表」就没人说得清了。
+    public static let placeholderTableName = "table_name"
+
     /// 渲染选中行为文本。没有行或没有列时返回空串（调用方据此跳过"复制"动作）。
     public static func text(
         rows: [[String?]],
         columns: [ColumnMeta],
         format: Format = ResultClipboard.defaultFormat,
-        tableName: String = "table_name",
+        tableName: String = ResultClipboard.placeholderTableName,
         schema: String? = nil,
         dialect: any SQLDialect = PostgresDialect()
     ) -> String {

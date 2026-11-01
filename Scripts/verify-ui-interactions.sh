@@ -53,6 +53,21 @@ set -euo pipefail
 # `ObjectTreeRows.visibleRows` 喂 `ObjectTreeMenuTarget.resolve`。
 # 老缺陷的回归钉 = 「非服务器那一行**不许**出现服务器菜单项」（点数据库弹服务器菜单那次）。
 #
+# ## 第五批（v0.3.0 数据库运维面·第一跳）：`FR-STD-DB-RES-006` 复制为多格式
+#
+# `TestsUISnapshot/ResultCopyProbeTests.swift` 判这一行的**交付面**（台账备注原文是
+# 「界面粘贴待人工点验」）：挂真 `ResultGrid` 进离屏真窗口 → 取出真 `NSTableView` →
+# 用**产品自己那份右键菜单**（`tableView.menu`）里的菜单项 → 按菜单项自己的
+# `action` / `target` 派发 → 读 `NSPasteboard.general` 里真实的字符串。七条：
+#   ① 四档格式都在「复制为…」子菜单里、每档都能真的写进系统剪贴板且带表头 / 只含选中的行；
+#   ② 默认 ⌘C = TSV，逐字节与需求口径一致（值里的制表符 / 换行被换成空格，不撑破行）；
+#   ③ 转义：Markdown 的 `|` 与换行（`<br>`）、CSV 含换行字段加引号；
+#   ④ INSERT 指向**正在浏览的那张表**（`public.orders`），没有来源表时落占位表名；
+#   ⑤ 负例：没有选中行时剪贴板一个字节都不动；
+#   ⑥ 只进剪贴板、不落文件（剪贴板类型里没有 `public.file-url`）。
+# **证不住**：把这段文本粘进 Excel / 飞书之后长什么样（外部软件行为，与 `DB-RES-014` 同边界）。
+# 反例三段（默认格式改成 markdown / INSERT 不带来源表 / 菜单少放一档格式）各判红后逐字节还原。
+#
 # **源锚点归位（开发循环第 113 轮，队列 `L-103`）**：2026-09-29 23:25–23:36 那个会话把行渲染搬进
 # `ObjectTreeRowContent.swift`、把右键改由**行的 AppKit 捕获器**自己给出（`ObjectTreeRightClick.swift`
 # → `ObjectTreeAppKitMenu.build(object: row.object…)`），附录里原先钉的三条（`.contextMenu {` /
@@ -76,7 +91,7 @@ SWIFT="${DEVELOPER_DIR}/Toolchains/XcodeDefault.xctoolchain/usr/bin/swift"
 SCRATCH="${ROOT}/.build"
 CACHE="${ROOT}/.build-cache"
 OUT="${SCRATCH}/ui-interactions"
-FILTER="TerminalInteractionProbeTests|MultiCursorProbeTests|ObjectTreeContextMenuProbeTests|TitleBarSearchClickProbeTests"
+FILTER="TerminalInteractionProbeTests|MultiCursorProbeTests|ObjectTreeContextMenuProbeTests|TitleBarSearchClickProbeTests|ResultCopyProbeTests"
 while [ $# -gt 0 ]; do
     case "${1}" in
         --filter) FILTER="${2:-}"; shift 2 ;;
@@ -140,9 +155,9 @@ else:
     total, failed, unexpected = max(executed, key=lambda row: int(row[0]))
     if int(failed) or int(unexpected):
         failures.append(f"汇总非零失败：{failed} 失败 / {unexpected} 意外")
-    if int(total) < 15:
+    if int(total) < 22:
         failures.append(
-            f"只跑了 {total} 条 —— 四批十五条（鼠标上报 / DECCKM / 右键归属 / ⌥⌘D 多光标 /"
+            f"只跑了 {total} 条 —— 五批二十二条（鼠标上报 / DECCKM / 右键归属 / ⌥⌘D 多光标 /"
             " ⌥⌘↑↓ 加光标 / ⌥ 拖拽列选 / 逐行菜单内容 / 菜单作用行 / 菜单确定性与跟随行 /"
             " 点击地图 / 留白点给键盘 / 清空按钮三态 + 回车接线 / 打字后回车交词 / 修前对照 / 整框源锚点）应当都跑到"
         )
@@ -163,6 +178,14 @@ expected = [
     "testTypedTextThenReturnStillHandsTheWordOut",
     "testLegacySwiftUISearchBoxWouldSwallowThePaddingPoints",
     "testSourceAnchorsKeepTheBoxPureAppKit",
+    # 第五批（v0.3.0 数据库运维面第一跳 · FR-STD-DB-RES-006）：复制为多格式
+    "testEveryFormatIsOnTheMenuAndReachesTheRealPasteboard",
+    "testDefaultCopyIsTSVWithHeaderWithoutAnyEscapingDamage",
+    "testEscapingSurvivesTheRealCopyPath",
+    "testInsertCopyPointsAtTheTableBeingBrowsed",
+    "testInsertCopyWithoutASourceTableSaysPlaceholderInsteadOfGuessing",
+    "testEmptySelectionLeavesThePasteboardUntouched",
+    "testCopyNeverLeavesAFileOnDisk",
 ]
 for name in expected:
     if name not in log:
@@ -177,7 +200,7 @@ if failures:
     for item in failures:
         print(f"✗ {item}")
     sys.exit(1)
-print("✓ 十五条都真跑过、都以 passed 收尾、没有跳过")
+print(f"✓ {total} 条都真跑过（五批）、都以 passed 收尾、没有跳过")
 PY
 
 echo
@@ -246,6 +269,19 @@ anchors = {
         ("public static let menuKinds: Set<DatabaseObject.Kind> = [",
          "「哪些节点类型该有右键菜单」不再在 Core 里单点定义（漏一个就判不出来了）"),
     ),
+    # 第五批（`FR-STD-DB-RES-006`）：探针点的必须是**产品那份菜单与那条写剪贴板的路**。
+    "App/Views/ResultGrid.swift": (
+        ("for format in ResultClipboard.Format.allCases {",
+         "「复制为…」子菜单不再按格式枚举现建 ⇒ 少一档格式用户就点不到，探针也就量成了别的菜单"),
+        ("pasteboard.setString(text, forType: .string)",
+         "复制不再写系统剪贴板（改成落文件 / 只打日志，用户粘贴到的就是旧内容）"),
+        ("tableName: copySourceTable?.name ?? ResultClipboard.placeholderTableName,",
+         "复制的 INSERT 不再用来源表名 ⇒ 贴回库里的语句指向 table_name 这张不存在的表"),
+    ),
+    "App/Views/ResultTableView.swift": (
+        ("copySourceTable: sourceTable",
+         "结果区不再把来源表交给表格 ⇒ 复制 INSERT 只能落占位表名（而来源表本来就是它手里的事实）"),
+    ),
     "App/Views/TitleBarSearchField.swift": (
         ("final class TitleBarSearchBoxView: NSView",
          "整框不再是 AppKit 视图 ⇒ 命中测试又会被 SwiftUI 那层接走，可见框里的留白重新点不动（T-20261002-027 二次复测打回后的结构性换法）"),
@@ -270,7 +306,7 @@ for relative, needles in anchors.items():
             failures.append(f"{relative} 里「{needle}」不见了：{why}")
 
 for probe in ("TerminalInteractionProbeTests", "MultiCursorProbeTests", "ObjectTreeContextMenuProbeTests",
-              "TitleBarSearchClickProbeTests"):
+              "TitleBarSearchClickProbeTests", "ResultCopyProbeTests"):
     if not os.path.exists(os.path.join(root, f"TestsUISnapshot/{probe}.swift")):
         failures.append(f"TestsUISnapshot/{probe}.swift 不在盘上")
 
@@ -299,3 +335,4 @@ echo "    · §1 FR-STD-WS-UI-006 留白点按下把键盘交给输入框（左�
 echo "    · §1 FR-STD-WS-UI-006 清空按钮三态（空词隐藏 / 有词显示 / 点它清空并回调）"
 echo "    · §1 FR-STD-WS-UI-006 打字之后按回车那个词真的交出去（打字不许把 AppKit 的编辑会话收掉 —— 2026-10-02 晚的真缺陷）"
 echo "    · §1 FR-STD-WS-UI-006 修前对照（装饰参与命中测试的那份框必须判红 —— 这条判据量得出来）"
+echo "    · §3.4 FR-STD-DB-RES-006 复制为多格式（真视图 + 真菜单 + 真系统剪贴板：四档格式都在菜单里、默认 ⌘C = 带表头 TSV、转义不乱、只复制选中的行、INSERT 指向正在浏览的表、空选中不动剪贴板、不落文件）"

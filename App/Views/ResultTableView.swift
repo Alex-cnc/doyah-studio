@@ -545,7 +545,11 @@ struct ResultTableView: View {
                     } else {
                         draftStore.draft.markDeleted(row: row, rowValues: rows[row])
                     }
-                }
+                },
+                // 「复制为 INSERT」要知道这是哪张表（FR-STD-DB-RES-006）：与内联编辑
+                // 同一条事实来源 —— `QueryTab.sourceTable`。手写 SQL 的结果没有它，
+                // 那里落占位表名（不猜）。
+                copySourceTable: sourceTable
             )
 
             // **只要结果里有行就给出分页条**，包括"每页 = 全部"这一档。

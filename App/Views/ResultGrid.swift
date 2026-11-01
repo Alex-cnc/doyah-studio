@@ -74,6 +74,12 @@ struct ResultGrid: NSViewRepresentable {
     var onCommitCellEdit: ((Int, Int, String) -> Void)?
     /// 右键「标记删除此行 / 取消删除标记」：`(显示行号, 该行当前是否已标记删除)`。
     var onToggleRowDeletion: ((Int, Bool) -> Void)?
+    /// 这段结果来自哪张表（FR-STD-DB-RES-006 的「复制为 INSERT 文本」要用它）。
+    ///
+    /// 只认调用方给的**来源表事实**（生产路径 = `QueryTab.sourceTable`）；没有就不猜 ——
+    /// 手写 SQL 的结果没有来源表，那时复制出来的 INSERT 落占位表名
+    /// （`ResultClipboard.placeholderTableName`），而不是悄悄指向某个「看起来像」的表。
+    var copySourceTable: DatabaseObjectRef?
 
     func makeCoordinator() -> Coordinator {
         Coordinator()
@@ -168,6 +174,7 @@ struct ResultGrid: NSViewRepresentable {
             editing: editing,
             onCommitCellEdit: onCommitCellEdit,
             onToggleRowDeletion: onToggleRowDeletion,
+            copySourceTable: copySourceTable,
             tableView: tableView
         )
 
@@ -193,6 +200,7 @@ struct ResultGrid: NSViewRepresentable {
             editing: editing,
             onCommitCellEdit: onCommitCellEdit,
             onToggleRowDeletion: onToggleRowDeletion,
+            copySourceTable: copySourceTable,
             tableView: tableView
         )
     }
@@ -217,6 +225,8 @@ struct ResultGrid: NSViewRepresentable {
         private var editing = ResultGridEditing()
         private var onCommitCellEdit: ((Int, Int, String) -> Void)?
         private var onToggleRowDeletion: ((Int, Bool) -> Void)?
+        /// 这段结果的来源表（复制为 INSERT 时用；nil = 不知道，落占位表名）。
+        private var copySourceTable: DatabaseObjectRef?
         /// 上一次的编辑态渲染签名：编辑态 / 待提交覆盖值变了要重画，但**不必**作废选中态。
         private var lastEditingSignature = ""
         /// 表格本体（右键菜单的可用性要知道用户点在哪一行）。
@@ -250,6 +260,7 @@ struct ResultGrid: NSViewRepresentable {
             editing: ResultGridEditing,
             onCommitCellEdit: ((Int, Int, String) -> Void)?,
             onToggleRowDeletion: ((Int, Bool) -> Void)?,
+            copySourceTable: DatabaseObjectRef?,
             tableView: NSTableView
         ) {
             self.result = result
@@ -260,6 +271,7 @@ struct ResultGrid: NSViewRepresentable {
             self.editing = editing
             self.onCommitCellEdit = onCommitCellEdit
             self.onToggleRowDeletion = onToggleRowDeletion
+            self.copySourceTable = copySourceTable
             self.boundTableView = tableView
             syncSortDescriptors(sortDescriptors, tableView: tableView)
 
@@ -612,7 +624,11 @@ struct ResultGrid: NSViewRepresentable {
             let text = ResultClipboard.text(
                 rows: selected,
                 columns: result.columns,
-                format: format
+                format: format,
+                // 有来源表就用它：复制出来的 INSERT 必须能直接贴回**这张表**。
+                // 不知道来源表（手写 SQL 的结果）时落占位表名，不猜。
+                tableName: copySourceTable?.name ?? ResultClipboard.placeholderTableName,
+                schema: copySourceTable?.schema
             )
             guard !text.isEmpty else { return }
 
