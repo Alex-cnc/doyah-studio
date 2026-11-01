@@ -1619,7 +1619,12 @@ final class AppState: ObservableObject {
     /// IM 通道凭据的落点（AppID 在配置文件、Secret 在系统钥匙串；`FR-AGT-LINK-CHAN-003`）。
     private let agentIMCredentialStore: AgentIMCredentialStore
     /// 审计日志（追加式 JSONL）；导出前脱敏在 Core 里完成（NFR-AI-03）。
-    private let agentAuditLog = AgentAuditLog.shared
+    ///
+    /// 探针可以把它指到**临时目录**：验一次「点拒绝 ⇒ 历史读作已拒绝」不该往用户的真审计
+    /// （`agent-audit.jsonl`）里写一行 —— 与 `sqlTaskStoreOverride` 同一条纪律。
+    var agentAuditLogOverride: AgentAuditLog?
+
+    private var agentAuditLog: AgentAuditLog { agentAuditLogOverride ?? .shared }
     private let egressLog = EgressLog.shared
 
 

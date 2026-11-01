@@ -66,27 +66,50 @@ final class ObjectTreeRetrySourceTests: XCTestCase {
     }
 
     /// **先清旧错误、再取数**：反过来的话，点击到落地之间那一行还是上一轮的红字。
+    ///
+    /// 2026-11-01（B1 第四片）：这两步从视图的 `performRetry` 搬进了 `Core/ObjectTreeRetry.apply`
+    /// （探针要读得出顺序 ⇒ 它不能只活在 `@State` 上）。判据跟着形状搬，盯的仍是同一件事：
+    /// 视图把两个回调交给 `apply`，而 `apply` 按计划里的 `steps` 顺序走。
     func testStaleErrorIsClearedBeforeLoading() throws {
         let view = try source("App/Views/ObjectTreeView.swift")
-        guard let clear = view.range(of: "errors[object.id] = nil"),
-              let start = view.range(of: "private func performRetry("),
-              let load = view.range(of: "await loadChildren(of: object)", range: start.upperBound..<view.endIndex)
-        else { return XCTFail("清错误与取数这两处都得在") }
-        XCTAssertTrue(clear.lowerBound > start.lowerBound, "清错误要在 `performRetry` 体内")
+        guard let start = view.range(of: "private func performRetry("),
+              let end = view.range(of: "private func loadChildren(of object:") else {
+            return XCTFail("`performRetry` 与 `loadChildren` 都得在（缺一处这条判据就失效）")
+        }
+        let body = view[start.upperBound..<end.lowerBound]
+        XCTAssertTrue(body.contains("ObjectTreeRetry.apply("),
+                      "两步执行不再走 Core 的 `apply` ⇒ 顺序又只有视图自己知道（判据读不到）")
+        XCTAssertTrue(body.contains("clearError: { errors[$0] = nil }"),
+                      "`clearError` 没接到 `errors` 上（点完重试旧红字还在）")
+
+        let core = try source("Core/ObjectTreeRetry.swift")
+        guard let apply = core.range(of: "public static func apply("),
+              let clear = core.range(of: "clearError(plan.nodeID)", range: apply.upperBound..<core.endIndex),
+              let load = core.range(of: "loadChildren(plan.nodeID)", range: clear.upperBound..<core.endIndex)
+        else { return XCTFail("`apply` 里的两步不见了") }
         XCTAssertTrue(clear.lowerBound < load.lowerBound,
                       "清错误必须在取数**之前**（否则用户点了以后看到的是同一句旧红字）")
+        // 计划本身也必须是这个顺序（两处同源才叫「顺序即口径」）。
+        XCTAssertTrue(core.contains("steps: [.clearError, .loadChildren]"),
+                      "计划里的两步顺序变了")
     }
 
     /// 入口是**文字**按钮且带提示：一枚孤零零的 ↻ 在红字旁边指什么，得靠悬停才知道；
     /// 而纯图标按钮要另配 help / 无障碍标签（本仓有专门的门禁查这条）。
+    ///
+    /// 2026-11-01（B1 第四片）：这一行搬进 `App/Views/ObjectTreePlaceholderRow.swift`、按钮换成真
+    /// `NSButton`（`.help` / `.accessibilityLabel` 两个 SwiftUI 修饰符对应到 `toolTip` /
+    /// `setAccessibilityLabel`）。判据跟着形状搬 —— 盯的仍是「文字来自语言表 + 悬停与读屏都有」。
     func testTheEntryIsALabelledTextButton() throws {
-        let view = try source("App/Views/ObjectTreeView.swift")
-        guard let retry = view.range(of: "if let retry {") else {
+        let row = try source("App/Views/ObjectTreePlaceholderRow.swift")
+        guard let retry = row.range(of: "if let retry {") else {
             return XCTFail("重试入口不见了")
         }
-        let body = view[retry.upperBound...].prefix(700)
+        let body = row[retry.upperBound...].prefix(200)
         XCTAssertTrue(body.contains("L(.commonRetry)"), "按钮文字走语言表（不许写死一句中文）")
-        XCTAssertTrue(body.contains(".help("), "要有悬停提示")
-        XCTAssertTrue(body.contains(".accessibilityLabel("), "读屏也要念得出这枚按钮")
+
+        XCTAssertTrue(row.contains("button.toolTip = title"), "要有悬停提示")
+        XCTAssertTrue(row.contains("button.setAccessibilityLabel(title)"), "读屏也要念得出这枚按钮")
+        XCTAssertTrue(row.contains("underlineStyle"), "文字按钮要带下划线（看起来才像「可点的链接」而不是一句灰字）")
     }
 }

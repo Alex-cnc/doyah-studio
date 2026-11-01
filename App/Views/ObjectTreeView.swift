@@ -276,34 +276,15 @@ struct ObjectTreeView: View {
         color: Color,
         retry: (() -> Void)? = nil
     ) -> some View {
-        HStack(spacing: Spacing.s) {
-            if let systemImage {
-                Image(systemName: systemImage)
-                    .font(Theme.font(.caption))
-                    .foregroundStyle(color)
-            }
-            Text(text)
-                .font(Theme.font(.caption))
-                .foregroundStyle(color)
-                .lineLimit(3)
-                .textSelection(.enabled)
-            if let retry {
-                // **文字按钮**（不是纯图标）：这里同时是「可读错误」与「怎么办」的并置 ——
-                // 一枚孤零零的 ↻ 在红字旁边到底指什么，得靠悬停才知道；
-                // 且纯图标按钮要另配 help / 无障碍标签，文字本身就够了。
-                Button(action: retry) {
-                    Text(L(.commonRetry))
-                        .font(Theme.font(.caption))
-                        .underline()
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(Theme.text(.secondary))
-                .help(L(.commonRetry))
-                .accessibilityLabel(Text(L(.commonRetry)))
-            }
-        }
-        .padding(.leading, CGFloat(depth) * Metrics.listIndent + Metrics.listIndent + Spacing.xs)
+        // 行体与重试入口在 `ObjectTreePlaceholderRow`（真 `NSButton`）里 —— 那一行是
+        // `FR-STD-DB-META-006` ③ 唯一被点过的地方，单独成文件才装得进探针的活宿主。
+        ObjectTreePlaceholderRow(
+            text: text,
+            depth: depth,
+            systemImage: systemImage,
+            color: color,
+            retry: retry
+        )
     }
 
     /// 行首 chevron 的横向范围（相对行左边）—— 左键落在这一段里**不拦**，放行给 SwiftUI 那个按钮。
@@ -364,15 +345,13 @@ struct ObjectTreeView: View {
             error: errors[object.id]
         )
         guard let plan = outcome.plan, plan.nodeID == object.id else { return }
-        for step in plan.steps {
-            switch step {
-            case .clearError:
-                // 先清：否则从点击到结果落地之间那一行还写着上一轮的失败原因（用户以为没生效）。
-                errors[object.id] = nil
-            case .loadChildren:
-                Task { await loadChildren(of: object) }
-            }
-        }
+        // 两步（先清错误、再取数）在 `Core/ObjectTreeRetry.apply` 里 —— 顺序是口径，
+        // 与探针读的是同一份（视图不再自己 for 一遍）。
+        ObjectTreeRetry.apply(
+            plan,
+            clearError: { errors[$0] = nil },
+            loadChildren: { _ in Task { await loadChildren(of: object) } }
+        )
     }
 
     private func loadChildren(of object: DatabaseObject) async {

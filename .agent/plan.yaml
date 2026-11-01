@@ -64,8 +64,8 @@ tasks:
     done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-META-006 | grep -q '✅'"
     layer: "基线必备"
     prio: "高"
-    status: todo
-    evidence: ""
+    status: done
+    evidence: ".agent/evidence/2026-11-01-B1-TASK-002-META-006.md"
   - id: FR-STD-DB-META-007
     goal: "跨数据库浏览：服务器节点展开后列出当前用户可连接的数据库"
     done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-META-007 | grep -q '✅'"
@@ -183,8 +183,8 @@ tasks:
     done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-TASK-002 | grep -q '✅'"
     layer: "基线必备"
     prio: "高"
-    status: todo
-    evidence: ""
+    status: done
+    evidence: ".agent/evidence/2026-11-01-B1-TASK-002-META-006.md"
   - id: FR-STD-DB-TASK-003
     goal: "**执行回执**：记录成功 / 失败、影响行数、耗时、错误原文与执行时刻，挂在会话上可作为审计依据；回执不含口令与敏感字面量。"
     done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-TASK-003 | grep -q '✅'"

@@ -11,3 +11,7 @@
 - 2026-11-01 `FR-STD-DB-TASK-003`（B1 第一片）：把回执页三枚动作从 SwiftUI `Button` 换成真 `NSButton`（新 `App/Views/PanelIconButton.swift`）—— 理由：SwiftUI 按钮在离屏宿主里不落 `NSButton`、无障碍树也不构建（本机实测：合成鼠标事件投进去 action 不动、`accessibilityChildren()` = 0），三枚正是验收要点里要点的动作，不换就只能靠人点；与 `ResultFilterPopup` / `TitleBarSearchBox` 的换法同源。
 - 2026-11-01 `FR-STD-DB-TASK-003`：导出拆成两半（`exportReceipts(for:)` 只问路径，`writeReceipts(_:to:)` 落盘）—— 理由：模态 `NSSavePanel` 无人值守不该弹窗、探针也不该去点它，而「写出去的字节里有没有原文」是这条验收唯一能把住的一环；拆开之后探针拿**同一个函数**只换路径，不另开一条写盘路。
 - 2026-11-01 B1 批次的划分前提有一半不成立：`batches.yaml` 原写「只补点验与接线」，实测 TASK-001/002 的入口（工具栏任务菜单 / 审批单）也是 SwiftUI ⇒ 先要把入口换成真 AppKit 控件才量得到。已写进 `plan-batches.py` 的 B1 说明，本跳只收口 TASK-003，余 4 条留给下一跳。
+- 2026-11-01 `FR-STD-DB-TASK-002`（B1 第四片）：两枚审批动作从 `DialogActionButton` 换成真 `NSButton`（新 `App/Views/AgentApprovalDecisionRow.swift`），并把「点了做什么」收成 `AgentApprovalDecisionWiring.make` 一处、由它直接产出那一行（`wiring.row(isWorking:)`）—— 理由：上一版探针自己拼一行、审批单另拼一行，实测「把两枚动作在审批单里接反」判不红（探针点的不是用户点的那一枚）；换成接线产出整行之后同一改动当场判红。
+- 2026-11-01 `FR-STD-DB-TASK-002`：给 `AppState` 加了 `agentAuditLogOverride`（与 `sqlTaskStoreOverride` 同形）—— 理由：验一次「点拒绝 ⇒ 历史读作已拒绝」必须读盘上那份 JSONL，而 `agentAuditLog` 原本写死 `.shared`，那等于往用户的真审计里写一行。
+- 2026-11-01 `FR-STD-DB-META-006`（B1 第四片）：失败那一行的两步执行从视图 `performRetry` 搬进 `Core/ObjectTreeRetry.apply` —— 理由：顺序（先清错误、再取数）原先只活在 `@State` 上，除人点一次没有第二条路能读；搬进 Core 之后探针把两个回调接成记账状态就能判顺序。
+- 2026-11-01 `verify-ui-interactions.sh` 源锚点字典里 `"App/AppState.swift"` 登记了两次（第八批 + 第十批）⇒ Python 字典静默丢掉先出现那份，第八批两条判据两批以来是死的。已合成一个键并在原地加注「一个文件只许一个键」。这是坏判据（红线 #2/#14），不是本片引入。

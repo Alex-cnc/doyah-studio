@@ -49,20 +49,9 @@ struct AgentApprovalSheet: View {
                 .font(.caption2)
                 .foregroundStyle(.secondary)
 
-            HStack {
-                Spacer()
-
-                DialogActionButton(systemName: "xmark.circle", title: L(.agentApprovalReject), role: .destructive) {
-                    decide(approve: false)
-                }
-                .disabled(isWorking)
-
-                DialogActionButton(systemName: "checkmark.circle", title: L(.agentApprovalApprove)) {
-                    decide(approve: true)
-                }
-                .keyboardShortcut(.defaultAction)
-                .disabled(isWorking)
-            }
+            // 两枚动作是**真 `NSButton`**（`AgentApprovalDecisionRow`）：离屏宿主里 SwiftUI 按钮
+            // 不落 `NSButton` ⇒ 「点拒绝之后是不是一条都没发」此前只能靠人手点。
+            decisionRow
         }
         .padding(20)
         .frame(width: 620)
@@ -249,26 +238,21 @@ struct AgentApprovalSheet: View {
 
     // MARK: - 决策
 
-    /// 决策交给 `AppState`：状态机流转 + 执行 + 留痕都在那一处完成，
-    /// 界面只负责收集「批准 / 拒绝」与备注。
-    private func decide(approve: Bool) {
-        guard !isWorking else { return }
-        isWorking = true
-        let id = approval.id
-        let decisionNote = note
-
-        Task {
-            if approve {
-                await appState.approveAgentAction(id: id, note: decisionNote)
-            } else {
-                await appState.rejectAgentAction(id: id, note: decisionNote)
+    /// 两枚动作（拒绝 / 批准并执行）：**接线只有一处** —— `AgentApprovalDecisionWiring.make`
+    /// 与探针读的是同一份（各写一份的后果：按钮在、点了没反应，或探针量的是自己拼的一条假路）。
+    ///
+    /// 决策本身交给 `AppState`：状态机流转 + 执行 + 留痕都在那一处完成，
+    /// 界面只负责收集「批准 / 拒绝」与备注、以及「落地之后要不要关窗」。
+    private var decisionRow: some View {
+        let actions = AgentApprovalDecisionWiring.make(
+            appState: appState,
+            approvalID: approval.id,
+            note: { note },
+            isWorking: { isWorking = $0 },
+            onSettled: { settled in
+                if settled { dismiss() }
             }
-            isWorking = false
-            // 只有这条审批单真的离开待审批队列才关窗：流转失败时留在原处，
-            // 让用户看到错误（而不是「点了没反应、窗口却关了」）。
-            if !appState.pendingAgentApprovals.contains(where: { $0.id == id }) {
-                dismiss()
-            }
-        }
+        )
+        return actions.row(isWorking: isWorking)
     }
 }

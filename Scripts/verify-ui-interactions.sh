@@ -173,6 +173,27 @@ set -euo pipefail
 # 边界：保存面板 / 选目录面板没点（模态，无人值守不该弹）；不是真数据库（真库那一面见 R-036 的
 # 12 万行 / 27 MB 记录）；内存峰值不做断言。
 
+# ## 第十一批 / 第十二批（B1 批次第四片）：审批单两枚动作 · 对象树失败行的「重试」
+#
+# `TestsUISnapshot/AgentApprovalDecisionProbeTests.swift` 判 `FR-STD-DB-TASK-002` 的**交付面**
+# （台账备注原文是「差人工在审批单上点一次」）：两枚动作换成真 `NSButton`，接线收进
+# `AgentApprovalDecisionWiring.make`（审批单与探针读同一处），审计落点可由 `agentAuditLogOverride`
+# 指到临时目录。探针 `performClick(nil)` 之后判 `AppState` 的**状态**：
+#   ① 两枚都在、各带各的提示、批准是回车等价；在途时两枚全灰（不许点第二次决策）；
+#   ② 点「拒绝」⇒ 待审批队列清空、`agentApprovalRequest` 清掉、历史最后一条 `rejected` 且带备注、
+#      内存与盘上都没有 `executed` —— 「未确认不发送任何语句」是这一步的可见后果；
+#   ③ 覆盖写入（`TRUNCATE` + `INSERT`）逐条带自己的目标库、序号 1 起、影响面问之前不冒充 0 行，
+#      拒绝交出 0 条语句；
+#   ④ 源锚点：审批单走这一份（旧的 `decide(approve:)` 与两枚 SwiftUI 按钮不许回来）。
+#
+# `TestsUISnapshot/ObjectTreeRetryProbeTests.swift` 判 `FR-STD-DB-META-006` ③ 的**交付面**：
+# 失败那一行收进 `ObjectTreePlaceholderRow`、入口换成真 `NSButton`，两步执行收进
+# `Core/ObjectTreeRetry.apply`（顺序即口径）。五条：① 那一行落出一枚真按钮、点两次跑两次；
+# ② 四档「不出」逐档渲染 0 枚（在途 / 收起 / 没失败 / 已缓存）、该出那一档 1 枚且计划是两步；
+# ③ 点一下之后顺序是「先清旧错误、再取数」，取数那一刻旧错误已清；④ 在途时同一行上入口消失；
+# ⑤ 源锚点：树的失败分支走这一行、两步走 Core、SwiftUI 版按钮不许回来。
+# 边界：不是真数据库（真库那一面归 `run-manual-verification-probes.sh`）；行内红字读不出来（SwiftUI `Text`）。
+
 # ## 第九批（B1 批次第二片）：`FR-STD-DB-TASK-001` 工具栏「任务」菜单
 #
 # `TestsUISnapshot/SQLTaskMenuProbeTests.swift` 判这一行的**交付面**（台账备注原文是
@@ -205,7 +226,7 @@ SWIFT="${DEVELOPER_DIR}/Toolchains/XcodeDefault.xctoolchain/usr/bin/swift"
 SCRATCH="${ROOT}/.build"
 CACHE="${ROOT}/.build-cache"
 OUT="${SCRATCH}/ui-interactions"
-FILTER="TerminalInteractionProbeTests|MultiCursorProbeTests|ObjectTreeContextMenuProbeTests|TitleBarSearchClickProbeTests|ResultCopyProbeTests|ResultSortProbeTests|ResultFilterProbeTests|ExecutionReceiptPaneProbeTests|SQLTaskMenuProbeTests|TableExportStreamProbeTests"
+FILTER="TerminalInteractionProbeTests|MultiCursorProbeTests|ObjectTreeContextMenuProbeTests|TitleBarSearchClickProbeTests|ResultCopyProbeTests|ResultSortProbeTests|ResultFilterProbeTests|ExecutionReceiptPaneProbeTests|SQLTaskMenuProbeTests|TableExportStreamProbeTests|AgentApprovalDecisionProbeTests|ObjectTreeRetryProbeTests"
 while [ $# -gt 0 ]; do
     case "${1}" in
         --filter) FILTER="${2:-}"; shift 2 ;;
@@ -269,9 +290,9 @@ else:
     total, failed, unexpected = max(executed, key=lambda row: int(row[0]))
     if int(failed) or int(unexpected):
         failures.append(f"汇总非零失败：{failed} 失败 / {unexpected} 意外")
-    if int(total) < 53:
+    if int(total) < 62:
         failures.append(
-            f"只跑了 {total} 条 —— 十批五十三条（鼠标上报 / DECCKM / 右键归属 / ⌥⌘D 多光标 /"
+            f"只跑了 {total} 条 —— 十二批六十二条（鼠标上报 / DECCKM / 右键归属 / ⌥⌘D 多光标 /"
             " ⌥⌘↑↓ 加光标 / ⌥ 拖拽列选 / 逐行菜单内容 / 菜单作用行 / 菜单确定性与跟随行 /"
             " 点击地图 / 留白点给键盘 / 清空按钮三态 + 回车接线 / 打字后回车交词 / 修前对照 / 整框源锚点 /"
             " 复制四档格式与默认 TSV / 排序三档与 NULL / Shift 次要键 / 筛选条默认在场 /"
@@ -281,7 +302,11 @@ else:
             " 任务菜单每行四段与删除子菜单 / 空册子给理由且保存跟着语句走 / 点载入切语句库连接 /"
             " 点解绑松开页签 / 点删除盘上少一条 / 工具栏走同一份菜单判定 /"
             " 整表导出真落文件与三趟 FETCH / 空表不落文件 / 半途失败不留半成品 /"
-            " 整库逐张落文件且一张没成不打断 / 两条导出入口共用一条取数路）应当都跑到"
+            " 整库逐张落文件且一张没成不打断 / 两条导出入口共用一条取数路 /"
+            " 审批单两枚真按钮且各自带提示 / 点拒绝一条都没发且历史读作已拒绝 /"
+            " 覆盖写入逐条带目标库且拒绝交空表 / 审批单走同一份接线 /"
+            " 失败行一枚真重试按钮且点得动 / 四档不出逐档无按钮 / 先清旧错误再取数 /"
+            " 在途时入口消失 / 树的占位行走这一份）应当都跑到"
         )
 
 expected = [
@@ -343,6 +368,17 @@ expected = [
     "testFailureMidwayLeavesNoPartialFile",
     "testDatabaseExportWritesOneFilePerTableAndKeepsOneFailureFromStoppingTheRest",
     "testBothExportEntriesShareOneStreamingPath",
+    # 第十一批（B1 批次第四片 · FR-STD-DB-TASK-002）：审批单两枚动作
+    "testTheDecisionRowIsTwoRealButtonsAndGoesGreyWhileWorking",
+    "testClickingRejectSendsNothingAndLeavesRejectedInHistory",
+    "testOverwritePlanListsTwoStatementsWithTheirOwnTargetAndRejectionSendsNone",
+    "testTheSheetUsesThatRowAndWiring",
+    # 第十二批（B1 批次第四片 · FR-STD-DB-META-006）：失败那一行的「重试」
+    "testFailureRowDrawsARealRetryButtonAndClickingItRunsOnce",
+    "testCoreJudgementDecidesWhetherTheEntryIsDrawn",
+    "testClickingRetryClearsTheErrorBeforeReloading",
+    "testInFlightRowDrawsNoEntry",
+    "testObjectTreeUsesThatRowAndCoreJudgement",
 ]
 for name in expected:
     if name not in log:
@@ -357,7 +393,7 @@ if failures:
     for item in failures:
         print(f"✗ {item}")
     sys.exit(1)
-print(f"✓ {total} 条都真跑过（十批）、都以 passed 收尾、没有跳过")
+print(f"✓ {total} 条都真跑过（十二批）、都以 passed 收尾、没有跳过")
 PY
 
 echo
@@ -404,6 +440,10 @@ anchors = {
          "行里不再现建那一份菜单 ⇒ 会退回「整树一份 + 按列表行解析」那种错行"),
         ("object: row.object",
          "菜单的目标不再是**这一行自己的对象** ⇒ 会退回按悬停 / 上次选中解析"),
+        ("ObjectTreePlaceholderRow(",
+         "占位行不再走那一份（重试入口又会退回离屏点不到的 SwiftUI 按钮）"),
+        ("ObjectTreeRetry.apply(",
+         "重试两步不再走 Core 的 `apply` ⇒ 顺序散回视图里自己 for 一遍（判据读不到）"),
         # 反向那半（整树兜底菜单 `menuTargetObject` / `ObjectTreeMenuTarget.resolve(` 不许回来）由
         # `Tests/ObjectTreeRowMenuConventionTests.swift` 与 `Tests/ObjectTreeMenuConventionTests.swift`
         # 的 `XCTAssertFalse` 钉住 —— 这个脚本只支持「在场」形状，别把它写成第二个判据。
@@ -490,6 +530,16 @@ anchors = {
         ("func writeReceipts(_ log: ExecutionReceiptLog, to url: URL) -> Bool {",
          "落盘那一半不再是单独一个出口 ⇒ 面板与探针会各写一份 JSON（脱敏就能在其中一条上失效）"),
         ("let data = try log.exportData()", "导出不再用结构自己的 `exportData()` ⇒ 复制/导出/界面三处可能不是同一份"),
+    # 第十批（`FR-STD-DB-IO-002`）：空表要在写盘**之前**认出来、逐表落盘只许一处。
+    # 第十一批 / 第十二批（`FR-STD-DB-TASK-002` / `META-006`）：审计落点可注入、重试两步的出口只剩一处。
+    # ⚠️ 同一个文件**只许一个键**：Python 字典会静默丢掉先出现的那一份 —— 第八批那两条判据
+    #    曾因此死了两批（第二次出现的是第十批那个键）。加针请加进**同一个**块里。
+        ("guard let first = try await fetcher.nextPage(), !first.rows.isEmpty else {",
+         "空表又只判 nil ⇒ 会落一个只有表头的文件、面板报「导出成功 0 行」"),
+        ("func streamDatabase(",
+         "整库逐表落盘那一半又被塞回面板闭包里 ⇒ 它只能靠人点一次来验"),
+        ("var agentAuditLogOverride: AgentAuditLog?",
+         "审计落点不可注入 ⇒ 验一次「点拒绝」就得往用户的真审计里写一行（探针只能靠人手点）"),
     ),
     # 第九批（`FR-STD-DB-TASK-001`）：菜单内容只许有一处判定、铺设只许走 AppKit 那份。
     "App/Views/SQLTaskAppKitMenu.swift": (
@@ -509,12 +559,35 @@ anchors = {
         ("!tabSQL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty",
          "「保存」不再跟着语句是否空白走 ⇒ 空脚本也能存成一条永远会被拒的定义"),
     ),
-    # 第十批（`FR-STD-DB-IO-002`）：空表要在写盘**之前**认出来、逐表落盘只许一处。
-    "App/AppState.swift": (
-        ("guard let first = try await fetcher.nextPage(), !first.rows.isEmpty else {",
-         "空表又只判 nil ⇒ 会落一个只有表头的文件、面板报「导出成功 0 行」"),
-        ("func streamDatabase(",
-         "整库逐表落盘那一半又被塞回面板闭包里 ⇒ 它只能靠人点一次来验"),
+    # 第十一批（`FR-STD-DB-TASK-002`）：两枚审批动作必须是**真 `NSButton`**，接线只有一处。
+    "App/Views/AgentApprovalDecisionRow.swift": (
+        ("static func make(",
+         "动作接线不再是一处 ⇒ 审批单与探针会各拼一套「点了之后做什么」"),
+        ("button.isEnabled = isEnabled",
+         "在途时按钮不变灰（状态机已流转过，再点一次就是第二次决策）"),
+        ("func row(isWorking: Bool) -> AgentApprovalDecisionRow",
+         "接线不再产出审批单那一行 ⇒ 探针只能自己拼一行（点的未必是用户点的那一枚）"),
+        ("button.target = context.coordinator",
+         "按钮没有 target/action ⇒ 点了什么都不发生"),
+    ),
+    "App/Views/AgentApprovalSheet.swift": (
+        ("AgentApprovalDecisionRow(",
+         "审批单不再走那枚真按钮的动作行 ⇒ 离屏又点不到"),
+        ("AgentApprovalDecisionWiring.make(",
+         "审批单自己拼了一份接线 ⇒ 探针量到的不是用户点的那条路"),
+        ("actions.row(isWorking: isWorking)",
+         "审批单没用接线给的那一行 ⇒ 探针点的是自己拼的一行"),
+    ),
+    # 第十二批（`FR-STD-DB-META-006`）：失败那一行与重试入口是 AppKit、两步执行只有一处。
+    "App/Views/ObjectTreePlaceholderRow.swift": (
+        ("ObjectTreeRetryButton(title: L(.commonRetry)",
+         "重试入口退回 SwiftUI `Button` ⇒ 离屏宿主里落不出 `NSButton`（又只能靠人手点）"),
+        ("button.setAccessibilityLabel(title)",
+         "重试按钮没有读屏标签 ⇒ 读屏只会念「按钮」"),
+    ),
+    "Core/ObjectTreeRetry.swift": (
+        ("public static func apply(",
+         "两步执行（先清错误、再取数）不再有唯一出口 ⇒ 顺序又只有视图自己知道"),
     ),
     "App/Views/TitleBarSearchField.swift": (
         ("final class TitleBarSearchBoxView: NSView",
@@ -542,7 +615,8 @@ for relative, needles in anchors.items():
 for probe in ("TerminalInteractionProbeTests", "MultiCursorProbeTests", "ObjectTreeContextMenuProbeTests",
               "TitleBarSearchClickProbeTests", "ResultCopyProbeTests", "ResultSortProbeTests",
               "ResultFilterProbeTests", "ExecutionReceiptPaneProbeTests",
-              "SQLTaskMenuProbeTests", "TableExportStreamProbeTests"):
+              "SQLTaskMenuProbeTests", "TableExportStreamProbeTests",
+              "AgentApprovalDecisionProbeTests", "ObjectTreeRetryProbeTests"):
     if not os.path.exists(os.path.join(root, f"TestsUISnapshot/{probe}.swift")):
         failures.append(f"TestsUISnapshot/{probe}.swift 不在盘上")
 
@@ -576,4 +650,6 @@ echo "    · §3.4 FR-STD-DB-RES-008 客户端筛选（真控件点击 + 真字�
 echo "    · §3.4 FR-STD-DB-TASK-003 执行回执（真 AppKit 按钮 performClick + 真系统剪贴板：三枚动作都在且各带提示、复制整本新的在前且口令已抹、空态给理由不动剪贴板、清空后回空态、导出字节与结构一致、三条比一条画得多）"
 echo "    · §3.4 FR-STD-DB-IO-002 整表 / 整库导出（假服务应答游标 + 真 streamTable 写盘：2500 行 / 2501 行文件、三趟 FETCH、空表不落文件、半途失败不留残件、整库逐张落文件且一张没成不打断）"
 echo "    · §3.4 FR-STD-DB-TASK-001 工具栏「任务」菜单（真 NSMenu 按行派发：行文案四段、空册子给理由、「保存」跟着语句走、点载入切语句·库·连接并绑上、点解绑松开页签、点删除册子与盘上各少一条、工具栏走同一份判定）"
+echo "    · §3.4 FR-STD-DB-TASK-002 审批单两枚动作（真 NSButton performClick：两枚都在且各带提示 / 在途全灰 / 点拒绝后队列清空、历史与盘上都是已拒绝且一条都没执行 / 覆盖写入两条各带目标库、拒绝交空表）"
+echo "    · §3.4 FR-STD-DB-META-006 失败那一行「重试」（真 NSButton performClick：按钮在且点得动 / 四档不出逐档零按钮 / 先清旧错误再取数 / 在途时入口消失）"
 echo "    · §3.4 FR-STD-DB-RES-007 客户端排序（真表头点击 + 真 AppKit 跟踪循环：升 → 降 → 取消三档、数值按数值比、NULL 两种方向都留末尾、Shift 加 / 翻 / 删次要键、点空白处不动、排序不改列宽）"

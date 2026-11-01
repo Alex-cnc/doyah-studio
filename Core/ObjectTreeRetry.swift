@@ -109,4 +109,29 @@ public enum ObjectTreeRetry {
 
         return .retry(Plan(nodeID: nodeID, steps: [.clearError, .loadChildren]))
     }
+
+    /// 按计划**执行**重试 —— 顺序即口径：先清旧错误、再取数。
+    ///
+    /// 为什么这一小段也要搬进 Core：它原先写在视图的 `performRetry` 里（对着 `@State` 的
+    /// `errors` / `childrenCache` 直接改），于是「点一下之后到底做了哪两步、什么顺序」
+    /// 除了人点一次没有第二条路能读 —— 而这两步正是用户能看见的那件事
+    /// （点了之后旧红字有没有先消失）。搬出来之后，探针把两个回调接成记账的假状态就能判顺序。
+    ///
+    /// - Parameters:
+    ///   - clearError: 清掉这个节点挂着的失败文案（参数是计划里的 `nodeID`）。
+    ///   - loadChildren: 取这个节点的子节点（**必须是用户手点走的那同一条取数路**）。
+    public static func apply(
+        _ plan: Plan,
+        clearError: (String) -> Void,
+        loadChildren: (String) -> Void
+    ) {
+        for step in plan.steps {
+            switch step {
+            case .clearError:
+                clearError(plan.nodeID)
+            case .loadChildren:
+                loadChildren(plan.nodeID)
+            }
+        }
+    }
 }
