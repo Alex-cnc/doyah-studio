@@ -102,7 +102,7 @@ echo "$OUT" | grep -q "agentModel → http://127.0.0.1:${PORT}" \
     || { check "外发日志目标应指向本地端点" 1; echo "$OUT" | grep "外发日志" -A 3; }
 
 echo ""
-echo "== 3) 反向核对：**总开关关闭时一个请求都不发**（NFR-ALL-GATE-AI-002 / AC-ALL-GATE-AI-01）=="
+echo "== 3) 反向核对：**总开关关闭时一个请求都不发**（NFR-ALL-GATE-AI-002 / AC-ALL-GATE-AI-001）=="
 BEFORE=$(grep -c "STUB_REQ" /tmp/doyah-stub.log || true)
 OUT2="$("$CLI" agent-sql --endpoint "http://127.0.0.1:${PORT}/v1" --model "qwen2.5:7b" --disabled "找出最近 7 天的订单" 2>&1)"
 AFTER=$(grep -c "STUB_REQ" /tmp/doyah-stub.log || true)

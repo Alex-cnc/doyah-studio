@@ -27,7 +27,10 @@ import sys
 
 L0_DEFAULT = os.path.expanduser("~/dev/doyah/lead/studio/Docs/Doyah产品需求规格说明书.md")
 
-FIVE = re.compile(r"^(FR|NFR|AC)-(AGT|STD|NTS|RTR|ALL)-([A-Z]{2,8})-([A-Z]{2,8})-(\d{2,3})$")
+FIVE = re.compile(r"^(FR|NFR|AC)-(AGT|STD|NTS|RTR|ALL)-([A-Z]{2,8})-([A-Z]{2,8})-(\d{3})$")
+# 2026-11-01：序号段由 `\d{2,3}` 收紧为 `\d{3}`。原写法「两位也算合规」是判据给自己留的后门 ——
+# 规范 §2 写的是三位，判据却放行两位，于是 `AC-ALL-GATE-AI-01` / `NFR-ALL-GATE-LANG-01` 这类
+# 15 条从诞生起就不合规，却一路绿着。（域码长度规则缺口另记，不在此收。）
 CANDIDATE = re.compile(r"(?<![A-Z])((?:FR|NFR|AC)-[A-Z]+(?:-[A-Z]+){0,3}-\d{2,3})")
 # 只看「像编号的独立记号」，避免把句子里的 FR-UI 这种家族前缀当成编号
 LEGACY = re.compile(r"^(FR|NFR|AC)-[A-Z]+-\d{2,3}$")
@@ -118,21 +121,24 @@ def main() -> int:
     ap.add_argument("--base", help="对照基线（缺省 = 工作区相对 HEAD）")
     ap.add_argument("--l0", default=os.environ.get("DOYAH_L0_SRS", L0_DEFAULT))
     ap.add_argument("--self-test", action="store_true")
+    ap.add_argument("--all", action="store_true", help="存量全量体检：三书 + 一单里出现的每个编号都过一遍形制（不只 diff）")
     args = ap.parse_args()
 
     if args.self_test:
         products = {"AGT", "STD", "NTS", "RTR", "ALL"}
         faces = {("NTS", "NOTE"), ("STD", "WS")}
         domains = {("NOTE", "SET"), ("NOTE", "CAPTURE"), ("WS", "UI")}
-        good = ["| FR-NTS-NOTE-SET-001 | 设置页 |"]
+        good = ["| FR-NTS-NOTE-SET-001 | 设置页 |"]  # 路径必须是 Docs/ 下，check() 只扫文档树
 
         def one(line):
             return ["| FR-UI-10 | 设置页 |"] if line is None else [line]
 
-        checked_ok, p_ok = check({"a.md": good}, products, faces, domains, None)
-        checked_bad, p_bad = check({"a.md": ["+ | FR-UI-10 | 新需求 |"]}, products, faces, domains, None)
-        checked_dom, p_dom = check({"a.md": ["| FR-NTS-NOTE-NOPE-001 | x |"]}, products, faces, domains, None)
+        checked_ok, p_ok = check({"Docs/a.md": good}, products, faces, domains, None)
+        checked_bad, p_bad = check({"Docs/a.md": ["+ | FR-UI-10 | 新需求 |"]}, products, faces, domains, None)
+        checked_dom, p_dom = check({"Docs/a.md": ["| FR-NTS-NOTE-NOPE-001 | x |"]}, products, faces, domains, None)
+        two_digit = FIVE.match("AC-ALL-GATE-REL-04") is None
         cases = [
+            ("两位序号（AC-ALL-GATE-REL-04）⇒ 判据本身不认", two_digit),
             ("五段式且已登记 ⇒ 绿", checked_ok == 1 and not p_ok),
             ("三段短号新增 ⇒ 红", checked_bad >= 1 and p_bad),
             ("未登记域码 ⇒ 红", p_dom),
@@ -151,6 +157,23 @@ def main() -> int:
 
     files = added_lines(args.base)
     checked, problems = check(files, products, faces, domains, args.base)
+    if args.all:
+        # 存量体检：判据只扫 diff 时，历史存量永远看不见（这 15 条就是这么活下来的）。
+        scan = [os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), rel)
+                for rel in ("Docs/Doyah产品需求规格说明书.md",
+                            "Docs/Doyah产品概要设计说明书.md",
+                            "Docs/Doyah产品开发计划任务清单-macOS.md")]
+        library = set(products)
+        for path in scan:
+            if not os.path.exists(path):
+                problems.append((path, "-", "存量体检目标文件不存在"))
+                continue
+            for lineno, line in enumerate(open(path, encoding="utf-8"), 1):
+                for token in CANDIDATE.findall(line):
+                    if not FIVE.match(token):
+                        if LEGACY.match(token):
+                            continue  # 冻结的三段老号：规范明写「不迁移」，不算违规
+                        problems.append((f"{os.path.relpath(path)}:{lineno}", token, "形制不合：序号必须三位（§2 五段式）"))
     if problems:
         print("✗ 新增的需求编号不合 L0 §1.5 编码规范：")
         for path, rid, why in problems:

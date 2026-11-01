@@ -1,7 +1,7 @@
 # Doyah产品开发计划任务清单 · macOS 端
 > 上游（活书）：同端《Doyah产品详细设计说明书 · macOS端》（`Docs/Doyah产品详细设计说明书-macOS.md`）> 需求规格说明书 > 概要设计说明书；本文件只记「要做什么」，不复制上游正文。
 
-> **版本** v1.0.109（2026-11-01 **第八十一批：面向 v1.0.0 倒推里程碑**。主人令：「已规划的能力全部完成才能作为第一个正式版 Release v1.0.0 发布」⇒ 新增 §4.2，把未闭 133 条按「日常面 → 进阶面 → 横切 → 发布」拆成 v0.2.0 工作区 41 · v0.3.0 数据库 38 · v0.4.0 笔记待办 14 · v0.5.0 智能体 16 · v0.6.0 横切 21 · v0.9.0 发布候选 3 → v1.0.0 全 383 条 ✅；`v1.1+` 档语义改为「v1.0.0 前最后一档」。此前 （2026-11-01 **第八十批：读数纠偏**。主人问「还有多少功能没开发完」，一查发现：本书 §2/§3/§4/§5 四个小节标题里的条数停在 9–10 月（130 / 74 / 174 / 75），真实是 **250 / 118 / 15 / 118**；`## 4 里程碑与迭代` 表 M6 之后全是 9 月的旧状态。四个标题按今日复算改数、里程碑表加「非进度源」警示，台账行一字未动。此前 v1.0.107（2026-10-31 **第七十九批：联网工具落地**。`web_search` 新建、`fetch_url` 启用、三后端（DDG / Bing / Tavily）+ 自动链 + 熔断、设置页可配、SSRF 边界；16 例联网单测 + 真机实测（搜「swift programming language」得 5 条带链接结果、`fetch_url` 抓 swift.org 0.4s 成功）。全量 4984 例 0 失败。
+> **版本** v1.0.110（2026-11-01 **第八十一批：面向 v1.0.0 倒推里程碑**。主人令：「已规划的能力全部完成才能作为第一个正式版 Release v1.0.0 发布」⇒ 新增 §4.2，把未闭 133 条按「日常面 → 进阶面 → 横切 → 发布」拆成 v0.2.0 工作区 41 · v0.3.0 数据库 38 · v0.4.0 笔记待办 14 · v0.5.0 智能体 16 · v0.6.0 横切 21 · v0.9.0 发布候选 3 → v1.0.0 全 383 条 ✅；`v1.1+` 档语义改为「v1.0.0 前最后一档」。此前 （2026-11-01 **第八十批：读数纠偏**。主人问「还有多少功能没开发完」，一查发现：本书 §2/§3/§4/§5 四个小节标题里的条数停在 9–10 月（130 / 74 / 174 / 75），真实是 **250 / 118 / 15 / 118**；`## 4 里程碑与迭代` 表 M6 之后全是 9 月的旧状态。四个标题按今日复算改数、里程碑表加「非进度源」警示，台账行一字未动。此前 v1.0.107（2026-10-31 **第七十九批：联网工具落地**。`web_search` 新建、`fetch_url` 启用、三后端（DDG / Bing / Tavily）+ 自动链 + 熔断、设置页可配、SSRF 边界；16 例联网单测 + 真机实测（搜「swift programming language」得 5 条带链接结果、`fetch_url` 抓 swift.org 0.4s 成功）。全量 4984 例 0 失败。
 > **版本** v1.0.105（2026-10-30 **第七十八批：联网能力归正 + 补两条需求**。由头 = 主人 2026-10-31 报「Doyah Agent 没有联网工具」。查证：`fetch_url` 登记但 `enabled: false`（第二批未启用）、`web_search` 不存在、`Core/AgentIngestion.swift` 是本地资料切块而非联网 ⇒ `FR-AGT-TOOL-INGEST-001` 原标 ✅ ✅ 是**错读**，归正为 ⬜；新增 `FR-AGT-TOOL-INGEST-004`（后端可配 DDG/Tavily）与 `NFR-AGT-TOOL-INGEST-001`（抓取边界防 SSRF）。活书同批：能力书 v1.0.257、需求书 v1.0.444、概设 v1.0.25（§18.12 加两条、74→76）、详设 v1.0.19（新增 §3.27）。
 > **版本** v1.0.104（2026-10-30 **第七十七批：详设补登记**。主人问「改了之后有没有同步更新详细设计文档」——如实答「没有」，本批补上：详设 macOS **v1.0.15** 新增 §3.25「IM 通道凭据：扫码接入 / 手填 / 自检」契约（六个落点 + 五条禁止 + `T-3.25-01~05`）、§4.2 增两条存储契约（`im-channel-qq.json` / 钥匙串 `agent-im-qq`）；需求书 **v1.0.440**（`FR-AGT-LINK-CHAN-003` 判据加 ⑤ 自检）；概设 **v1.0.22**（§18.17 补 ⑥）。上一批：2026-10-30 **第七十六批：设置面板分页 + IM 自检**。主人令「配置框太乱了，应该分成几个 Tab 页」⇒ 面板拆成 **模型 / 运行 / IM 通道 / 扩展 / 外观** 五页（内容逐字未改，只搬进各自滚动区；底栏「测试连接 / 取消 / 保存」留在页签外）；IM 页新增**自检**按钮：念出「配置是否落盘 / AppID / 钥匙串里有没有 Secret / 有没有选环境」，问题按该修的先后排（新 `Core/AgentIMSelfCheck` + `AgentIMSelfCheckTests` **6 例**）。起因排查：本机盘上**没有** `im-channel-qq.json`、钥匙串无 `agent-im-qq` 账户、出网日志 0 次 QQ 请求 ⇒ 那次配置压根没落盘（不是连不上）。Core 单测 **4970**（+6）。上一批：2026-10-29 **第七十五批：QQ 扫码接入（`FR-AGT-LINK-CHAN-003`）**。新增 `Scripts/qq-qr-bridge.mjs`（官方 `@tencent-connect/qqbot-connector`，逐行 JSON：`qr`/`expired`/`success`/`failed`；取消即释放连接器）+ `Core/AgentIMQRLogin.swift`（行解析 / 四档状态机 / 起桥参数与环境；缺 AppID 或 Secret 判失败、成功即定稿、出码中不许重复起进程）+ `App/Views/QQQRLoginSheet.swift`（CoreImage 画二维码、状态行、换一张、取消必杀子进程）+ 设置面板「用 QQ 扫码接入」入口（成功与手填同一套落库，Secret 仍只进钥匙串）。本机实测桥能出真码（`https://q.qq.com/qqbot/openclaw/connect.html?task_id=…`）。判据 `AgentIMQRLoginTests` **14 例**；Core 单测 **4964**（+14）。实现仍 🟡（差真扫码一次端到端点验）。上一批：2026-10-29 **第七十四批：能力描述改照 App Store 写法**。按主人提示去对照真实商品页（Things 3 / Bear / BBEdit / Caliope / TableAI）：加**一句定位句**、每条改成「**名字 — 一句收益**」、结尾加**一句信任句**（「全部在本机运行…不经过我们的服务器」）；判据 `LicenseHighlightsTests` **14 例**（新增：定位句与信任句中英齐 / 定位句 ≤ 40 字且只一句 / 名字 ≤ 10 字不含逗号 / 信任句必须说清数据在哪）。Core 单测 **4950**（+4）。上一批：2026-10-29 **第七十三批：关于页加「这个应用能帮你做什么」**。按主人令只写最亮点、用普通用户的话：新增 `Core/LicenseHighlights`（5 条，各挂能力位）+ 关于页一节（标题 + 一句话 + 「当前版本已含 / 需 X 版」）；判据 `Tests/LicenseHighlightsTests` **10 例**。Core 单测 **4946**（+10）。上一批：2026-10-29 **第七十二批：CLI `export` 的方言判（`FR-STD-DB-IO-002` 收尾片；实现·判据两格不动）**。由头 = 第七十一批收尾排下的下一条活。核源码先纠正那句记录的一半：**`doyah export` 今天走不到 MySQL**（默认路径把 `dbType` 写成 `.postgresql`，`mysql` / `gbase8a` 子命令只认 `--sql`），但两处真缺陷都成立：① 调用点把方言**钉死** `PostgresDialect()` ⇒「用哪个方言」与「连的是哪种库」是两句互不相干的说法，这条路一旦接上非 PG 连接就会照 PG 语义拼 `DECLARE … CURSOR` 与双引号标识符；② `doyah mysql --export --out x.csv` 里那个 `--export` **被静默忽略**（rc=0、没有文件）—— 一次看起来成功的空操作。落法 = **一处裁定、两处引用**：`Core/TableExport` 把「能不能流式」从布尔升成带理由的 `decision(for:)`（`.streaming` / `.rejected(.streamingUnsupported(类型))`，`streamingSupported` 改为它的投影）；CLI 方言按连接派生（`SQLDialectFactory.make(for: dbType)`，三个取数函数入参由 `PostgresDialect` 放宽为 `any SQLDialect`），非 PG 在**建目录 / 拼语句之前**退 **69** 并说清三件事（缺的是服务端游标 / 一条语句都没发出去 / 今天仍可走 `mysql --sql … --json`）；`mysql` · `gbase8a` 子命令在**建连接之前**用同一句话拒绝 `--export`。判据 **+14 例**：`Tests/TableExportTests` +7（允许面 / 两种拒绝各带自己的类型 / 两种非 PG 不许压成一档 / 布尔是裁定的投影 / 拒绝理由带类型名 / 方言随连接类型）+ `Tests/CLIExportDialectSourceTests` 7（源树钉住：出口交连接类型 · 命令内派生方言 · 三个函数收 `any SQLDialect` · 裁定在任何动作之前 · mysql 子命令在连接之前拒绝 · 两处只用一句话 · 那句话写清「没发出去」与出路）；反例七段（Core 4 + CLI 3）各判红后逐字节还原。**实测**：`DoyahCLI mysql --export …` ⇒ rc=69 + 那句话、目录 0 文件；`gbase8a export` ⇒ 同 rc=69；反向对照 `mysql --sql`（不带 `--export`）⇒ 原用法提示 rc=2。Core 单测 **4936**（4922 → +14）。三格读数不变（跨切面收口，不对应新 `FR-*` 行）⇒ 实现 ✅ 126 / 🟡 83 / ⬜ 4 = 213；判据 ✅ 162 / 🟡 46 / ⬜ 4 / — 1 = 213。包 `be96b836（09:04:34）`（二进制 102,922,608 字节）；同标签 08:46:57 那份 `f023f8d2` 自本批起作废（本批改了 Core 与 CLI ⇒ 二进制变了）。明细见 `.agent/evidence/2026-10-29-CLI-export-dialect.md`。)
 > **版本** v1.0.98（2026-10-29 **第七十一批：整库导出接线 + 修掉一处入口接错渲染器（`FR-STD-DB-IO-002`，实现仍 🟡 差人工点一次／判据 ✅）**。由头 = 上一批收尾时写下的下一条活「整库导出的界面入口」，本轮照做；做的时候先撞到一个更严重的问题：**上一批的「导出整表…」只加进了 SwiftUI 那份菜单渲染（`ObjectTreeContextMenu`），而生产右键走的是 AppKit 那份（`ObjectTreeAppKitMenu`）** ⇒ 上一批交付的入口用户其实点不到，两套渲染各写一份清单就是这种错法的温床。落法三件：① 生产菜单补上「导出整表…」，两套渲染共用同一份格式清单（`ObjectTreeAppKitMenu.exportFormats` / `exportFormatTitle`，SwiftUI 那份改成遍历它，不再各写五个按钮）；② 整库导出接线：`TableExport.databasePlan` 纯判定（只导表与视图、其余跳过并报数、同一 `(schema, table)` 只导一次、跨 schema 时文件名与账里的称呼都带前缀、净化与撞名顺延走与整表导出同一条 `uniqueFileName`）+ `AppState.exportDatabase`（选一个目录 → 逐张表调 `streamTable` → 逐表记 `Ledger` 账 → 小结报「行数 → 路径」+ 合计 + 跳过数）+ 右键数据库 / schema「导出整库…」五档 + 复用同一块 `TableExportSheet`；取数循环从 `exportTable` 抽成 `streamTable` 一处，两条路不再各写一份（空表、取到一半失败的口径因此必然一致）；③ 判据成对：`Tests/TableExportTests` +7 例（共 22），并新加 `TestsUISnapshot/ObjectTreeContextMenuProbeTests.testProductionMenuCarriesExportEntries` —— 直接构造**生产那份 NSMenu**，判「表 / 视图有整表入口、库 / schema 有整库入口、子菜单都是那五档文本格式、其余节点一个都没有」，这正是上一批漏掉的那一面（旧探针只拿 `ObjectTreeAction` 的动作项对账，导出不在其中 ⇒ 两套菜单各缺一项也不会红）。反例：Core 侧四段（去掉跨 schema 前缀 / 去掉去重 / 允许空名 / 只认表不认视图）、菜单侧三段（拆掉整表入口 / 拆掉整库入口 / 往格式清单里塞 xlsx）各判红一次后逐字节还原，七段读数见 `.agent/evidence/2026-10-29-DB-IO-002-整库.md`。Core 单测 **4922**（4915 → +7）。分族读数（逐行实数）⇒ 实现 ✅ 126 / 🟡 83 / ⬜ 4 = 213（不变，本条仍在 🟡）；判据 ✅ 162 / 🟡 46 / ⬜ 4 / — 1 = 213（不变）。)
@@ -133,18 +133,18 @@
 | FR-NTS-NOTE-SYNC-002 | — | 3.5 Doyah Notes | 常用增强 | 高 | 🟡 | ⬜ | v0.1.0-alpha | — |
 | FR-NTS-NOTE-EXPORT-001 | 导出与迁移：导出 Markdown / 纯文本 / 备份包，导入自己导出的包可完整还 | 3.5 Doyah Notes | 常用增强 | 中 | ✅ | ⬜ | v0.1.0-alpha | — |
 | FR-NTS-NOTE-PRIVACY-001 | 私密保护：可把单条笔记标为私密（不进搜索、不同步、不外发），需二次验证才可查看 | 3.5 Doyah Notes | 基线必备 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
-| AC-ALL-GATE-AI-01 | — | 7.4 智能体验收 | — | — | ⬜ | ⬜ | v0.1.0-alpha | — |
-| AC-ALL-GATE-AI-02 | — | 7.4 智能体验收 | — | — | ✅ | ✅ 已接线（T-57；真实实例端到端待执行） | v0.1.0-alpha | — |
-| AC-ALL-GATE-AI-03 | — | 7.4 智能体验收 | — | — | ✅ | ✅ 已接线（T-57；真实实例端到端待执行） | v0.1.0-alpha | — |
-| AC-ALL-GATE-AI-04 | — | 7.4 智能体验收 | — | — | ⬜ | ⬜ | v0.1.0-alpha | — |
-| AC-ALL-GATE-REL-01 | — | 7.1 发布门槛 | — | — | ✅ | ✅ 89/89（2026 | v0.1.0-alpha | — |
-| AC-ALL-GATE-REL-02 | — | 7.1 发布门槛 | — | — | ✅ | ✅ SwiftPM `P | v0.1.0-alpha | — |
-| AC-ALL-GATE-REL-03 | — | 7.1 发布门槛 | — | — | ✅ | ✅ 28/28（2026 | v0.1.0-alpha | — |
-| AC-ALL-GATE-REL-04 | — | 7.1 发布门槛 | — | — | 🟡 | 🟡 连接与查询已实测；对 | v0.1.0-alpha | — |
-| AC-ALL-GATE-REL-05 | — | 7.1 发布门槛 | — | — | ⬜ | ⬜ | v0.1.0-alpha | — |
-| AC-ALL-GATE-REL-06 | — | 7.1 发布门槛 | — | — | ⬜ | ⬜ | v0.1.0-alpha | — |
-| AC-ALL-GATE-REL-07 | — | 7.1 发布门槛 | — | — | ✅ | ✅ | v0.1.0-alpha | — |
-| AC-ALL-GATE-REL-08 | — | 7.1 发布门槛 | — | — | ✅ | ✅ v1.1 已核对 | v0.1.0-alpha | — |
+| AC-ALL-GATE-AI-001 | — | 7.4 智能体验收 | — | — | ⬜ | ⬜ | v0.1.0-alpha | — |
+| AC-ALL-GATE-AI-002 | — | 7.4 智能体验收 | — | — | ✅ | ✅ 已接线（T-57；真实实例端到端待执行） | v0.1.0-alpha | — |
+| AC-ALL-GATE-AI-003 | — | 7.4 智能体验收 | — | — | ✅ | ✅ 已接线（T-57；真实实例端到端待执行） | v0.1.0-alpha | — |
+| AC-ALL-GATE-AI-004 | — | 7.4 智能体验收 | — | — | ⬜ | ⬜ | v0.1.0-alpha | — |
+| AC-ALL-GATE-REL-001 | — | 7.1 发布门槛 | — | — | ✅ | ✅ 89/89（2026 | v0.1.0-alpha | — |
+| AC-ALL-GATE-REL-002 | — | 7.1 发布门槛 | — | — | ✅ | ✅ SwiftPM `P | v0.1.0-alpha | — |
+| AC-ALL-GATE-REL-003 | — | 7.1 发布门槛 | — | — | ✅ | ✅ 28/28（2026 | v0.1.0-alpha | — |
+| AC-ALL-GATE-REL-004 | — | 7.1 发布门槛 | — | — | 🟡 | 🟡 连接与查询已实测；对 | v0.1.0-alpha | — |
+| AC-ALL-GATE-REL-005 | — | 7.1 发布门槛 | — | — | ⬜ | ⬜ | v0.1.0-alpha | — |
+| AC-ALL-GATE-REL-006 | — | 7.1 发布门槛 | — | — | ⬜ | ⬜ | v0.1.0-alpha | — |
+| AC-ALL-GATE-REL-007 | — | 7.1 发布门槛 | — | — | ✅ | ✅ | v0.1.0-alpha | — |
+| AC-ALL-GATE-REL-008 | — | 7.1 发布门槛 | — | — | ✅ | ✅ v1.1 已核对 | v0.1.0-alpha | — |
 | FR-AGT-LINK-CHAN-001 | 模型接入配置：可配置模型服务（本地 / 远端，OpenAI 兼容端点）、模型名、AP | 3.2 Doyah Agent | 基线必备 | 高 | ✅ | ✅ | v0.1.0-alpha | — |
 | FR-AGT-PLAN-CLAR-001 | 主动澄清：开跑前遇到目标不清 / 缺关键参数 / 两种做法代价差很大时，先问一句再动 | 3.2 Doyah Agent | 常用增强 | 高 | ✅ | ✅ | v1.1+ | `Core/AgentClarificationGate`：目标无动词/缺关键参数/代价差≥3 倍才问，其余直接干（判据 10 例） |
 | FR-AGT-PLAN-PLAN-004 | 计划修订：执行中发现原计划不成立时，说出为什么改并给出新计划，不静默换路 | 3.2 Doyah Agent | 常用增强 | 中 | ✅ | ✅ | v1.1+ | `Core/AgentPlanRevisionLog`：改道必带触发事实与理由，缺一拒收；可机械查出静默换路（判据同上） |
@@ -432,9 +432,9 @@
 | NFR-ALL-GATE-COMP-001 | 支持 PostgreSQL 12–18 多版本回归 | 4.5 NFR-COMP | 基线必备 | — | 🟡 | 🟡 | v0.1.0-alpha | — |
 | NFR-ALL-GATE-COMP-002 | 支持 GBase 最新版本，并向下兼容至 GBase 8a（版本窗口见下） | 4.5 NFR-COMP | 进阶可选 | — | ⬜ | ⬜ | v0.1.0-alpha | — |
 | NFR-ALL-GATE-COMP-003 | 支持 MySQL 最新大版本，并向下兼容最近 5 个大版本（版本窗口见下） | 4.5 NFR-COMP | 常用增强 | — | ⬜ | ⬜ | v0.1.0-alpha | — |
-| NFR-ALL-GATE-LANG-01 | v1.x 界面语言为简体中文 | 4.7 国际化 | 常用增强 | — | 🟡 | 🟡 | v0.1.0-alpha | — |
-| NFR-ALL-GATE-LANG-02 | 预留英文文案抽取（不硬编码在视图里为长期目标） | 4.7 国际化 | 常用增强 | — | ✅ | ✅ | v0.1.0-alpha | — |
-| NFR-ALL-GATE-LANG-03 | 国际化：界面语言支持简体中文 / English 切换，用户可选、选择持久化、重启后 | 4.7 国际化 | 常用增强 | — | ✅ | ✅ | v0.1.0-alpha | — |
+| NFR-ALL-GATE-LANG-001 | v1.x 界面语言为简体中文 | 4.7 国际化 | 常用增强 | — | 🟡 | 🟡 | v0.1.0-alpha | — |
+| NFR-ALL-GATE-LANG-002 | 预留英文文案抽取（不硬编码在视图里为长期目标） | 4.7 国际化 | 常用增强 | — | ✅ | ✅ | v0.1.0-alpha | — |
+| NFR-ALL-GATE-LANG-003 | 国际化：界面语言支持简体中文 / English 切换，用户可选、选择持久化、重启后 | 4.7 国际化 | 常用增强 | — | ✅ | ✅ | v0.1.0-alpha | — |
 | NFR-ALL-GATE-MAINT-001 | 核心逻辑单元测试：拆分、方言、配置序列化、静态检查、tokenizer、元数据映射、 | 4.6 NFR-MAINT | 常用增强 | — | ✅ | ✅ | v0.1.0-alpha | — |
 | NFR-ALL-GATE-MAINT-002 | 新增数据库类型不改动 UI 层代码 | 4.6 NFR-MAINT | 常用增强 | — | ✅ | ✅ | v0.1.0-alpha | — |
 | NFR-ALL-GATE-MAINT-003 | 关键行为有脚本化回归（本地 PostgreSQL 全链路） | 4.6 NFR-MAINT | 常用增强 | — | ✅ | ✅ | v0.1.0-alpha | — |
@@ -753,9 +753,9 @@
 | **v0.2.0** | 工作区闭环 | **41**（39 / 2） | 编辑器编辑面 `WS-EDIT-*`、文件 `WS-FS-*`、导航与跳转 `WS-NAV-*`、界面细节 `WS-UI-*`、内嵌 Web 预览 `WS-WEB-*`、版本控制面 `WS-VCS-*`、工作区智能体入口 `WS-AI-001`、DAP 调试 `WS-TOOL-003` | 该 41 条实现+判据双 ✅；`swift test` 全绿；`check-board-parity` 该域零差异 |
 | **v0.3.0** | 数据库运维面 | **38**（37 / 1） | 连接 `DB-CONN-*`、数据编辑 `DB-DATA-*`、DDL `DB-DDL-*`、诊断 `DB-DIAG-*`（含 `DIAG-006`）、导出导入 `DB-IO-*`、元数据 `DB-META-*`、结果面 `DB-RES-*`、会话 `DB-SESS-*`、高危任务 `DB-TASK-*`、驱动 `DB-DRV-009` | 该 38 条双 ✅；真机对真实 PG 回归（含 12–18 兼容矩阵）零失败 |
 | **v0.4.0** | 笔记与任务闭环 | **14**（12 / 2） | 采集 / 附件 / 版本 / 同步 `NTS-NOTE-*`、待办 `NTS-TODO-*`、组织与私密 `NTS-NOTE-ORG-002` / `PRIVACY-001` | 该 14 条双 ✅；离线装配与同步两路各跑通一次 |
-| **v0.5.0** | 智能体进阶层 | **16**（13 / 3） | 工具面 `AGT-TOOL-*`、运维观测 `AGT-OPS-OBS-002`、同步与对话 `AGT-UX-*`、编排 `AGT-PLAN-PLAN-001`、外部接口 `AGT-LINK-EXT-*`、通道 `AGT-LINK-CHAN-003`、记忆 `AGT-KNOW-MEM-003` + `NFR-ALL-GATE-AI-004/006/007` + `AC-ALL-GATE-AI-01/04` | 该 16 条双 ✅；智能体验收两条 AC 真机走通（含越权拒绝与审计留痕） |
-| **v0.6.0** | 横切面收口 | **21**（16 / 5） | 授权与版本 `STD-ALL-LIC-001~005` + `STD-WS-LIC-001`、插件离线装配 `PLUG-005/008`、性能 `NFR-PERF-001~004`、兼容 `NFR-COMP-001~005`、界面 `NFR-UI-001`、可用性 `NFR-USE-005`、安全 `NFR-SEC-008`、国际化 `NFR-LANG-01` | 该 21 条双 ✅；四项 NFR 各出一份读数表 |
-| **v0.9.0** | 发布候选 | **3**（1 / 2） | `AC-ALL-GATE-REL-04`（签名与公证链路）、`REL-05`、`REL-06`（发布门槛与产物校验） | `./Scripts/verify-all.sh` **18 项全绿、0 处红**；多工作区真机回归一轮；安装包可分发 |
+| **v0.5.0** | 智能体进阶层 | **16**（13 / 3） | 工具面 `AGT-TOOL-*`、运维观测 `AGT-OPS-OBS-002`、同步与对话 `AGT-UX-*`、编排 `AGT-PLAN-PLAN-001`、外部接口 `AGT-LINK-EXT-*`、通道 `AGT-LINK-CHAN-003`、记忆 `AGT-KNOW-MEM-003` + `NFR-ALL-GATE-AI-004/006/007` + `AC-ALL-GATE-AI-001/04` | 该 16 条双 ✅；智能体验收两条 AC 真机走通（含越权拒绝与审计留痕） |
+| **v0.6.0** | 横切面收口 | **21**（16 / 5） | 授权与版本 `FR-STD-ALL-LIC-001`~`005` + `FR-STD-WS-LIC-001`、插件离线装配 `FR-STD-ALL-PLUG-005` / `008`、性能 `NFR-ALL-GATE-PERF-001`~`004`、兼容 `NFR-ALL-GATE-COMP-001`~`005`、界面 `NFR-ALL-GATE-UI-001`、可用性 `NFR-ALL-GATE-USE-005`、安全 `NFR-ALL-GATE-SEC-008`、国际化 `NFR-ALL-GATE-LANG-001` | 该 21 条双 ✅；四项 NFR 各出一份读数表 |
+| **v0.9.0** | 发布候选 | **3**（1 / 2） | `AC-ALL-GATE-REL-004`（签名与公证链路）、`REL-05`、`REL-06`（发布门槛与产物校验） | `./Scripts/verify-all.sh` **18 项全绿、0 处红**；多工作区真机回归一轮；安装包可分发 |
 | **v1.0.0** | **正式发布** | **0** | 无新增能力 | 383 条全 ✅ + 上一行全绿 + 一单无 ⬜/🟡 + 版本号与产物校验一致 |
 
 **倒推逻辑**：①② 是日常最高频的两个面（工作区 + 数据库），先把「每天都要用」的做成闭环；③ 笔记/待办是第二产品面，依赖工作区稳定；④ 智能体依赖 ①②③ 的工具面与权限体系（它调的正是前者），排在它们之后；⑤ 授权、插件、四项 NFR 是横切约束，越晚做返工越少但必须在发布前收口；⑥ 发布门槛本身是最后一道。
@@ -782,7 +782,7 @@
 
 **M6—M8 建议需求优先级**：FR-STD-DB-EXEC-018（服务器端取消）> FR-STD-DB-RES-010（导出）> FR-STD-DB-SESS-001（历史）> FR-STD-WS-NAV-003（补全接入）> FR-STD-DB-CONN-009（删除确认）> FR-STD-DB-CONN-003（校验复用）。
 
-**M8.1 新增需求优先级（2026-09-20）**：FR-STD-DB-META-006（对象树持续下钻，先复现定位）> FR-STD-DB-CONN-015 / FR-STD-DB-CONN-016（服务器与数据库选择）> FR-STD-WS-EDIT-001（保存查询）> FR-STD-WS-UI-007（拖拽分隔）> NFR-ALL-GATE-LANG-03（中 / 英切换，依赖文案资源化）。
+**M8.1 新增需求优先级（2026-09-20）**：FR-STD-DB-META-006（对象树持续下钻，先复现定位）> FR-STD-DB-CONN-015 / FR-STD-DB-CONN-016（服务器与数据库选择）> FR-STD-WS-EDIT-001（保存查询）> FR-STD-WS-UI-007（拖拽分隔）> NFR-ALL-GATE-LANG-003（中 / 英切换，依赖文案资源化）。
 
 ---
 
@@ -792,7 +792,7 @@
 
 | 范围 | 内容 |
 |---|---|
-| **v1.0 纳入** | ① 22 条**已覆盖**的基线能力（核对即可）；② 9 条**部分覆盖**的扩写（含 `DROP/ALTER DATABASE`、多窗口、`pg_dumpall`、对象树分组、角色改删、索引/外键管理、大结果流式）；③ 2 条**新增** DBA 能力（FR-STD-DB-SESS-005 权限管理、FR-STD-DB-DIAG-005 锁与阻塞链）；④ **基本智能体能力**：FR-AGT-LINK-CHAN-001 模型接入、FR-AGT-CORE-LOOP-001 自然语言→SQL（只读）、FR-AGT-PLAN-PLAN-002 specs→数据任务、FR-AGT-TOOL-SCHED-001 定时调度、FR-AGT-CORE-LOOP-002 数据生成/合成、FR-AGT-CORE-LOOP-003 安全作用域目录导出、FR-AGT-GUARD-PERM-001 审批与审计、FR-AGT-GUARD-PERM-004 安全护栏，以及 NFR-AI 全部与 AC-ALL-GATE-AI-01~04 |
+| **v1.0 纳入** | ① 22 条**已覆盖**的基线能力（核对即可）；② 9 条**部分覆盖**的扩写（含 `DROP/ALTER DATABASE`、多窗口、`pg_dumpall`、对象树分组、角色改删、索引/外键管理、大结果流式）；③ 2 条**新增** DBA 能力（FR-STD-DB-SESS-005 权限管理、FR-STD-DB-DIAG-005 锁与阻塞链）；④ **基本智能体能力**：FR-AGT-LINK-CHAN-001 模型接入、FR-AGT-CORE-LOOP-001 自然语言→SQL（只读）、FR-AGT-PLAN-PLAN-002 specs→数据任务、FR-AGT-TOOL-SCHED-001 定时调度、FR-AGT-CORE-LOOP-002 数据生成/合成、FR-AGT-CORE-LOOP-003 安全作用域目录导出、FR-AGT-GUARD-PERM-001 审批与审计、FR-AGT-GUARD-PERM-004 安全护栏，以及 NFR-AI 全部与 AC-ALL-GATE-AI-001~04 |
 | **v1.1+** | 常用增强 74 条中按使用频率挑选（连接分组/颜色、事务模式、查询参数…）；智能体进阶项：FR-AGT-UX-CONV-001 对话式诊断、FR-AGT-PLAN-PLAN-001 DBA 维护编排、FR-AGT-LINK-EXT-001 MCP 对外接口、FR-AGT-PLAN-PLAN-003 specs 版本化 |
 | **不做** | 见需求书 §2.4（范围与本期不做） |
 
