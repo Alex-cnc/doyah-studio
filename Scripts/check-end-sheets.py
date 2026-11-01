@@ -1,7 +1,7 @@
 """端级对账：**六端各一份详设 + 一份任务清单**（人类主人 2026-10-26 令）。
 
 判据：
-  A. 允许存在的端清单 = `{macOS端, 安卓端}`；出现别的端清单（iOS / Windows / Linux / HarmonyOS …）即判红；
+  A. 允许存在的端清单 = `{macOS, Android}`；出现别的端清单（iOS / Windows / Linux / HarmonyOS …）即判红；
   B. 每份存在的端清单必须有同名详设兜着（`Docs/Doyah产品详细设计说明书-<端>.md`）；
   C. 不存在不带端名的产品级总单（`Docs/Doyah产品开发计划任务清单.md`）；
   D. 每份端清单要有「变更记录」节；
@@ -23,7 +23,8 @@ DERIVED = ROOT / ".build" / "derived"
 # 允许存在的端清单（键 = 清单文件名里的端名，值 = 详设文件名里的端名）
 ALLOWED_SHEETS = {
     # 2026-10-26 人类主人令：「六端各一份详细设计、一份开发计划任务清单」——每端一份，共六份单。
-    "macOS端": "macOS",
+    # 2026-10-31 人类主人令：活书文件名里的「端」字去掉 ⇒ 清单端名与详设端名一致，都写 `macOS`。
+    "macOS": "macOS",
     "Android": "Android",
     "Windows": "Windows",
     "Linux": "Linux",
@@ -149,7 +150,7 @@ def main() -> int:
         for p in problems:
             print(f"   · {p}")
         return 1
-    print("✅ 端级对账通过：任务清单六端各一份（macOS端 / Android / Windows / Linux / HarmonyOS / iOS），各有一份同端详设兜底；"
+    print("✅ 端级对账通过：任务清单六端各一份（macOS / Android / Windows / Linux / HarmonyOS / iOS），各有一份同端详设兜底；"
           "无孤本、无产品级总单、无跨端视图混进 Docs/")
     return 0
 

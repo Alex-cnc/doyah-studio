@@ -28,7 +28,7 @@ BOOKS_AND_SHEETS = [
     "Doyah产品详细设计说明书-Linux.md",
     "Doyah产品详细设计说明书-HarmonyOS.md",
     "Doyah产品详细设计说明书-iOS.md",
-    "Doyah产品开发计划任务清单-macOS端.md",
+    "Doyah产品开发计划任务清单-macOS.md",
     "Doyah产品开发计划任务清单-Android.md",
     "Doyah产品开发计划任务清单-Windows.md",
     "Doyah产品开发计划任务清单-Linux.md",

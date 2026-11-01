@@ -35,6 +35,7 @@ BOOKS = [
     ("Docs/Doyah产品概要设计说明书.md", "Doyah产品概要设计说明书"),
     ("Docs/Doyah产品能力规划说明书.md", "Doyah产品能力规划说明书"),
     ("Docs/Doyah产品详细设计说明书-macOS.md", "Doyah产品详细设计说明书-macOS"),
+    ("Docs/Doyah产品详细设计说明书-Android.md", "Doyah产品详细设计说明书-Android"),
 ]
 DEFAULT_THRESHOLD = 40  # 行；超过就该问人类「冻结不冻结」
 

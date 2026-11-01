@@ -47,7 +47,7 @@ LAYERS: list[tuple[str, str, str]] = [
     ("②需求规格", "Docs/Doyah产品需求规格说明书.md", "requirement"),
     ("③概要设计", "Docs/Doyah产品概要设计说明书.md", "design"),
     ("④详细设计", "Docs/Doyah产品详细设计说明书-macOS.md", "detail"),
-    ("一单", "Docs/Doyah产品开发计划任务清单-macOS端.md", "plan"),
+    ("一单", "Docs/Doyah产品开发计划任务清单-macOS.md", "plan"),
 ]
 
 # 派生出口（§2 点名的那几个；不在盘上就如实报「未覆盖」）

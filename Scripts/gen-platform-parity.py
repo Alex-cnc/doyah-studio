@@ -49,7 +49,7 @@ SRS = ROOT / "Docs/Doyah产品需求规格说明书.md"
 INDEX = doc_index.path()
 # 2026-10-20：状态矩阵（原 §10.10）迁到一单 §3 台账 —— 读仍从 SRS 取（索引与摘要），
 # 写改到一单；否则本脚本会在 SRS 里找不到标记而报错。
-PLAN = ROOT / "Docs/Doyah产品开发计划任务清单-macOS端.md"   # 台账真值源（2026-10-26 起按端分册）
+PLAN = ROOT / "Docs/Doyah产品开发计划任务清单-macOS.md"   # 台账真值源（2026-10-26 起按端分册）
 # 平台等价矩阵是**派生视图**（台账 + 平台实现状态.json 算出来的），不进 Docs：人类主人只认「四书一单」，
 # 一单与详设同构按端分册 ⇒ 跨端矩阵没有「书」的身份，落 .build/derived/。
 MATRIX = ROOT / ".build/derived/平台矩阵.md"
@@ -341,7 +341,7 @@ def matrix_text(root: pathlib.Path | None = None) -> str:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(
             "# 平台等价矩阵（派生件 · 请勿手改）\n\n"
-            "> 由 `Scripts/gen-platform-parity.py` 从《Doyah产品开发计划任务清单-macOS端》§3 台账 + "
+            "> 由 `Scripts/gen-platform-parity.py` 从《Doyah产品开发计划任务清单-macOS》§3 台账 + "
             "`Docs/平台实现状态.json` 重生成，落 `.build/derived/`，不进版本库。\n\n"
             f"{BEGIN}\n{END}\n",
             encoding="utf-8")

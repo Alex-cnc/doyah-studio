@@ -46,7 +46,7 @@ set -euo pipefail
 #        `Scripts/self-test-counts.json`，判据 `Scripts/check-self-test-counts.py` 把每一族 runner
 #        **真跑一遍**（要求 exit 0）、再与台账和文档里的现状声明逐处对账 —— 此前 `test-*.py`
 #        14 个里 **8 个根本没人跑**，其中一个已经坏在第 3 例而无人知）
-#   5. 需求状态一致性（计划书 §3 台账 ↔ 其它文档状态括注）
+#   5. 需求状态一致性（一单 §3 台账 ↔ 其它文档状态括注）
 #      + **版本范围**（2026-10-20 人类主人令）：哪个版本做哪些需求，由版本计划说清 ——
 #        台账 §3 的 `版本` / `版本口径` 两列就是范围台账，判据 = 版本 ⊆ 四档 / alpha 行口径必为 `—` /
 #        非 alpha 行口径非空 / 编号唯一 / 空跑防护。旧做法（需求行内写 `[alpha 不含]` +
@@ -434,7 +434,7 @@ python3 Scripts/check-req-index.py   # 机器视图（requirement-index.jsonl）
 # 三书结构自审（「九轮清单」的机械层：结构 / 标题 / 节序 / 交叉引用 / 排印 / 章内完整 / 追溯 / 平台名）。
 # 一轮全清即可，不必真跑九遍 —— 清单的九类是分类，不是轮次；豁免见 Scripts/doc-layout-exempt.json（每条带理由）。
 python3 Scripts/check-doc-layout.py
-# 需求编号三方对账：正文定义域（第 3/4/7 章）↔ 需求索引 ↔ 计划书台账。
+# 需求编号三方对账：正文定义域（第 3/4/7 章）↔ 需求索引 ↔ 一单台账。
 # 两份派生件互比（台账↔索引）永远绿，正文这一侧此前没人比；§5 数据需求 / §6 接口需求另账、§8 风险与待决同号两表属刻意。
 # 端级一一对应（详设 ↔ 任务清单；人类主人 2026-10-26 令「与详细设计文档对标」）
 python3 Scripts/check-end-sheets.py
@@ -536,7 +536,7 @@ python3 Scripts/check-pending-agenda.py --self-test
 python3 Scripts/check-self-test-counts.py
 python3 Scripts/check-self-test-counts.py --self-test
 
-echo "==> 5/18 需求状态一致性（计划书 §3 台账 ↔ 其它文档状态括注）+ 版本范围（版本 / 版本口径）"
+echo "==> 5/18 需求状态一致性（一单 §3 台账 ↔ 其它文档状态括注）+ 版本范围（版本 / 版本口径）"
 python3 Scripts/check-status-consistency.py
 # L-69 ③（2026-09-28 第 56 轮）：上面那条管的是「其它文档括注 ↔ 台账**状态一致**」（2026-10-20 改口径，
 # 原为「索引 ↔ 定义行」），管不了「这条 🟡 到底算不算本版范围」。

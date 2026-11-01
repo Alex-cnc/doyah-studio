@@ -6,7 +6,7 @@
 
 读：
   · `Docs/Doyah产品能力规划说明书.md`  —— 三级标题 = 能力条目（按章节归属产品面）
-  · `Docs/Doyah产品开发计划任务清单-macOS端.md`        —— §5 平台等价矩阵（FR 行 + 四端状态列）
+  · `Docs/Doyah产品开发计划任务清单-macOS.md`        —— §5 平台等价矩阵（FR 行 + 四端状态列）
   · `Docs/平台实现状态.json`             —— 各端台账（Windows 的显式登记）
 写：
   · `Platform/windows/开发计划-Windows.md`
