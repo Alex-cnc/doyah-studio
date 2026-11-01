@@ -26,6 +26,16 @@ struct WorkspaceAreaView: View {
             messageBar
         }
         .onAppear { syncPreviewCursor() }
+        // 编辑区 AI 辅助面板（`FR-STD-WS-AI-001`）：菜单「AI 辅助」那一组打开它。
+        .sheet(isPresented: Binding(
+            get: { appState.editAssist.isPresented },
+            set: { appState.editAssist.isPresented = $0 }
+        )) {
+            EditAssistSheet(model: appState.editAssist)
+        }
+        .sheet(isPresented: $appState.isDebugPanelPresented) {
+            DebugPanelView(model: appState.debugSession)
+        }
         // 换页签 / 关页签都要过一遍：行号按页签各记一份（`FR-STD-WS-WEB-002` 收口片），
         // 否则切到另一篇时预览拿着上一份文档的行号去找落点。
         .onChange(of: tabs.selectedID) { _, _ in syncPreviewCursor() }
@@ -81,6 +91,7 @@ struct WorkspaceAreaView: View {
             language: tab.language,
             pendingFormat: tabs.formatDelivery,
             pendingReveal: tabs.revealDelivery,
+            pendingAssist: tabs.assistDelivery,
             onTextChange: { text in tabs.updateContent(text, for: tab.id) },
             onSave: { tabs.save(tab.id) },
             onFormat: { tabs.formatSelected() },

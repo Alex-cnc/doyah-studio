@@ -114,7 +114,7 @@ def run(l0_books: list[pathlib.Path], fascicles: list[tuple[str, pathlib.Path, s
     if missing_files:
         def _short(m: pathlib.Path) -> str:
             try:
-                return str(m.relative_to(ROOT))
+                return m.relative_to(ROOT).as_posix()
             except ValueError:
                 return m.name
         print("❌ 全量四书不在盘上：" + ", ".join(_short(m) for m in missing_files))

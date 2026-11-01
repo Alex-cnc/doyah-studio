@@ -68,6 +68,34 @@ struct DoyahStudioCommands: Commands {
                 AppShortcut.toggleTaskCheckbox.key,
                 modifiers: AppShortcut.toggleTaskCheckbox.modifiers
             )
+
+            Divider()
+
+            // **编辑区 AI 辅助**（`FR-STD-WS-AI-001`）：四个动作各一条，全部走同一个入口
+            // （`AppState.presentEditAssist`）—— 取上下文、判闸门、发请求、可撤销应用都只有一份实现。
+            // 不挂快捷键：这四个都要先看「选了什么 / 发给谁」，按错键反而更慢。
+            Button(L(.editAssistActionExplain)) {
+                appState.presentEditAssist(.explain, model: appState.editAssist, tabs: workspaceTabs)
+            }
+            Button(L(.editAssistActionRewrite)) {
+                appState.presentEditAssist(.rewrite, model: appState.editAssist, tabs: workspaceTabs)
+            }
+            Button(L(.editAssistActionComplete)) {
+                appState.presentEditAssist(.complete, model: appState.editAssist, tabs: workspaceTabs)
+            }
+            Button(L(.editAssistActionFixError)) {
+                appState.presentEditAssist(.fixError, model: appState.editAssist, tabs: workspaceTabs)
+            }
+
+            Divider()
+
+            // **调试器**（`FR-STD-WS-TOOL-003`）：断点与单步都在面板里，菜单只负责进门。
+            Button(L(.menuToggleBreakpoint)) {
+                appState.toggleBreakpointAtCaret(tabs: workspaceTabs)
+            }
+            Button(L(.menuDebugPanel)) {
+                appState.presentDebugPanel(tabs: workspaceTabs)
+            }
         }
 
         CommandGroup(replacing: .newItem) {

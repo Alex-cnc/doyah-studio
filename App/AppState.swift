@@ -357,6 +357,15 @@ final class AppState: ObservableObject {
     @Published var agentConfiguration: AgentConfiguration = .default
     /// 已保存的 API Key（只存在于内存与系统钥匙串，**永不写入配置文件**）。
     @Published var agentAPIKey: String?
+
+    /// 编辑区 AI 辅助的状态机（`FR-STD-WS-AI-001`）。挂在 AppState 上是因为
+    /// 菜单命令与工作区面板分处两棵树，只有这里同时够得着「页签」与「模型配置」。
+    let editAssist = EditAssistModel()
+
+    /// 调试会话（`FR-STD-WS-TOOL-003`）。与编辑区 AI 同一个理由：菜单与工作区面板分处两棵树。
+    let debugSession = DebugSessionModel()
+    /// 调试面板是否呈现。
+    @Published var isDebugPanelPresented = false
     /// 钥匙串里是否已有 Key（界面显示「已配置 / 未配置」）。
     @Published var hasAgentAPIKey = false
 
@@ -5648,6 +5657,106 @@ final class AppState: ObservableObject {
     static let agentTableListLimit = 60
     /// 列信息外发总量上限（按列累计，超出后的表只发表名）。
     static let agentColumnBudget = 400
+
+    // MARK: - 编辑区 AI 辅助（`FR-STD-WS-AI-001`）
+
+    /// 打开编辑区 AI 辅助面板：上下文（文件 / 语言 / 选区）从**真编辑器**现取，
+    /// 闸门（端点 / 模型 / 边界 / 本机能力）由 Core 的 `EditAssist.gate` 判在发请求之前。
+    ///
+    /// 这里只做三件界面侧的事：取上下文、把「发请求」与「应用改动」两根线交给 AppState
+    /// （密钥 / 外发留痕 / 撤销栈都在这两侧），其余判断一概不重复实现。
+    @MainActor
+    func presentEditAssist(_ action: EditAssist.Action,
+                           model: EditAssistModel,
+                           tabs: WorkspaceTabsModel) {
+        guard let tab = tabs.selectedTab, let path = tab.path, !tab.isHome, !tab.isAgentChat else {
+            model.open(
+                action: action,
+                context: EditAssist.Context(fileName: "", language: .plainText, fileText: "",
+                                            selection: NSRange(location: 0, length: 0)),
+                endpoint: agentConfiguration.endpoint,
+                model: agentConfiguration.model
+            )
+            return
+        }
+        let selection = EditorCommandCenter.shared.liveSelection(for: tab.id)
+            ?? NSRange(location: 0, length: 0)
+        let context = EditAssist.Context(
+            fileName: WorkspaceTabSet.title(for: path),
+            language: tab.language,
+            fileText: tab.content,
+            selection: selection
+        )
+        model.runner = { [weak self] request in
+            guard let self else { throw LLMError.disabled }
+            return try await self.editAssistComplete(request)
+        }
+        model.apply = { [weak tabs] proposal in
+            tabs?.deliverAssist(proposal, for: tab.id)
+        }
+        model.open(action: action, context: context,
+                   endpoint: agentConfiguration.endpoint, model: agentConfiguration.model)
+    }
+
+    // MARK: - 调试器（`FR-STD-WS-TOOL-003`）
+
+    /// 打开调试面板；工作区里有文件时把「要调试的程序」预填成它（用户可改）。
+    @MainActor
+    func presentDebugPanel(tabs: WorkspaceTabsModel) {
+        if debugSession.program.isEmpty, let path = tabs.selectedTab?.path {
+            debugSession.program = path
+        }
+        isDebugPanelPresented = true
+    }
+
+    /// 「在当前行切换断点」：行号由 `Core/CodeLines` 从光标偏移算（与行号列同一份实现）。
+    @MainActor
+    func toggleBreakpointAtCaret(tabs: WorkspaceTabsModel) {
+        guard let tab = tabs.selectedTab, let path = tab.path, !tab.isHome else {
+            isDebugPanelPresented = true
+            return
+        }
+        let offset = EditorCommandCenter.shared.liveSelection(for: tab.id)?.location ?? 0
+        let line = CodeLines.lineNumber(at: offset, in: tab.content)
+        debugSession.toggleBreakpoint(line: line, in: path)
+    }
+
+    /// 真发这一次「编辑区 AI 辅助」请求。
+    ///
+    /// 与既有的智能体通道同一套：密钥显式带上（漏了必 401，2026-10-16 实机踩过）、
+    /// 外发进 `Egress` 日志、失败也留痕（NFR-AI-03）。
+    func editAssistComplete(_ request: EditAssist.Request) async throws -> LLMResponse {
+        let raw = agentConfiguration.endpoint.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let url = URL(string: raw), url.scheme != nil else {
+            throw LLMError.forbidden(L(.editAssistRefusedEndpoint))
+        }
+        let started = Date()
+        let llmRequest = LLMRequest(
+            endpoint: url,
+            model: agentConfiguration.model,
+            apiKey: agentAPIKey,
+            timeoutSeconds: agentConfiguration.timeoutSeconds,
+            systemPrompt: request.systemPrompt,
+            userPrompt: request.userPrompt
+        )
+        let client = RetryingLLMClient(
+            base: OpenAICompatibleClient(
+                transport: EgressRecordingTransport(
+                    origin: "编辑区 AI 辅助",
+                    wrapped: URLSessionTransport()
+                )
+            )
+        )
+        do {
+            let response = try await client.complete(llmRequest)
+            await recordAgentModelCall(summary: request.action.rawValue, outcome: .generated, since: started)
+            return response
+        } catch {
+            await recordAgentModelCall(summary: request.action.rawValue, outcome: .failed,
+                                       since: started, detail: ErrorPresenter.message(for: error))
+            throw error
+        }
+    }
 
     /// 走完整条「自然语言 → SQL」通道；产物是文本，**不会被自动执行**（FR-AI-02）。
     func generateAgentSQL(

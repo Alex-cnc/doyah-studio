@@ -87,6 +87,9 @@ LEDGER = pathlib.Path("Scripts/language-registry-exemptions.json")
 
 # 语言消费方那一族（A 档的扫描面）——「谁按语言身份分支过，就是谁把知识从登记表里搬走了」。
 CONSUMER_FILES = (
+    # 编辑区 AI 辅助（`FR-STD-WS-AI-001`）：要按文件语言给代码围栏标记与提示词语言，
+    # 属于「引用语言类型」的消费者 ⇒ 按 A 档规则登记（2026-11-01 本片新增）。
+    "Core/EditAssist.swift",
     "App/Views/CodeEditorView.swift",
     "App/Views/GhostTextOverlay.swift",
     "App/Views/MarkdownPreviewView.swift",

@@ -3219,6 +3219,68 @@ public enum LKey: String, CaseIterable, Sendable {
     case undoActionIndent
     case undoActionFormatting
     case undoActionDocumentReplace
+    // MARK: 编辑区 AI 辅助（FR-STD-WS-AI-001）
+    case editAssistActionExplain
+    case editAssistActionRewrite
+    case editAssistActionComplete
+    case editAssistActionFixError
+    case editAssistBoundarySelection
+    case editAssistBoundaryFile
+    case editAssistOutboundSelection
+    case editAssistOutboundFile
+    case editAssistLocalAlternativeCompletion
+    case editAssistRefusedNothingToSend
+    case editAssistRefusedMissingInstruction
+    case editAssistRefusedLocalCapability
+    case editAssistRefusedEndpoint
+    case editAssistRefusedModel
+    case editAssistRefusedUnreachable
+    case editAssistRefusedEmptyResponse
+    case editAssistSheetTitle
+    case editAssistInstructionLabel
+    case editAssistModelLine
+    case editAssistEndpointLine
+    case editAssistRun
+    case editAssistApply
+    case editAssistAnswerTitle
+    case editAssistDiffTitle
+    case editAssistSending
+    case editAssistApplied
+    case editAssistNothingApplied
+    case editAssistNotConfigured
+    case undoActionAssist
+
+    // MARK: 调试器（FR-STD-WS-TOOL-003）
+    case debugTitle
+    case debugProgramLabel
+    case debugStart
+    case debugStop
+    case debugContinue
+    case debugStepOver
+    case debugStepInto
+    case debugStepOut
+    case debugVariables
+    case debugBreakpoints
+    case debugLog
+    case debugNoProgram
+    case debugStarting
+    case debugStoppedAt
+    case debugFinished
+    case debugTimedOut
+    case debugStoppedByUser
+    case debugBreakpointAdded
+    case debugBreakpointRemoved
+    case debugAdapterMissing
+    case debugAdapterExited
+    case debugTimeout
+    case debugClosed
+    case debugProtocolBroken
+    case debugNoVariables
+    case debugEmptyBreakpoints
+    case debugIdleHint
+    case menuDebugPanel
+    case menuToggleBreakpoint
+
 }
 
 public enum LocalizedStrings {
@@ -6283,5 +6345,65 @@ public enum LocalizedStrings {
         .undoActionIndent: [.simplifiedChinese: "缩进", .english: "Indent"],
         .undoActionFormatting: [.simplifiedChinese: "格式化", .english: "Format"],
         .undoActionDocumentReplace: [.simplifiedChinese: "替换", .english: "Replace"],
+        // 编辑区 AI 辅助（`FR-STD-WS-AI-001`）
+        .editAssistActionExplain: [.simplifiedChinese: "解释选中代码", .english: "Explain Selection"],
+        .editAssistActionRewrite: [.simplifiedChinese: "按说明改写", .english: "Rewrite as Described"],
+        .editAssistActionComplete: [.simplifiedChinese: "补全当前上下文", .english: "Complete from Context"],
+        .editAssistActionFixError: [.simplifiedChinese: "对报错给修法", .english: "Fix the Error"],
+        .editAssistBoundarySelection: [.simplifiedChinese: "只发选中片段", .english: "Send Selection Only"],
+        .editAssistBoundaryFile: [.simplifiedChinese: "发送整个文件", .english: "Send Whole File"],
+        .editAssistOutboundSelection: [.simplifiedChinese: "将发送：选中片段 · %d 行 · %d 字", .english: "Will send: selection · %d lines · %d characters"],
+        .editAssistOutboundFile: [.simplifiedChinese: "将发送：整个文件 · %d 行 · %d 字", .english: "Will send: whole file · %d lines · %d characters"],
+        .editAssistLocalAlternativeCompletion: [.simplifiedChinese: "本机已有补全（词法 / SQL / 路径三路灰字），不需要走模型", .english: "Local completion already exists (lexical / SQL / path ghost text) — no model needed"],
+        .editAssistRefusedNothingToSend: [.simplifiedChinese: "没有可发出去的内容（先选中一段，或打开一个非空文件）", .english: "Nothing to send — select some text or open a non-empty file"],
+        .editAssistRefusedMissingInstruction: [.simplifiedChinese: "先写一句要改成什么样", .english: "Describe the change first"],
+        .editAssistRefusedLocalCapability: [.simplifiedChinese: "这件事本机能算，不必问模型", .english: "This is computed locally — no model needed"],
+        .editAssistRefusedEndpoint: [.simplifiedChinese: "模型端点未配置 —— 先去设置里填一个（不是「连不上」）", .english: "Model endpoint is not configured — set one up first (this is not a connection failure)"],
+        .editAssistRefusedModel: [.simplifiedChinese: "模型名未配置 —— 端点有了，还差用哪个模型", .english: "Model name is not configured — the endpoint is set, the model is missing"],
+        .editAssistRefusedUnreachable: [.simplifiedChinese: "连不上：%@", .english: "Cannot reach the model: %@"],
+        .editAssistRefusedEmptyResponse: [.simplifiedChinese: "模型回了空内容 —— 没有可应用的改动", .english: "The model returned nothing — no change to apply"],
+        .editAssistSheetTitle: [.simplifiedChinese: "编辑区 AI 辅助", .english: "Editor AI Assist"],
+        .editAssistInstructionLabel: [.simplifiedChinese: "要改成什么样", .english: "What should change"],
+        .editAssistModelLine: [.simplifiedChinese: "模型：%@", .english: "Model: %@"],
+        .editAssistEndpointLine: [.simplifiedChinese: "端点：%@", .english: "Endpoint: %@"],
+        .editAssistRun: [.simplifiedChinese: "发送", .english: "Send"],
+        .editAssistApply: [.simplifiedChinese: "应用", .english: "Apply"],
+        .editAssistAnswerTitle: [.simplifiedChinese: "模型回答", .english: "Answer"],
+        .editAssistDiffTitle: [.simplifiedChinese: "改动（点「应用」才写进文件）", .english: "Change (nothing is written until you apply)"],
+        .editAssistSending: [.simplifiedChinese: "正在请求模型…", .english: "Asking the model…"],
+        .editAssistApplied: [.simplifiedChinese: "已应用 · ⌘Z 可撤销", .english: "Applied · ⌘Z to undo"],
+        .editAssistNothingApplied: [.simplifiedChinese: "没有应用任何改动", .english: "Nothing was applied"],
+        .editAssistNotConfigured: [.simplifiedChinese: "未配置", .english: "Not configured"],
+        .undoActionAssist: [.simplifiedChinese: "AI 辅助", .english: "AI Assist"],
+        .debugTitle: [.simplifiedChinese: "调试", .english: "Debug"],
+        .debugProgramLabel: [.simplifiedChinese: "要调试的程序", .english: "Program to debug"],
+        .debugStart: [.simplifiedChinese: "开始调试", .english: "Start Debugging"],
+        .debugStop: [.simplifiedChinese: "停止", .english: "Stop"],
+        .debugContinue: [.simplifiedChinese: "继续", .english: "Continue"],
+        .debugStepOver: [.simplifiedChinese: "步过", .english: "Step Over"],
+        .debugStepInto: [.simplifiedChinese: "步入", .english: "Step Into"],
+        .debugStepOut: [.simplifiedChinese: "步出", .english: "Step Out"],
+        .debugVariables: [.simplifiedChinese: "变量", .english: "Variables"],
+        .debugBreakpoints: [.simplifiedChinese: "断点", .english: "Breakpoints"],
+        .debugLog: [.simplifiedChinese: "调试输出", .english: "Debug Output"],
+        .debugNoProgram: [.simplifiedChinese: "先填要调试的程序路径（或从一个文件点「调试这个文件」）", .english: "Fill in the program path first (or use “Debug This File”)"],
+        .debugStarting: [.simplifiedChinese: "正在启动调试：%@", .english: "Starting the debugger: %@"],
+        .debugStoppedAt: [.simplifiedChinese: "已停在 %@ 第 %d 行", .english: "Stopped at %@ line %d"],
+        .debugFinished: [.simplifiedChinese: "程序已结束（%@）", .english: "Program finished (%@)"],
+        .debugTimedOut: [.simplifiedChinese: "等了 %d 秒还没停下来 —— 适配器没回话", .english: "No stop event within %d seconds — the adapter is not answering"],
+        .debugStoppedByUser: [.simplifiedChinese: "已停止调试", .english: "Debugging stopped"],
+        .debugBreakpointAdded: [.simplifiedChinese: "第 %d 行已加断点", .english: "Breakpoint added at line %d"],
+        .debugBreakpointRemoved: [.simplifiedChinese: "第 %d 行断点已去掉", .english: "Breakpoint removed at line %d"],
+        .debugAdapterMissing: [.simplifiedChinese: "找不到调试适配器：%@", .english: "Debug adapter not found: %@"],
+        .debugAdapterExited: [.simplifiedChinese: "调试适配器启动即退出（退出码 %d）", .english: "Debug adapter exited on start (code %d)"],
+        .debugTimeout: [.simplifiedChinese: "调试适配器对 %@ 超时（%d 秒）", .english: "Debug adapter timed out on %@ (%d seconds)"],
+        .debugClosed: [.simplifiedChinese: "调试适配器在 %@ 之前关闭了连接", .english: "Debug adapter closed the connection before %@"],
+        .debugProtocolBroken: [.simplifiedChinese: "调试协议对不上：%@", .english: "Debug protocol mismatch: %@"],
+        .debugNoVariables: [.simplifiedChinese: "这一帧没有可读的变量", .english: "No readable variables in this frame"],
+        .debugEmptyBreakpoints: [.simplifiedChinese: "还没有断点 —— 在面板里按「在第 %d 行加断点」", .english: "No breakpoints yet — use “Add breakpoint at line %d”"],
+        .debugIdleHint: [.simplifiedChinese: "断点与单步都经 DAP 交给本机已有的调试适配器（不自研调试协议）", .english: "Breakpoints and stepping go through DAP to an existing local adapter (no home-grown debug protocol)"],
+        .menuDebugPanel: [.simplifiedChinese: "调试…", .english: "Debug…"],
+        .menuToggleBreakpoint: [.simplifiedChinese: "在当前行切换断点", .english: "Toggle Breakpoint at Current Line"],
+
     ]
 }

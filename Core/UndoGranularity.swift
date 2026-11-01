@@ -26,6 +26,8 @@ public enum UndoEditKind: String, CaseIterable, Sendable {
     case completion
     /// 片段模板展开。
     case snippet
+    /// 编辑区 AI 辅助的产出被用户点了「应用」（`FR-STD-WS-AI-001` ①：可撤销）。
+    case assist
     /// 自动配对（打 `(` 补 `)`、引号成对）。
     case pairing
     /// 整行上移 / 下移。
@@ -66,6 +68,7 @@ public enum UndoEditKind: String, CaseIterable, Sendable {
         case .paste: return .undoActionPaste
         case .completion: return .undoActionCompletion
         case .snippet: return .undoActionSnippet
+        case .assist: return .undoActionAssist
         case .pairing: return .undoActionPairing
         case .lineMove: return .undoActionLineMove
         case .duplicateLine: return .undoActionDuplicateLine
@@ -136,7 +139,11 @@ public struct EditSelectionPolicy {
                              replacementLength: Int,
                              requested: NSRange,
                              documentLength: Int) -> NSRange {
-        if replacementLength == editRange.length {
+        // 等长替换保选区（需求 ③）—— 但**零长编辑**（`跳引号` / `跳闭合符`：既不删也不插，
+        // 只是把光标挪过去）不属于「替换」：它没有可保的正文变化，取 requested 才能让光标真的跳过。
+        // 2026-11-01 实测抓出：闭合符该跳时 Core 给了 `caret + 1`，这里却按「等长」把原选区还回去
+        // ⇒ 字符没插进去、光标也没动，看起来就是「按了没反应」。
+        if editRange.length > 0 && replacementLength == editRange.length {
             return clamped(original, to: documentLength)
         }
         return clamped(requested, to: documentLength)

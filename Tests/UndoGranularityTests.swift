@@ -175,4 +175,19 @@ final class UndoGranularityTests: XCTestCase {
                                              documentLength: 12)
         XCTAssertEqual(kept, NSRange(location: 1, length: 2))
     }
+
+    /// 零长编辑（跳引号 / 跳闭合符）不是「等长替换」：正文一个字没动，光标必须走到 `requested`。
+    ///
+    /// 2026-11-01 由 `TestsUISnapshot/AutoPairingKeyProbeTests.swift` 的真视图判据抓出：
+    /// 在 `()` 中间敲 `)` 时字符没插进去（对的一半），光标却退回原位（错的一半），
+    /// 用户看到的正是「按了没反应」。根因在本策略把 `{len:0} → 空串` 当成等长替换。
+    func testZeroLengthEditTakesRequestedCaret() {
+        let skipped = EditSelectionPolicy.after(original: NSRange(location: 1, length: 0),
+                                               editRange: NSRange(location: 1, length: 0),
+                                               replacementLength: 0,
+                                               requested: NSRange(location: 2, length: 0),
+                                               documentLength: 2)
+        XCTAssertEqual(skipped, NSRange(location: 2, length: 0),
+                       "跳闭合符是零长编辑，光标必须真的跳过一格")
+    }
 }

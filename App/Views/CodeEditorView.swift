@@ -15,6 +15,9 @@ struct CodeEditorView: NSViewRepresentable {
     var pendingFormat: WorkspaceTabsModel.FormatDelivery?
     /// 「跳到第 N 行」的一次性投递（`FR-EDIT-44` 标头搜索框回车）。
     var pendingReveal: WorkspaceTabsModel.RevealDelivery?
+    /// 「编辑区 AI 辅助」被应用的那一条（`FR-STD-WS-AI-001` ①）。与格式化同一形状：
+    /// 这里只把 Core 算好的 `range/replacement` 交给 `applyEditPlan`，撤销栈仍是那一处。
+    var pendingAssist: WorkspaceTabsModel.AssistDelivery?
     var onTextChange: (String) -> Void
     var onSave: () -> Void
 
@@ -226,6 +229,13 @@ struct CodeEditorView: NSViewRepresentable {
         if fontChanged || languageChanged || context.coordinator.lastHighlightedText != textView.string {
             context.coordinator.applyHighlighting()
         }
+        // AI 辅助的产出：同样**每条投递只应用一次**，且走 `applyEditPlan`（可撤销、会带模型与行号）。
+        if let assist = pendingAssist, assist.tabID == tabID,
+           context.coordinator.appliedAssistID != assist.id {
+            context.coordinator.appliedAssistID = assist.id
+            _ = textView.applyEditPlan(range: assist.range, replacement: assist.replacement,
+                                       caret: assist.caret, kind: .assist)
+        }
     }
 
     final class Coordinator: NSObject, NSTextViewDelegate {
@@ -238,6 +248,9 @@ struct CodeEditorView: NSViewRepresentable {
         var appliedFormatID: UUID?
         /// 已经应用过的「跳到第 N 行」投递（同上）。
         var appliedRevealID: UUID?
+        /// 已应用过的那条 AI 辅助投递（`FR-STD-WS-AI-001`）：同一条投递重复应用会把用户
+        // 后续的手改撤掉，所以按 id 记账。
+        var appliedAssistID: UUID?
         /// 上一次交给视图的折叠展示面（同一条不重复应用 —— 它会重排段落高度）。
         var lastFoldPresentation = WorkspaceTabsModel.FoldPresentation()
         private var highlightWorkItem: DispatchWorkItem?

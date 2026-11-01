@@ -655,6 +655,30 @@ final class WorkspaceTabsModel: ObservableObject {
 
     @Published private(set) var formatDelivery: FormatDelivery?
 
+    /// 「编辑区 AI 辅助」的产出被点了「应用」之后的一次性投递（`FR-STD-WS-AI-001`）——
+    /// 与 `FormatDelivery` 同一形状：模型侧只算「换哪一段、换成什么」，真正落笔与撤销
+    /// 在编辑器视图那层（`NSTextView` 的 `applyEditPlan`）。
+    ///
+    /// **为什么必须走投递而不是直接改 `content`**：直接改正文等于绕过撤销栈 ——
+    /// 需求 ① 的「可撤销」会变成一句空话（用户按 ⌘Z 撤不回 AI 那一下）。
+    struct AssistDelivery: Equatable {
+        let id: UUID
+        let tabID: UUID
+        let range: NSRange
+        let replacement: String
+        let caret: Int
+    }
+
+    @Published private(set) var assistDelivery: AssistDelivery?
+
+    /// 把一条 AI 改动投递给编辑器（只投一种，重复应用同一 id 由视图侧挡）。
+    func deliverAssist(_ proposal: EditAssist.Proposal, for tabID: UUID) {
+        let caret = proposal.range.location + (proposal.replacement as NSString).length
+        assistDelivery = AssistDelivery(id: UUID(), tabID: tabID, range: proposal.range,
+                                        replacement: proposal.replacement, caret: caret)
+    }
+
+
     /// 「格式化代码」：菜单与 ⇧⌘F 走**同一个入口**（两个入口两条路迟早不一致）。
     func formatSelected() {
         guard let tab = selectedTab, !tab.isHome else {
