@@ -37,30 +37,38 @@ DEFAULT_DOCS = [
 ]
 QUEUE_FILE = "Docs/design/开发循环-任务队列.md"
 
-VERSION_ROW = re.compile(r"^\|\s*\*{0,2}(v\d+\.\d+)\*{0,2}\s*\|")
-VERSION_QUOTE = re.compile(r"^>\s*\*\*(v\d+\.\d+)")
+# 头部两种形制：表格格 `| 版本 | **v1.0.450**（…）|`、引言行 `> **版本** v1.0.30（…）`
+HEADER_ROW = re.compile(r"^\|\s*版本\s*\|\s*\**v(\d+)\.(\d+)\.(\d+)")
+VERSION_ROW = re.compile(r"^\|\s*\*{0,2}(v\d+\.\d+\.\d+)\*{0,2}\s*\|")
+VERSION_QUOTE = re.compile(r"^>\s*\*\*版本\*\*\s*(v\d+\.\d+\.\d+)")
+ROLLOVER_AT = 999
 ID_DEF = re.compile(r"^\|\s*\*{0,2}([LNR]-\d+)\*{0,2}\s*\|")
 
 
-def version_key(token: str) -> tuple[int, int]:
-    major, minor = token[1:].split(".")
-    return (int(major), int(minor))
+def version_key(token: str) -> tuple[int, int, int]:
+    major, minor, serial = token[1:].split(".")
+    return (int(major), int(minor), int(serial))
 
 
 def next_version(root: pathlib.Path, relative: str) -> str:
     lines = (root / relative).read_text(encoding="utf-8").splitlines()
-    tokens = [
-        match.group(1)
-        for line in lines
-        for match in (VERSION_ROW.match(line) or VERSION_QUOTE.match(line),)
-        if match
-    ]
+    tokens = []
+    for line in lines:
+        head = HEADER_ROW.match(line)
+        if head:
+            tokens.append(f"v{head.group(1)}.{head.group(2)}.{head.group(3)}")
+            continue
+        match = VERSION_ROW.match(line) or VERSION_QUOTE.match(line)
+        if match:
+            tokens.append(match.group(1))
     if not tokens:
         raise SystemExit(f"❌ {relative} 里找不到任何变更记录版本号（取号无从下手）")
-    major = max(major for major, _ in (version_key(token) for token in tokens))
-    minor = max(minor for token_major, minor in (version_key(token) for token in tokens)
-                if token_major == major)
-    return f"v{major}.{minor + 1}"
+    major, minor, serial = max(version_key(token) for token in tokens)
+    # 自动冻结（2026-11-01 人类主人令）：流水到 999 就不再自增，转下一段并从 0 起。
+    # 转段前该段的冻结件必须已生成（判据 `Scripts/check-doc-versions.py` 会拦）。
+    if serial >= ROLLOVER_AT:
+        return f"v{major}.{minor + 1}.0"
+    return f"v{major}.{minor}.{serial + 1}"
 
 
 def next_ids(root: pathlib.Path, prefixes: list[str], queue: str | None = None) -> dict[str, str]:

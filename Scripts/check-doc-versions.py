@@ -13,6 +13,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import pathlib
 import re
 import sys
@@ -27,6 +28,11 @@ VERSION_ANY = re.compile(r"v\d+\.\d+(?:\.\d+)?")
 CHANGELOG_HEADING = re.compile(r"^#{1,6}\s.*变更记录")
 CHANGELOG_REF = re.compile(r"-变更记录\.md")
 QUEUE_ID = re.compile(r"^\|\s*\**Q(\d+)\**\s*\|")
+
+# 自动冻结（2026-11-01 人类主人令）：`v1.0.NNN` 的流水段加到 999 就不再自增，
+# 该段的冻结件必须已经存在，活书转下一段 `vA.(B+1).0`。
+FROZEN_DIR = DOCS / "frozen"
+ROLLOVER_AT = 999
 
 HEAD_SCAN_LINES = 20
 
@@ -51,7 +57,35 @@ def header_version(lines: list[str]) -> str | None:
     return None
 
 
-def check_doc(path: pathlib.Path) -> list[str]:
+def frozen_baselines(frozen_dir: pathlib.Path, stem: str, segment: str) -> list[pathlib.Path]:
+    """找「同一本书 + 同一冻结段」的冻结件，形如 `<书名>-v1.0-20261025.md`。"""
+    if not frozen_dir.exists():
+        return []
+    return sorted(frozen_dir.glob(f"{stem}-{segment}-*.md"))
+
+
+def check_rollover(rel: str, stem: str, three: re.Match, frozen_dir: pathlib.Path,
+                   live: pathlib.Path) -> list[str]:
+    """流水到 999 ⇒ 该段必须已冻结**现在这一版**（逐字一致），否则不许再自增。
+
+    为什么要比逐字而不是「有这个文件名」：`Docs/frozen/` 里早就有 `-v1.0-20261025` 这类老基线，
+    只判「同名段冻结件存在」会被老文件蒙过去 —— 实测把活书改成 999 仍然绿，等于没有判据。
+    """
+    if int(three.group(3)) < ROLLOVER_AT:
+        return []
+    segment = f"v{three.group(1)}.{three.group(2)}"
+    digest = hashlib.sha256(live.read_bytes()).hexdigest()
+    for candidate in frozen_baselines(frozen_dir, stem, segment):
+        if hashlib.sha256(candidate.read_bytes()).hexdigest() == digest:
+            return []
+    return [
+        f"{rel}: 流水段已到 {ROLLOVER_AT}（`{segment}.{ROLLOVER_AT}`）⇒ **必须先冻结** —— "
+        f"`python3 Scripts/freeze-books.py --version {segment}` 生成 `{stem}-{segment}-YYYYMMDD.md`，"
+        f"然后活书转下一段 `v{three.group(1)}.{int(three.group(2)) + 1}.0`；未冻结不许再自增"
+    ]
+
+
+def check_doc(path: pathlib.Path, frozen_dir: pathlib.Path | None = None) -> list[str]:
     try:
         rel = path.relative_to(ROOT).as_posix()
     except ValueError:  # 自检用临时文件，不在仓内
@@ -68,8 +102,13 @@ def check_doc(path: pathlib.Path) -> list[str]:
             problems.append(
                 f"{rel}: 版本号 `{version}` 不是三段式 —— 应写成 `v<冻结段>.<次>.<流水>`（例 `v1.0.430`）"
             )
-        elif not (0 <= int(three.group(3)) <= 999):
-            problems.append(f"{rel}: 第三段 `{three.group(3)}` 超出上限 999（满了就该冻结成 v1.x）")
+        elif not (0 <= int(three.group(3)) <= ROLLOVER_AT):
+            problems.append(
+                f"{rel}: 第三段 `{three.group(3)}` 超出上限 {ROLLOVER_AT} —— 到 999 就不再自增，"
+                f"冻结该段后活书转 `vA.(B+1).0`"
+            )
+        else:
+            problems.extend(check_rollover(rel, path.stem, three, frozen_dir or FROZEN_DIR, path))
 
     for index, line in enumerate(lines, 1):
         if CHANGELOG_HEADING.match(line):
@@ -129,10 +168,36 @@ def self_test() -> int:
     }
     ok = True
     with tempfile.TemporaryDirectory() as tmp:
+        frozen = pathlib.Path(tmp) / "frozen"
+        frozen.mkdir()
+        rollover_cases = {
+            # 999 且没有该段冻结件 ⇒ 红（到 999 必须冻结）
+            "999未冻结": ("| 版本 | **v1.0.999** |\n\n正文\n", False),
+            # 998 不受该规则约束
+            "998": ("| 版本 | **v1.0.998** |\n\n正文\n", True),
+        }
+        cases.update(rollover_cases)
         for name, (body, should_pass) in cases.items():
             path = pathlib.Path(tmp) / f"{name}.md"
             path.write_text(body, encoding="utf-8")
-            found = check_doc(path)
+            if name == "999未冻结":
+                found = check_doc(path, frozen_dir=frozen)
+            else:
+                found = check_doc(path, frozen_dir=frozen)
+        # 补一例：999 且冻结件在 ⇒ 绿
+        path999 = pathlib.Path(tmp) / "有件.md"
+        path999.write_text("| 版本 | **v1.0.999** |\n\n正文\n", encoding="utf-8")
+        (frozen / "有件-v1.0-20261101.md").write_bytes(path999.read_bytes())
+        with_art = check_doc(path999, frozen_dir=frozen)
+        mark = "✓" if not with_art else "✗"
+        if with_art:
+            ok = False
+        print(f"  {mark} 样本「999已冻结」：{'绿' if not with_art else '红'}")
+
+        for name, (body, should_pass) in cases.items():
+            path = pathlib.Path(tmp) / f"{name}.md"
+            path.write_text(body, encoding="utf-8")
+            found = check_doc(path, frozen_dir=frozen)
             passed = not found
             mark = "✓" if passed == should_pass else "✗"
             if passed != should_pass:
