@@ -2,11 +2,11 @@
   "title": "面板根固定尺寸 `.frame(width:height:)` 的处置台账（队列 L-61）",
   "scope": "App/Views/**/*.swift",
   "panelRootMinWidth": 400,
-  "scannedFiles": 104,
+  "scannedFiles": 118,
   "totals": {
-    "frames": 41,
-    "panelRoots": 23,
-    "ornaments": 18
+    "frames": 46,
+    "panelRoots": 26,
+    "ornaments": 20
   },
   "intentVocab": {
     "content-stretches": "这个面板根里有能撑满高度的容器（`ScrollView` / `List` / `Table` / `Form`（滚动容器）/ `GeometryReader` / 显式的 `maxHeight: .infinity`）⇒ 内容本来就填满这个尺寸，**居中与顶对齐视觉等价**（`stretchProbe` 要在同一个视图类型里真的存在）",
@@ -405,6 +405,54 @@
       "kind": "ornament",
       "intent": "",
       "note": "品牌区的应用图标（2026-10-27 人类主人令的左图标右文字版式）—— 56pt 图标尺寸，不是面板根。本轮（第五十三批）扫面时发现它一直没登记，补登，不是本批引入"
+    },
+    {
+      "file": "App/Views/DebugPanelView.swift",
+      "symbol": "DebugPanelView",
+      "frame": "width: 720, height: 560",
+      "count": 1,
+      "kind": "panel-root",
+      "intent": "explicit-alignment",
+      "alignment": ".topLeading",
+      "note": "源码显式写 `alignment: .topLeading` —— 调试面板是断点清单 / 单步工具栏 / 变量 / 输出四段自上而下（`FR-STD-WS-TOOL-003`），顶对齐是有意的；本行 2026-11-02 补登（面板早就上盘、台账一直没跟）"
+    },
+    {
+      "file": "App/Views/EditAssistSheet.swift",
+      "symbol": "EditAssistSheet",
+      "frame": "width: 620, height: 520",
+      "count": 1,
+      "kind": "panel-root",
+      "intent": "explicit-alignment",
+      "alignment": ".topLeading",
+      "note": "源码显式写 `alignment: .topLeading` —— 编辑区 AI 辅助面板是「动作 / 边界 / 结果 / 应用」四段表单（`FR-STD-WS-AI-001`），顶对齐是有意的；本行 2026-11-02 补登"
+    },
+    {
+      "file": "App/Views/SlowQueryPanel.swift",
+      "symbol": "SlowQueryPanel",
+      "frame": "width: 760, height: 560",
+      "count": 1,
+      "kind": "panel-root",
+      "intent": "content-stretches",
+      "stretchProbe": "ScrollView {",
+      "note": "排行那一路是 `ScrollView`（`FR-DIAG-03`），加载 / 报错 / 没装扩展三路显式写 `maxHeight: .infinity` ⇒ 内容吃满高度，居中与顶对齐视觉等价；本行 2026-11-02 补登"
+    },
+    {
+      "file": "App/Views/QQQRLoginSheet.swift",
+      "symbol": "QQQRLoginSheet",
+      "frame": "width: 232, height: 232",
+      "count": 1,
+      "kind": "ornament",
+      "intent": "",
+      "note": "二维码的底衬方块（`RoundedRectangle(cornerRadius: 12).fill(...)`）—— 232pt 是码图外框尺寸，不是面板根；本行 2026-11-02 补登"
+    },
+    {
+      "file": "App/Views/QQQRLoginSheet.swift",
+      "symbol": "QQQRLoginSheet",
+      "frame": "width: 208, height: 208",
+      "count": 1,
+      "kind": "ornament",
+      "intent": "",
+      "note": "二维码图本身（`Image(nsImage:).interpolation(.none)`）—— 208pt 解码像素对齐的固定边长，不是面板根；本行 2026-11-02 补登"
     }
   ],
   "totalsNote": "`frames` / `panelRoots` / `ornaments` 都是**处数**（同一形状出现多次按处数记，例如对象树里三处 12×12 的形状算 3 处）；条目数另计（现 31 条）。",

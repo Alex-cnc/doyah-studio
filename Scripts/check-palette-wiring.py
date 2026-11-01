@@ -74,7 +74,7 @@ STATE_FLOOR = 2         # 其它状态档（实测 2：notesSearchScope / status
 ASSIGN_FLOOR = 21       # 赋值落点合计（实测 21 处 = 17 + 2 + 2）
 READ_FILES_FLOOR = 142  # 「读」扫描面文件数（实测：App 118 + Plugins 24；不含 AppState.swift）
 CATALOG_FLOOR = 39      # 命令清单条数（实测 39）
-PROBE_FLOOR = 33        # 落点表条数（实测 33）
+PROBE_FLOOR = 34        # 落点表条数（实测 34；2026-11-02 补 `slowQuery` 后 33 → 34）
 
 # 已登记的落点缺口：命令清单里有、探针落点表里没有的 id（判据 5 的**已登记**那一半）。
 _GAP_IDS = ("newNote", "newNotebook", "noteSearchScopeCurrent", "noteSearchScopeAll", "noteFavorites", "noteAllNotes")

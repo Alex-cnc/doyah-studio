@@ -276,15 +276,29 @@ def run_self_test() -> int:
         case("干净副本应 exit 0", lambda: None if run_at(clone)[0] == 0 else f"rc={run_at(clone)[0]}")
 
         # 例 2：写坏一处（`as_posix()` 退回 `str(...)`）⇒ 判红并点名 file:line
-        target = clone / "Scripts/check-doc-versions.py"
-        original = target.read_text(encoding="utf-8")
-        broken = original.replace(
-            "        relative = identity_text(path.relative_to(root))",
-            "        relative = str(path.relative_to(root))",
-            1,
-        )
-        if broken == original:
-            failures.append("例 2 准备失败：夹具锚点（`.as_posix()` 那一行）已不在盘上，请同步本自检")
+        #
+        # 夹具**不硬钉某一行**：2026-11-02 发现原锚点 `relative = identity_text(path.relative_to(root))`
+        # 早已不在 `check-doc-versions.py` 上（该处改成走 `identity_text`），例 2 直接「准备失败」，
+        # 连带例 5/6/7 三例（都指着这个文件）一起失去对象 ⇒ 实际只跑了 6/8 例。
+        # 现改为在副本里**现找**第一个真带 `.relative_to(…).as_posix()` 的行，把它换成 `str(…)`：
+        # 盘上写法再变也不会哑火；一处都找不到才报「夹具无对象」。
+        as_posix_shape = re.compile(r"[A-Za-z_][\w.]*\.relative_to\((?:[^()]|\([^()]*\))*\)\.as_posix\(\)")
+        target = None
+        original = broken = ""
+        for candidate in sorted((clone / "Scripts").glob("*.py")):
+            text = candidate.read_text(encoding="utf-8")
+            match = as_posix_shape.search(text)
+            if match is None:
+                continue
+            target = candidate
+            original = text
+            inner = match.group(0)[: -len(".as_posix()")]
+            broken = text[: match.start()] + f"str({inner})" + text[match.end() :]
+            break
+        if target is None:
+            failures.append(
+                "例 2 准备失败：副本里找不到任何 `.relative_to(…).as_posix()` 行 —— 判据与夹具同时失去对象"
+            )
         else:
             target.write_text(broken, encoding="utf-8")
 
@@ -292,14 +306,15 @@ def run_self_test() -> int:
                 code, output = run_at(clone)
                 if code == 0:
                     return "写坏一处仍 exit 0 —— 判据是空的"
-                if "check-doc-versions.py:" not in output:
+                if f"Scripts/{target.name}:" not in output:
                     return f"报红了但没点名文件与行号\n{output}"
                 return None
 
             case("写坏一处 ⇒ 判红且点名", check_written)
 
         # 例 3：还原 ⇒ 复绿（逐字节与副本原稿一致）
-        target.write_text(original, encoding="utf-8")
+        if target is not None:
+            target.write_text(original, encoding="utf-8")
 
         def check_restored():
             code, output = run_at(clone)
@@ -323,8 +338,11 @@ def run_self_test() -> int:
         extra.unlink()
 
         # 例 5：例外台账缺理由 ⇒ 判红；例 6：陈旧豁免 ⇒ 判红；例 7：合法命中 ⇒ 绿且打印例外
+        #
+        # 三个例子的「命中文件」= 例 2 现找出来的那份（`Scripts/<name>`），不再硬钉文件名 ——
+        # 硬钉 `check-doc-versions.py` 时，该文件一改写法这三例就整体失去对象（2026-11-02 实测）。
         ledger = clone / "Scripts/script-portability-exemptions.json"
-        target.write_text(broken, encoding="utf-8")
+        hit_file = f"Scripts/{target.name}" if target is not None else ""
 
         status = {"code": -1, "output": ""}
 
@@ -333,21 +351,31 @@ def run_self_test() -> int:
             status["code"], status["output"] = run_at(clone)
             return status["output"]
 
-        output = with_ledger({"file": "Scripts/check-doc-versions.py", "pattern": "as_posix", "reason": ""})
-        case("例外没写理由 ⇒ 判红", lambda: None if "没写理由" in output else f"没报「没写理由」\n{output}")
+        if target is None:
+            total += 3
+            failures.append("例 5/6/7 无法执行：例 2 没找到任何 `.as_posix()` 命中点（没有可豁免的对象）")
+        else:
+            target.write_text(broken, encoding="utf-8")
 
-        output = with_ledger({"file": "Scripts/check-literal-language.py", "pattern": "as_posix", "reason": "随便写的"})
-        case("陈旧豁免 ⇒ 判红", lambda: None if "陈旧豁免" in output else f"没报陈旧豁免\n{output}")
+            output = with_ledger({"file": hit_file, "pattern": "as_posix", "reason": ""})
+            case("例外没写理由 ⇒ 判红", lambda: None if "没写理由" in output else f"没报「没写理由」\n{output}")
 
-        output = with_ledger({"file": "Scripts/check-doc-versions.py", "pattern": "as_posix", "reason": "夹具：验证例外路径本身"})
-        case(
-            "合法例外 ⇒ 绿且打印例外条目",
-            lambda: None
-            if status["code"] == 0 and "例外命中：Scripts/check-doc-versions.py" in output
-            else f"例外路径没走通（rc={status['code']}）\n{output}",
-        )
-        ledger.unlink()
-        target.write_text(original, encoding="utf-8")
+            output = with_ledger(
+                {"file": "Scripts/check-literal-language.py", "pattern": "as_posix", "reason": "随便写的"}
+            )
+            case("陈旧豁免 ⇒ 判红", lambda: None if "陈旧豁免" in output else f"没报陈旧豁免\n{output}")
+
+            output = with_ledger(
+                {"file": hit_file, "pattern": "as_posix", "reason": "夹具：验证例外路径本身"}
+            )
+            case(
+                "合法例外 ⇒ 绿且打印例外条目",
+                lambda: None
+                if status["code"] == 0 and f"例外命中：{hit_file}" in output
+                else f"例外路径没走通（rc={status['code']}）\n{output}",
+            )
+            ledger.unlink()
+            target.write_text(original, encoding="utf-8")
 
         # 例 8：空跑防护 —— 把扫描面砍到底 ⇒ 判红
         pruned = scratch / "pruned"

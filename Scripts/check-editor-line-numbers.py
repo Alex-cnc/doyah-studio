@@ -421,9 +421,13 @@ def self_test() -> int:
         edit(
             directory,
             "App/Views/SQLEditorView.swift",
-            "final class SQLTextView: NSTextView {",
-            "final class SQLTextView: NSTextView {\n"
-            "    static func width(digits: Int) -> CGFloat { CGFloat(digits) * 7 }",
+            "final class SQLTextView: NSTextView",
+            # 在类声明**之前**插一个 extension：不依赖继承列表的写法（2026-11-02 加
+            # `UndoScopedEditor` 一致性后原锚点 `: NSTextView {` 失效），且产物仍是合法 Swift。
+            "extension SQLTextView {\n"
+            "    static func width(digits: Int) -> CGFloat { CGFloat(digits) * 7 }\n"
+            "}\n\n"
+            "final class SQLTextView: NSTextView",
         )
         return ledger
 

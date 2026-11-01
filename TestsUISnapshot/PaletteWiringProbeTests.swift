@@ -69,6 +69,7 @@ final class PaletteWiringProbeTests: XCTestCase {
         case objectSearch, routineCandidates, importData, backupRestore
         case connectionSettings, databaseStats, schemaDiff, erDiagram
         case serverObjects, diagnosis, maintenance, mcpApproval
+        case slowQuery
 
         var name: String {
             switch self {
@@ -92,6 +93,7 @@ final class PaletteWiringProbeTests: XCTestCase {
             case .diagnosis: return "isDiagnosisPresented"
             case .maintenance: return "isMaintenancePresented"
             case .mcpApproval: return "isMCPApprovalPresented"
+            case .slowQuery: return "isSlowQueryPresented"
             }
         }
 
@@ -118,6 +120,7 @@ final class PaletteWiringProbeTests: XCTestCase {
             case .diagnosis: return state.isDiagnosisPresented
             case .maintenance: return state.isMaintenancePresented
             case .mcpApproval: return state.isMCPApprovalPresented
+            case .slowQuery: return state.isSlowQueryPresented
             }
         }
     }
@@ -194,6 +197,9 @@ final class PaletteWiringProbeTests: XCTestCase {
             ("mcpApprovals", .panel(.mcpApproval)),
             ("egressLog", .panel(.egressLog)),
             ("help", .panel(.shortcutHelp)),
+            // 慢查询排行（`FR-DIAG-03`）：分派器把 `isSlowQueryPresented` 设 true，`MainWindow` 的
+            // `.sheet(isPresented:)` 打开 `SlowQueryPanel` —— 与「显示」菜单同一处面板。
+            ("slowQuery", .panel(.slowQuery)),
             ("notes", .notesEntry),
         ]
     }
