@@ -41,3 +41,17 @@
 - **自检族存量（全跑复跑，不再是推算）**：54 族 / 1054 例 / 86 锚点 · **红 8 族** = `cli-failure-readability` · `core-localization` · `design-tokens` · `language-registry` · `network-egress` · `release-version` · `terminal-tabs` · `tri-repo-parity`（与上一片推算的 8 族逐名一致）
 - **取证脚本还剩 4 个红用例**（5 failures；下一项按此顺序）：① `QueryHistoryPaneProbeTests.testClearAndDeleteBothWaitForConfirmation` 全量里红、单跑 4/4 绿 ⇒ 判为同进程共用一份笔记库的串扰，根因未判 ② `PaletteWiringProbeTests` 6 条笔记命令无落点（`newNote`/`newNotebook`/`noteAllNotes`/`noteFavorites`/`noteSearchScope{All,Current}`）③ `NotesEditorSaveProbeTests` 失败弹了框（判据④不成立）④ `RetroHostProbeTests` 夹具钉死 `~/.dsh/notes/geopolitics-weekly/packages` 恰 2 包、实测 5 包
 - 证据 `.agent/evidence/2026-11-02-probe-band-slice10.md`
+
+## 判据维护第十一片（2026-11-02 · 无台账行 · 脚本级）
+
+- **队列仍是 0 todo / 1 blocked**（`FR-STD-DB-META-002` GBase 8a 无实例）⇒ 本跳继续脚本级维护，只动一个探针文件。
+- **清掉 `RetroHost` 那两处红（同一个根因：夹具钉在活用户数据上）**：`RetroHostProbeTests` 判据 ④-a 原来断言固定扫描目录「恰好两包 `2026-W41`/`2026-W40`」，而那个目录由前门**按周投放**（盘上已是 `W40…W44` 五包）⇒ 每投放一期就以「用户数据变了」判红。改成期望值**从盘上现取**（`FileManager` 列直接子目录，成包 = 有 `index.json` + `report.md` + 期号形状 `YYYY-Www`；顺序按每包 `index.json` 的 `published` 降序、同日按目录名降序），**不经过被测的扫描器**。目录不在本机 / 一包都没有 ⇒ `XCTSkip` 如实说（跳过 ≠ 通过）。产品代码一行未动。
+- **读数**：`--filter RetroHostProbeTests` ⇒ `Executed 6 tests, 0 failures`（`disk=["2026-W44"…"2026-W40"] == model` 同样五包 · `issues=[]`）· 负例两段（期望排序改升序 ⇒ 1 failure；期望集合 `dropLast` ⇒ 1 failure），还原 sha256 `19365318…` 逐字节一致 · 全量取证脚本 **418 例 / 4 skipped / 1 failure**（本片入场 5、复跑 3）· `verify-core.sh` **5078 例 / 13 skipped / 1 failure** · 文档门禁五道 rc=0 · 提交 `24ea0189`，`local=remote=24ea0189`，pre-commit 通过，锁已释放。
+- **取证脚本剩余红（三遍全量实测，按性质分开）**：
+  - **确定性 1 条**：`PaletteWiringProbeTests.testEveryCommandHasARegisteredLanding` —— 6 条笔记命令无落点（`newNote` / `newNotebook` / `noteAllNotes` / `noteFavorites` / `noteSearchScope{All,Current}`）。next_try = 先判「命令真的落到界面了吗」：`AppCommandCatalog` 有这 6 条、分派器有没有 case、有没有视图读标志位；有落点就补探针落点表（同第八片 `slowQuery` 那条），没有就是**真产品缺口**，要进台账。
+  - **抖动 2 处（三遍里只出现一遍，未定性）**：① `NotesEditorSaveProbeTests.testN24FailureIsVisibleAndNeverAPopup` —— 弹的框是 `.notesFileUnreadable`（后台 `reloadNotes()` 读不到库时设 `errorMessage`），而夹具把库连目录一起 `chmod 0555/0444`，把**读**也弄坏了（`PRAGMA journal_mode = WAL` 需要写权限）；要么改夹具成**只坏写**、要么把判据④收成「自动保存那条路自己不弹框 + 若弹框必须点明是读不出来」，next_try 先跑 5 次单族定量。② `NotesLayoutProbeTests.testDeletingANoteAsksForConfirmationBeforeTouchingTheLibrary` 删一条后 `10 != 9`（多出一条，疑似同一只读窗口里排队的自动保存又建了一条）。
+  - **未复现**：`QueryHistoryPaneProbeTests` 那条串扰三遍全量都绿 ⇒ 仍记「根因未判」。
+- **新发现（`verify-core` 侧，非本片引入）**：`SSHTunnelRuntimeTests.testBusyPortFailsFastWithoutStartingAnything` **抖动**（单族 3 次：红 1 / 绿 2）—— 期望 `portInUse(53830)`，实测 `processExited("ssh 已退出：… OSError: [Errno 48] Address already in use")` ⇒「端口被占」有时被归因成「子进程退出」。next_try = 在归因处把 ssh 的 `Address already in use` 也判成 `portInUse`（B7 的 `SSHTunnelDiagnosis` 那条归因链）。
+- **自检族存量未复跑**（本片没动门禁脚本）：沿用第十片读数 **8 族红**（`cli-failure-readability` · `core-localization` · `design-tokens` · `language-registry` · `network-egress` · `release-version` · `terminal-tabs` · `tri-repo-parity`），下一片开工先复跑一次再动。
+- 边界：真机点验 0 次 · 217 真库 0 次（本片只动一个探针文件，这两条不在覆盖面内）。
+- 证据 `.agent/evidence/2026-11-02-probe-retro-fixture-slice11.md`
