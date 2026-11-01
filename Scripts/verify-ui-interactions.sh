@@ -97,6 +97,33 @@ set -euo pipefail
 #     末行往往与降序那份的末行相同 ⇒ 摘要不变 ⇒ 不重载 ⇒ 界面上还留着旧的排序结果
 #     （现改为逐行比对 `lastDisplayedRows`）。
 #
+# ## 第七批（v0.3.0 数据库运维面·第三跳）：`FR-STD-DB-RES-008` 客户端筛选
+#
+# `TestsUISnapshot/ResultFilterProbeTests.swift` 判这一行的**交付面**（台账备注原文是
+# 「界面点击待人工点验」）：挂真 `ResultTableView` 进离屏真窗口 → 取真 `NSTableView` 与条上的
+# 真控件 → 按钮用 `performClick(nil)`、换列 / 换运算符用 `NSPopUpButton.selectItem + sendAction`
+# （与手选同一条 action 路径）、打字走**字段编辑器**（`makeFirstResponder` →
+# `currentEditor().insertText`，与手打同一条路）。判据读**表格里真的显示成哪几行**。六条：
+#   ① 死路回归钉：**没做过任何客户端操作**时条也在场、「+」点得动，而且加出来的（还没填值的）
+#      条件**不参与筛选**（一行不少）；
+#   ② 换列：条件看的是哪一列，表格跟着变（换到 id 列 ⇒ 0 行，换回 note ⇒ 3 行）；
+#   ③ 换运算符：包含 / 不包含 / 为空 三档都改到显示的行，「为空」同时命中 NULL 与空串，
+#      并把值输入框收掉（它不需要值）；
+#   ④ 打字：逐字打进输入框，表格**当场**跟着筛，且编辑会话一直在（`currentEditor()` 不丢 ——
+#      `TitleBarSearchField` 那次「字只进得去一个」的同一类风险）；
+#   ⑤ 大小写开关：同一份数据按一下命中的行就变（`beta/BETA/gamma` ⇒ 只剩 `BETA`）；
+#   ⑥ 多条件 AND + 删单条条件 + 删光之后条还在、还能再加（入口不许跟着条件一起消失）。
+# **证不住**：真鼠标点开菜单的弹出动画与拖选文本（输入设备行为）；条右侧「清空全部条件 /
+# 生成 WHERE」两颗仍是 SwiftUI `.plain` 按钮（`ToolbarIconButton` 不落成 `NSButton`，量不到点击）。
+# 反例四段（条退回 `isClientViewActive` 才渲染 / 待填条件照旧参与筛选 / 列弹出按钮退回 SwiftUI
+# `Menu` / WHERE 不丢待填条件）各判红后逐字节还原。
+#
+# **本批在这条路上抓出两个真缺陷并修掉**（不是只补判据）：
+#   · 筛选条只在 `isClientViewActive` 时渲染，而唯一的「+ 加条件」入口就在条里 ⇒ 没排过序的用户
+#     永远加不了第一个筛选条件（与 2026-09-23 分页条死路同一个形状）；
+#   · 点「+」当场把整张表清空：新条件默认 `contains ""`，而 Foundation 里 `"abc".contains("") == false`
+#     ⇒ 一条还没填值的条件筛掉了所有行。现按 `ResultFilter.isPending` 跳过，也进不了生成的 WHERE。
+#
 # **源锚点归位（开发循环第 113 轮，队列 `L-103`）**：2026-09-29 23:25–23:36 那个会话把行渲染搬进
 # `ObjectTreeRowContent.swift`、把右键改由**行的 AppKit 捕获器**自己给出（`ObjectTreeRightClick.swift`
 # → `ObjectTreeAppKitMenu.build(object: row.object…)`），附录里原先钉的三条（`.contextMenu {` /
@@ -120,7 +147,7 @@ SWIFT="${DEVELOPER_DIR}/Toolchains/XcodeDefault.xctoolchain/usr/bin/swift"
 SCRATCH="${ROOT}/.build"
 CACHE="${ROOT}/.build-cache"
 OUT="${SCRATCH}/ui-interactions"
-FILTER="TerminalInteractionProbeTests|MultiCursorProbeTests|ObjectTreeContextMenuProbeTests|TitleBarSearchClickProbeTests|ResultCopyProbeTests|ResultSortProbeTests"
+FILTER="TerminalInteractionProbeTests|MultiCursorProbeTests|ObjectTreeContextMenuProbeTests|TitleBarSearchClickProbeTests|ResultCopyProbeTests|ResultSortProbeTests|ResultFilterProbeTests"
 while [ $# -gt 0 ]; do
     case "${1}" in
         --filter) FILTER="${2:-}"; shift 2 ;;
@@ -184,12 +211,13 @@ else:
     total, failed, unexpected = max(executed, key=lambda row: int(row[0]))
     if int(failed) or int(unexpected):
         failures.append(f"汇总非零失败：{failed} 失败 / {unexpected} 意外")
-    if int(total) < 29:
+    if int(total) < 35:
         failures.append(
-            f"只跑了 {total} 条 —— 六批二十九条（鼠标上报 / DECCKM / 右键归属 / ⌥⌘D 多光标 /"
+            f"只跑了 {total} 条 —— 七批三十五条（鼠标上报 / DECCKM / 右键归属 / ⌥⌘D 多光标 /"
             " ⌥⌘↑↓ 加光标 / ⌥ 拖拽列选 / 逐行菜单内容 / 菜单作用行 / 菜单确定性与跟随行 /"
             " 点击地图 / 留白点给键盘 / 清空按钮三态 + 回车接线 / 打字后回车交词 / 修前对照 / 整框源锚点 /"
-            " 复制四档格式与默认 TSV / 排序三档与 NULL / Shift 次要键）应当都跑到"
+            " 复制四档格式与默认 TSV / 排序三档与 NULL / Shift 次要键 / 筛选条默认在场 /"
+            " 换列与换运算符 / 逐字打值 / 大小写开关 / 多条件 AND 与删条件）应当都跑到"
         )
 
 expected = [
@@ -223,6 +251,13 @@ expected = [
     "testShiftClickAddsASecondaryKeyWithoutLosingThePrimary",
     "testShiftClickOnTheSecondaryKeyFlipsThenRemovesOnlyThatKey",
     "testClickingTheEmptyHeaderAreaChangesNothing",
+    # 第七批（v0.3.0 数据库运维面第三跳 · FR-STD-DB-RES-008）：客户端筛选
+    "testBarIsAlwaysPresentAndAddingAWaitingConditionKeepsEveryRow",
+    "testTheColumnPopupChangesWhichColumnIsFiltered",
+    "testTheOperatorPopupSwitchesContainsNotContainsAndEmptiness",
+    "testTypedValueFiltersLiveAndKeepsTheEditingSession",
+    "testCaseSensitiveToggleChangesWhichRowsMatch",
+    "testMultipleConditionsAreAndedAndRemovingThemRestoresServerOrder",
 ]
 for name in expected:
     if name not in log:
@@ -237,7 +272,7 @@ if failures:
     for item in failures:
         print(f"✗ {item}")
     sys.exit(1)
-print(f"✓ {total} 条都真跑过（六批）、都以 passed 收尾、没有跳过")
+print(f"✓ {total} 条都真跑过（七批）、都以 passed 收尾、没有跳过")
 PY
 
 echo
@@ -331,8 +366,25 @@ anchors = {
         # 第六批（`FR-STD-DB-RES-007`）：表头点击真的接到状态层。
         ("gridState.toggleSort(columnIndex: columnIndex, additive: additive)",
          "表头点击不再交给状态层（排序循环只活在 Core 里，点表头会变成「什么都没发生」）"),
+        # 第七批（`FR-STD-DB-RES-008`）：筛选条与「+ 加条件」入口默认在场。
+        ("if !result.columns.isEmpty {",
+         "筛选条退回 `isClientViewActive` 才渲染 ⇒ 没排过序的用户永远加不了第一个筛选条件（死路）"),
+        ("isClientViewActive: gridState.isClientViewActive,",
+         "条拿不到「现在有没有客户端操作」⇒ 提示要么不出现、要么一进来就喊"),
+    ),
+    "App/Views/ResultClientViewBar.swift": (
+        ("ResultFilterPopup(",
+         "列 / 运算符退回 SwiftUI `Menu`（菜单项要到弹出那一刻才建，离屏探针量不到 ⇒ 换列换运算符又只剩人点）"),
+        ("titles: ResultFilterOperator.allCases.map(filterOperatorLabel)",
+         "运算符候选不再来自 Core 的 allCases（少一档用户就选不到，判据也量不到这一档）"),
+        ("if isClientViewActive {",
+         "R-21 提示不按状态判断 ⇒ 条默认在场之后每次查询都喊一句「仅对已加载的行生效」"),
     ),
     "Core/ResultView.swift": (
+        ("public var isPending: Bool { op.requiresValue && value.isEmpty }",
+         "「还没填值」的概念消失 ⇒ 点「+」那一刻 contains \"\" 会把整张表清空（用户什么都没输入就先丢光行）"),
+        ("let effective = filters.filter { !$0.isPending }",
+         "筛选不再跳过待填条件 ⇒ 刚加的那条当场筛掉所有行"),
         ("case (true, false):\n                        return descriptor.nullsFirst",
          "NULL 的先后不再只由 nullsFirst 决定 ⇒ 降序时 NULL 会跑到最前面（NULL 位置固定这条就没钉住）"),
     ),
@@ -360,7 +412,8 @@ for relative, needles in anchors.items():
             failures.append(f"{relative} 里「{needle}」不见了：{why}")
 
 for probe in ("TerminalInteractionProbeTests", "MultiCursorProbeTests", "ObjectTreeContextMenuProbeTests",
-              "TitleBarSearchClickProbeTests", "ResultCopyProbeTests", "ResultSortProbeTests"):
+              "TitleBarSearchClickProbeTests", "ResultCopyProbeTests", "ResultSortProbeTests",
+              "ResultFilterProbeTests"):
     if not os.path.exists(os.path.join(root, f"TestsUISnapshot/{probe}.swift")):
         failures.append(f"TestsUISnapshot/{probe}.swift 不在盘上")
 
@@ -374,7 +427,7 @@ PY
 
 echo
 echo "==> 完成：证据日志在 ${OUT}/"
-echo "    本入口判住的十六条："
+echo "    本入口判住的十七条："
 echo "    · §1 FR-STD-WS-TOOL-001 鼠标上报（真 PTY 上的 SGR 报文：右下角点击列行变大、拖动 32、滚轮 64、⌥ 归本机）"
 echo "    · §1 FR-STD-WS-TOOL-001 方向键 DECCKM（?1h 时 ^[OA、复位后 ^[[B）"
 echo "    · §1 FR-STD-WS-TOOL-001 右键菜单（五项齐备且指向产品自己的动作、接管 + ⌥ 时按钮码 10 转发）"
@@ -390,4 +443,5 @@ echo "    · §1 FR-STD-WS-UI-006 清空按钮三态（空词隐藏 / 有词显�
 echo "    · §1 FR-STD-WS-UI-006 打字之后按回车那个词真的交出去（打字不许把 AppKit 的编辑会话收掉 —— 2026-10-02 晚的真缺陷）"
 echo "    · §1 FR-STD-WS-UI-006 修前对照（装饰参与命中测试的那份框必须判红 —— 这条判据量得出来）"
 echo "    · §3.4 FR-STD-DB-RES-006 复制为多格式（真视图 + 真菜单 + 真系统剪贴板：四档格式都在菜单里、默认 ⌘C = 带表头 TSV、转义不乱、只复制选中的行、INSERT 指向正在浏览的表、空选中不动剪贴板、不落文件）"
+echo "    · §3.4 FR-STD-DB-RES-008 客户端筛选（真控件点击 + 真字段编辑器打字：条默认在场、加条件不丢行、换列换运算符、逐字打值、大小写开关、多条件 AND、删光条件后入口仍在）"
 echo "    · §3.4 FR-STD-DB-RES-007 客户端排序（真表头点击 + 真 AppKit 跟踪循环：升 → 降 → 取消三档、数值按数值比、NULL 两种方向都留末尾、Shift 加 / 翻 / 删次要键、点空白处不动、排序不改列宽）"

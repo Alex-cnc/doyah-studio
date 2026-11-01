@@ -139,6 +139,50 @@ final class ResultViewTests: XCTestCase {
         XCTAssertEqual(ResultView.apply(filters: [filter], to: rows).count, 1)
     }
 
+    // MARK: - 还没填值的条件（FR-STD-DB-RES-008）
+
+    /// 「要值但还没值」的条件**不参与筛选**。
+    ///
+    /// 这不是空想出来的边界：界面上点「+」先加一条 `contains ""`，而 Foundation 里
+    /// `"abc".contains("") == false` ⇒ 老实现会当场把整张表清空（用户还没输入任何东西）。
+    func testPendingFilterDoesNotFilterAnything() {
+        let rows: [[String?]] = [["alice"], ["bob"], [nil], [""]]
+        let pending = ResultFilter(columnIndex: 0, op: .contains, value: "")
+
+        XCTAssertTrue(pending.isPending)
+        XCTAssertEqual(ResultView.apply(filters: [pending], to: rows).count, rows.count,
+                       "还没填值的条件把行筛掉了")
+        // 与「不筛选」等价：顺序也不许变
+        XCTAssertEqual(ResultView.apply(filters: [pending], to: rows).map { $0[0] ?? "NULL" },
+                       rows.map { $0[0] ?? "NULL" })
+    }
+
+    /// 填上值就立刻生效 —— 上一条的「不生效」不能变成「永远不生效」。
+    func testPendingFilterTakesEffectAsSoonAsItHasAValue() {
+        let rows: [[String?]] = [["alice"], ["bob"]]
+        let typed = ResultFilter(columnIndex: 0, op: .contains, value: "ali")
+
+        XCTAssertFalse(typed.isPending)
+        XCTAssertEqual(ResultView.apply(filters: [typed], to: rows).count, 1)
+    }
+
+    /// 「为空 / 不为空」这两档**不需要值**，空值也算填好了（不许被当成 pending 跳过）。
+    func testOperatorsThatNeedNoValueAreNeverPending() {
+        XCTAssertFalse(ResultFilter(columnIndex: 0, op: .isEmpty, value: "").isPending)
+        XCTAssertFalse(ResultFilter(columnIndex: 0, op: .isNotEmpty, value: "").isPending)
+    }
+
+    /// 一真一待：生效的那条照常筛，待填的那条不添乱（AND 里少一个不该改变结果）。
+    func testPendingFilterIsSkippedAmongActiveOnes() {
+        let rows: [[String?]] = [["alice", "30"], ["alice", "20"], ["bob", "40"]]
+        let filters = [
+            ResultFilter(columnIndex: 1, op: .greaterThanOrEqual, value: "25"),
+            ResultFilter(columnIndex: 0, op: .contains, value: ""),
+        ]
+        let filtered = ResultView.apply(filters: filters, to: rows)
+        XCTAssertEqual(filtered.compactMap { $0.first ?? nil }, ["alice", "bob"])
+    }
+
     // MARK: - 分页
 
     func testPageSlicesRows() {

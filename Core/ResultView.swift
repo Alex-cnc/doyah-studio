@@ -138,6 +138,15 @@ public struct ResultFilter: Hashable, Sendable {
         }
     }
 
+    /// 这条条件是不是**还没填值**（界面上刚点「+」加进来、用户还在打字的那一条）。
+    ///
+    /// 为什么要有这个概念：`contains` 的空串在 Foundation 里**匹配所有人 ≠ 真**
+    /// （实测 `"abc".contains("") == false`、`range(of: "") == nil`），于是「点 +」会
+    /// 当场把整张表清空 —— 用户还没输入任何东西，先丢掉了全部行（FR-STD-DB-RES-008 本轮实测）。
+    /// 「没填值」不是「匹配零行」，是**这条还没参与筛选**：界面上看得见（占位符还在），
+    /// 屏幕上该显示什么就显示什么，直到用户真的敲进一个字。
+    public var isPending: Bool { op.requiresValue && value.isEmpty }
+
     private func compareText(_ lhs: String, _ rhs: String) -> ComparisonResult {
         let options: String.CompareOptions = caseSensitive
             ? [.numeric]
@@ -201,10 +210,14 @@ public enum ResultView {
     }
 
     /// 只做筛选（多条件之间是 AND）。
+    ///
+    /// **还没填值的条件不参与筛选**（`ResultFilter.isPending`）：界面上刚点「+」那一条
+    /// 只是占了个位子，用户没输入之前拿它去比，`contains ""` 会把整张表清空。
     public static func apply(filters: [ResultFilter], to rows: [[String?]]) -> [[String?]] {
-        guard !filters.isEmpty else { return rows }
+        let effective = filters.filter { !$0.isPending }
+        guard !effective.isEmpty else { return rows }
         return rows.filter { row in
-            filters.allSatisfy { filter in
+            effective.allSatisfy { filter in
                 filter.matches(cell(row, at: filter.columnIndex))
             }
         }

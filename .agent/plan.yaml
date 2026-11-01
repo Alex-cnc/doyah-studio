@@ -22,8 +22,8 @@ tasks:
     done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-RES-008 | grep -q '✅'"
     layer: "常用增强"
     prio: "中"
-    status: todo
-    evidence: ""
+    status: done
+    evidence: ".agent/evidence/2026-11-01-FR-STD-DB-RES-008.md"
   - id: FR-STD-DB-RES-009
     goal: "分页控制条：选择每页行数（50 / 100 / 200 / 500 / 1000），"
     done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-RES-009 | grep -q '✅'"

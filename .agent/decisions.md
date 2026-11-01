@@ -7,3 +7,4 @@
 - 2026-11-01 · `FR-STD-DB-RES-007` 的「界面点击待人工点验」按**交付面未取证**处理，不当成「必须人点」 · 理由：本条验收要点（点表头排序 / 多列 / 升降 / NULL 位置）全在表头点击这一侧，可用真表头 + 真 AppKit 跟踪循环机械判 · 做法：`TestsUISnapshot/ResultSortProbeTests`（6 例）挂进 `verify-ui-interactions.sh` 第六批 · 影响：探针默认 `XCTSkip`，取证跑（`DOYAH_UI_SNAPSHOT=1`）
 - 2026-11-01 · Shift 点击不靠 AppKit 的 `sortDescriptors` 认列，改由 `SortableHeaderView` 自己记那一击 · 理由：AppKit 把新列追加在后面（`first` 还是老主键），且实测 macOS 27 离屏窗口里 Shift 点击它干脆不派发 ⇒ 只靠它，多列排序静默失效 · 影响：`super` 仍要调（列宽拖动 / 换列排序），过滤条件 = 「没派发过 + 没拖动 + 不在分界线上 + 单击」
 - 2026-11-01 · 表格「显示内容变了没有」从首末行摘要改成逐行比对 · 理由：取消排序回到服务端顺序时末行常与降序那份相同 ⇒ 摘要不变 ⇒ 不重载 ⇒ 界面上留着旧顺序（探针实测） · 影响：`ResultGrid.Coordinator` 每次 update 做一次 O(行数) 早退比较
+- 2026-11-01 `FR-STD-DB-RES-008`：把筛选条里的列 / 运算符从 SwiftUI `Menu` 换成真 `NSPopUpButton`（`ResultFilterPopup`）—— 理由：`Menu` 的菜单项只在弹出那一刻才建（实测 `itemTitles == []`、`menu.update()` 与 `menuNeedsUpdate` 都填不进），换列 / 换运算符在离屏探针里量不到；与 `TitleBarSearchField` 那次「要能量就得是真控件」的换法同源。

@@ -148,7 +148,13 @@ struct ResultTableView: View {
                         HairlineView()
                     }
 
-                    if gridState.isClientViewActive {
+                    // 客户端视图条**默认就在**（FR-STD-DB-RES-008）。
+                    //
+                    // 原先只在 `isClientViewActive` 为真时才渲染，而**唯一的「+ 加筛选条件」入口就在条里**
+                    // —— 于是没排过序的用户永远加不了第一个条件（排序后才冒出条、才有加号）。这与
+                    // 2026-09-23 那次分页条死路是同一个形状：入口藏在一个「只有用了入口才会出现」的地方。
+                    // 现在只要结果有列就渲染；「仅对已加载的 N 行生效」那句提示留给条自己按状态决定。
+                    if !result.columns.isEmpty {
                         clientViewBar(for: result)
                         HairlineView()
                     }
@@ -471,6 +477,7 @@ struct ResultTableView: View {
             loadedRowCount: result.rowCount,
             filters: gridState.filters,
             sortDescriptors: gridState.sortDescriptors,
+            isClientViewActive: gridState.isClientViewActive,
             onChangeFilter: { index, filter in gridState.updateFilter(at: index, to: filter) },
             onRemoveFilter: { index in gridState.removeFilter(at: index) },
             onAddFilter: { gridState.addFilter(columnIndex: 0) },

@@ -112,6 +112,25 @@ final class ResultFilterSQLTests: XCTestCase {
         XCTAssertEqual(text, "WHERE LOWER(CAST(\"name\" AS TEXT)) = LOWER('ok')")
     }
 
+    /// 还没填值的条件不进 WHERE：否则会生成 `LIKE '%%'`（什么都匹配）这类假条件，
+    /// 用户看不出它其实什么都没表达。全部条件都待填时等同于「没有条件」。
+    func testPendingFilterIsDroppedFromWhereClause() {
+        XCTAssertNil(ResultFilterSQL.whereClause(
+            filters: [ResultFilter(columnIndex: 0, op: .contains, value: "")],
+            columns: columns
+        ), "还没填值的条件被写进了 WHERE（会是 LIKE '%%' 这种假条件）")
+
+        let clause = ResultFilterSQL.whereClause(
+            filters: [
+                ResultFilter(columnIndex: 1, op: .equals, value: "ok"),
+                ResultFilter(columnIndex: 0, op: .equals, value: ""),
+            ],
+            columns: columns
+        )
+        XCTAssertEqual(clause, "WHERE LOWER(CAST(\"name\" AS TEXT)) = LOWER('ok')",
+                       "待填的那条没被丢掉（它的列号也越界不到，必须只留生效那条）")
+    }
+
     func testNumericLiteralDetection() {
         XCTAssertTrue(ResultFilterSQL.isNumericLiteral("10"))
         XCTAssertTrue(ResultFilterSQL.isNumericLiteral(" -3.5 "))

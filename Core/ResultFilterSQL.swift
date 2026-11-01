@@ -98,9 +98,11 @@ public enum ResultFilterSQL {
 
     /// 整组条件 → `WHERE` 片段（多条件 AND）。无条件时返回 nil。
     /// 列号越界（结果集变了、列少了）的条件**丢弃**：宁少一条，不要生成引用不存在列的 SQL。
+    /// 还没填值的条件（`isPending`）同样丢弃 —— 否则会生成 `LIKE '%%'` 这种「什么都匹配」
+    /// 的假条件，用户看不出它其实什么都没表达。
     public static func whereClause(filters: [ResultFilter], columns: [Column]) -> String? {
         let parts = filters.compactMap { filter -> String? in
-            guard columns.indices.contains(filter.columnIndex) else { return nil }
+            guard columns.indices.contains(filter.columnIndex), !filter.isPending else { return nil }
             return predicate(for: filter, column: columns[filter.columnIndex])
         }
         guard !parts.isEmpty else { return nil }
