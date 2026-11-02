@@ -1,5 +1,20 @@
 # 检查点
 
+## v0.5.0 · A2 末片（第三片：会话持久化 / 密钥 / 审计 / 配额同一口径）· 2026-11-02
+
+- **收一条**：`NFR-ALL-GATE-AI-007` 两列全 ✅。**v0.5.0 队列到此为 0 todo**（10 条 §7.1 外部卡点 + 1 条跨版携带 `FR-NTS-NOTE-ORG-002` 仍 blocked）。
+  - 核盘结论：会话存储 / 审计脱敏 / 配额账本 / 检查点 / 压缩**大半已在盘**且各有判据；本条的真缺口是两处「接线形状」：
+    ① `AgentSessionTurn` 白名单里有 `toolName` / `toolCallID`，`recordTurn` **从不接收**它们 ⇒ 重启读回只剩文本，查不到每一跳调了什么；
+    ② 循环的审计口写 `AgentAuditLog.shared`，本类其余取用点是 `agentAuditLog`（override ?? shared）⇒ **两个口子**：探针把审计指到临时目录时循环那几跳仍写进用户真审计。
+  - 落法：`recordTurn` 补两个可选参数 + 五个工具跳调用点传入；循环审计口收成 `agentAuditLog`。判据 = 新 `Tests/AgentSessionDurabilityTests` **8 例** + `TestsPlatform/AgentSecretStorageContractTests` **3 例**（0600 / 0700 / 重启可取回 / 显式清除 / 同目录 `agent.json` 无密钥）。
+- **读数（本跳实测）**：`swift test --filter "AgentSessionDurabilityTests|AgentSecretStorageContractTests"` **8 + 3 例 / 0 失败** · `env -u DOYAH_UI_SNAPSHOT ./Scripts/verify-core.sh` **5259 例 / 13 skipped / 0 失败**（5251 → +8；本跳无抖动）· `verify-ui-interactions.sh` **116 例 / 0 失败** rc=0 · 文档门禁五道 rc=0（tables 74 / numbers 三向 5259 / plan-coverage 471 空壳 0 / status 471 / version-scope 471）· `plan-batches --version 0.5.0 --check` rc=0 ⇒ **0 条待办**。
+- **反例四段**（判红后 `sha256` 逐字节还原）：审计口改回 `.shared` ⇒ 3 断言红（`58146410…`）· 工具跳不写 `toolName` ⇒ 1 红（`ed453541…`）· 写入不脱敏 ⇒ 1 红（`102081e9…`）· 密钥文件 0600 → 0644 ⇒ 1 红（`346c28ac…`）。
+- **同批数字**：`Scripts/doc-numbers.json` 与 `AGENT-SPEC.md` 两处 5251 → **5259**（Core 只含本目标 8 例；平台 3 例不计入该项数，已写明）。
+- **未验证（≠ 通过）**：真机重启点一次未做（「重启」= 新实例读同一目录）· 密钥**不在系统钥匙串**而是 0600 文件（主人 2026-10-30 令「这个 keychain 太烦人了，总是要输入」）⇒ 钥匙串那条**记未覆盖**，判据只判「不落配置文件 / 重启可取回 / 可明确清除」· 真鼠标在设置面板存 / 删 Key 未点 · `verify-all.sh` 第 11 / 18 项未执行。
+- **提交**：见本笔提交（代码 + 测试 + 台账 + 派生队列 + 证据一次提交）。
+- **下一项 = 无**（v0.5.0 为 0 todo）。下一跳按 `.agent/next-version.md` §五 派生 **v0.6.0（横切面收口：授权 / 插件离线装配 / 四项 NFR）** 队列 —— 起跳先核 §4.2 那一行与台账逐行实算的差，别照抄表里的数。
+- 证据 `.agent/evidence/2026-11-02-NFR-ALL-GATE-AI-007.md`
+
 ## v0.5.0 · A2（第二片：本地 OpenAI 兼容端点）· 2026-11-02
 
 - **收一条**：`NFR-ALL-GATE-AI-006`（本地模型优先：OpenAI 兼容本地端点，如 Ollama / vLLM）两列全 ✅。

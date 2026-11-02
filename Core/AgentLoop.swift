@@ -879,7 +879,8 @@ public struct AgentLoop: Sendable {
                                                          summary: AgentToolSummary.line(fromArgumentsJSON: invocation.argumentsJSON)))
                     await observer?.observe(.toolFinished(name: invocation.name, outcome: "denied", millis: nil))
                     recordTurn(context: context, kind: .tool, role: "tool",
-                               text: "\(invocation.name) => \(reason)", at: startedAt)
+                               text: "\(invocation.name) => \(reason)",
+                               toolName: invocation.name, toolCallID: invocation.callID, at: startedAt)
                     await audit?.record(AgentActionRecord.makeToolCall(
                         toolName: invocation.name, argumentsSummary: invocation.argumentsJSON,
                         outcome: .denied, detail: reason,
@@ -894,7 +895,8 @@ public struct AgentLoop: Sendable {
                                                          summary: AgentToolSummary.line(fromArgumentsJSON: invocation.argumentsJSON)))
                     await observer?.observe(.toolFinished(name: invocation.name, outcome: "denied", millis: nil))
                     recordTurn(context: context, kind: .tool, role: "tool",
-                               text: "\(invocation.name) => \(violation)", at: startedAt)
+                               text: "\(invocation.name) => \(violation)",
+                               toolName: invocation.name, toolCallID: invocation.callID, at: startedAt)
                     await audit?.record(AgentActionRecord.makeToolCall(
                         toolName: invocation.name, argumentsSummary: invocation.argumentsJSON,
                         outcome: .denied, detail: violation,
@@ -952,6 +954,7 @@ public struct AgentLoop: Sendable {
                                    kind: .tool,
                                    role: "system",
                                    text: "\(invocation.name) => \(reason)/\(policyDetail)",
+                                   toolName: invocation.name, toolCallID: invocation.callID,
                                    at: startedAt)
                         continue
                     }
@@ -1033,7 +1036,8 @@ public struct AgentLoop: Sendable {
                     rejected.append((invocation.name, code.rawValue))
                     observations.append("\(invocation.name): \(code.rawValue)/\(detail)")
                     recordTurn(context: context, kind: .tool, role: "tool",
-                               text: "\(invocation.name) => \(code.rawValue)", at: startedAt)
+                               text: "\(invocation.name) => \(code.rawValue)",
+                               toolName: invocation.name, toolCallID: invocation.callID, at: startedAt)
                     await audit?.record(AgentActionRecord.makeToolCall(
                         toolName: invocation.name, argumentsSummary: invocation.argumentsJSON,
                         outcome: .denied, detail: "\(code.rawValue)/\(detail)",
@@ -1050,7 +1054,8 @@ public struct AgentLoop: Sendable {
                     let summary = Self.summary(of: outcome)
                     observations.append("\(invocation.name): \(summary)")
                     recordTurn(context: context, kind: .tool, role: "tool",
-                               text: "\(invocation.name) => \(summary)", at: startedAt)
+                               text: "\(invocation.name) => \(summary)",
+                               toolName: invocation.name, toolCallID: invocation.callID, at: startedAt)
                     await audit?.record(AgentActionRecord.makeToolCall(
                         toolName: invocation.name, argumentsSummary: invocation.argumentsJSON,
                         outcome: .executed, detail: summary,
@@ -1326,11 +1331,18 @@ public struct AgentLoop: Sendable {
             + "\n[truncated:\(label):原文 \(text.utf8.count)B，此处只留前 \(budget) 字符]"
     }
 
+    /// 记一跳。`toolName` / `toolCallID` **只对工具跳有意义**：`AgentSessionTurn` 的白名单里
+    /// 一直有这两个键，但此前**没有任何调用点写过** ⇒ 回看时只看得见「read_file => ok」这类文本，
+    /// 结构化字段恒为 `nil`。工具那几处现在补上（`NFR-ALL-GATE-AI-007` ①：重启读回的不只是条数，
+    /// 还要知道每一跳调了什么）。
     private func recordTurn(context: AgentLoopContext, kind: AgentSessionTurn.Kind,
-                            role: String, text: String, at: Date) {
+                            role: String, text: String,
+                            toolName: String? = nil, toolCallID: String? = nil,
+                            at: Date) {
         guard let sessionStore else { return }
         let turn = AgentSessionTurn(sessionID: context.sessionID, workspace: context.workspace,
-                                    kind: kind, role: role, text: text, at: at)
+                                    kind: kind, role: role, text: text,
+                                    toolName: toolName, toolCallID: toolCallID, at: at)
         // 会话还没建就先建（循环可以开在一个新会话上）。
         if sessionStore.load(sessionID: context.sessionID, workspace: context.workspace).session == nil {
             try? sessionStore.createSession(workspace: context.workspace, title: context.sessionID,

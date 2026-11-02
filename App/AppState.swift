@@ -4519,7 +4519,11 @@ final class AppState: ObservableObject {
                              registry: whitelisted.registry,
                              // `FR-AI-17` 会话持久化：每跳落一份 `.jsonl`（与其余本机数据同一处，不另开文件体系）。
                              sessionStore: AgentSessionStore(directory: AgentSessionStore.defaultDirectory),
-                             audit: AgentAuditLog.shared,
+                             // `NFR-ALL-GATE-AI-007` ③「不出现第二套实现」：审计口走**本类唯一那个取用点**
+                             // （`agentAuditLog` = override ?? shared），不在这里另写一次 `.shared` 直取。
+                             // 两处取用同一个对象在生产里看不出差别，但探针把审计指到临时目录时，
+                             // 循环那几跳会**写进用户的真审计**（`agent-audit.jsonl`）—— 那正是这条判据要防的形状。
+                             audit: agentAuditLog,
                              observer: observer,
                              // `FR-AGT-UX-CONV-007` 中途干预：给循环一个**干预信箱** ——
                              // 斜杠 `/steer` 往这里塞 `redirect`，循环在每跳边界取（当前步做完生效，
