@@ -1,5 +1,18 @@
 # 检查点
 
+## v0.7.0 收口跳：队列清零后的存量红三分标注（无台账行）· 2026-11-03
+
+- **本跳不开维护跳**：`rules.md`「判据维护跳的出口」第 5 条 —— 一个版本收口后维护跳总预算 ≤ 3 跳，v0.7.0 收口后已用满 3 跳（报数 / 判据 E · 217 证据 / 判据 F · 判据 F 接线）。本跳做的是同条**第 3 步的硬要求**（剩下的红三分标注写进 checkpoint），判据一字未改。
+- **队列**：`plan-batches --check` rc=0「0 条待办，台账复算一致」；`plan.yaml` **0 todo / 28 blocked**（18 条跨版携带只列表可见）。没有可认领的 todo ⇒ 走四出口第 1 条（写收口）。
+- **全量读数（本跳实跑）**：`verify-all.sh --keep-going` 项块 **19** · 失败 **10 项（31 处）** · 平台跳过 0 · **未执行项 = 无**。上一跳 11 项 / 33 处，差 1 项 2 处正是第 1 项那条隧道抖动（本轮绿）⇒ 与「抖动」定性一致。
+- **三分标注**：确定性失败 **31 处 / 10 项**（逐条单跑 rc 与全量逐处相同，`.build/triage-20261103-041019.tsv`）· 抖动 **1**（`SSHTunnelRuntimeTests.testBusyPortFailsFastWithoutStartingAnything`，族外，本轮绿，历史单族连跑 0/1/1）· 未复现 **0**（没有一条给不出复现步骤）。
+- **根因五族**（下次按族清，不按项清）：① 自检「绿对照 / 末例」红 = 真仓库本身红（5 处，清真红即自愈：`editor-surface-tokens --self-test` / `agent-provider-presets --self-test` / `terminal-tabs --self-test` / `tri-repo-parity --self-test` / `plugin-assembly` 例 20）② 真产品面红（12 处；最大一笔 `check-format-arguments` **230 处 > 预算 190** + 25 条占位符对账）③ 生成物没重出（3 处，`gen-platform-parity` / `gen-studio-win-align` / `gen-platform-board --check` 全是这句）④ 夹具锚点失效 / 脚本崩（4 处；`check-release-version --self-test` **rc=2**：`build-app.sh` 找不到 `<string>3</string>`；`check-board-parity` **Traceback** 仍在）⑤ 跨仓快照落后（1 处：`check-path-ownership.py` 期望 `248ab90e…` 实测 `3a774482…`）。
+- **第 11 项单列**：两档各三次都「等了 120 秒没等到 dump」。手工带同一套 env 启动 `dist/DoyahStudio.app` ⇒ 30 s 内无 dump、stderr 只有 `sandbox_extension_issue_file_to_process failed … (Operation not permitted)`。**红在「真启动取证」这一层，菜单文案未判**。next_try：查 `App/DoyahStudioApp.swift:41` 的 `isMenuDumpProbe` 启动路径（`open -a` / 容器内落盘 / 激活策略），并核该包到底带不带 `app-sandbox`（`codesign -d --entitlements` 只见 `network.client`，与第 11 项标题「（沙箱）」不符）。
+- **自检族读数（本跳实跑全量，不 `--no-run`）**：`check-self-test-counts.py` **rc=1** —— 族 56 / 例 1074 / 锚点 86，**14 族红 / 42 族绿**（旧 checkpoint 记的「8 族红」已过期）。
+- **未验证（≠通过）**：31 处红**一处未修**（本跳只分类、不改判据）；第 11 项产品面结论；14 族红的根因只到脚本层（没逐族进源码定位）。
+- **卡在谁（28 条 blocked）**：217 主机（TCP 5432 超时 / 3306 `No route to host` / 22 `Host is down`）· 真 MySQL / PG / GBase · 真云端 · 真 MCP 对端 · 真 QQ 凭据 · 另两端在场（`DIST-001` / `PARITY-001`）· 主人拍板（`LANG-001` ①、`LANG-003` ②、`WS-AI-002`、Notes 分发签名）。
+- 证据 `.agent/evidence/2026-11-03-v070-closure-triage.md`。
+
 ## 判据 F 接进闭环第 5 项（无台账行 · 门禁接线）· 2026-11-03
 
 - **没有台账行**（不改任何需求状态）；由来 = 上一片自己留的 next_try「判据 F 还没接进 `verify-all`，只在手工 `--check` 里生效」= 有判据没闭环。
