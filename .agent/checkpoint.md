@@ -164,4 +164,5 @@
 - **读数**：`swift test --filter TodoInlineEditTests` **7 例 / 0 失败** · `--filter "TodoRepeatTests|TodoSyncFamilyTests|TodoNoteLinkTests|TodoQueryOrganizationTests"` **36 例 / 0 失败** · `verify-core.sh` **5168 例 / 13 skipped / 0 失败**（5143 → +25）· `verify-ui-interactions.sh` **116 条全跑 / 无跳过 / 源锚点全在** · `check-doc-numbers` 三向 5168 ✅ · 反例三段各判红后 sha256 逐字节还原。
 - **队列口径（本片后实测）**：`plan-batches --version 0.4.0 --check` rc=0；`plan.yaml` = **4 todo + 1 blocked**；`batches.yaml` 只剩 **N3 4 条**（N1 / N2 已空、自动消失）；台账 §4.2 v0.4.0 7 → **5**（4 / 1），未闭 136 → **134**（🟡 37 / ⬜ 97）。
 - **未验证（≠通过）**：真鼠标双击 / 真菜单点击 / 真按撤销未点 · **加密未覆盖**（本仓无 SQLCipher；判据只判同一个库文件与同一条导出链路）· 标签回读按字母序（`todo_tag` 的 `ORDER BY tag ASC`，存量口径）· `verify-all.sh` 收尾行仍未拿到（第 11 项打包 `.app`、第 18 项生成物一致性未执行）。
+- **提交**：`f27d7a77`（local = remote = f27d7a77，pre-commit 三项全过；本 checkpoint 落号见下一笔“证据补号”）。
 - **下一批 = N3（4 条）**：`TODO-CALENDAR-001/002` · `TODO-STATE-001/002`。起跳先看清：日历那一屏早在盘（`TodoCalendar` / `TodoCalendarPane`），缺口是「按发生日把重复规则铺开」与「完成 / 改期同一事务 + 日历不另存」两条判据的读数；**重复规则铺开要在 Core 一处算（`TodoRepeat`），日历不许自己推日子**。
