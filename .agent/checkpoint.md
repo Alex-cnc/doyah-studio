@@ -145,3 +145,12 @@
 - **未验证（≠通过）**：真鼠标点「另存 / 以我这版为准」未点（机械证据在 Core 与 `AppState` 方法层，界面只到源锚点与构建）· 段落级并集 / CRDT 不在本条（能力书 5.1.9 边界）· `verify-all.sh` 收尾行仍未拿到（第 11 项打包 `.app`、第 18 项生成物一致性未执行）· 四条 HEAD 存量红（icon-only 15 / format-args 20 / design-tokens 17 / panel-root 扫描面 118↔119）已在 `/tmp` 的 HEAD 工作树复跑，读数逐字相同 = **本片未引入**。
 - **下一批 = N2（4 条）**：`FR-NTS-TODO-LIST-001/002/003` · `FR-NTS-TODO-LINK-001`（待办本体 / 清单 / 分组筛选 / 与笔记双向转化）。盘上已有 `Todo` 模型 + `todo` 表（schema v5/v9）+ `TodoListView`，起跳先核「已有实现 vs 需求四字段与五列」的差，别重写迁移。
 - **落提交号**：`f1d45153`（本片代码 + 界面 + 台账 + 派生队列 + 证据一次提交；已推送，`local = remote = f1d45153`）；pre-commit 三项全过（需求编号形状 / 越界 `--mine hugehippo` 受检 0 行 / AGENTS 索引）。
+
+## v0.4.0 · N2a 收口（2026-11-02 · 接管陈旧锁的补完跳）
+
+- 上一跳（持锁 45 分钟被判陈旧）留下**未提交**的整片改动：LIST-003 + LINK-001 的代码 / 测试 / 台账全在盘，无提交、无证据文件。本跳先验证再提交，不重写。
+- 收两条：`FR-NTS-TODO-LINK-001` / `FR-NTS-TODO-LIST-003`（两列全 ✅）。提交 `4469e5d3`（local = remote）。
+- 读数：`--filter "TodoNoteLinkTests|TodoQueryOrganizationTests"` **18 例 0 失败** · `verify-core.sh` **5143 / 13 skipped / 0 失败**（复跑 1 失败 = `SSHTunnelRuntimeTests.testBusyPortFailsFastWithoutStartingAnything` 存量抖动，单族 3/3 绿）· `verify-ui-interactions.sh` **116 条全跑 / 无跳过** rc=0 · 文档门禁八道 rc=0（status 471 / version-scope 471）。
+- **本跳修掉一处假绿（判据自身）**：LIST-003 的源树判据只读 `CodingKeys` 里写着一串名字的那一行 ⇒ 另起一行 `case listName` 能绕过（实测 6/6 全绿）。改成扫**整个枚举体**后，两种注入形状各判红 2 处，`Todo.swift` 还原 `026bc317…` 逐字节一致，`TodoQueryOrganizationTests` 复跑 6/6。
+- 队列口径：`plan-batches --version 0.4.0 --check` rc=0 ⇒ **7 todo + 1 blocked**（`NOTE-ORG-002` 仍 blocked：判据互斥，等契约裁决）。
+- 下一项：`FR-NTS-TODO-LIST-001`（待办本体四字段）。**起跳先看清 ③**：概设 §15.6 明写「存储层加密若开启属整库层的事」，本仓笔记侧至今**没开启**（无 SQLCipher）⇒ 判据③只能按「与笔记同一存储 / 导出链路、不另开第二套、导出不带密钥」写，**加密本身记未覆盖**，不许报通过；新增的「重复规则」落 schema v14 并复用 `Core/Reminder.swift` 的 `ReminderRule`（不新造枚举）。
