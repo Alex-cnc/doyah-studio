@@ -1,5 +1,26 @@
 # 检查点
 
+## v0.6.0 · 判据债第四片（收尾）：`FR-STD-WS-AI-001` 编辑区 AI 辅助 · 2026-11-02
+
+- **收一条（双 ✅）**：`FR-STD-WS-AI-001`。这一条原本是「实现 ✅ / 判据 ⬜」，备注里那句「23 例 + 6 例全绿」是旧读数，而且那 6 例当时是「取证件」（不在闭环里，跳过也不会红）。
+- **本跳实跑复现旧读数**：`EditAssistTests` 23 例 / 0 失败、`EditAssistProbeTests`（`DOYAH_UI_SNAPSHOT=1`）6 例 / 0 失败 / 0 跳过。再逐条对四条契约，查出**两处真缺口**：
+  ① 需求 ③ 写明三档（选中片段 / 当前文件 / **不发送**），盘上只有两档 ⇒ 「不发送」这一档根本不存在；
+  ② 拨在「只发选中片段」而**没选中**时 `outbound` 实际退回整篇，界面那行却仍写「将发送：选中片段」—— 契约 ③ 的「写明范围」在这一格是假话。
+- **落法**：`Boundary.none`（第三档；`gate` 里先于端点判定拦下 `.notSending`，`request` 返 nil）+ `Context.outboundScope`（界面那一行写**实际**范围，没选中时补一句「这一档实际发整个文件」）+ `OutboundSummary.displayArguments` 对 `.none` 给空 + 拒绝文案两语；选择器本来就由 `allCases` 出档位，所以第三档自动上界面。
+- **判据**：`EditAssistTests` **23 → 26 例**、`EditAssistProbeTests` **6 → 9 例**（新三条：不发送档**请求数 0** · 连不上如实说并带原因原文 · 应用后**真 `CodeTextView` + 真 `undoManager`** 一次 ⌘Z，视图与模型正文都逐字回到原文 —— 与 `NAV-014` ② 同一口径，不再是「源锚点算可撤销」）。
+- **门禁侧同一批改**：`verify-ui-interactions.sh` 把 `EditAssistProbeTests` 从「取证件」收进闭环（`FILTER` 加一族、下限 **121 → 130**、期望名单 +9 条）⇒ 以后这九条不进/被跳过就判红。
+- 读数：`EditAssistTests` **26 / 0** · `EditAssistProbeTests` **9 / 0 / 0 跳过** · `verify-ui-interactions` **130 条全跑、无跳过**（exit 0）· `verify-core` **5325 / 13 skipped / 0 失败**（+3，同批写进 `doc-numbers.json` + `AGENT-SPEC.md`）· `check-status-gap` **1 → 0 行** · 文档门禁 invariants / tables / plan-coverage / status-consistency / version-scope / doc-versions / doc-layout / agents-index / literal-language / language-registry / core-localization / palette-wiring / button-icon-only / design-tokens / empty-action-buttons rc=0 · `plan-batches --version 0.6.0 --check` rc=0（0 todo / 18 blocked）。
+- 反例三段（判红后 `sha256 87024585…` 逐字节还原）：`outboundScope` 退回 `boundary` ⇒ 3 红 · 删 `.none` 的 gate 分支 ⇒ 2 红 · `.none` 的 `outbound` 返回整篇 ⇒ 3 红。
+- **未验证（≠ 通过）**：真模型端点 / 真局域网请求未做 · 真鼠标点面板与编辑菜单四条未点 · 观感未看 · `verify-all.sh` 第 11 / 18 项未执行 · `check-format-arguments` 存量红（225 > 188，与本片无关，上一片读数相同）。
+- 证据 `.agent/evidence/2026-11-02-FR-STD-WS-AI-001.md`
+
+## 下一项：把 `check-status-gap.py` 接成闭环第 19 项（**不是台账行，是门禁债**）
+
+- 现状：`check-status-gap` 已 **0 行**（这一片清零），`check-doc-numbers` 的 `checkScriptParity` 只剩它这一笔红 —— 按规矩「两条都清零了才接」，现在**条件已满足**。
+- 起跳先看清代价：接它要同批重编「项数」**四种形状 47 处**（`doc-numbers.json` 的 `gate-items`：`gateBlocks 18→19` / `closeWrites 1` / `chineseNumerals 5` / `skipPrints 1` / `itemMentions 20` / `itemEnumerations 2`；`spellout` 十八 → 十九；`AGENT-SPEC.md` 与三书里**现状语境**的「十八项」改成「十九项」，历史变更行与 §9 整节**不动** —— `check-doc-numbers` 已按 skipSections 跳过它们）。
+- 接法：`Scripts/verify-all.sh` 第 19 项块 = `python3 Scripts/check-status-gap.py`，失败信息保留它自带的「补判据 = 点名本仓已有测试 + 跑一次读数」那句；接完单跑 `check-doc-numbers` 必须 rc=0，再单跑 `check-status-gap` rc=0 与一段反例（把台账某行判据格改回 ⬜ ⇒ 闭环判红 ⇒ 还原）。
+- 之后：`plan.yaml` 0 todo / 18 blocked ⇒ v0.6.0 机器面已无活；下一版按 `.agent/next-version.md` §五 派生（先核 §4.2 与台账逐行实算的差）。
+
 ## v0.6.0 · 判据债第三片：`FR-STD-WS-NAV-014` 代码格式化 · 2026-11-02
 
 - **收一条（双 ✅）**：`FR-STD-WS-NAV-014`。上一片把它留在 `check-status-gap`（实现 ✅ / 判据 🟡），取证写着「3 例（2 绿、1 例真菜单树需真 App 进程而跳过）」—— **跳过不算通过**，等于零证据。
@@ -10,7 +31,7 @@
 - **未验证（≠ 通过）**：真鼠标点菜单 / ⇧⌘F 一条没点 · 观感未看 · 真拔网线未做 · `verify-all.sh` 第 11 / 18 项未执行。
 - 提交：`a19f5b72`（已推送，local = remote；锁已释放，工作树干净）。证据 `.agent/evidence/2026-11-02-FR-STD-WS-NAV-014.md`。
 
-## 下一项：`FR-STD-WS-AI-001`（编辑区 AI 辅助，判据 ⬜，实现 ✅）
+## 上一项（本跳已收）：`FR-STD-WS-AI-001`（编辑区 AI 辅助）
 
 - 起跳先按需求书四条契约逐条对：差异先出 / 模型与端点可见 / 数据边界默认保守 / 不重复造本机能力；盘上已有 `EditAssistTests` 23 例 + `EditAssistProbeTests` 6 例的备注，**要先复跑读数**，不许照抄旧数。
 - 它清零之后同批把 `check-status-gap.py` 接成 `verify-all.sh` 一环（`check-doc-numbers` 的 `checkScriptParity` 那一笔债），接的时候要同批重编「十八项」四种形状。

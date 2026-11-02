@@ -164,6 +164,129 @@ final class EditAssistProbeTests: XCTestCase {
         XCTAssertEqual(textView.string, "xyz!", "同一条投递被重复应用 = 用户的手改被顶掉")
     }
 
+    // MARK: - ⑤ 契约 ③ 第三档：拨到「不发送」⇒ 一次请求都不发
+
+    @MainActor
+    func testNoSendBoundaryNeverCallsTheRunner() {
+        let model = EditAssistModel()
+        var calls = 0
+        model.runner = { _ in
+            calls += 1
+            return LLMResponse(text: "不该被调用")
+        }
+        model.open(action: .explain, context: makeContext(),
+                   endpoint: "http://127.0.0.1:11434/v1", model: "qwen2.5-coder")
+        XCTAssertTrue(model.canSend, "端点是好的，这一档本身可发")
+
+        model.boundary = .none
+        XCTAssertEqual(model.outboundSummary?.scope, EditAssist.Boundary.none)
+        XCTAssertFalse(model.canSend, "拨到「不发送」之后「发送」必须点不动")
+        model.send()
+        XCTAssertEqual(calls, 0, "「不发送」档却发了请求 —— 契约 ③ 破在发请求前那一关")
+        XCTAssertEqual(model.phase, .refused(.notSending))
+
+        // 界面那一半：三档都在选择器里（枚举驱动，不是手写两档）。
+        let source = try! String(contentsOfFile: #filePath
+            .replacingOccurrences(of: "TestsUISnapshot/EditAssistProbeTests.swift", with: "")
+            + "App/Views/EditAssistSheet.swift", encoding: .utf8)
+        XCTAssertTrue(source.contains("EditAssist.Boundary.allCases"),
+                      "面板的边界选择器必须由 `Boundary.allCases` 出档位，否则加了第三档界面上也看不见")
+    }
+
+    // MARK: - ⑥ 契约 ②：连不上就如实说「连不上」（不许假装在跑）
+
+    private struct ConnectionRefused: LocalizedError {
+        var errorDescription: String? { "connect ECONNREFUSED 127.0.0.1:11434" }
+    }
+
+    @MainActor
+    func testUnreachableSaysSoInsteadOfPretending() throws {
+        let model = EditAssistModel()
+        var applied = 0
+        model.apply = { _ in applied += 1 }
+        model.runner = { _ in throw ConnectionRefused() }
+        model.open(action: .explain, context: makeContext(),
+                   endpoint: "http://127.0.0.1:11434/v1", model: "qwen2.5-coder")
+        model.send()
+
+        let deadline = Date().addingTimeInterval(3)
+        while Date() < deadline {
+            if case .sending = model.phase { hostPumpOnce() } else { break }
+        }
+        guard case .refused(.unreachable(let detail)) = model.phase else {
+            return XCTFail("连不上时界面应当说「连不上」，实测 = \(model.phase)")
+        }
+        XCTAssertTrue(detail.contains("ECONNREFUSED"), "原因被吃掉了，界面只剩一句笼统的话")
+        XCTAssertFalse(model.canApply, "没有产出时不许出现「应用」")
+        XCTAssertEqual(applied, 0)
+    }
+
+    // MARK: - ⑦ 契约 ①：应用之后 ⌘Z 能逐字回到原文
+
+    private struct TabsHarness: View {
+        @ObservedObject var tabs: WorkspaceTabsModel
+        let tabID: UUID
+        var body: some View {
+            CodeEditorView(
+                tabID: tabID,
+                text: tabs.tabs.first(where: { $0.id == tabID })?.content ?? "",
+                language: tabs.tabs.first(where: { $0.id == tabID })?.language ?? .plainText,
+                pendingAssist: tabs.assistDelivery,
+                onTextChange: { tabs.updateContent($0, for: tabID) },
+                onSave: {},
+                onFormat: {}
+            )
+        }
+    }
+
+    /// 与 `FR-STD-WS-NAV-014` ② 同一口径：真 `CodeTextView` + 真 `undoManager`，
+    /// 量「应用 → 一次撤销 → 视图与模型正文都逐字等于原文」。
+    /// 只判源锚点会放过「应用了但绕开撤销栈」，只判 Core 会放过「策略对、编辑器没走那条路」。
+    @MainActor
+    func testApplyingAssistIsUndoableBackToTheExactOriginal() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("assist-undo-\\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let file = directory.appendingPathComponent("Demo.swift")
+        let original = "let a = 1\n"
+        try original.write(to: file, atomically: true, encoding: .utf8)
+
+        let tabs = WorkspaceTabsModel()
+        tabs.openFile(at: file)
+        guard let tab = tabs.tabs.first(where: { !$0.isHome }) else {
+            return XCTFail("文件没开成页签")
+        }
+        tabs.select(tab.id)
+
+        let host = UISnapshot.LiveHost(TabsHarness(tabs: tabs, tabID: tab.id),
+                                       size: CGSize(width: 640, height: 240))
+        host.pump(0.4)
+        let textView = try XCTUnwrap(
+            UISnapshot.LiveHost<TabsHarness>.findViews(ofType: CodeTextView.self, in: host.hosting).first,
+            "真编辑器不在宿主视图树里 —— 判据的入口没了"
+        )
+        XCTAssertEqual(textView.string, original)
+
+        let proposal = EditAssist.Proposal(
+            action: .rewrite, range: NSRange(location: 8, length: 1), original: "1",
+            replacement: "42", diff: AgentTextDiff.lines(before: "1", after: "42")
+        )
+        tabs.deliverAssist(proposal, for: tab.id)
+        host.pump(0.6)
+        XCTAssertEqual(textView.string, "let a = 42\n", "点了「应用」之后编辑器里没变")
+        XCTAssertEqual(tabs.tabs.first(where: { $0.id == tab.id })?.content, "let a = 42\n")
+
+        guard let undoManager = textView.undoManager else {
+            return XCTFail("编辑器没有撤销管理器 ⇒ 「可撤销」这条判据无从成立（不是通过）")
+        }
+        XCTAssertTrue(undoManager.canUndo, "应用 AI 产出没有进撤销栈 ⇒ ⌘Z 拿不回来")
+        undoManager.undo()
+        host.pump(0.3)
+        XCTAssertEqual(textView.string, original, "撤销之后与原文不逐字一致")
+        XCTAssertEqual(tabs.tabs.first(where: { $0.id == tab.id })?.content, original,
+                       "模型里的正文没有跟着撤销回来（下一次保存会把 AI 改动写回磁盘）")
+    }
+
     // MARK: - ④ 解释只出文字，没有可应用的东西
 
     @MainActor

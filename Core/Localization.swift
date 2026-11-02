@@ -3479,10 +3479,14 @@ public enum LKey: String, CaseIterable, Sendable {
     case editAssistActionFixError
     case editAssistBoundarySelection
     case editAssistBoundaryFile
+    case editAssistBoundaryNone
     case editAssistOutboundSelection
     case editAssistOutboundFile
+    case editAssistOutboundNone
+    case editAssistOutboundNoSelectionHint
     case editAssistLocalAlternativeCompletion
     case editAssistRefusedNothingToSend
+    case editAssistRefusedNotSending
     case editAssistRefusedMissingInstruction
     case editAssistRefusedLocalCapability
     case editAssistRefusedEndpoint
@@ -6822,10 +6826,14 @@ public enum LocalizedStrings {
         .editAssistActionFixError: [.simplifiedChinese: "对报错给修法", .english: "Fix the Error"],
         .editAssistBoundarySelection: [.simplifiedChinese: "只发选中片段", .english: "Send Selection Only"],
         .editAssistBoundaryFile: [.simplifiedChinese: "发送整个文件", .english: "Send Whole File"],
+        .editAssistBoundaryNone: [.simplifiedChinese: "不发送", .english: "Send Nothing"],
         .editAssistOutboundSelection: [.simplifiedChinese: "将发送：选中片段 · %d 行 · %d 字", .english: "Will send: selection · %d lines · %d characters"],
         .editAssistOutboundFile: [.simplifiedChinese: "将发送：整个文件 · %d 行 · %d 字", .english: "Will send: whole file · %d lines · %d characters"],
+        .editAssistOutboundNone: [.simplifiedChinese: "将发送：什么都不发送（一个字节都不出本机）", .english: "Will send: nothing at all (not a single byte leaves this machine)"],
+        .editAssistOutboundNoSelectionHint: [.simplifiedChinese: "当前没有选中任何内容 ⇒ 这一档实际发的是整个文件（按事实写，不按开关上的字念）", .english: "Nothing is selected — this setting actually sends the whole file (the line above states the fact, not the switch label)"],
         .editAssistLocalAlternativeCompletion: [.simplifiedChinese: "本机已有补全（词法 / SQL / 路径三路灰字），不需要走模型", .english: "Local completion already exists (lexical / SQL / path ghost text) — no model needed"],
         .editAssistRefusedNothingToSend: [.simplifiedChinese: "没有可发出去的内容（先选中一段，或打开一个非空文件）", .english: "Nothing to send — select some text or open a non-empty file"],
+        .editAssistRefusedNotSending: [.simplifiedChinese: "数据边界选了「不发送」—— 这次一个字节都不出去", .english: "The data boundary is set to send nothing — not a single byte leaves this machine this time"],
         .editAssistRefusedMissingInstruction: [.simplifiedChinese: "先写一句要改成什么样", .english: "Describe the change first"],
         .editAssistRefusedLocalCapability: [.simplifiedChinese: "这件事本机能算，不必问模型", .english: "This is computed locally — no model needed"],
         .editAssistRefusedEndpoint: [.simplifiedChinese: "模型端点未配置 —— 先去设置里填一个（不是「连不上」）", .english: "Model endpoint is not configured — set one up first (this is not a connection failure)"],

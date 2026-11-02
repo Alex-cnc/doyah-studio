@@ -187,6 +187,60 @@ final class EditAssistTests: XCTestCase {
         XCTAssertTrue(UndoEditKind.assist.isAtomic, "应用 AI 产出是一次动作 = 一个撤销步")
     }
 
+    // MARK: - 数据边界第三档（契约 ③：不发送）
+
+    /// 需求原文的第三档「不发送」：拨到它，**一个字节都不许出本机**，且拦在发请求之前。
+    func testBoundaryNoneRefusesBeforeAnyRequest() {
+        let context = context(selection: NSRange(location: 0, length: 3), boundary: .none)
+        XCTAssertEqual(context.outbound, "", "「不发送」档不许把正文交出去")
+        XCTAssertEqual(context.outboundSummary.scope, .none)
+        XCTAssertEqual(context.outboundSummary.textLength, 0)
+        XCTAssertEqual(EditAssist.gate(action: .explain, context: context, endpoint: "http://x", model: "m"),
+                       .notSending, "端点 / 模型都配好了也不许发 —— 边界挡在发请求之前")
+        XCTAssertEqual(EditAssist.gate(action: .rewrite, context: context, endpoint: "", model: ""),
+                       .notSending, "「不发送」比「端点没配」更该先说（说的是人自己拨的那一档）")
+        XCTAssertNil(EditAssist.request(action: .explain, context: context))
+    }
+
+    /// 界面写明的范围必须是**实际发出去的范围**：拨在「只发选中片段」而没选中时，
+    /// `outbound` 退回整篇 —— 那一行就要写「整个文件」，写「选中片段」就是撒谎。
+    func testOutboundScopeStatesWhatIsActuallySent() {
+        let noSelection = context(selection: NSRange(location: 0, length: 0), text: "abc\ndef")
+        XCTAssertEqual(noSelection.outbound, "abc\ndef")
+        XCTAssertEqual(noSelection.outboundSummary.scope, .file,
+                       "标签写「选中片段」而实际发整篇 —— 契约 ③ 的「写明范围」在这一格是假的")
+        XCTAssertTrue(noSelection.outboundScopeNeedsExplanation)
+        XCTAssertEqual(noSelection.outboundSummary.lineCount, 2)
+        XCTAssertEqual(noSelection.outboundSummary.textLength, 7)
+
+        let withSelection = context(selection: NSRange(location: 0, length: 3), text: "abcdef")
+        XCTAssertEqual(withSelection.outboundSummary.scope, .selection)
+        XCTAssertFalse(withSelection.outboundScopeNeedsExplanation)
+
+        let wholeFile = context(boundary: .file, text: "abc")
+        XCTAssertEqual(wholeFile.outboundSummary.scope, .file)
+        XCTAssertFalse(wholeFile.outboundScopeNeedsExplanation, "整篇档本来就发整篇，不需要再补一句")
+    }
+
+    /// 「不发送」那一行不印数字（模板不带占位符）⇒ 三档各念各的话，不许互相借模板。
+    func testNoSendBoundaryHasNoNumbersToPrint() {
+        let summary = context(boundary: .none, text: "abc").outboundSummary
+        XCTAssertTrue(summary.displayArguments.isEmpty)
+        XCTAssertEqual(summary.displayKey, .editAssistOutboundNone)
+        let keys = Set(EditAssist.Boundary.allCases.map { $0.titleKey })
+        XCTAssertEqual(keys.count, 3, "三档边界各要一个名字（选中片段 / 当前文件 / 不发送）")
+        // 有选中时三档各念各的；**没选中**时 `.selection` 与 `.file` 说的是同一件事（都在发整篇）
+        // —— 这正是 `outboundScope` 存在的意义：话术跟着事实走，不跟着开关走。
+        let selection = NSRange(location: 0, length: 1)
+        let outboundKeys = Set(EditAssist.Boundary.allCases.map {
+            context(selection: selection, boundary: $0, text: "abc").outboundSummary.displayKey
+        })
+        XCTAssertEqual(outboundKeys.count, 3, "三档的「将发送」各说各的，不许借同一句")
+        XCTAssertEqual(context(selection: NSRange(location: 0, length: 0), boundary: .selection,
+                               text: "abc").outboundSummary.displayKey,
+                       .editAssistOutboundFile)
+    }
+
     // MARK: - 语言表（中英齐）
 
     func testEveryActionAndBoundaryIsLocalized() {
@@ -196,9 +250,10 @@ final class EditAssistTests: XCTestCase {
         for boundary in EditAssist.Boundary.allCases {
             XCTAssertFalse(LocalizedStrings.englishText(boundary.titleKey).isEmpty)
         }
-        for refusal in [EditAssist.Refusal.nothingToSend, .missingInstruction, .endpointNotConfigured,
-                        .modelNotConfigured, .emptyResponse] {
+        for refusal in [EditAssist.Refusal.nothingToSend, .notSending, .missingInstruction,
+                        .endpointNotConfigured, .modelNotConfigured, .emptyResponse] {
             XCTAssertFalse(LocalizedStrings.defaultText(refusal.messageKey).isEmpty)
+            XCTAssertFalse(LocalizedStrings.englishText(refusal.messageKey).isEmpty)
         }
         XCTAssertTrue(LocalizedStrings.englishText(.editAssistRefusedEndpoint).contains("not configured"))
     }

@@ -85,11 +85,17 @@ public enum EditAssist {
     // MARK: - 数据边界
 
     /// 发出去的内容范围。**默认 `.selection`**（契约 ③：默认保守）。
+    ///
+    /// 三档与需求原文一一对应：**选中片段 / 当前文件 / 不发送**。
+    /// `.none` 不是「把正文换成空串」的花招 —— 它在 `gate` 里先于端点判定被拦下，
+    /// 一个字节都不出本机（判据：`testBoundaryNoneRefusesBeforeAnyRequest`）。
     public enum Boundary: String, CaseIterable, Sendable, Equatable {
         /// 只发选中的片段。
         case selection
         /// 发整个文件。
         case file
+        /// 不发送：这次什么都不出本机。
+        case none
 
         public static var `default`: Boundary { .selection }
 
@@ -97,6 +103,7 @@ public enum EditAssist {
             switch self {
             case .selection: return .editAssistBoundarySelection
             case .file: return .editAssistBoundaryFile
+            case .none: return .editAssistBoundaryNone
             }
         }
     }
@@ -140,16 +147,37 @@ public enum EditAssist {
         /// **真会发出去的正文**（契约 ③）：界面照这个原样显示，不另算一次。
         public var outbound: String {
             switch boundary {
+            case .none: return ""
             case .selection: return selectedText.isEmpty ? fileText : selectedText
             case .file: return fileText
             }
+        }
+
+        /// **这一次真会发出去的范围**（契约 ③：界面写明的必须是事实，不是开关档位）。
+        ///
+        /// 两处与 `boundary` 不同：
+        /// - `.none` ⇒ `.none`（不发送）；
+        /// - `.selection` 档但**没有选中** ⇒ `.file`（`outbound` 退回整篇）。
+        ///   不这样判，界面就会在「只发选中片段」的标签下把整个文件发出去 —— 那是假话。
+        public var outboundScope: Boundary {
+            switch boundary {
+            case .none: return .none
+            case .file: return .file
+            case .selection: return selectedText.isEmpty ? .file : .selection
+            }
+        }
+
+        /// 界面那一行需要补一句「为什么这一档发的是整个文件」（没选中时）。
+        public var outboundScopeNeedsExplanation: Bool {
+            boundary == .selection && outboundScope == .file
         }
 
         /// 发出去多大（界面那句「将发送：选中 12 行 · 480 字」）。
         public var outboundSummary: OutboundSummary {
             let body = outbound
             let lineCount = body.isEmpty ? 0 : body.components(separatedBy: "\n").count
-            return OutboundSummary(scope: boundary, textLength: (body as NSString).length, lineCount: lineCount)
+            return OutboundSummary(scope: outboundScope, textLength: (body as NSString).length,
+                                   lineCount: lineCount)
         }
     }
 
@@ -170,10 +198,14 @@ public enum EditAssist {
             switch scope {
             case .selection: return .editAssistOutboundSelection
             case .file: return .editAssistOutboundFile
+            case .none: return .editAssistOutboundNone
             }
         }
 
-        public var displayArguments: [CVarArg] { [lineCount, textLength] }
+        /// `.none` 那一档没有数字可填（模板也不带占位符）⇒ 调用点按空实参念。
+        public var displayArguments: [CVarArg] {
+            scope == .none ? [] : [lineCount, textLength]
+        }
     }
 
     // MARK: - 请求
@@ -278,6 +310,8 @@ public enum EditAssist {
     public enum Refusal: Equatable, Sendable {
         /// 没有可发的东西（空文件 / 空选区）。
         case nothingToSend
+        /// 数据边界选了「不发送」（契约 ③ 的第三档）：这次什么都不出本机。
+        case notSending
         /// 改写型动作缺自然语言要求。
         case missingInstruction
         /// 本机就能算（契约 ④：格式化 / 补全 / 行号…）。
@@ -294,6 +328,7 @@ public enum EditAssist {
         public var messageKey: LKey {
             switch self {
             case .nothingToSend: return .editAssistRefusedNothingToSend
+            case .notSending: return .editAssistRefusedNotSending
             case .missingInstruction: return .editAssistRefusedMissingInstruction
             case .localCapabilityExists: return .editAssistRefusedLocalCapability
             case .endpointNotConfigured: return .editAssistRefusedEndpoint
@@ -311,6 +346,9 @@ public enum EditAssist {
     ///   - model: 配置里的模型名；空 ⇒ `.modelNotConfigured`。
     public static func gate(action: Action, context: Context,
                             endpoint: String, model: String) -> Refusal? {
+        // 契约 ③ 第三档先判：人把边界拨到「不发送」，这件事比「端点配没配」更靠前 ——
+        // 界面该说的是「按你选的，什么都不发」，而不是去挑端点/模型的刺。
+        if context.boundary == .none { return .notSending }
         if let local = action.localOnlyAlternative { return .localCapabilityExists(local) }
         if context.outbound.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             return .nothingToSend

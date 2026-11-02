@@ -74,9 +74,16 @@ struct EditAssistSheet: View {
             }
 
             if let summary = model.outboundSummary {
-                Text(L(summary.displayKey, summary.lineCount, summary.textLength))
+                Text(summaryText(summary))
                     .font(Theme.font(.caption))
                     .foregroundStyle(Theme.text(TextTone.secondary))
+                // 契约 ③ 的另一半：开关档位与实际发出去的范围不一致时，把原因写出来
+                // （没选中却拨在「只发选中片段」⇒ 实际发整个文件；不写这一句就是界面说谎）。
+                if model.effectiveContext?.outboundScopeNeedsExplanation == true {
+                    Text(L(.editAssistOutboundNoSelectionHint))
+                        .font(Theme.font(.caption))
+                        .foregroundStyle(Theme.text(TextTone.secondary))
+                }
             }
         }
         .padding(Spacing.m)
@@ -133,6 +140,13 @@ struct EditAssistSheet: View {
             }
             .padding(Spacing.m)
         }
+    }
+
+    /// 「将发送…」那一行（契约 ③）：`.none` 档模板不带占位符，其余两档带行数与字数。
+    private func summaryText(_ summary: EditAssist.OutboundSummary) -> String {
+        summary.scope == .none
+            ? L(summary.displayKey)
+            : L(summary.displayKey, summary.lineCount, summary.textLength)
     }
 
     private func prefix(_ kind: AgentTextDiff.Line.Kind) -> String {
