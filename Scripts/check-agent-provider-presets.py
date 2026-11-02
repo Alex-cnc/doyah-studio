@@ -89,6 +89,9 @@ OUT_OF_FACE_LEDGER = {
         "界面探针夹具：消息头里显示的服务商名来自 profile 的端点，探针要照真名渲染才拍得出对照图"),
     "Tests/EgressLogTests.swift": (
         "单测夹具：出网日志要有一条真 URL 才造得出日志（同一个理由，逐条登记而不是整目录豁免）"),
+    "Tests/AgentEndpointDiagnosisTests.swift": (
+        "单测夹具：端点诊断按「本地 / 远端 / 地址表边界」分档，`api.openai.com` 是被断言的输入之一"
+        "（要真公网宿主名才判得出「远端需 Key」），不是预设清单的镜像"),
 }
 MIN_OUT_OF_FACE_LEDGER = 2
 

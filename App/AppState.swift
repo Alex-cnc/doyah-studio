@@ -11263,7 +11263,9 @@ final class AppState: ObservableObject {
                 statusMessage = L(.notesExportEmpty)
                 return false
             }
-            let language = LocalizationManager.shared.language
+            // 导出产物用的是**宿主语境优先**的语言（`effectiveLanguage`）：本机语境被外部宿主
+            // 覆盖时，导出文本与界面同语言；`language` 只表示用户偏好档，口径见 L-13。
+            let language = LocalizationManager.shared.effectiveLanguage
             let data: Data
             switch kind {
             case .package:

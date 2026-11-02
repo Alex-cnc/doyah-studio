@@ -1,83 +1,84 @@
 {
-  "version": 1,
-  "purpose": "三仓「同源副本」身份的唯一来源（合册 T-20261013-027 · 原单 T-20261010-039）：两份同源判据脚本在 Studio / Notes / Retro 三处各自的 sha256 + 行数。判据 = Scripts/check-tri-repo-parity.py（闭环第 16 项）。改任一份都要三仓同改并同步本台账；三份不一致时必须逐仓登记 divergence（原因 + 依据单），否则判红。",
-  "basis": [
-    "T-20261010-039",
-    "T-20261013-027"
-  ],
-  "readingRules": [
-    "sha256 = 唯一身份（逐字节）；行数 = 人读的粗指纹，两者都比。",
-    "另两仓按 repos[].dir 在「三仓父目录」下找（本机 = ~/.dsh/projects）；不在盘上如实跳过、跳过 ≠ 通过（--require-all 时跳过即红）。",
-    "path-ownership.json 与提交钩子按仓定制 ⇒ 不在对账面内（不算分叉）。",
-    "divergence = 三份不一致时的逐仓理由（无理由 = 判红；三份已一致而登记未删也判红）。"
-  ],
-  "floor": 2,
-  "repos": [
-    {
-      "id": "studio",
-      "label": "DoyahStudio",
-      "dir": "DoyahStudio",
-      "self": true
+ "version": 1,
+ "purpose": "三仓「同源副本」身份的唯一来源（合册 T-20261013-027 · 原单 T-20261010-039）：两份同源判据脚本在 Studio / Notes / Retro 三处各自的 sha256 + 行数。判据 = Scripts/check-tri-repo-parity.py（闭环第 16 项）。改任一份都要三仓同改并同步本台账；三份不一致时必须逐仓登记 divergence（原因 + 依据单），否则判红。",
+ "basis": [
+  "T-20261010-039",
+  "T-20261013-027"
+ ],
+ "readingRules": [
+  "sha256 = 唯一身份（逐字节）；行数 = 人读的粗指纹，两者都比。",
+  "另两仓按 repos[].dir 在「三仓父目录」下找（本机 = ~/.dsh/projects）；不在盘上如实跳过、跳过 ≠ 通过（--require-all 时跳过即红）。",
+  "path-ownership.json 与提交钩子按仓定制 ⇒ 不在对账面内（不算分叉）。",
+  "divergence = 三份不一致时的逐仓理由（无理由 = 判红；三份已一致而登记未删也判红）。",
+  "2026-11-03：studio 的 check-path-ownership.py 在 419acff8（Docs 根收口 · 判据 H/I）改过一次、行数仍 879，本台账 studio 那一格已跟版；Notes / Retro 的副本不在盘上 ⇒ 那两仓是否同源**未判**（下次到盘时按本台账复比，不一致就登记 divergence）。"
+ ],
+ "floor": 2,
+ "repos": [
+  {
+   "id": "studio",
+   "label": "DoyahStudio",
+   "dir": "DoyahStudio",
+   "self": true
+  },
+  {
+   "id": "notes",
+   "label": "DoyahNotes",
+   "dir": "DoyahNotes"
+  },
+  {
+   "id": "retro",
+   "label": "DoyahRetro",
+   "dir": "DoyahRetro"
+  }
+ ],
+ "copies": [
+  {
+   "file": "check-exclusive-sections.py",
+   "basis": "T-20261010-039",
+   "paths": {
+    "studio": "Scripts/check-exclusive-sections.py",
+    "notes": "tools/logic-check/check-exclusive-sections.py",
+    "retro": "tools/check-exclusive-sections.py"
+   },
+   "expect": {
+    "studio": {
+     "sha256": "37cc427ec4e8df7d0516394149b002054bf0566f416b41d14694a6497dffa107",
+     "lines": 1000
     },
-    {
-      "id": "notes",
-      "label": "DoyahNotes",
-      "dir": "DoyahNotes"
+    "notes": {
+     "sha256": "37cc427ec4e8df7d0516394149b002054bf0566f416b41d14694a6497dffa107",
+     "lines": 1000
     },
-    {
-      "id": "retro",
-      "label": "DoyahRetro",
-      "dir": "DoyahRetro"
+    "retro": {
+     "sha256": "37cc427ec4e8df7d0516394149b002054bf0566f416b41d14694a6497dffa107",
+     "lines": 1000
     }
-  ],
-  "copies": [
-    {
-      "file": "check-exclusive-sections.py",
-      "basis": "T-20261010-039",
-      "paths": {
-        "studio": "Scripts/check-exclusive-sections.py",
-        "notes": "tools/logic-check/check-exclusive-sections.py",
-        "retro": "tools/check-exclusive-sections.py"
-      },
-      "expect": {
-        "studio": {
-          "sha256": "37cc427ec4e8df7d0516394149b002054bf0566f416b41d14694a6497dffa107",
-          "lines": 1000
-        },
-        "notes": {
-          "sha256": "37cc427ec4e8df7d0516394149b002054bf0566f416b41d14694a6497dffa107",
-          "lines": 1000
-        },
-        "retro": {
-          "sha256": "37cc427ec4e8df7d0516394149b002054bf0566f416b41d14694a6497dffa107",
-          "lines": 1000
-        }
-      },
-      "divergence": []
+   },
+   "divergence": []
+  },
+  {
+   "file": "check-path-ownership.py",
+   "basis": "T-20261010-039",
+   "paths": {
+    "studio": "Scripts/check-path-ownership.py",
+    "notes": "tools/logic-check/check-path-ownership.py",
+    "retro": "tools/check-path-ownership.py"
+   },
+   "expect": {
+    "studio": {
+     "sha256": "3a774482921bf9ee8bf3d7b861c1949a57455a80921360719996a521212701aa",
+     "lines": 879
     },
-    {
-      "file": "check-path-ownership.py",
-      "basis": "T-20261010-039",
-      "paths": {
-        "studio": "Scripts/check-path-ownership.py",
-        "notes": "tools/logic-check/check-path-ownership.py",
-        "retro": "tools/check-path-ownership.py"
-      },
-      "expect": {
-        "studio": {
-          "sha256": "248ab90e14198b77c020861cd98c8db6f9ebcad481198dc9340100ceeeeaa0f0",
-          "lines": 879
-        },
-        "notes": {
-          "sha256": "6348235135b859aefea0e228db883e9bc1b53454ae245c8106de4638cfe7f746",
-          "lines": 883
-        },
-        "retro": {
-          "sha256": "caa76d5031e11d0316644a0695e265396cb7414b780ddedec54e0c4884669a29",
-          "lines": 850
-        }
-      },
-      "divergence": []
+    "notes": {
+     "sha256": "6348235135b859aefea0e228db883e9bc1b53454ae245c8106de4638cfe7f746",
+     "lines": 883
+    },
+    "retro": {
+     "sha256": "caa76d5031e11d0316644a0695e265396cb7414b780ddedec54e0c4884669a29",
+     "lines": 850
     }
-  ]
+   },
+   "divergence": []
+  }
+ ]
 }

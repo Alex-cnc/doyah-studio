@@ -33,11 +33,14 @@ struct QuickCaptureSheet: View {
                     .font(Theme.font(.body))
                     .focused($isBodyFocused)
                     .frame(minHeight: 150)
-                    .scrollContentBackground(.hidden)
+                    // 编辑面底色 / 字色的唯一出处（`L-142` 甲2）：这里既不许自己写
+                    // `scrollContentBackground` ，也不许自己填色 —— 上面那层占位文字跟着
+                    // 同一块底色走，所以容器底也取同一个令牌。
+                    .editorSurface()
             }
             .padding(Spacing.s)
-            .background(RoundedRectangle(cornerRadius: 8).fill(Color(nsColor: .textBackgroundColor)))
-            .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(.separator))
+            .background(RoundedRectangle(cornerRadius: 8).fill(Theme.surface(.content)))
+            .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Theme.surface(.panel)))
 
             if appState.quickCapture.body.isEmpty {
                 Text(L(.notesQuickCaptureUntitled) + " · " + QuickCaptureShortcut.standard.display)

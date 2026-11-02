@@ -327,9 +327,20 @@ def self_test() -> int:
               % ("✓" if report.problems else "✗", "判红（如预期）" if report.problems else "判绿（如预期）"))
         ok = ok and bool(report.problems)
         second.unlink()
-        # 例 5：supportedVersion 落后一档
-        ok &= mutate(fixture, DATABASE_FILE, "supportedVersion = NoteSchemaV14.version",
-                     "supportedVersion = NoteSchemaV13.version", "例 5（supportedVersion 落后链尾）")
+        # 例 5：supportedVersion 落后一档 —— 版本号**从盘上现读**，不写死。
+        # 写死 `v14 → v13` 这一条在 schema 升到 v15 后就找不到锚点，整族自检 rc=1
+        # （2026-11-03 实测；判据本身是对的，坏的是夹具）。
+        database = fixture / DATABASE_FILE
+        matched = SUPPORTED_PATTERN.search(database.read_text(encoding="utf-8"))
+        if matched is None:
+            print("  ✗ 自检 例 5：夹具里找不到 `supportedVersion = NoteSchemaV<N>.version`")
+            ok = False
+        else:
+            head = int(matched.group(1))
+            ok &= mutate(fixture, DATABASE_FILE,
+                         "supportedVersion = NoteSchemaV%d.version" % head,
+                         "supportedVersion = NoteSchemaV%d.version" % (head - 1),
+                         "例 5（supportedVersion 落后链尾 v%d → v%d）" % (head, head - 1),)
         # 例 6：WAL 被删
         ok &= mutate(fixture, DATABASE_FILE, 'setPragma("journal_mode = WAL")',
                      'setPragma("journal_mode = TRUNCATE")', "例 6（journal_mode 不是 WAL）")

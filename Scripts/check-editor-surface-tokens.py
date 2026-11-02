@@ -131,6 +131,7 @@ LEDGER = (
     "App/Views/MaintenancePanel.swift",   # 维护 · 计划
     "App/Views/MCPServersSheet.swift",    # MCP 服务器 · 环境变量 / 参数（多行文本块，T6.1 补登记）
     "Plugins/Notes/Views/NotesPanel.swift",         # 笔记正文（内测 甲2 的正主）
+    "App/Views/QuickCaptureSheet.swift",  # 快速捕获 · 正文（FR-NTS-NOTE-CAPTURE-001，2026-11-03 补登记）
 )
 
 # 面无基线钉（㈧ 削面无钉）：这两条下限**有实测依据**，由基线文件回读核对。

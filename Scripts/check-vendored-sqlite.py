@@ -673,6 +673,14 @@ def _ledger_edit(copy: pathlib.Path, mutate) -> None:
     path.write_text(json.dumps(ledger, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
+def _first_item_marker(copy: pathlib.Path) -> str:
+    """闭环**第一项**那一整行（项号从盘上现读，别写死 —— 写死 `1/18` 在项数升到 19 后失效）。"""
+    script = copy / "Scripts" / "verify-all.sh"
+    for line in script.read_text(encoding="utf-8").split("\n"):
+        if re.search(r"==> 1/\d+ ", line):
+            return line
+    raise AssertionError("verify-all.sh 里找不到 `==> 1/N ` 那一项块")
+
 def _comment_in_item_block(copy: pathlib.Path, item: str) -> None:
     """在某一项的正文里插一行**注释**提到命令名（原单 ㈥ P10：旧版会把项号判定带偏）。"""
     script = copy / "Scripts" / "verify-all.sh"
@@ -701,6 +709,19 @@ def _drop_all_defines(path: pathlib.Path) -> None:
     lines = [line for line in path.read_text(encoding="utf-8").split("\n")
              if not line.strip().startswith(".define(")]
     path.write_text("\n".join(lines), encoding="utf-8")
+
+def _skew_item_count(root: pathlib.Path) -> None:
+    """把闭环第一项的分母改小一 —— 「项数声明漏改」那一形的负例（只在临时副本上写坏）。
+
+    分母**从盘上现读**：写死 `1/18` 在闭环项数从 18 升到 19 后就找不到锚点，整族自检 rc=1
+    （2026-11-03 实测 —— 判据本身是对的，坏的是夹具）。
+    """
+    path = root / "Scripts/verify-all.sh"
+    text = path.read_text(encoding="utf-8")
+    matched = re.search(r"==> 1/(\d+) ", text)
+    assert matched is not None, "verify-all.sh 里找不到 `==> 1/N ` 那一项块"
+    total = int(matched.group(1))
+    path.write_text(text.replace(matched.group(0), "==> 1/%d " % (total - 1), 1), encoding="utf-8")
 
 def self_test() -> int:
     """负例 + 对手臂：每类篡改都必须让门禁红，每条**不该红的**都不许误报。
@@ -736,8 +757,7 @@ def self_test() -> int:
             "python3 Scripts/check-vendored-sqlite.py --self-test", "true"), "红"),
         ("台账写的项号与闭环实际不符", lambda d: _edit(
             d / "Scripts/vendored-sqlite.json", "第 17 项", "第 16 项"), "红"),
-        ("闭环项数声明漏改（一项写 1/17、其余 18）", lambda d: _edit(
-            d / "Scripts/verify-all.sh", "==> 1/18 ", "==> 1/17 "), "红"),
+        ("闭环项数声明漏改（第一项分母比其余小一）", _skew_item_count, "红"),
         ("生成器没进闭环（删掉 gen-sqlite-constants 的 --check）", lambda d: _edit(
             d / "Scripts/verify-all.sh", "python3 Scripts/gen-sqlite-constants.py --check\n", ""), "红"),
         ("台账 generator 项号与闭环不符", lambda d: _edit(
@@ -776,7 +796,7 @@ def self_test() -> int:
         ("（对手臂·不许误报）块注释里的 `import SQLite3` 不算真 import",
          lambda d: _write(d / "Core" / "Commented.swift", "/*\nimport SQLite3\n*/\n"), "绿"),
         ("（对手臂·不许误报）别项的注释里提一句命令名，不改项号判定",
-         lambda d: _comment_in_item_block(d, "==> 1/18 "), "绿"),
+         lambda d: _comment_in_item_block(d, _first_item_marker(d)), "绿"),
         ("（自坏兜底）台账缺 swiftTarget + 同时有哈希不符 ⇒ 不留栈、已收集诊断照打",
          lambda d: (_ledger_edit(d, lambda ledger: ledger.pop("swiftTarget", None)),
                     _edit(d / "Vendor/sqlite3/Sources/CSQLite3/include/sqlite3.h",

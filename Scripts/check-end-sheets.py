@@ -102,8 +102,16 @@ def check() -> list[str]:
                 continue
             if f"详细设计说明书-{other}" in head or f"详细设计说明书 · {other}" in head:
                 problems.append(f"{path.name}: 头部引了**别端**的详设（{other}）—— 各端一单只认同端详设活书版")
-        if re.search(r"-v\d+\.\d+-\d{8}\.md", head):
-            problems.append(f"{path.name}: 头部把**冻结件**当上游 —— 一单跟的是同端详设**活书**，不是冻结快照")
+        # 「把冻结件当上游」只判**上游那一行**（2026-11-03 修）：元信息表里「冻结基线」那一行
+        # 本来就该写出冻结件的文件名（那是基线快照的登记，不是上游）。旧版拿整段头部去匹配
+        # ⇒ 把写对的文档判成错（Android 一单就是这样红的：上游行写的是活书）。
+        # 反向也判：头部找不到「上游」那一行 ⇒ 判据取不到输入（空跑防护，不许零命中 = 通过）。
+        upstream_rows = [line for line in head.splitlines()
+                         if "上游" in line and "次上游" not in line]
+        if not upstream_rows:
+            problems.append(f"{path.name}: 头部找不到「唯一上游」那一行 —— 没得判（空跑防护）")
+        elif re.search(r"-v\d+\.\d+-\d{8}\.md", "\n".join(upstream_rows)):
+            problems.append(f"{path.name}: 上游那一行把**冻结件**当上游 —— 一单跟的是同端详设**活书**，不是冻结快照")
 
     # H. 根目录只许四书 + 一单 + 工程规范（人类主人 2026-10-26 令「以后任何开发侧都只有四书一单」）
     allowed = re.compile("|".join(BOOK_PATTERNS + [SHEET_PATTERN]))

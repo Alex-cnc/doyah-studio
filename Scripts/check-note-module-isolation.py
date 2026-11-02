@@ -86,6 +86,9 @@ NOTE_SOURCES = [
     "Plugins/Notes/Sources/NoteAttachmentStore.swift",
     "Plugins/Notes/Sources/NoteCapture.swift",
     "Plugins/Notes/Sources/NotePrivacy.swift",
+    # `FR-NTS-NOTE-EXPORT-001`（导出与迁移）：备份包的格式 / 三种产物 / 导入还原的规则 ——
+    # 只 `import Foundation`（核过 import 面），无网络、无库、零平台 API ⇒ 算笔记侧
+    "Plugins/Notes/Sources/NoteArchive.swift",
     "Plugins/Notes/Sources/NoteSync/SyncConflictResolution.swift",
     "Plugins/Notes/Sources/NoteTrash.swift",
     "Plugins/Notes/Sources/NoteVersion.swift",
