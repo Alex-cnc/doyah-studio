@@ -1,6 +1,6 @@
 # 检查点
 
-- 队列：`.agent/batches.yaml`（**0 条待办**，2026-11-02 B7 收口后 `plan-batches.py --write` 重出）；`plan.yaml` = 34 done + 1 blocked
+- 队列：**v0.4.0** `.agent/batches.yaml`（N1 6 条 / N2 4 条 / N3 4 条，2026-11-02 由 `plan-batches.py --emit-plan --write` 重出）；`plan.yaml` = **14 todo**（台账复算一致）。（v0.3.0 历史读数留档见 §「v0.3.0 收口」：34 done + 1 blocked）
 - 已完成：**v0.3.0 队列 34 / 35**（B1–B7 七批；最后一批 = `CONN-012` 连接分组 / `CONN-020` SSH 隧道 / `DRV-009` GBase 8a 驱动）
 - **口径护栏（2026-11-02 收口复核跳实测）**：`34/35` 是**本版队列**口径，不是「DB 需求总数」。台账 DB 面实为 **111 条**（`FR-STD-DB-*` 逐行解析）= **110 条实现与判据双 ✅ + 1 条 🟡**（`META-002`）；另 76 条早版已收口、从未进本版队列。读 checkpoint 时别把 35 当分母
 - **队列外存量（同一跳实测，供下一版选题）**：全台账 **411 条 = 274 双 ✅ + 137 未闭**；未闭分组 = `RTR` 82（Retro 仓）/ `NTS` 24（Notes 仓）/ `STD` 20（**本仓**）/ `AGT` 11。本仓那 20 条 = v1.1+ 11 · v0.1.0-alpha 8 · v1.0 1（含 `ALL-LIC-001~005` 五条 🟡、`WS-LIC-001` 全 ⬜、`ALL-PLUG-005/008`、`WS-TOOL-001`）
@@ -84,3 +84,14 @@
 - **下一项**：派生 v0.4.0 队列 —— `.agent/plan.yaml` 换成本版 14 条（`NOTE-CAPTURE/ATTACH/ORG-002/VERSION/SYNC-002/PRIVACY` + 8 条 `TODO`），`Scripts/plan-batches.py` 加 `--version 0.4.0` 规则表（N1–N4）并让 `--check` 能对着台账复算；之后从 **N1（采集 / 格式 / 附件）** 开工。
 - next_try（存量）：台账「层次 / 优先级」与需求书 2 处不一致（`NOTE-VERSION-001`、`NOTE-PRIVACY-001`）—— 改层次会动 §2 分档计数，留到 N 批次里与判据同批改。
 - 证据 `.agent/evidence/2026-11-02-v040-shell-fill.md`
+
+## v0.4.0 队列派生（2026-11-02 · 无台账行 · 派生件）
+
+- **队列换代 v0.3.0 → v0.4.0**：`plan.yaml` 从「34 done + 1 blocked」换成 **14 todo**，`batches.yaml` = N1 6 / N2 4 / N3 4。两份都是**派生件**，由 `Scripts/plan-batches.py --version 0.4.0 --emit-plan --write` 现算，不手写。
+- **`--check` 现在能对着台账复算**（判据 A）：范围 = 台账 `FR-NTS-NOTE-*` / `FR-NTS-TODO-*` 且状态非 ✅ ⇒ **14 条（12 🟡 / 2 ⬜）**，与一单 §4.2「v0.4.0 14（12/2）」逐数吻合。三条对账：台账未闭而队列缺 / 队列 todo 而台账已闭或越界 / 台账未闭而队列标非 todo，任一不成立即 rc=1 并逐名列出。判据 B：`batches.yaml` == 按 plan.yaml 重出。判据 C：有条目掉进「未归堆」⇒ 判红（补规则，不许手塞）。
+- **负例三段**（读数在证据里）：① 还挂 v0.3.0 队列 ⇒ 点名 14 条 rc=1；② 一条标 done ⇒ 点名该条 rc=1，还原 sha256 一致复绿；③ 撤一条归堆规则 ⇒ 点名 `TODO-LINK-001` rc=1，还原 sha256 一致复绿。**回归**：换回 HEAD 的 v0.3.0 两件跑 `--version 0.3.0 --check` ⇒ rc=0（重构没改历史字节）。
+- **批次合成 4 → 3 的理由**：§4.2 那 14 条里 5 条同类项早已 ✅（`FORMAT` / `SEARCH` / `ORG-001` / `TRASH` / `SYNC-001`），按域切只剩 6/4/4；再切一批会落到 1–2 条，违反「每批 3–6 条」。N1 笔记面 6 · N2 待办条目 4 · N3 待办日历与状态 4。
+- **未验证（≠通过）**：代码套件本跳未跑（只动 `.agent/` + 一个派生脚本）；`plan-batches.py` **无自检族**，负例是手跑的、没进 `check-self-test-counts` 台账 —— 要立族须同批改族/例数读数。
+- **下一批 = N1**（`NOTE-CAPTURE-001` / `ATTACH-001` / `VERSION-001` / `ORG-002` / `PRIVACY-001` / `SYNC-002`）。N1 起跳前先看清：这 6 条里 **2 条是 ⬜（`ORG-002` / `PRIVACY-001`，台账无实现无判据）**，按 v0.4.0 出口要求走「先写需求侧判据 → 再落实现 → 探针读数」，不许先实现再补判据。
+- 观察（不动，记 next_try）：`check-version-scope` 里 `未排期 10` 含这 8 条 `TODO-*`；§4.2 把它们划进 v0.4.0 但台账 `版本` 列仍是 `未排期` —— 改该列会动 §2 分档计数，留到 N 批次与判据同批改。
+- 证据 `.agent/evidence/2026-11-02-v040-queue.md`

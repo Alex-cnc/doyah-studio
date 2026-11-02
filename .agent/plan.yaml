@@ -1,253 +1,103 @@
-# v0.3.0 数据库运维面 · 执行队列（**派生草稿**）
+# v0.4.0 笔记与任务闭环 · 执行队列（**派生件**）
 # 唯一事实源 = Docs/Doyah产品开发计划任务清单-macOS.md（活书台账）。
-# 本文件只做「下一跳」排序，不许反向改台账；台账一改，本文件按 README 里的生成命令重出。
-# 生成于 2026-11-01，源 = 台账中 35 条未闭 DB 行。
+# 本文件只做「下一跳」排序，不许反向改台账；台账一改就跑 --emit-plan 重出，别手改。
+# 生成于 2026-11-02，源 = 台账里 FR-NTS-NOTE- / FR-NTS-TODO- 未闭 14 条（12 🟡 / 2 ⬜）。
 tasks:
-  - id: FR-STD-DB-RES-006
-    goal: "复制为多种格式：复制即带表头，或直接是 Markdown / INSERT 文本（不"
-    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-RES-006 | grep -q '✅'"
-    layer: "常用增强"
-    prio: "中"
-    status: done
-    evidence: ".agent/evidence/2026-11-01-FR-STD-DB-RES-006.md"
-  - id: FR-STD-DB-RES-007
-    goal: "客户端排序：点表头按列排序，支持多列（次要排序键）、升降序切换、NULL 位置固定"
-    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-RES-007 | grep -q '✅'"
-    layer: "常用增强"
-    prio: "中"
-    status: done
-    evidence: ".agent/evidence/2026-11-01-FR-STD-DB-RES-007.md"
-  - id: FR-STD-DB-RES-008
-    goal: "客户端筛选：每列可加条件（包含 / 不包含 / 等于 / 大于 / 小于 / 为空"
-    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-RES-008 | grep -q '✅'"
-    layer: "常用增强"
-    prio: "中"
-    status: done
-    evidence: ".agent/evidence/2026-11-01-FR-STD-DB-RES-008.md"
-  - id: FR-STD-DB-RES-009
-    goal: "分页控制条：选择每页行数（50 / 100 / 200 / 500 / 1000），"
-    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-RES-009 | grep -q '✅'"
-    layer: "常用增强"
-    prio: "中"
-    status: done
-    evidence: ".agent/evidence/2026-11-01-B2.md"
-  - id: FR-STD-DB-RES-011
-    goal: "结果集分页 / 虚拟滚动超大数据量"
-    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-RES-011 | grep -q '✅'"
-    layer: "常用增强"
-    prio: "中"
-    status: done
-    evidence: ".agent/evidence/2026-11-01-B2.md"
-  - id: FR-STD-DB-RES-013
-    goal: "超大结果集流式落盘：导出直接写文件，不把全量结果驻留内存"
-    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-RES-013 | grep -q '✅'"
-    layer: "进阶可选"
-    prio: "低"
-    status: done
-    evidence: ".agent/evidence/2026-11-01-B2.md"
-  - id: FR-STD-DB-RES-014
-    goal: "结果集导出 Excel（.xlsx）"
-    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-RES-014 | grep -q '✅'"
-    layer: "进阶可选"
-    prio: "低"
-    status: done
-    evidence: ".agent/evidence/2026-11-01-B2.md"
-  - id: FR-STD-DB-META-002
-    goal: "GBase 8a 树形结构：服务器 → Database → Table → Col"
-    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-META-002 | grep -q '✅'"
-    layer: "常用增强"
-    prio: "中"
-    status: blocked
+  - id: FR-NTS-NOTE-CAPTURE-001
+    goal: "快速捕获：**一个动作**记下一条笔记（手机锁屏 / 桌面快捷键），不要求先选目录与标签"
+    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-NTS-NOTE-CAPTURE-001 | grep -q '✅'"
+    layer: "基线必备"
+    prio: "—"
+    status: todo
     evidence: ""
-  
-    blocked_reason: "主人 2026-11-02 令：217 上没有 GBase 8a 实例，环境不具备即挂起（不是不做，是没条件验）"
-    next_try: "拿到 GBase 8a 实例后：连一次 8a 握手 → 抓一次 META 元数据查询 → 多版本矩阵再开；在此之前只保留离线方言推断，不标 ✅。**2026-11-02 复核：217 重启后地址变更 192.168.5.217 → 192.168.5.26，该机上 5432(PG)/3306(MySQL 8.4.10) 在，5258/5050 仍超时 ⇒ GBase 8a 依旧没有**"
-- id: FR-STD-DB-META-006
-    goal: "对象树必须支持持续下钻：从服务器节点开始，Database → Schema → T"
-    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-META-006 | grep -q '✅'"
+  - id: FR-NTS-NOTE-ATTACH-001
+    goal: "附件与图片：插入图片与文件，**附件存文件系统、笔记里存引用**，原图不被压缩覆盖"
+    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-NTS-NOTE-ATTACH-001 | grep -q '✅'"
+    layer: "常用增强"
+    prio: "中"
+    status: todo
+    evidence: ""
+  - id: FR-NTS-NOTE-VERSION-001
+    goal: "历史版本：每次保存留版本，可查看与回滚，**回滚本身也生成新版本**"
+    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-NTS-NOTE-VERSION-001 | grep -q '✅'"
+    layer: "基线必备"
+    prio: "—"
+    status: todo
+    evidence: ""
+  - id: FR-NTS-NOTE-ORG-002
+    goal: "笔记本归类：笔记可归入**一个笔记本**（单层，不做「架 → 笔记本」两层；未指定时落默认「收件箱」），**归属唯一**，跨笔记本移动只改归属"
+    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-NTS-NOTE-ORG-002 | grep -q '✅'"
     layer: "基线必备"
     prio: "高"
-    status: done
-    evidence: ".agent/evidence/2026-11-01-B1-TASK-002-META-006.md"
-  - id: FR-STD-DB-META-007
-    goal: "跨数据库浏览：服务器节点展开后列出当前用户可连接的数据库"
-    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-META-007 | grep -q '✅'"
+    status: todo
+    evidence: ""
+  - id: FR-NTS-NOTE-PRIVACY-001
+    goal: "私密保护：可把单条笔记标为私密（不进搜索、不同步、不外发），需二次验证才可查看"
+    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-NTS-NOTE-PRIVACY-001 | grep -q '✅'"
+    layer: "基线必备"
+    prio: "中"
+    status: todo
+    evidence: ""
+  - id: FR-NTS-NOTE-SYNC-002
+    goal: "冲突合并：按**记录级 LWW（`rev` + `updatedAt`）+ 冲突留两版** —— 落败的那版原样留底、能打开并标来源设备与时间（**段落级并集 / CRDT 自动合并不在本条范围**，见能力书 5.1.9 的边界；这里只做记录级 LWW + 留两版）"
+    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-NTS-NOTE-SYNC-002 | grep -q '✅'"
+    layer: "常用增强"
+    prio: "高"
+    status: todo
+    evidence: ""
+  - id: FR-NTS-TODO-LIST-001
+    goal: "待办事项本体：**标题 / 截止时间 / 重复规则 / 完成态**，与笔记**同级**，共用同一套同步与加密"
+    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-NTS-TODO-LIST-001 | grep -q '✅'"
     layer: "基线必备"
     prio: "高"
-    status: done
+    status: todo
     evidence: ""
-  - id: FR-STD-DB-META-008
-    goal: "对象树按类型 / schema 分组视图：可在「层级视图」与「按类型分组」之间切换"
-    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-META-008 | grep -q '✅'"
-    layer: "进阶可选"
-    prio: "低"
-    status: done
-    evidence: ""
-  - id: FR-STD-DB-META-011
-    goal: "查看对象 DDL：表 / 视图 / 函数节点右键「查看 DDL」，展示等价建对象语句"
-    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-META-011 | grep -q '✅'"
-    layer: "常用增强"
-    prio: "中"
-    status: done
-    evidence: ""
-  - id: FR-STD-DB-META-015
-    goal: "全库对象搜索：输入名称片段即跨 schema / 跨库匹配表、视图、列、函数，命中结"
-    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-META-015 | grep -q '✅'"
-    layer: "常用增强"
-    prio: "中"
-    status: done
-    evidence: ""
-  - id: FR-STD-DB-IO-002
-    goal: "客户端侧整表 / 整库导出：走 COPY <表> TO STDOUT 流式写文件"
-    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-IO-002 | grep -q '✅'"
-    layer: "常用增强"
-    prio: "中"
-    status: done
-    evidence: ".agent/evidence/2026-11-01-B1-IO-002.md"
-  - id: FR-STD-DB-IO-003
-    goal: "备份 / 恢复：封装 pg_dump / pg_restore（plain / cu"
-    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-IO-003 | grep -q '✅'"
-    layer: "常用增强"
-    prio: "中"
-    status: done
-    evidence: ".agent/evidence/2026-11-01-B4.md"
-  - id: FR-STD-DB-IO-004
-    goal: "备份文件恢复到指定库（pg_restore 的 --clean / --sectio"
-    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-IO-004 | grep -q '✅'"
-    layer: "进阶可选"
-    prio: "低"
-    status: done
-    evidence: ".agent/evidence/2026-11-01-B4.md"
-  - id: FR-STD-DB-IO-006
-    goal: "CSV / JSON 导入：COPY … FROM STDIN 流式导入 + 列映射"
-    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-IO-006 | grep -q '✅'"
-    layer: "进阶可选"
-    prio: "低"
-    status: done
-    evidence: ".agent/evidence/2026-11-01-B4.md"
-  - id: FR-STD-DB-IO-007
-    goal: "Excel（.xlsx）导入映射向导"
-    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-IO-007 | grep -q '✅'"
-    layer: "进阶可选"
-    prio: "低"
-    status: done
-    evidence: ".agent/evidence/2026-11-01-B4.md"
-  - id: FR-STD-DB-DATA-002
-    goal: "表行数统计与条件过滤入口：一键 count(*)"
-    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-DATA-002 | grep -q '✅'"
-    layer: "常用增强"
-    prio: "中"
-    status: done
-    evidence: ".agent/evidence/2026-11-02-B6.md"
-  - id: FR-STD-DB-DATA-005
-    goal: "单行详情 / 单元格值编辑器：宽表与长 JSON 竖排查看，JSON 值格式化显示"
-    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-DATA-005 | grep -q '✅'"
-    layer: "进阶可选"
-    prio: "低"
-    status: done
-    evidence: ".agent/evidence/2026-11-02-B6.md"
-  - id: FR-STD-DB-DATA-006
-    goal: "外键引用导航：由单元格 / 行跳转到被引用表并自动带入条件"
-    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-DATA-006 | grep -q '✅'"
-    layer: "进阶可选"
-    prio: "低"
-    status: done
-    evidence: ".agent/evidence/2026-11-02-B6.md"
-  - id: FR-STD-DB-SESS-002
-    goal: "服务器会话列表：展示当前实例的会话（进程号 / 用户 / 数据库 / 客户端地址 /"
-    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-SESS-002 | grep -q '✅'"
-    layer: "常用增强"
-    prio: "中"
-    status: done
-    evidence: ".agent/evidence/2026-11-01-B5.md"
-  - id: FR-STD-DB-SESS-003
-    goal: "取消 / 终止会话：对选中会话执行「取消当前语句」（PG pg_cancel_bac"
-    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-SESS-003 | grep -q '✅'"
-    layer: "常用增强"
-    prio: "中"
-    status: done
-    evidence: ".agent/evidence/2026-11-01-B5.md"
-  - id: FR-STD-DB-SESS-004
-    goal: "服务器级对象管理：数据库 / 角色 / 表空间 / 扩展的浏览与创建（DBA 日常）"
-    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-SESS-004 | grep -q '✅'"
-    layer: "进阶可选"
-    prio: "低"
-    status: done
-    evidence: ".agent/evidence/2026-11-01-B5.md"
-  - id: FR-STD-DB-TASK-001
-    goal: "**一句话 → 一条可执行任务**：任务定义落在连接上（目标库、只读 / 可写、影响行数上限、是否需审批），保存后可复用；定义与实际执行参数不一致时拒绝执行。"
-    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-TASK-001 | grep -q '✅'"
-    layer: "常用增强"
-    prio: "中"
-    status: done
-    evidence: ".agent/evidence/2026-11-01-B1-TASK-001.md"
-  - id: FR-STD-DB-TASK-002
-    goal: "**高危任务执行前逐条列出**：将要执行的语句、目标库、预估影响范围，等人工确认；确认才发送，拒绝即中止并留痕。"
-    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-TASK-002 | grep -q '✅'"
+  - id: FR-NTS-TODO-LIST-002
+    goal: "**清单式列出各种任务**（标题 / 截止时间 / 完成态 / 优先级 / 标签），支持新建 / 编辑 / 完成 / 删除 / 排序"
+    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-NTS-TODO-LIST-002 | grep -q '✅'"
     layer: "基线必备"
     prio: "高"
-    status: done
-    evidence: ".agent/evidence/2026-11-01-B1-TASK-002-META-006.md"
-  - id: FR-STD-DB-TASK-003
-    goal: "**执行回执**：记录成功 / 失败、影响行数、耗时、错误原文与执行时刻，挂在会话上可作为审计依据；回执不含口令与敏感字面量。"
-    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-TASK-003 | grep -q '✅'"
+    status: todo
+    evidence: ""
+  - id: FR-NTS-TODO-LIST-003
+    goal: "**组织与检索**：分组（按时间 / 按状态 / **按标签**）· 筛选（今天 / 本周 / 已过期 / 无截止）· 排序"
+    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-NTS-TODO-LIST-003 | grep -q '✅'"
+    layer: "常用增强"
+    prio: "中"
+    status: todo
+    evidence: ""
+  - id: FR-NTS-TODO-LINK-001
+    goal: "任务 ↔ 笔记**双向转化**：笔记生成任务、任务记成笔记，带回指，可撤销"
+    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-NTS-TODO-LINK-001 | grep -q '✅'"
+    layer: "常用增强"
+    prio: "中"
+    status: todo
+    evidence: ""
+  - id: FR-NTS-TODO-CALENDAR-001
+    goal: "**月视图**（可切周视图）把任务**铺在日期上**（按截止时间；有提醒的日子同时打点）"
+    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-NTS-TODO-CALENDAR-001 | grep -q '✅'"
+    layer: "常用增强"
+    prio: "中"
+    status: todo
+    evidence: ""
+  - id: FR-NTS-TODO-CALENDAR-002
+    goal: "点某天看当天任务、点任务进详情；**逾期任务显式标识**"
+    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-NTS-TODO-CALENDAR-002 | grep -q '✅'"
+    layer: "常用增强"
+    prio: "中"
+    status: todo
+    evidence: ""
+  - id: FR-NTS-TODO-STATE-001
+    goal: "**完成 / 改期**在清单与日历上是**同一次写入、同一事务**；日历上可直接完成 / 改期（拖拽或长按）"
+    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-NTS-TODO-STATE-001 | grep -q '✅'"
     layer: "基线必备"
-    prio: "中"
-    status: done
-    evidence: ".agent/evidence/2026-11-01-B1-TASK-003.md"
-  - id: FR-STD-DB-CONN-012
-    goal: "连接分组 / 文件夹：连接可归入自定义分组，侧边栏按组折叠展示，便于按「项目 / 环"
-    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-CONN-012 | grep -q '✅'"
-    layer: "常用增强"
-    prio: "中"
-    status: done
-    evidence: ".agent/evidence/2026-11-02-B7.md"
-  - id: FR-STD-DB-CONN-020
-    goal: "SSH 隧道：通过 SSH 跳板连接不可直连的数据库（密码 / 私钥两种方式）"
-    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-CONN-020 | grep -q '✅'"
-    layer: "常用增强"
-    prio: "中"
-    status: done
-    evidence: ".agent/evidence/2026-11-02-B7.md"
-  - id: FR-STD-DB-DDL-003
-    goal: "表结构编辑器：可视化增删列、改类型、加索引与约束，并实时对照将要执行的 DDL （v"
-    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-DDL-003 | grep -q '✅'"
-    layer: "常用增强"
-    prio: "中"
-    status: done
-    evidence: ".agent/evidence/2026-11-02-B6.md"
-  - id: FR-STD-DB-DDL-004
-    goal: "Schema 对比与同步：对比两个库 / 两个连接的结构差异并生成同步脚本"
-    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-DDL-004 | grep -q '✅'"
-    layer: "进阶可选"
-    prio: "低"
-    status: done
-    evidence: ".agent/evidence/2026-11-02-B6.md"
-  - id: FR-STD-DB-DIAG-003
-    goal: "慢查询排行：pg_stat_statements 按总耗时 / 平均耗时 / 调用次"
-    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-DIAG-003 | grep -q '✅'"
-    layer: "进阶可选"
-    prio: "低"
-    status: done
-    evidence: ".agent/evidence/2026-11-01-B5.md"
-  - id: FR-STD-DB-DIAG-004
-    goal: "数据库统计面板：表大小、索引命中率、连接数、缓存命中率等 pg_stat_* 指标"
-    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-DIAG-004 | grep -q '✅'"
-    layer: "进阶可选"
-    prio: "低"
-    status: done
-    evidence: ".agent/evidence/2026-11-01-B5.md"
-  - id: FR-STD-DB-DIAG-006
-    goal: "连接上下文里的诊断入口：从对象树右键唤起，连接 / 库 / 对象 / 最近一次执行读数一并带进上下文；结论里的对象名可点回节点；没有统计读数时明说未取到"
-    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-DIAG-006 | grep -q '✅'"
-    layer: "常用增强"
-    prio: "中"
-    status: done
-    evidence: ".agent/evidence/2026-11-02-B5.md"
-  - id: FR-STD-DB-DRV-009
-    goal: "GBase 8a 驱动实现（复用 MySQL 协议系的协议实现，具体库属平台实现）"
-    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-DRV-009 | grep -q '✅'"
-    layer: "进阶可选"
-    prio: "低（排期最后）"
-    status: done
-    evidence: ".agent/evidence/2026-11-02-B7.md"
+    prio: "高"
+    status: todo
+    evidence: ""
+  - id: FR-NTS-TODO-STATE-002
+    goal: "**清单是唯一事实源**：任务数据只有一份，日历不另存、切视图不复制、不产生第二套状态"
+    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-NTS-TODO-STATE-002 | grep -q '✅'"
+    layer: "基线必备"
+    prio: "高"
+    status: todo
+    evidence: ""

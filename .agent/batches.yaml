@@ -1,12 +1,36 @@
-# v0.3.0 数据库运维面 · 批次队列（一跳 = 一批，3–6 条同类项）
+# v0.4.0 笔记与任务闭环 · 批次队列（一跳 = 一批，3–6 条同类项）
 #
 # 唯一事实源 = Docs/Doyah产品开发计划任务清单-macOS.md（活书台账）。
 # 本文件只决定「一跳做哪几条」，不许反向改台账。
-# 生成于 2026-11-02，源 = plan.yaml 里 0 条 status: todo（已收口 34 条：RES-006, RES-007, RES-008, RES-009, RES-011, RES-013, RES-014, META-006, META-007, META-008, META-011, META-015, IO-002, IO-003, IO-004, IO-006, IO-007, DATA-002, DATA-005, DATA-006, SESS-002, SESS-003, SESS-004, TASK-001, TASK-002, TASK-003, CONN-012, CONN-020, DDL-003, DDL-004, DIAG-003, DIAG-004, DIAG-006, DRV-009）（另有 1 条 blocked，不在批次里：FR-STD-DB-META-002）
+# 生成于 2026-11-02，源 = plan.yaml 里 14 条 status: todo
 #
 # 生成命令：python3 Scripts/plan-batches.py --write   （--check 只比对不写盘）
 
 batches:
 
-# 合计 0 条，覆盖 plan.yaml 全部 todo。
-# 粗估 0 分钟 ≈ 0.0 小时（原一格一条的节奏按 20 分钟/条算）。
+  - id: N1
+    title: "笔记面收尾：采集 / 附件 / 版本 / 笔记本归属 / 私密 / 同步冲突"
+    status: todo
+    est_min: 90
+    items: [FR-NTS-NOTE-CAPTURE-001, FR-NTS-NOTE-ATTACH-001, FR-NTS-NOTE-VERSION-001, FR-NTS-NOTE-ORG-002, FR-NTS-NOTE-PRIVACY-001, FR-NTS-NOTE-SYNC-002]
+    why: "六条都在笔记这本身上（一个动作记下 / 附件引用 / 版本回滚 / 单层笔记本 / 私密不进搜索同步 / 记录级 LWW 留两版），共用 `NotesStore` + 同一份检索与同步口径 ⇒ 一次改到位比一条一跳省手续费。原计划的 N1/N2 边界（采集·格式·附件 / 检索·组织·回收站）在台账上只剩这几条未闭：FORMAT / SEARCH / ORG-001 / TRASH / SYNC-001 早已 ✅"
+    exit: "6 行两列全 ✅；每条的证据必须是探针或单测读数（`ledger-row.py <ID>` 出现 ✅ 只算抽查）"
+
+  - id: N2
+    title: "待办条目：本体 / 清单视图 / 组织检索 / 与笔记双向转化"
+    status: todo
+    est_min: 70
+    items: [FR-NTS-TODO-LIST-001, FR-NTS-TODO-LIST-002, FR-NTS-TODO-LIST-003, FR-NTS-TODO-LINK-001]
+    why: "四条都是「一条待办记录本身」的读写（字段 / 列表增删改排序 / 分组筛选排序 / 与笔记互转带回指），同一个模型与同一套同步，拆开做会重复写迁移"
+    exit: "4 行两列全 ✅；含一条「任务与笔记互转后回指可撤销」的反例"
+
+  - id: N3
+    title: "待办日历与状态一致性：月/周视图 / 当天详情 / 完成与改期同一事务 / 单一事实源"
+    status: todo
+    est_min: 60
+    items: [FR-NTS-TODO-CALENDAR-001, FR-NTS-TODO-CALENDAR-002, FR-NTS-TODO-STATE-001, FR-NTS-TODO-STATE-002]
+    why: "四条互相咬：日历只是同一份任务的第二种视图，所以「完成 / 改期同一事务」与「日历不另存」必须同批落地，否则先做日历就会做出第二套状态"
+    exit: "4 行两列全 ✅；含一条「日历另存一份 ⇒ 必须判红」的反例"
+
+# 合计 14 条，覆盖 plan.yaml 全部 todo。
+# 粗估 220 分钟 ≈ 3.7 小时（原一格一条的节奏按 20 分钟/条算）。
