@@ -610,6 +610,15 @@ final class AppState: ObservableObject {
     @Published var noteEditorTags = "" {
         didSet { noteEditorTextChanged() }
     }
+    /// **当前这条笔记挂着的附件索引**（`FR-NTS-NOTE-ATTACH-001`）：界面只画这份读数。
+    /// 库里的 `note_attachment` 只存路径，二进制在文件系统（`NoteAttachmentStore`）。
+    @Published private(set) var noteAttachments: [NoteAttachment] = []
+    /// 其中**文件已经不在了**的那些（判据②「附件缺失时明确提示」的读数面 —— 界面按它画缺失态）。
+    @Published private(set) var missingNoteAttachments: [NoteAttachment] = []
+    /// 删笔记之后**还留在盘上的附件清单**（判据③：另行确认才删文件）。
+    /// 非空 ⇒ 界面弹一次「文件要一起删吗」，两个出口都是人按的。
+    @Published var pendingAttachmentCleanup: [NoteAttachment] = []
+    @Published var isAttachmentCleanupPresented = false
     /// **当前是「预览」还是「改」**（片 `N2-3a`「单击预览」；枚举见文件头的 `NoteEditorMode`）。
     ///
     /// 默认 `.edit` —— 与 `N2-3a` 之前一致（没点过任何行时编辑器就是可编辑的）。
@@ -631,6 +640,9 @@ final class AppState: ObservableObject {
     /// 正在跑的「从库里读回正文权威源 spans」那一发（片 `WY-2a`；见 `loadEditorSpans`）。
     /// 换一条笔记就把它收掉重排 —— 迟到的读数属于上一条，装到当前这一条上就是串内容。
     private var noteSpansLoadTask: Task<Void, Never>?
+    /// 正在跑的「读这条笔记的附件索引 + 文件在不在」那一发（`FR-NTS-NOTE-ATTACH-001`）。
+    /// 与 spans 那一发同一条口径：换一条笔记就收掉重排，迟到的读数不许装到当前这一条上。
+    private var noteAttachmentLoadTask: Task<Void, Never>?
     /// 装内容进编辑器期间置真 —— 那三个 `didSet` 据此**不把「装进来的」当成「用户改的」**。
     private var isLoadingNoteEditor = false
     /// 刚落库、还没被 `reloadNotes()` 反映到 `notes` 里的那一份（**读旧列表的窗口期**）。
@@ -10425,8 +10437,17 @@ final class AppState: ObservableObject {
         // 装进来 = 与库里一致 ⇒ 不脏，也不该再挂着上一条留下的保存状态。
         noteEditorDirty = false
         noteSaveState = .idle
-        // 私密挡位跟着这一条走（`nil` = 新建态 ⇒ 不是私密）。
+        // **私密挡位跟着这一条走**（`nil` = 新建态 ⇒ 不是私密）。
         noteEditorIsPrivate = id.flatMap { identifier in notes.first { $0.id == identifier }?.isPrivate } ?? false
+        // **附件索引也跟着这一条走**（`FR-NTS-NOTE-ATTACH-001`）：换一条就必须换一份清单，
+        // 否则「切到 B 却看见 A 的附件」—— 与正文串内容同一族的错。
+        if let id {
+            loadNoteAttachments(id: id)
+        } else {
+            noteAttachmentLoadTask?.cancel()
+            noteAttachments = []
+            missingNoteAttachments = []
+        }
     }
 
     /// 把库里那一条的**正文权威源**（`spans`）读回来重挂在编辑面上（片 `WY-2a`）。
@@ -10478,6 +10499,137 @@ final class AppState: ObservableObject {
     /// `awaitPendingNoteAutosave()` 同一条理由）。
     func awaitPendingNoteSpansLoad() async {
         await noteSpansLoadTask?.value
+    }
+
+    // MARK: - 附件（`FR-NTS-NOTE-ATTACH-001`）
+
+    /// 读一条笔记的附件索引，并顺手标出**文件已经不在**的那些（判据②）。
+    ///
+    /// 为什么「在不在」要在这里算一次而不是视图里现判：视图每帧去摸文件系统既慢又会在
+    /// 外接盘拔掉时抖；读数收在一处，界面只画 `missingNoteAttachments` 给出的结论。
+    private func loadNoteAttachments(id: UUID) {
+        noteAttachmentLoadTask?.cancel()
+        noteAttachmentLoadTask = Task { [weak self] in
+            await self?.refreshNoteAttachments(id: id)
+        }
+    }
+
+    private func refreshNoteAttachments(id: UUID) async {
+        guard notesEnabled else { return }
+        do {
+            let store = NoteLibrary.defaultLibrary()
+            let all = try await store.attachments(of: id)
+            let missing = try await store.missingAttachments(of: id)
+            guard noteBeingEdited == id else { return }   // 迟到的读数属于上一条
+            noteAttachments = all
+            missingNoteAttachments = missing
+        } catch {
+            errorMessage = ErrorPresenter.message(for: error)
+        }
+    }
+
+    /// 等「读附件」那一发收口（判据要确定性，不靠 `sleep` 撞 —— 与 `awaitPendingNoteSpansLoad` 同一条理由）。
+    func awaitPendingNoteAttachments() async {
+        await noteAttachmentLoadTask?.value
+    }
+
+    /// 一条附件**文件还在不在**（界面那枚缺失标记读它；判定处仍是 `NoteAttachmentStore.isMissing`）。
+    func attachmentIsMissing(_ attachment: NoteAttachment) -> Bool {
+        missingNoteAttachments.contains { $0.id == attachment.id }
+    }
+
+    /// **插入图片 / 文件**（判据①：一次动作；原文件按字节原样收进来，不压缩不改写）。
+    ///
+    /// 新建态（还没落库）先按正常保存路把这一条写下去再挂 —— 否则附件没有可挂的笔记 id。
+    /// 为空（没东西可挂）时**不弹文件选择框**、给一句人话（`notesAttachNothingToAttachTo`）。
+    func attachFiles(at urls: [URL]) async {
+        guard notesEnabled else {
+            statusMessage = L(.licenseNotesNotIncluded)
+            return
+        }
+        guard !urls.isEmpty else { return }
+        var target = noteBeingEdited
+        if target == nil {
+            guard noteEditorHasContent else {
+                statusMessage = L(.notesAttachNothingToAttachTo)
+                return
+            }
+            guard await writeNoteEditor(snapshot: noteEditorSnapshot(), automatic: false) else { return }
+            target = noteBeingEdited
+        }
+        guard let noteID = target else {
+            statusMessage = L(.notesAttachNothingToAttachTo)
+            return
+        }
+        let store = NoteLibrary.defaultLibrary()
+        var attached = 0
+        var failure: Error?
+        for url in urls {
+            do {
+                _ = try await store.attach(fileAt: url, to: noteID)
+                attached += 1
+            } catch {
+                // 一份失败不拦其余（拖进来三份、坏了一份，另外两份照挂），但**不静默**。
+                failure = failure ?? error
+            }
+        }
+        await refreshNoteAttachments(id: noteID)
+        if let failure {
+            statusMessage = L(.notesAttachFailed, String(describing: failure))
+        } else if attached > 0 {
+            statusMessage = L(.notesAttached, attached)
+        }
+    }
+
+    /// 删笔记确认框里那句正文要带上的附件条数（判据③：先说清「有 N 个附件」再让人按删除）。
+    var pendingNoteRemovalAttachmentCount: Int {
+        guard let request = pendingNoteRemoval else { return 0 }
+        let ids: [UUID]
+        if case .notes(let targets) = request.target {
+            ids = targets
+        } else {
+            ids = []
+        }
+        return ids.reduce(0) { total, id in
+            total + (noteAttachmentsForDeletion[id]?.count ?? 0)
+        }
+    }
+
+    /// 确认框挂出来之前先读各条的附件条数（`requestNoteRemoval` 里同步填不了 —— 库是 actor）。
+    /// 只存条数，不存内容：这一格只用来拼那句话。
+    @Published var noteAttachmentsForDeletion: [UUID: [NoteAttachment]] = [:]
+
+    func loadAttachmentsForPendingRemoval() async {
+        guard let request = pendingNoteRemoval, case .notes(let ids) = request.target else {
+            noteAttachmentsForDeletion = [:]
+            return
+        }
+        var counts: [UUID: [NoteAttachment]] = [:]
+        let store = NoteLibrary.defaultLibrary()
+        for id in ids {
+            counts[id] = (try? await store.attachments(of: id)) ?? []
+        }
+        noteAttachmentsForDeletion = counts
+    }
+
+    /// **保留附件文件**（判据③的「另行确认」里那一条「不删」的出口）。
+    func keepPendingAttachmentFiles() {
+        pendingAttachmentCleanup = []
+        isAttachmentCleanupPresented = false
+    }
+
+    /// **一起删掉附件文件**（判据③的另一个出口：人按了「一起删掉」才动文件）。
+    func deletePendingAttachmentFiles() async {
+        let files = pendingAttachmentCleanup
+        pendingAttachmentCleanup = []
+        isAttachmentCleanupPresented = false
+        guard !files.isEmpty else { return }
+        do {
+            let removed = try await NoteLibrary.defaultLibrary().deleteAttachmentFiles(files)
+            statusMessage = L(.notesAttachmentFilesDeleted, removed)
+        } catch {
+            errorMessage = ErrorPresenter.message(for: error)
+        }
     }
 
     /// span 树 → 落库那份 JSON（`NoteBody` 的编解码面 = 交换面，**不另起一套序列化**）。
@@ -10801,9 +10953,16 @@ final class AppState: ObservableObject {
         do {
             // **墓碑入口**（`IR-17`）：`changeCount == 0`（库里没有这条）会抛 `noteNotFound`，
             // 由下面那条 `catch` 如实报出来 —— 不再静默 no-op（`T-20261009-161/162`）。
-            try await NoteLibrary.defaultLibrary().delete(id: id, at: Date())
+            //
+            // **附件清单先读回来**（`FR-NTS-NOTE-ATTACH-001` 判据③）：墓碑只删索引行、**不动文件**，
+            // 于是「这条原来挂着哪些附件」必须在这里接住，删完由界面再问一次「文件要一起删吗」。
+            // 不问就把清单丢掉 = 文件变成谁也找不到的孤儿（占地方、还可能含敏感内容）。
+            let receipt = try await NoteLibrary.defaultLibrary().deleteReturningAttachments(id: id, at: Date())
             if noteBeingEdited == id { beginNewNote() }
             await reloadNotes()
+            if !receipt.attachments.isEmpty {
+                pendingAttachmentCleanup.append(contentsOf: receipt.attachments)
+            }
             // **删除也是一次内容变更**：写库成功之后入队 + 尝试上行（`IR-17` 墓碑 / `IR-21` 断网留队）。
             // 契约 v3.96 新纪律：墓碑上行 `rev` 必须 +1 —— 由 `flush` 的 `.delete` 那一支用
             // `nextRevision(for:)` 落实（否则另一端持更高 `rev` 的副本会把删除 LWW 覆盖回来）。
@@ -11023,6 +11182,9 @@ final class AppState: ObservableObject {
                 ? (notes.first { $0.id == ids.first }?.title ?? "")
                 : ""
             pendingNoteRemoval = NoteRemovalPrompt.request(target: .notes(Array(ids)), subject: subject)
+            // **先读附件条数**（`FR-NTS-NOTE-ATTACH-001` 判据③）：确认框那句正文要说「这条挂着 N 个附件，
+            // 删笔记不动文件」。读库是异步的，所以这里发一发，框上那句话随读数更新。
+            Task { await loadAttachmentsForPendingRemoval() }
         case .todos:
             guard let id = todoEditingID else {
                 pendingNoteRemoval = nil
@@ -11064,9 +11226,20 @@ final class AppState: ObservableObject {
     }
 
     /// 确认框正文（多选才写条数；单条的名字已经在标题里了）。
+    ///
+    /// **附件那一句也要在这里说**（`FR-NTS-NOTE-ATTACH-001` 判据③）：删笔记只删索引、不动文件 ——
+    /// 不提前说，用户会以为「删了就是删干净了」，那些文件却还在盘上。
     var pendingNoteRemovalMessage: String? {
-        guard let request = pendingNoteRemoval, request.target.isMultipleNotes else { return nil }
-        return L(.notesRemoveSummaryNotes, request.target.count)
+        guard let request = pendingNoteRemoval else { return nil }
+        var lines: [String] = []
+        if request.target.isMultipleNotes {
+            lines.append(L(.notesRemoveSummaryNotes, request.target.count))
+        }
+        let attachmentCount = pendingNoteRemovalAttachmentCount
+        if attachmentCount > 0 {
+            lines.append(L(.notesAttachmentCleanupMessage, attachmentCount))
+        }
+        return lines.isEmpty ? nil : lines.joined(separator: "\n")
     }
 
     /// 用户在确认框里点了「删除」：**这才落库**，然后重读库。
@@ -11075,7 +11248,12 @@ final class AppState: ObservableObject {
         pendingNoteRemoval = nil
         switch request.target {
         case .notes(let ids):
+            pendingAttachmentCleanup = []
             for id in ids { await deleteNote(id: id) }
+            noteAttachmentsForDeletion = [:]
+            // **附件文件另行确认**（判据③）：上面那些 `deleteNote` 只把清单攒起来，一个文件都没删。
+            // 这里只负责把框挂出来 —— 「保留」与「一起删」两个出口都是人按的。
+            isAttachmentCleanupPresented = !pendingAttachmentCleanup.isEmpty
         case .todo(let id):
             await deleteTodo(id: id)
         }

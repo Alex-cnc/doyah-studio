@@ -64,3 +64,4 @@
 - 2026-11-02 N1：`NOTE-ORG-002` 记 blocked 而不自行拆两层 —— 需求书 §3.5 与契约 §2.12 判据互斥，拆 `shelf` 是产品回滚 + 跨仓改契约，超出本跳授权。
 - 2026-11-02 N1：`plan-batches.py --check` 认 `blocked` 但要求 `next_try` 非空（没写的 blocked 判红），理由是「blocked」必须是一个**声明了出口的卡点**，不是「我不想做」的别名。
 - 2026-11-02 N1 收尾片：`revealPrivate` 的中文默认值**删掉、`reason` 改必填**，不走 `--update-baseline` 上调棘轮 —— 上调会把「英文界面弹中文验证框」洗成合法欠账；而语言表里早就有 `notesPrivateUnlockReason`、调用方本来就在传，删默认值只让「忘了传」在编译期就红。
+- 2026-11-02（N1 第二片 · ATTACH-001）：删笔记**不动**附件文件 —— 墓碑只删索引行，删除改成「收据带回清单 + 界面另行确认」（判据③「不会静默删掉附件」的字面口径）；附件按 `<库目录>/attachments/<noteID>/<uuid>-<原名>` 落盘、`copyItem` 字节拷贝，**不做压缩 / 缩略图落盘**；`NoteLibrary.attachments(of:)` 对「查无此条」返回空表而不抛（与 `reminders()` 同口径），`requireRowID` 那类程序错误仍抛。

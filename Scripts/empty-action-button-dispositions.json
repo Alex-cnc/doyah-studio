@@ -290,6 +290,24 @@
       "guard": "!edits.isEmpty || wishDeliveryValidation != nil",
       "form": "internal",
       "reason": "交付面的内部同步（private）：账空、也没有验证读数 ⇒ 清单置 `nil`，界面不留空壳；没有按钮入口，由账变化与命令收尾两处调它。"
+    },
+    {
+      "func": "attachFiles",
+      "guard": "!urls.isEmpty",
+      "form": "internal",
+      "reason": "不是按钮前置：这一发由 `NotesEditorToolbar` 的「插入附件」把 `NSOpenPanel` 选中的 URL 交进来，人点「取消」时表就是空的 —— 取消是正常动作，不该再补一句「附件没有挂上」（那是失败用语，会把「我改主意了」说成「出错了」）。"
+    },
+    {
+      "func": "attachFiles",
+      "guard": "noteEditorHasContent",
+      "form": "explain",
+      "reason": "新建态且一个字都没有时没有可挂的笔记：给 `notesAttachNothingToAttachTo`（「先写一条笔记，再插附件」），不静默早退 —— 用户刚点了插入附件、又选好了文件，什么都不发生就是「点了没反应」。"
+    },
+    {
+      "func": "deletePendingAttachmentFiles",
+      "guard": "!files.isEmpty",
+      "form": "internal",
+      "reason": "够不着按钮：确认框只在 `pendingAttachmentCleanup` 非空时挂出来（`confirmNoteRemoval` 末尾那句），这一句防的是并发重入（连点两次「一起删掉」），不是任何按钮的前置判据。"
     }
   ]
 }

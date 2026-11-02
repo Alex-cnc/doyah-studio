@@ -905,6 +905,9 @@ struct NotesEditorView: View {
             TextField(L(.notesTagsPlaceholder), text: $appState.noteEditorTags)
                 .textFieldStyle(.roundedBorder)
                 .font(Theme.font(.caption))
+            // **附件条**（`FR-NTS-NOTE-ATTACH-001`）：只画库里的索引（文件本体在文件系统）。
+            // 缺失的那几个**画成缺失态并写「文件不在了」**（判据②），不静默跳过。
+            attachmentStrip
             // **正文那一块按 `appState.editorMode` 分两半**（片 `N2-3a`「单击预览」）：
             //   · `.edit`（新建 / 「改」）⇒ SwiftUI `TextEditor`，就是本片之前那一支；
             //   · `.preview`（列表里单击一条）⇒ `NotePreviewBody`：真 `NSTextView` 且
@@ -982,6 +985,71 @@ struct NotesEditorView: View {
         } message: {
             Text(L(.notesPrivateConfirmMessage))
         }
+        // **附件文件另行确认**（`FR-NTS-NOTE-ATTACH-001` 判据③）：删笔记只删索引，文件还在盘上 ——
+        // 这里问一次「要一起删吗」。两个出口都是人按的：保留 = 一个文件都不动；一起删 = 才真的删。
+        .confirmationDialog(
+            L(.notesAttachmentCleanupTitle),
+            isPresented: Binding(
+                get: { appState.isAttachmentCleanupPresented },
+                set: { if !$0 { appState.keepPendingAttachmentFiles() } }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button(L(.notesAttachmentDeleteFiles), role: .destructive) {
+                Task { await appState.deletePendingAttachmentFiles() }
+            }
+            Button(L(.notesAttachmentKeepFiles), role: .cancel) {
+                appState.keepPendingAttachmentFiles()
+            }
+        } message: {
+            Text(L(.notesAttachmentCleanupMessage, appState.pendingAttachmentCleanup.count))
+        }
+    }
+
+    /// **附件条**（`FR-NTS-NOTE-ATTACH-001`）：一枚一枚画名字；文件不在的那一枚带缺失标记。
+    ///
+    /// 为什么只画名字不画缩略图：缩略图要先解码一次图片 —— 那是「读」不是「改写」，
+    /// 但离屏判据（`TestsUISnapshot`）里没有真窗口可解码，画出来反而让「文件在不在」这件事
+    /// 变得不可判。名字 + 缺失态是这两条判据都能读到的形状；图片预览留给真机点验。
+    private var attachmentStrip: some View {
+        Group {
+            if !appState.noteAttachments.isEmpty {
+                HStack(spacing: Spacing.s) {
+                    ForEach(appState.noteAttachments, id: \.id) { attachment in
+                        attachmentChip(attachment)
+                    }
+                    Spacer(minLength: 0)
+                }
+                .accessibilityIdentifier("notes-attachments")
+            }
+        }
+    }
+
+    /// 一枚附件：名字 + （缺失时）「文件不在了」。
+    ///
+    /// **灰着而不是隐藏**：文件不在时那一行必须还在 —— 藏起来等于告诉用户「这条没有附件」，
+    /// 与事实相反（判据②要的就是「明确提示文件不在了」）。
+    private func attachmentChip(_ attachment: NoteAttachment) -> some View {
+        let missing = appState.attachmentIsMissing(attachment)
+        return HStack(spacing: Spacing.xs) {
+            Image(systemName: missing ? "exclamationmark.triangle" : "paperclip")
+                .foregroundStyle(missing ? Theme.text(.secondary) : Theme.text(.primary))
+            Text(URL(fileURLWithPath: attachment.path).lastPathComponent)
+                .font(Theme.font(.caption))
+                .foregroundStyle(Theme.text(.secondary))
+                .lineLimit(1)
+            if missing {
+                Text(L(.notesAttachmentMissing))
+                    .font(Theme.font(.caption))
+                    .foregroundStyle(Theme.text(.secondary))
+            }
+        }
+        .padding(.horizontal, Spacing.s)
+        .padding(.vertical, Spacing.xs)
+        .background(Theme.surface(.panel))
+        .clipShape(RoundedRectangle(cornerRadius: 6))
+        .help(missing ? L(.notesAttachmentMissing) : attachment.path)
+        .accessibilityIdentifier("notes-attachment-\(attachment.id.uuidString)")
     }
 
     // MARK: - title 区（正文区第一行 · 片 `R3-T` · 契约 `FR-NOTEUI-07` + `-09`）
@@ -1283,6 +1351,17 @@ struct NotesEditorToolbar: View {
                 .disabled(!canApplyInline)
                 .accessibilityIdentifier(command.accessibilityIdentifier)
             }
+            // **插入附件**（`FR-NTS-NOTE-ATTACH-001`）：形态与上面九枚同一档 —— 纯图标 + 悬停名字。
+            // 一次动作 = 点这一枚、选文件；原文件按字节原样收进附件家（`NoteAttachmentStore`），
+            // 不压缩、不改写。没有可挂的笔记时 `attachFiles` 会**给一句人话**而不是静默不动。
+            Button {
+                chooseAttachments()
+            } label: {
+                Image(systemName: "paperclip")
+                    .foregroundStyle(Theme.text(.secondary))
+            }
+            .help(L(.notesAttachTip))
+            .accessibilityIdentifier("notes-attach-file")
             Text(L(.notesSourceHint))
                 .font(Theme.font(.caption))
                 .foregroundStyle(Theme.text(.secondary))
@@ -1320,6 +1399,22 @@ struct NotesEditorToolbar: View {
     /// 守卫与 `.disabled` 同一条判断）—— 这里只是**同一个判据的另一个消费点**，
     /// 视图里不许再自己算一遍（那才是 `L-50` 的病根）。
     private var canApplyInline: Bool { appState.noteEditorHasContent }
+
+    /// **选文件**（`FR-NTS-NOTE-ATTACH-001`）：只做「选」这一件事，收文件 / 写索引全在
+    /// `AppState.attachFiles(at:)`（不在这里碰库，也不在这里判能不能挂）。
+    ///
+    /// `canChooseDirectories = false`：附件是文件，不是目录 —— 选一个目录进来只会变成一条
+    /// 指向目录的索引（判据里立刻显示「文件不在了」，因为目录不是文件）。
+    private func chooseAttachments() {
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = true
+        panel.canChooseDirectories = false
+        panel.canChooseFiles = true
+        panel.title = L(.notesAttachTip)
+        guard panel.runModal() == .OK else { return }
+        let urls = panel.urls
+        Task { await appState.attachFiles(at: urls) }
+    }
 }
 
 /// **笔记区 = 顶栏 + 三栏**（队列 `L-184`）：需求提出者 2026-10-04 原话「macOS版界面布局可以

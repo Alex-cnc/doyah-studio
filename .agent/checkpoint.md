@@ -110,3 +110,15 @@
 - **下一批 = N1**（`NOTE-CAPTURE-001` / `ATTACH-001` / `VERSION-001` / `ORG-002` / `PRIVACY-001` / `SYNC-002`）。N1 起跳前先看清：这 6 条里 **2 条是 ⬜（`ORG-002` / `PRIVACY-001`，台账无实现无判据）**，按 v0.4.0 出口要求走「先写需求侧判据 → 再落实现 → 探针读数」，不许先实现再补判据。
 - 观察（不动，记 next_try）：`check-version-scope` 里 `未排期 10` 含这 8 条 `TODO-*`；§4.2 把它们划进 v0.4.0 但台账 `版本` 列仍是 `未排期` —— 改该列会动 §2 分档计数，留到 N 批次与判据同批改。
 - 证据 `.agent/evidence/2026-11-02-v040-queue.md`
+
+## v0.4.0 · N1（第二片：附件）（2026-11-02）
+
+- **队列口径（本片后实测）**：`plan-batches --version 0.4.0 --check` rc=0；`plan.yaml` = **10 todo + 1 blocked**（ATTACH 已出队，派生件按台账重出）；`batches.yaml` N1 只剩 **2 条**（`CAPTURE-001` / `SYNC-002`，按「3–6 条」的规矩它已经偏小 ⇒ 下一跳可与 N2 并一批，别为凑数硬切）。台账 §4.2 v0.4.0 12 → **11**（10 / 1），未闭 83 → **82**。
+- **收一条**：`FR-NTS-NOTE-ATTACH-001` 两列全 ✅。
+  - 落盘：`Plugins/Notes/Sources/NoteAttachmentStore.swift`（`importFile` = `FileManager.copyItem` 字节拷贝，不解码 / 不重编码 / 不缩图；拷完按字节数核对，对不上删目标并报失败；同名文件 `<uuid>-<原名>` 各占一份）；`NoteLibrary` 四件事 + 删除收据 `NoteDeletionReceipt`（墓碑只删索引行，文件一个不碰，清单交界面另行确认）。
+  - 界面：工具条第十枚图标（纯图标 + 悬停名字）→ `NSOpenPanel`；编辑面 tags 下一条附件条（缺失那枚画警示 + 「文件不在了」）；删笔记确认框正文带「挂着 N 个附件、删笔记不动文件」，删完再弹「保留 / 一起删掉」两个出口。
+  - 语言表新增六键（两语齐全）；`check-empty-action-buttons` 台账新登记 3 条（`attachFiles` ×2 · `deletePendingAttachmentFiles` ×1）。
+- **读数**：`swift test --filter NoteAttachmentTests` **8 例 / 0 失败** · `verify-core.sh` **5099 例 / 13 skipped / 1 失败**（+8；那 1 条 = `SSHTunnelRuntimeTests.testBusyPortFailsFastWithoutStartingAnything` 存量抖动，本片没碰隧道）· `verify-ui-interactions.sh` **116 条全跑 / 无跳过 / 源锚点全在** rc=0 · 文档门禁十道 rc=0（numbers 三向 5099）· `check-palette-wiring` 40 ↔ 40 · 棘轮 A 101/954 == 基线（棘轮 B 38 项存量红未动）。
+- **反例两段**（判红后 `shasum` 逐字节还原）：`copyItem` → 文本重写 ⇒ **6 例红**（`f0f10473…`）；`deleteReturningAttachments` 顺手删文件 ⇒ **2 例红**（`a55fe156…`）。
+- **本片留下的口子（next_try）**：① 真鼠标点「插入附件」+ `NSOpenPanel` 真选文件**未点**（机械证据在库 / 文件系统层）· ② 缩略图 / 图片预览未画 · ③「缩放不改原文件」只保证不改文件，显示比例未量 · ④ 多选删除时附件清单按条累加后一次确认，混合场景文案未量。
+- **下一批 = N1 剩余 2 条**：`NOTE-CAPTURE-001`（一个动作记下：桌面全局快捷键 + 不填标题也能存、首行当标题）· `NOTE-SYNC-002`（记录级 LWW + 冲突留两版：落败那版可打开 / 两版标来源设备与时间 / 合并结果可回退 / 「以我这版为准」是人按的 / 墓碑 rev 严格递增）。

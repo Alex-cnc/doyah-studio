@@ -324,6 +324,89 @@ public actor NoteLibrary {
         return try save(draft, spans: entry.spans, id: id, now: now, reason: .rollback, retention: retention)
     }
 
+    // MARK: - 附件（`FR-NTS-NOTE-ATTACH-001`）
+
+    /// 附件根目录：**与库文件同一个数据家**（`<库所在目录>/attachments`）。
+    ///
+    /// 为什么不走 `NoteAttachmentStore(environment:)` 的默认根：库可以指到临时目录（判据 / CLI），
+    /// 附件必须跟着**这一份库**走 —— 否则判据里的附件落到真用户数据家去，还会互相串。
+    public nonisolated var attachmentRoot: URL {
+        databaseURL.deletingLastPathComponent().appendingPathComponent("attachments", isDirectory: true)
+    }
+
+    /// 一条笔记的附件索引（库不在 / 没有这一条 ⇒ 空表，**不顺手建库** —— 与 `reminders()` 同一条纪律）。
+    ///
+    /// 「没有这一条」也返回空表而不是抛：附件清单的唯一用处是「界面上画什么」，
+    /// 一条已经不在的笔记没有附件可画（`requireRowID` 那类程序错误仍会抛，这里只挡「查无此条」）。
+    public func attachments(of id: UUID) throws -> [NoteAttachment] {
+        guard FileManager.default.fileExists(atPath: databaseURL.path) else { return [] }
+        let database = try open()
+        guard try database.note(id: id) != nil else { return [] }
+        return try database.attachments(of: id)
+    }
+
+    /// **收一份文件进来并挂到这条笔记上**：先落盘（字节拷贝），再写索引行。
+    ///
+    /// 顺序不能反：先写索引再拷文件，拷贝失败就会留下一条指向不存在文件的索引（判据② 的「文件不在了」
+    /// 会立刻出现，但那是我们自己造的）。拷贝成功而索引失败 ⇒ **把刚拷的文件删掉**，不留半份。
+    ///
+    /// - Returns: 索引里的那一条（路径 = 附件家下的绝对路径）。
+    public func attach(
+        fileAt source: URL,
+        to id: UUID,
+        now: Date = Date(),
+        store: NoteAttachmentStore? = nil
+    ) throws -> NoteAttachment {
+        let filer = store ?? NoteAttachmentStore(root: attachmentRoot)
+        let attachment = try filer.importFile(at: source, noteID: id, now: now)
+        do {
+            try open().addAttachment(attachment, to: id)
+        } catch {
+            try? filer.deleteFiles([attachment])
+            throw error
+        }
+        return attachment
+    }
+
+    /// 这条笔记上**文件已经不在**的附件（判据②的读数入口）。
+    public func missingAttachments(of id: UUID, store: NoteAttachmentStore? = nil) throws -> [NoteAttachment] {
+        let filer = store ?? NoteAttachmentStore(root: attachmentRoot)
+        return filer.missing(in: try attachments(of: id))
+    }
+
+    /// **真的删附件文件**（判据③：只有人另行确认才走这里；索引行由删除笔记那一支处理）。
+    @discardableResult
+    public func deleteAttachmentFiles(
+        _ attachments: [NoteAttachment], store: NoteAttachmentStore? = nil
+    ) throws -> Int {
+        let filer = store ?? NoteAttachmentStore(root: attachmentRoot)
+        return try filer.deleteFiles(attachments)
+    }
+
+    /// 删除的收据：**落了几行墓碑 + 这条笔记原本挂着哪些附件**。
+    ///
+    /// 判据③要的是「删笔记不会静默删掉附件」—— 于是「它有哪些附件」必须在删之前读出来交给调用方，
+    /// 由界面把「这些文件还在 `…/attachments/<noteID>/`，要不要一起删」问一次。库在这一层
+    /// **一个附件文件都不碰**（墓碑只删索引行，见 `NoteDatabase.tombstone` 注释第 ③ 条）。
+    public struct NoteDeletionReceipt: Equatable, Sendable {
+        /// `true` = 真的落下了墓碑；`false` = 库还不存在（没有任何东西被删）。
+        public var deleted: Bool
+        /// 删之前这条笔记挂着的附件（文件仍在盘上）。
+        public var attachments: [NoteAttachment]
+
+        public init(deleted: Bool, attachments: [NoteAttachment]) {
+            self.deleted = deleted
+            self.attachments = attachments
+        }
+    }
+
+    /// 与 `delete(id:at:)` 同一件事，但**把附件清单带回来**（界面按它问「要不要一起删文件」）。
+    public func deleteReturningAttachments(id: UUID, at date: Date) throws -> NoteDeletionReceipt {
+        let held = try attachments(of: id)
+        let deleted = try delete(id: id, at: date)
+        return NoteDeletionReceipt(deleted: deleted, attachments: deleted ? held : [])
+    }
+
     // MARK: - 私密挡位（`FR-NTS-NOTE-PRIVACY-001`）
 
     /// 私密条目门牌（**无正文 / 无标签**）：界面「私密」那一栏只显示这些。

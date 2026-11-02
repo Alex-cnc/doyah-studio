@@ -868,6 +868,17 @@ public enum LKey: String, CaseIterable, Sendable {
     case notesPrivateConfirmTitle
     case notesPrivateConfirmMessage
     case notesNoteMissing
+    case notesAttachTip
+    case notesAttached
+    case notesAttachNothingToAttachTo
+    case notesAttachFailed
+    case notesAttachmentMissing
+    case notesAttachmentMissingSummary
+    case notesAttachmentCleanupTitle
+    case notesAttachmentCleanupMessage
+    case notesAttachmentKeepFiles
+    case notesAttachmentDeleteFiles
+    case notesAttachmentFilesDeleted
     case menuMaintenanceTasks
     case maintenancePlanLabel
     case maintenancePlanHint
@@ -4239,6 +4250,17 @@ public enum LocalizedStrings {
             .english: "After this the note returns to search, sync and export — this needs one more confirmation."
         ],
         .notesNoteMissing: [.simplifiedChinese: "这条笔记已经不在了（列表已重读）", .english: "That note is gone (the list was reloaded)"],
+        .notesAttachTip: [.simplifiedChinese: "插入图片或文件（原文件原样保存）", .english: "Attach an image or file (kept byte for byte)"],
+        .notesAttached: [.simplifiedChinese: "已挂上 %d 个附件（原文件原样保存）", .english: "Attached %d file(s), stored byte for byte"],
+        .notesAttachNothingToAttachTo: [.simplifiedChinese: "先写一条笔记，再插附件", .english: "Write a note first, then attach a file"],
+        .notesAttachFailed: [.simplifiedChinese: "附件没有挂上：%@", .english: "The file was not attached: %@"],
+        .notesAttachmentMissing: [.simplifiedChinese: "文件不在了", .english: "File is gone"],
+        .notesAttachmentMissingSummary: [.simplifiedChinese: "有 %d 个附件文件已经不在了", .english: "%d attachment file(s) are gone"],
+        .notesAttachmentCleanupTitle: [.simplifiedChinese: "附件文件要一起删吗？", .english: "Delete the attachment files too?"],
+        .notesAttachmentCleanupMessage: [.simplifiedChinese: "这条笔记挂着 %d 个附件，文件仍在磁盘上。删笔记只删索引，不动文件；要一起删掉吗？", .english: "This note holds %d attachment(s); the files are still on disk. Deleting the note only drops the index — delete the files too?"],
+        .notesAttachmentKeepFiles: [.simplifiedChinese: "保留文件", .english: "Keep the files"],
+        .notesAttachmentDeleteFiles: [.simplifiedChinese: "一起删掉", .english: "Delete them too"],
+        .notesAttachmentFilesDeleted: [.simplifiedChinese: "已删掉 %d 个附件文件", .english: "Deleted %d attachment file(s)"],
         .menuMaintenanceTasks: [.simplifiedChinese: "维护任务…", .english: "Maintenance tasks…"],
         .maintenancePlanLabel: [.simplifiedChinese: "计划（每行一条：task: 类别 ｜ 人话描述 ｜ sql: 语句）", .english: "Plan (one per line: task: kind | description | sql: statement)"],
         .maintenancePlanHint: [.simplifiedChinese: "写操作与 DDL 一律要逐条批准；高开销（REINDEX / 备份 / 恢复）默认一次只放一条。", .english: "Writes and DDL always need step-by-step approval; high-cost ones (REINDEX / backup / restore) are limited to one per run by default."],

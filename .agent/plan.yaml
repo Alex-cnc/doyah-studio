@@ -1,20 +1,13 @@
 # v0.4.0 笔记与任务闭环 · 执行队列（**派生件**）
 # 唯一事实源 = Docs/Doyah产品开发计划任务清单-macOS.md（活书台账）。
 # 本文件只做「下一跳」排序，不许反向改台账；台账一改就跑 --emit-plan 重出，别手改。
-# 生成于 2026-11-02，源 = 台账里 FR-NTS-NOTE- / FR-NTS-TODO- 未闭 12 条（11 🟡 / 1 ⬜）。
+# 生成于 2026-11-02，源 = 台账里 FR-NTS-NOTE- / FR-NTS-TODO- 未闭 11 条（10 🟡 / 1 ⬜）。
 tasks:
   - id: FR-NTS-NOTE-CAPTURE-001
     goal: "快速捕获：**一个动作**记下一条笔记（手机锁屏 / 桌面快捷键），不要求先选目录与标签"
     done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-NTS-NOTE-CAPTURE-001 | grep -q '✅'"
     layer: "基线必备"
     prio: "—"
-    status: todo
-    evidence: ""
-  - id: FR-NTS-NOTE-ATTACH-001
-    goal: "附件与图片：插入图片与文件，**附件存文件系统、笔记里存引用**，原图不被压缩覆盖"
-    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-NTS-NOTE-ATTACH-001 | grep -q '✅'"
-    layer: "常用增强"
-    prio: "中"
     status: todo
     evidence: ""
   - id: FR-NTS-NOTE-ORG-002
