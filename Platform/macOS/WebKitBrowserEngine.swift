@@ -16,6 +16,8 @@ import DoyahCore
 /// 3. **站点存储按常规浏览器**（2026-10-28 第三十四批，`FR-STD-WS-WEB-004` ②）：缺省持久化 ——
 ///    否则「登录跳转回来后还是登录态」这条在重启 / 多次导航后必然断；站点数据仍只落在**本应用容器**的
 ///    WebKit 目录里，与 SQL 客户端的连接信息、钥匙串凭据不混放（原来那句「默认非持久化」已作废）；
+///    **每个页签一套自己的存储**（`FR-STD-WS-WEB-001` ③，`tabScopedDataStore(for:)`）—— 共用一份
+///    等于 A 页签的登录态漏给 B 页签；按页签 id 分仍然是持久化的，登录态照样跨重启；
 /// 4. 每次裁决（放行 / 拦截）都写进统一外发日志。
 ///
 /// **已知边界**：`WKWebView` 的公开 API 不暴露单个子资源请求，所以日志是**导航级**的
@@ -77,11 +79,21 @@ public final class WebKitBrowserEngine: NSObject, BrowserEngine {
     /// 或者反过来把脚本跳转放过去（安全属性坏掉）。所以由我们自己标记"这是用户按的"。
     private var explicitLoadRequested = false
 
+    /// 每个浏览页签**一套自己的站点存储**（`FR-STD-WS-WEB-001` ③：互不共享 Cookie）。
+    ///
+    /// 为什么按页签 id 而不是共用一个 `.default()`：共用存储时，在 A 页签登录过的站点，
+    /// 在 B 页签打开就是登录态 —— 需求书这条要的正是「互不串」。`WKWebsiteDataStore(forIdentifier:)`
+    /// （macOS 14+）给的存储**仍是持久化**的，所以 `FR-STD-WS-WEB-004` ②「登录态跨重启」照样成立：
+    /// 页签 id 随会话落盘（`BrowserTabStore`），重建同一页签时拿回同一套存储。
+    public static func tabScopedDataStore(for pageID: UUID) -> WKWebsiteDataStore {
+        WKWebsiteDataStore(forIdentifier: pageID)
+    }
+
     public init(
         pageID: UUID = UUID(),
         origin: String = "浏览器 · 页签",
         log: EgressLog = .shared,
-        websiteDataStore: WKWebsiteDataStore = .default()
+        websiteDataStore: WKWebsiteDataStore? = nil
     ) {
         self.pageID = pageID
         self.origin = origin
@@ -89,7 +101,7 @@ public final class WebKitBrowserEngine: NSObject, BrowserEngine {
         self.page = BrowserPage(id: pageID)
 
         let configuration = WKWebViewConfiguration()
-        configuration.websiteDataStore = websiteDataStore
+        configuration.websiteDataStore = websiteDataStore ?? Self.tabScopedDataStore(for: pageID)
         // 站点身份（`FR-STD-WS-WEB-004` ①）：**不往 UA 尾巴上拼产品名** —— 拼了就等于自报
         // 「内嵌面板」，站点据此降级（`nil` = 不拼）。
         configuration.applicationNameForUserAgent = BrowserIdentity.applicationNameForUserAgent

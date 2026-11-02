@@ -21,6 +21,34 @@ final class MultiCursorTests: XCTestCase {
         ])
     }
 
+    /// 需求 ② 里那条容易写反的口径：**相邻两处不合并**。
+    ///
+    /// `[0,2)` 与 `[2,2)` 边界相接但这仍是两处选区 —— 合并成 `[0,4)` 会让「选了三处只改两处」
+    /// 那种错变得看不出来（下一条输入会一整段替换）。实现用的是 `location < lastEnd`（严格小于），
+    /// 这条用例就是钉住那个「严格」。
+    func testAdjacentSelectionsDoNotMerge() {
+        let cursor = MultiCursor(selections: [
+            NSRange(location: 2, length: 2),
+            NSRange(location: 0, length: 2)
+        ], textLength: 10)
+
+        XCTAssertEqual(cursor.count, 2, "相邻两处不许合并成一处")
+        XCTAssertEqual(cursor.selections, [
+            NSRange(location: 0, length: 2),
+            NSRange(location: 2, length: 2)
+        ], "只排序，不合并")
+    }
+
+    /// 负例的对照面：真重叠（`location < lastEnd`）**必须**合并，否则一次输入会在重叠段写两遍。
+    func testTrueOverlapStillMerges() {
+        let cursor = MultiCursor(selections: [
+            NSRange(location: 0, length: 2),
+            NSRange(location: 1, length: 2)
+        ], textLength: 10)
+
+        XCTAssertEqual(cursor.selections, [NSRange(location: 0, length: 3)])
+    }
+
     /// 同一个零长度位置出现两次必须合并成一处 —— 否则一次输入会被写两遍。
     func testDuplicateCaretCollapses() {
         let cursor = MultiCursor(selections: [

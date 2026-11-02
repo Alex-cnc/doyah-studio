@@ -381,3 +381,16 @@
 - **存量红（与本片无关，逐条核过不在本片改动面上）**：`check-board-parity`（台账 `DIAG-006` 那行状态列被写成 `✅（…）`，解析崩）、`check-notes-capability-sync`（笔记能力章跨仓不同文 + §3.5 条目清单）、`check-note-module-isolation` / `check-plugin-assembly`（笔记源文件漏登清单）、`check-network-egress`（`AgentWebTools` 等未登记）、`check-format-arguments`（225 > 预算 188）。**都不是本片引入**：`--report` 里没有一处点名本片文件或新键。
 - **下一批 = C2（3 条）**：`NFR-ALL-GATE-PERF-001/002/003`（冷启动 ≤ 2 s · 1 万行 × 20 列 · 10 万行不 OOM）。起跳先核先例 `Scripts/result-scroll-baseline.json` + `check-result-scroll-ledger.py`：阈值只有一处、探针读它不写魔数。
 - 证据 `.agent/evidence/2026-11-02-C1.md`
+
+## v0.6.0 · 判据债第二片：工作区 / 主题 6 条 · 2026-11-02
+
+- **六条一次做完**：`FR-STD-WS-UI-008` / `-EDIT-016` / `-WEB-001` / `-FS-001` / `-NAV-002` 判据列翻 ✅；`FR-STD-WS-FS-008` 实现列与判据列**同降 🟡**（① 的「图片等按各自视图」没有实现 —— 无图片视图，图片走 `openAsText` 会被当二进制拒绝）。
+- **真缺口一处**：`WEB-001` ③「每页签独立数据存储」原来全应用共用一个 `WKWebsiteDataStore.default()`（A 页签登录过 B 页签就是登录态）。改 `WebKitBrowserEngine.tabScopedDataStore(for:)` = `WKWebsiteDataStore(forIdentifier: pageID)`（仍持久化 ⇒ `WEB-004` ② 不破），3 例钉住。
+- **新判据 4 处**：`WorkspaceHomeProbeTests` 6 例（Home 开局 / 欢迎语·版本·版权 / 三栏最近打开各接真动作 / 与数据库页签互不持有）· `WorkspaceFileOpenGuardProbeTests` 5 例（超限两数 / 二进制 / GB18030 / 缺文件 / 目录）· `MultiCursorTests` +2（相邻不合并 / 真重叠必合并）· `WebKitBrowserEngineTests` +3（存储隔离 / 同 id 复建 / 显式注入）。
+- **读数**：`verify-core` **5319 / 13 skipped / 0 失败**（本片 +16）· `verify-ui-interactions` **116 条全跑无跳过** · `check-status-gap` **8 → 2**（剩 `NAV-014` / `AI-001`）· 文档门禁除「status-gap 未接闭环」（存量）外全 rc=0 · 全量 `swift test` 两例存量抖动（IM 心跳 / ssh 忙端口），单族复跑 14 例 0 失败。
+- **反例六段**：共用存储 · `<`→`<=` · 删首页版本行 · 拿掉大文件上限 · `followSystem` 恒深色 · 回落语言塞关键字 —— 各判红后 `sha256` 逐字节还原。
+- **未验证（≠通过）**：真鼠标点验一条没点 · 观感未看 · 站点 Cookie 跨重启未实测（只判到「按页签 id 拿到不同存储对象」）· `verify-all.sh` 第 11 / 18 项未执行。
+- **下一项 = `FR-STD-WS-NAV-014`**（判据 🟡，实现 ✅）：起跳先看 `TestsUISnapshot/FormatMenuWiringProbeTests` 3 例里**被跳过的那一例**（真菜单树需真 App 进程）—— 要么换成本进程可判的形状（如 `App/DoyahStudioCommands` 源锚点 + `tabs.formatSelected` 唯一入口），要么如实记「跳过的仍不是通过」；再核 ①②③④⑤（可撤销逐字一致 / 只用内置不探 PATH / 断网可格式化 / 没有内置档时明说）。
+- **再下一项 = `FR-STD-WS-AI-001`**（判据 ⬜，实现 ✅，备注已写 `EditAssistTests` 23 + `EditAssistProbeTests` 6）：起跳逐条核四条契约（差异先出、模型与端点可见、数据边界默认保守、不重复造本机能力），核得上就翻 ✅，核不上降实现列。
+- **门禁债**：`check-status-gap.py` 尚未接进 `verify-all.sh`（`check-doc-numbers` 的 `checkScriptParity` 一笔红）—— 等上面两行清零后同批接进去，别在还有红行时接（接了等于让 `verify-all` 天天红）。
+- 证据 `.agent/evidence/2026-11-02-FR-STD-WS-batch.md`

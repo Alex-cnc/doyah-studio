@@ -135,4 +135,41 @@ final class WebKitBrowserEngineTests: XCTestCase {
         let engine = WebKitBrowserEngine(pageID: UUID(), origin: "浏览器 · 页签 1", log: EgressLog(directoryURL: directory))
         XCTAssertNotNil(engine.view.uiDelegate, "没有 UIDelegate 时 window.open / target=_blank 会静默无反应")
     }
+
+    // MARK: - 站点存储按页签隔离（`FR-STD-WS-WEB-001` ③）
+
+    /// 两个页签**各有一套**站点存储 —— 共用一份等于 A 页签登录过的站点在 B 页签也是登录态。
+    func testEachTabGetsItsOwnSiteStore() {
+        let log = EgressLog(directoryURL: directory)
+        let first = WebKitBrowserEngine(pageID: UUID(), origin: "浏览器 · 页签 1", log: log)
+        let second = WebKitBrowserEngine(pageID: UUID(), origin: "浏览器 · 页签 2", log: log)
+
+        let a = first.view.configuration.websiteDataStore
+        let b = second.view.configuration.websiteDataStore
+        XCTAssertFalse(a === b, "两个页签不能共用一个站点存储（否则 Cookie 互串）")
+        XCTAssertTrue(a.isPersistent && b.isPersistent, "按页签分仍然是持久化存储（登录态要跨重启）")
+        XCTAssertFalse(a === WKWebsiteDataStore.default(), "也不该回落到全应用那一份缺省存储")
+    }
+
+    /// 同一页签 id 重建引擎（会话恢复）⇒ 还是那一套存储，登录态不丢。
+    func testRebuildingTheSameTabKeepsItsSiteStore() {
+        let log = EgressLog(directoryURL: directory)
+        let id = UUID()
+        let before = WebKitBrowserEngine(pageID: id, origin: "浏览器 · 页签 1", log: log)
+        let after = WebKitBrowserEngine(pageID: id, origin: "浏览器 · 页签 1", log: log)
+
+        XCTAssertTrue(
+            before.view.configuration.websiteDataStore === after.view.configuration.websiteDataStore,
+            "同一页签重建后必须拿回同一套站点存储，否则重启后登录态必断（FR-STD-WS-WEB-004 ②）"
+        )
+    }
+
+    /// 显式注入的存储照旧优先（探针 / 预览页那条路要能指定）。
+    func testExplicitStoreWins() {
+        let log = EgressLog(directoryURL: directory)
+        let injected = WKWebsiteDataStore(forIdentifier: UUID())
+        let engine = WebKitBrowserEngine(pageID: UUID(), origin: "编辑器 · 网页预览", log: log, websiteDataStore: injected)
+
+        XCTAssertTrue(engine.view.configuration.websiteDataStore === injected)
+    }
 }
