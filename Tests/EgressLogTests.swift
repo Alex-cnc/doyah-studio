@@ -16,9 +16,14 @@ final class EgressLogTests: XCTestCase {
         directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("EgressLogTests-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        // 这一族判的是「记什么」，不是「发不发」：封条（`AC-ALL-GATE-AI-001`）必须开着，
+        // 否则 `EgressRecordingTransport` 会正确地记 `denied` 而不往下发 —— 那会把
+        // 「发出前先记」与「失败也记」两条断言判成红的（它们测的是路，不是开关）。
+        AgentEgressSeal.shared.setOpen(true)
     }
 
     override func tearDownWithError() throws {
+        AgentEgressSeal.shared.setOpen(false)
         try? FileManager.default.removeItem(at: directory)
         directory = nil
     }

@@ -304,6 +304,20 @@ public struct EgressRecordingTransport: HTTPTransport {
     public func send(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
         let target = EgressTarget.sanitize(request.url?.absoluteString ?? "")
 
+        // **封条先于「即将发出」那条记录**（`AC-ALL-GATE-AI-001`）：总开关关着时这条请求
+        // 根本没有离开本机，日志必须记 `denied` —— 记成 `allowed` 等于让审计系统自己说谎
+        // （"日志里写着发了" 与 "真的发了" 是两件事，`EgressOutcome.denied` 就是为这一档立的）。
+        guard AgentEgressSeal.shared.isOpen else {
+            await log.record(
+                kind: kind,
+                target: target,
+                origin: origin,
+                outcome: .denied,
+                detail: AgentEgressSeal.shared.refusal.localizedDescription
+            )
+            throw AgentEgressSeal.shared.refusal
+        }
+
         // 先记「即将发出」：进程若在请求途中被杀（或超时挂住），记录也已经落盘 ——
         // 出网日志最该抓住的恰恰是这种时刻。
         await log.record(

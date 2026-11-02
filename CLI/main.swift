@@ -4798,6 +4798,10 @@ client: any LLMClient
     )
     let apiKey = value(for: "--api-key")
 
+    // 封条跟着这次构造出来的配置走（`AC-ALL-GATE-AI-001`）：`--disabled` 时连运输层都发不出去，
+    // 而不是「发出去了再被闸门判掉」—— 前者才是「外发流量为 0」这句话的字面意思。
+    AgentEgressSeal.shared.apply(configuration)
+
     // 回灌（`FR-AI-30` ②）的脚本取证入口：把「上一次执行发生了什么」喂给下一跳。
     // 失败文本走 `--last-error`、`SQLSTATE` 走 `--last-code`、影响行数走 `--last-rows`；
     // 都不给 ⇒ `observation = nil`（提示词与改动前逐字节一致）。

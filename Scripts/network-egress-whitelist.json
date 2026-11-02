@@ -226,6 +226,15 @@
       ],
       "bucket": "production",
       "reason": "2026-10-28 第四十二批：★0 取 token / 取网关的 REST 出口（`bots.qq.com/app/getAppAccessToken`、`api.sgroup.qq.com/gateway`）—— 地址由程序自己取之后这条面必然存在。面外不判；定性待前门。"
+    },
+    {
+      "file": "Tests/AgentEgressSealTests.swift",
+      "bucket": "test-double",
+      "tokens": [
+        "URLRequest",
+        "URLSession"
+      ],
+      "reason": "面外活体（2026-11-02 `AC-ALL-GATE-AI-001` 判据）：本文件就是那台「在 URLSession 边界上数请求」的量具 —— 自建一个带计数 `URLProtocol` 的 session，证明封条关着时 0 条请求真的开始加载（并做松开 1 条的正向对照）。它不发起任何真实出网（计数器拦下所有请求并回固定假响应），不是产品出口路径；登记只为不再静默 + 棘轮（只减不增）。"
     }
   ],
   "outOfFaceNote": "登记类（只减不增）：`scan.scope = repo` ⇒ 这些文件**已经在扫描面内**，但不在 SRS §6.4 白名单面里 ⇒ 逐条登记（漏登 / 陈旧 / 死登记 / **抹登记**都判红；条数下限 `floors.minRegisteredEgress` = 10）。**登记 ≠ 放行**：`CLI/main.swift` · `Platform/macOS/WebKitBrowserEngine.swift` 两处生产活体的定性由前门裁（原单 `T-20261010-040` ④）。"

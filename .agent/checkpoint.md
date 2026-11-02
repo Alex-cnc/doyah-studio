@@ -1,5 +1,20 @@
 # 检查点
 
+## v0.5.0 · A1（第一片：总开关零外发）· 2026-11-02
+
+- **收一条**：`AC-ALL-GATE-AI-001`（关闭智能体总开关后，外发流量为 0）两列全 ✅。
+  - 缺口不是判定（`AgentGate.decide` 早就在），是**保证**与**读数**：问闸门的只有「生成 SQL / 数据任务规格 / 设置面板」三处；聊天循环、编辑区辅助、网页工具都直接造请求就发；`AppState.testAgentConnection` 只核端点与模型名 ⇒ **总开关关着点「测试连接」仍会真发一次流式往返**（真洞，本片修掉）。
+  - 落法 = 封条落在**运输层**：`Core/AgentEgressSeal.swift`（进程级、**默认关**）+ `URLSessionTransport.send` / `URLSessionStreamingTransport.stream` 发请求之前先判 + `EgressRecordingTransport` 拦下记 `denied` + 配置读回 / 落盘（`AgentConfigurationStore.load/save`、`AppState.loadAgentConfiguration`、CLI 自建配置）同步封条。
+- **读数**：`--filter AgentEgressSealTests` **7 例 / 0 失败** · `verify-core.sh` **5212 例 / 13 skipped / 0 失败**（5205 → +7）· `verify-ui-interactions.sh` **116 条全跑 / 无跳过** rc=0 · 文档门禁十道 rc=0（version-scope / tables 74 / numbers 三向 5212 / plan-coverage / status 471 / agents-index / doc-invariants / empty-action-buttons 48·48 / palette-wiring 41↔41 / req-index 488）。
+- **反例四段**（判红后 `sha256` 逐字节还原）：撤整段运输封条 ⇒ 5 红 · 撤流式那条 ⇒ 4 红 · 撤 `denied` 记录 ⇒ 2 红 · Core 里塞自开 `URLSession(` ⇒ 清单判据点名。
+- **未验证（≠ 通过）**：量的是 `URLSession` 层，**真抓包未做**；IM socket 与笔记云同步各有各的开关、不在本条；`verify-all.sh` 第 11 / 18 项未执行。
+- **存量红（HEAD 就有，本片未引入）**：`check-network-egress` 8 处全在 `Core/AgentWebTools.swift`(5) / `Tests/AgentWebToolsTests.swift`(3)；`check-core-localization`（`AgentSQLStatementJudge.swift:90`）；`check-format-arguments` 223/20。新测试文件已按纪律登记进 `network-egress-whitelist.json` 的 `outOfFace`（bucket `test-double`）。
+- **同批按实算归正**：§4.2 v0.5.0 `18（15/3）` → **15（13/2）**（差 2 = `TOOL-INGEST-001/004` 收口后没回改本节）。§2 / §3 / §4 三个小标题的陈旧计数**仍未动**（本跳只改与这条相关的一处），留给报数跳。
+- **队列口径（本片后实测）**：`plan-batches --version 0.5.0 --check` rc=0 ⇒ `plan.yaml` = **5 todo + 11 blocked**（blocked 里 1 条是跨版携带 `FR-NTS-NOTE-ORG-002`）；`batches.yaml` = **5 条待办**。
+- **下一项**：`AC-ALL-GATE-AI-004`（提示注入：含注入指令的 schema 注释 / 数据内容不被当作指令执行）。起跳先核 `AgentSQLGenerator` 的不可信内容包裹（`SchemaSummary.Table.comment` 已被 `boundedPromptText(` 包过）与 `AgentWebFetcher` 抓回的正文有没有同一条包裹；判据要的是「模型看见的是数据、不是指令」，得靠**提示词结构 + 解析侧拒绝**两条一起判，不能只判提示词里有围栏。
+- 证据 `.agent/evidence/2026-11-02-AC-ALL-GATE-AI-001.md`
+
+
 - **2026-11-02 N3 第二片（`FR-NTS-TODO-CALENDAR-002` / `STATE-001` / `STATE-002`）**：三条两列全 ✅。落地 = ① `TodoDue.isOverdue(_:on:todayStart:)`（`day == nil` 退回原截止那一支）+ `TodoDayTasks.overdueTodos`（整条，不只条数）⇒ 行上 `todo-overdue-badge-` / 日区顶 `todo-calendar-overdue-count` **说出来**；② 日历直改 = `Core/TodoDragPayload` + 行 `.draggable` + 格子 `.dropDestination` → `AppState.handleTodoDrop` → `rescheduleTodo` → **`applyReschedule()`**（同一条 upsert，`momentMatching` 保钟点）；视图零写库标识，完成仍走 `toggleTodoDone`；③ 唯一事实源：投影层无写路 / schema 无日历表 / `AppState` 只一个 `todos`，切档 id 与条数不变。读数：`--filter TodoCalendarDayStateTests` **19 / 0 失败** · `verify-core.sh` **5205 / 13 skipped / 0 失败**（5186 → +19）· `verify-ui-interactions.sh` **116 条全跑 / 无跳过** · 文档门禁 **11 道 rc=0**（numbers 三向 5205，落点 116 处）。反例三段（`sha256` 逐字节还原）：加 `@Published var calendarTodos` ⇒ 判红点名 · 逾期退回原截止 ⇒ 2 红 · 拖拽撤 `applyReschedule()` ⇒ 1 红。证据 `.agent/evidence/2026-11-02-N3-2.md`
 - 队列：**v0.5.0** `.agent/batches.yaml`（A1 3 条 / A2 3 条，2026-11-02 由 `plan-batches.py --version 0.5.0 --emit-plan --write` 重出）；`plan.yaml` = **6 todo / 11 blocked**（10 条台账 §7.1 外部卡点 + 1 条跨版携带 `FR-NTS-NOTE-ORG-002`），台账复算一致。（v0.4.0 历史：13 双 ✅ + 1 blocked；v0.3.0 历史读数留档见 §「v0.3.0 收口」：34 done + 1 blocked）
 - 已完成：**v0.4.0 队列 13 / 14**（N1 4 · N2 4 · N3 4；`v0.4.0` 只剩 1 条 blocked = `FR-NTS-NOTE-ORG-002` 等契约所有者裁决「单层笔记本 vs 已上盘 shelf/notebook 两层」）。v0.3.0 历史：34 / 35（B1–B7 七批）

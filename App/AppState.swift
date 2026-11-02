@@ -3547,6 +3547,10 @@ final class AppState: ObservableObject {
             agentConfiguration = .default
             statusMessage = L(.agentSaveFailed, ErrorPresenter.message(for: error))
         }
+        // 读回的那份就是「能不能外发」的真值（`AC-ALL-GATE-AI-001`）：封条与它同批同步，
+        // 漏这一步的后果是「界面说关着、网络层其实开着」。`store.load` 自己也会同步一次，
+        // 这里再显式同步一次是为了覆盖**读失败走 `.default` 那一支**（那条路不经过 store 的返回值）。
+        AgentEgressSeal.shared.apply(agentConfiguration)
 
         // 凭据后端：本机开发形态**一律 0600 文件**（主人 2026-10-31：
         // 「还是不用 keychain 了，每次打开要输入无数次密码」）。钥匙串的 ACL 绑签名，
@@ -5999,6 +6003,13 @@ final class AppState: ObservableObject {
     ///   否则刚填完 Key 点测试仍会用旧值（实机现象：填了新 Key，测试照样 401）。
     func testAgentConnection(apiKeyOverride: String? = nil) async -> AgentConnectionTest {
         let configuration = agentConfiguration
+        // **总开关关着 ⇒ 连「测一下」都不发**（`AC-ALL-GATE-AI-001`）。从前这里只核端点与模型名，
+        // 于是开关关着点「测试」仍会真发一次往返 —— 那是「零外发」这条承诺上的一个真洞。
+        // 刻意**不**用整条 `agentOutboundDecision`：面板里刚输入、还没保存的 Key 必须能测
+        // （`apiKeyOverride` 就是为这来的），拿已保存的 Key 判 `missingAPIKey` 会把这条路堵死。
+        guard configuration.isEnabled else {
+            return .failed(AgentEgressSeal.shared.refusal.localizedDescription)
+        }
         guard let url = URL(string: configuration.endpoint.trimmingCharacters(in: .whitespacesAndNewlines)),
               !configuration.model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             return .failed(L(.agentTestMisconfigured))

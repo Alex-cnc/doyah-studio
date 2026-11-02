@@ -69,6 +69,12 @@ public struct URLSessionStreamingTransport: HTTPStreamingTransport {
     }
 
     public func stream(_ request: URLRequest) async throws -> (HTTPURLResponse, AsyncThrowingStream<Data, Error>) {
+        // 同 `URLSessionTransport.send`：封条在**真正发请求之前**（`AC-ALL-GATE-AI-001`）。
+        // 流式这条路是聊天循环与「测试连接」的唯一出口 —— 从前它既不过闸门也不进外发日志，
+        // 总开关关着时「测一下」仍会真发一次往返（2026-11-02 实测的真缺口）。
+        guard AgentEgressSeal.shared.isOpen else {
+            throw AgentEgressSeal.shared.refusal
+        }
         let (bytes, response) = try await session.bytes(for: request)
         guard let http = response as? HTTPURLResponse else {
             throw LLMError.transport("响应不是 HTTP 响应。")

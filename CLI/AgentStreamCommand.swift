@@ -50,6 +50,10 @@ func runAgentSQLStreamCommand(arguments: [String]) async -> Int32 {
     }
 
     let model = value(for: "--model") ?? "local-model"
+    // CLI 一次性命令没有「已保存的配置」可读：端点 / 模型 / Key 都是这次显式传进来的
+    // ⇒ 这次调用本身就是用户的明确放行，封条按调用方语义打开（`AC-ALL-GATE-AI-001` 的
+    // 覆盖面 = App 的总开关；CLI 的 `agent-sql --disabled` 则是另一条路上的同一承诺）。
+    AgentEgressSeal.shared.setOpen(true)
     let request = LLMRequest(endpoint: endpoint,
                              model: model,
                              apiKey: value(for: "--api-key"),

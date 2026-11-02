@@ -53,14 +53,23 @@ public actor AgentConfigurationStore {
     }
 
     /// 读取配置；文件不存在时返回**关闭状态的默认配置**（安全默认，NFR-AI-02）。
+    ///
+    /// **读回即同步封条**（`AC-ALL-GATE-AI-001`）：配置是总开关的唯一真值源，
+    /// 读它的这一处就是「本进程此刻能不能外发」的更新点。读失败照样把封条关死 ——
+    /// 一个读不出来的配置不该被当成「开着」。
     public func load() throws -> AgentConfiguration {
         guard FileManager.default.fileExists(atPath: fileURL.path) else {
-            return .default
+            let configuration = AgentConfiguration.default
+            AgentEgressSeal.shared.apply(configuration)
+            return configuration
         }
         do {
             let data = try Data(contentsOf: fileURL)
-            return try decoder.decode(AgentConfiguration.self, from: data)
+            let configuration = try decoder.decode(AgentConfiguration.self, from: data)
+            AgentEgressSeal.shared.apply(configuration)
+            return configuration
         } catch {
+            AgentEgressSeal.shared.setOpen(false)
             throw AppError.persistence(error.localizedDescription)
         }
     }
@@ -74,6 +83,8 @@ public actor AgentConfigurationStore {
             )
             let data = try encoder.encode(configuration)
             try data.write(to: fileURL, options: [.atomic])
+            // 落盘成功才改封条（`AC-ALL-GATE-AI-001`）：写失败 = 配置没变，能不能外发也不该变。
+            AgentEgressSeal.shared.apply(configuration)
         } catch {
             throw AppError.persistence(error.localizedDescription)
         }

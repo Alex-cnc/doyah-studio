@@ -217,6 +217,12 @@ public struct URLSessionTransport: HTTPTransport {
     }
 
     public func send(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
+        // **封条在发请求之前**（`AC-ALL-GATE-AI-001`）：总开关关着就一个字节都不出去。
+        // 放在这里而不是只放在调用方：调用方可能有十几个（循环 / 编辑区 / 网页工具 / 连接测试…），
+        // 漏问一处就等于这条承诺不成立；这层是 Core 仅有的两个真实 HTTP 出口之一，绕不过去。
+        guard AgentEgressSeal.shared.isOpen else {
+            throw AgentEgressSeal.shared.refusal
+        }
         let (data, response) = try await session.data(for: request)
         guard let http = response as? HTTPURLResponse else {
             throw LLMError.transport("响应不是 HTTP 响应。")
