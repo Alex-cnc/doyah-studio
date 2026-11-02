@@ -58,9 +58,42 @@ final class LicenseTests: XCTestCase {
 
     func testExpiredLicenseDegradesToStandard() {
         let past = Date(timeIntervalSince1970: 1_000)
-        let result = LicenseGate.evaluate(license(expiresAt: past), now: Date(timeIntervalSince1970: 2_000))
+        // 「到期」只有对**已验签**的许可证才有意义：无法校验的许可证在前面就被拦下（判据 ②），
+        // 不该冒充「到期」—— 两句人话对应两个不同的用户动作。
+        let result = LicenseGate.evaluate(
+            license(expiresAt: past),
+            payload: Data("x".utf8), signature: Data("s".utf8), verifier: FakeVerifier(result: true),
+            now: Date(timeIntervalSince1970: 2_000)
+        )
         XCTAssertEqual(result.edition, .standard)
         XCTAssertEqual(result.basis, .expired(past))
+    }
+
+    /// 判据 ② 的反面：**无法校验 ≠ 通过**。一份手写的许可证（没有校验器 / 没有载荷 / 没有签名）
+    /// 曾经会因为 `if let verifier, let payload, let signature` 三者任一缺失就整段跳过，
+    /// 被静默当成全功能 —— 那正是本条判据明写不许的情形。
+    func testUnverifiableLicenseIsRefusedNotTrusted() {
+        let handwritten = license(capabilities: .all)
+
+        // ① 完全没有校验器（公钥没配 / 构造失败）
+        let noVerifier = LicenseGate.evaluate(handwritten, payload: Data("p".utf8), signature: Data("s".utf8))
+        XCTAssertEqual(noVerifier.edition, .standard, "没有校验器时必须降级，不许默认放行")
+        XCTAssertEqual(noVerifier.basis, .invalidSignature)
+
+        // ② 有校验器但没有载荷
+        let noPayload = LicenseGate.evaluate(handwritten, signature: Data("s".utf8), verifier: FakeVerifier(result: true))
+        XCTAssertEqual(noPayload.edition, .standard)
+        XCTAssertEqual(noPayload.basis, .invalidSignature)
+
+        // ③ 有校验器但没有签名
+        let noSignature = LicenseGate.evaluate(handwritten, payload: Data("p".utf8), verifier: FakeVerifier(result: true))
+        XCTAssertEqual(noSignature.edition, .standard)
+        XCTAssertEqual(noSignature.basis, .invalidSignature)
+
+        // ④ 三个都没有（最容易被误当成「老调用方式，放行」的那一条）
+        let bare = LicenseGate.evaluate(handwritten)
+        XCTAssertEqual(bare.edition, .standard)
+        XCTAssertEqual(bare.basis, .invalidSignature)
     }
 
     /// **到期只降级、不锁数据**：许可证对象本身不被改写、设备清单仍在。
@@ -83,7 +116,11 @@ final class LicenseTests: XCTestCase {
     }
 
     func testUnknownEditionDegradesToStandard() {
-        let result = LicenseGate.evaluate(license(capabilities: [.database]))
+        // 同 `testExpiredLicenseDegradesToStandard`：先验签，再判档位。
+        let result = LicenseGate.evaluate(
+            license(capabilities: [.database]),
+            payload: Data("x".utf8), signature: Data("s".utf8), verifier: FakeVerifier(result: true)
+        )
         XCTAssertEqual(result.basis, .unknownEdition)
     }
 

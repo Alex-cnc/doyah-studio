@@ -294,3 +294,15 @@
 - **未验证（≠通过）**：代码套件与 `verify-all.sh` 本跳未跑（只动 `.agent/` + 一个派生脚本）；`plan-batches.py` 仍无自检族（负例手跑未入台账）。
 - **下一批 = A1**（`AC-ALL-GATE-AI-001` 总开关零外发 · `AC-ALL-GATE-AI-004` 提示注入 · `NFR-ALL-GATE-AI-004` 配额与超时）；起跳先核外发收口处有没有现成的发件计数（`AgentAudit` / `LLMClient` / `AgentWebTools` 三处），AC-001 只能判到「收口处发件数 == 0」，真抓包记未覆盖。交接书已换成 `.agent/next-version.md`（v0.5.0）。
 - 证据 `.agent/evidence/2026-11-02-v050-queue.md`
+
+## v0.6.0 · C1 第一片：`FR-STD-ALL-LIC-001` 许可证解析与能力位 · 2026-11-02
+
+- **收一条**：`FR-STD-ALL-LIC-001`（两列全 ✅）。备注原写「代码与 23 项单测在」，实测族里已有 **58 例**（那个 23 是旧数）。
+- **真洞（判据 ② 被反过来执行）**：`LicenseGate.evaluate` 写成 `if let verifier, let payload, let signature, !verifier.isValid(…)` ⇒ 三个可选参数任一为空就**整段跳过**签名校验；四种缺参数形状实测全部判成 `ultra` / `licensed` —— 一份手写许可证就是全功能。改成 fail-closed：缺校验器 / 载荷 / 签名与「签名对不上」同罪。
+- **判据 ③ 补机器面**：新 `Tests/LicenseOfflineTests` **2 例** —— 扫许可证链路 7 个文件（去注释）零联网符号（`URLSession` / `URLRequest` / `import Network` / `Socket` …）+ 钉住接线（校验器只来自内置公钥、载荷只从本地文件读、判定只由 `Curve25519` 本地验签）。
+- **读数**：`--filter License` **61 例 / 0 失败**（58 → +3）· `verify-core.sh` **5262 / 13 skipped / 0 失败** · `verify-ui-interactions.sh` **116 条全跑 / 无跳过** rc=0 · 文档门禁九道 rc=0（numbers 三向 5262；`doc-numbers.json` + `AGENT-SPEC.md` 两处 5259 → 5262）· `plan-batches --version 0.6.0 --check` rc=0。
+- **反例三段**（判红后 `sha256` 逐字节还原 `92db9e19…` / `1b50687f…`）：fail-open ⇒ 6 断言红 · 注入 `URLSession` ⇒ 1 红 · 签名不符不给句子 ⇒ 2 红。
+- **队列口径**：`plan.yaml` = **15 todo + 16 blocked**（其中 11 条跨版携带只列表可见）；§4.2 v0.6.0 21 → **20**（15 / 5）。
+- **未验证（≠通过）**：发行方私钥签的真许可证本机 0 份（生产公钥那一半记未覆盖）· 界面呈现归 `LIC-002` · `verify-all.sh` 第 11 / 18 项未执行 · 静态扫描判不住间接联网，真抓包未做。
+- **下一项**：`FR-STD-ALL-LIC-002`（按授权呈现入口 + 「版本与许可证」页）。起跳先核三处：① 未授权时能力入口**不出现**（不是灰掉）；② 未授权 / 到期后文件树、编辑器、既有文件导出**照常可用**；③ 版本号与授权状态在 Home 与帮助里**同一处**可见。
+- 证据 `.agent/evidence/2026-11-02-FR-STD-ALL-LIC-001.md`

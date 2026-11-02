@@ -218,6 +218,11 @@ final class LicenseLoaderTests: XCTestCase {
         let result = LicenseLoader.load(language: .simplifiedChinese, from: url, verifier: verifier)
         XCTAssertEqual(result.entitlements.edition, .standard)
         XCTAssertEqual(result.entitlements.basis, .invalidSignature)
+        // 判据 ② 「给可读原因」：签名不符这一档也要有一句人话，而且跟着调用方语言走
+        let zh = LicenseLoader.summary(for: result, language: .simplifiedChinese)
+        let en = LicenseLoader.summary(for: result, language: .english)
+        XCTAssertFalse(zh.isEmpty, "签名不符必须给一句人话，不许静默降级")
+        XCTAssertNotEqual(zh, en, "这一句要跟着调用方语言")
         // 许可证本身仍能被解析出来（数据没被动过），只是签名不过 —— 界面上要能同时说这两件事
         XCTAssertEqual(result.license?.issuedTo, "mallory")
     }

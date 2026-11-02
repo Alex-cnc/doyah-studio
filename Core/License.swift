@@ -169,6 +169,14 @@ public enum LicenseGate {
     ///
     /// 顺序写死：**版本 → 签名 → 到期 → 档位 → 允许**；任何一步不过都退到 Standard，
     /// 但**降级原因必须能说出来**（用户界面上要显示，而不是悄悄少两块功能区）。
+    ///
+    /// **签名这一关是 fail-closed 的（判据 ②：「不静默当成全功能」）**：没有校验器
+    /// （公钥没配 / 构造失败）、没有载荷、没有签名，与「签名对不上」同罪 —— 一律降级。
+    /// 此前写成 `if let verifier, let payload, let signature, !verifier.isValid(…)`，
+    /// 三个可选参数任一为空就**整段跳过**，于是一份手写的许可证会被当成 Ultra
+    /// （2026-11-02 实测：四种缺参数形状全部判成 `ultra` / `licensed`）。
+    /// 这条口径之所以要写在这里而不是 `LicenseLoader`：`LicenseGate` 是公开 API，
+    /// 调用方不传校验器是最容易被漏掉的那条路。
     public static func evaluate(
         _ license: License?,
         payload: Data? = nil,
@@ -176,34 +184,25 @@ public enum LicenseGate {
         verifier: (any LicenseSignatureVerifying)? = nil,
         now: Date = Date()
     ) -> LicenseEntitlements {
-        let fallback = LicenseEntitlements(
-            edition: .standard,
-            capabilities: .notesOnly,
-            basis: .missingLicense,
-            note: ""
-        )
-        guard let license else { return fallback }
+        func degraded(_ basis: LicenseEntitlements.Basis) -> LicenseEntitlements {
+            LicenseEntitlements(edition: .standard, capabilities: .notesOnly, basis: basis, note: "")
+        }
+
+        guard let license else { return degraded(.missingLicense) }
 
         if license.version > LicenseFormat.currentVersion {
-            return LicenseEntitlements(
-                edition: .standard, capabilities: .notesOnly,
-                basis: .unsupportedVersion(license.version), note: ""
-            )
+            return degraded(.unsupportedVersion(license.version))
         }
-        if let verifier, let payload, let signature, !verifier.isValid(payload: payload, signature: signature) {
-            return LicenseEntitlements(
-                edition: .standard, capabilities: .notesOnly, basis: .invalidSignature, note: ""
-            )
+        // 无法校验 ≠ 通过：三样缺一样就不算验签通过。
+        guard let verifier, let payload, let signature,
+              verifier.isValid(payload: payload, signature: signature) else {
+            return degraded(.invalidSignature)
         }
         if license.isExpired(now: now), let expiresAt = license.expiresAt {
-            return LicenseEntitlements(
-                edition: .standard, capabilities: .notesOnly, basis: .expired(expiresAt), note: ""
-            )
+            return degraded(.expired(expiresAt))
         }
         guard let edition = license.edition else {
-            return LicenseEntitlements(
-                edition: .standard, capabilities: .notesOnly, basis: .unknownEdition, note: ""
-            )
+            return degraded(.unknownEdition)
         }
         return LicenseEntitlements(
             edition: edition, capabilities: edition.capabilities, basis: .licensed, note: ""
