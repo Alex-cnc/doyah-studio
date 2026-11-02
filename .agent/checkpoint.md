@@ -8,7 +8,7 @@
 - **读数**：`--emit-plan --write` ⇒ `plan.yaml` **7 todo / 28 blocked**（10 本版 + 18 跨版携带）、`batches.yaml` **2 批 7 条**；`--check` **rc=0「批次队列一致（7 条待办，台账复算一致）」**。反例两条：删 D2 段 ⇒ rc=1「batches.yaml 与 plan.yaml 不一致」；塞一条已收口行当 todo ⇒ rc=1「队列仍是 todo 但台账已闭（1 条）」+「未归堆 1 条」。门禁 numbers / tables 74 / invariants 5 / plan-coverage 471·空壳 0 / status-gap **0 行** / agents-index 15 / status-consistency / version-scope / doc-layout 全 rc=0。
 - **顺带修一处读数自述错**：`render_plan` 只数「整格 == 🟡 / ⬜」，而台账有两行状态格带尾巴（`WS-FS-008` = `🟡 ｜ 复核降级…`、`DB-META-002` = `➖`）⇒ 抬头写「17 条（9 🟡 / 6 ⬜）」，**9+6≠17**。改成按前缀数 + 单列「其他」，现在写「17 条（10 🟡 / 6 ⬜ / 1 其他）」。判据脚本自己少报 2 条，下一跳就会漏看。
 - **未验证（≠ 通过）**：`check-board-parity.py` **rc=1** —— 崩在读台账某行状态格整段 `✅（…）` 证据当键（`KeyError`，`Core/DiagnosisScope.swift` 那条），**存量红、与本片无关**（本跳台账一字未改）；`verify-all.sh` 未跑（没碰 App / Core / Tests）；7 条 todo 一条都还没做。
-- 证据 `.agent/evidence/2026-11-02-v0.7.0-queue.md`；派生说明 `.agent/next-version.md` §零。
+- 证据 `.agent/evidence/2026-11-02-v0.7.0-queue.md`；派生说明 `.agent/next-version.md` §零；提交 **66c982c9**（已推送，local = remote）。
 
 ## 下一项：D1 批次（`FR-NTS-NOTE-FORMAT-001` / `FR-NTS-NOTE-ORG-001` / `FR-NTS-NOTE-TRASH-001`）
 
