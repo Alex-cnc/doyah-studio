@@ -896,6 +896,74 @@ final class AppState: ObservableObject {
         )
     }
 
+    // MARK: 设备配额与设备管理（FR-STD-ALL-LIC-005）
+
+    /// 本地设备台账（`license-devices.json`，与许可证同目录）。**台账逻辑全在 Core**，
+    /// 这里只做「让界面跟着变」的那一层。
+    private let licenseDeviceStore = LicenseDeviceStore(
+        fileURL: LicenseDeviceStore.defaultFileURL()
+    )
+
+    /// 台账变了就动一下它 —— 视图读的是下面的计算属性，靠这条通知重画。
+    @Published private(set) var licenseDeviceRevision = 0
+
+    /// 这台机器上该许可证已登记的设备（没许可证 ⇒ 空）。
+    var licenseDevices: [LicenseDevice] {
+        _ = licenseDeviceRevision  // 依赖声明：台账变了要重画
+        guard let license = licenseLoad.license else { return [] }
+        return licenseDeviceStore.devices(for: license)
+    }
+
+    /// 还剩几台可登记（没许可证 ⇒ 0：配额来自许可证，不凭空给）。
+    var licenseRemainingDevices: Int {
+        guard let license = licenseLoad.license else { return 0 }
+        return licenseDeviceStore.remaining(for: license)
+    }
+
+    /// 把这台 Mac 登记进来。满了就如实说「先释放哪一台」（Core 抛的 `quotaExceeded` 带建议）。
+    func registerThisDevice() {
+        guard let license = licenseLoad.license else {
+            statusMessage = L(.licenseMissing)
+            return
+        }
+        do {
+            let name = ProcessInfo.processInfo.hostName
+            try licenseDeviceStore.activate(named: name, for: license)
+            licenseDeviceRevision += 1
+            statusMessage = L(.licAboutDevicesTitle) + "：" + name
+        } catch {
+            statusMessage = Self.deviceFailureText(error, language: LocalizationManager.shared.effectiveLanguage)
+        }
+    }
+
+    /// 释放一台设备（换机不锁：配额立刻回来）。
+    func releaseLicenseDevice(_ id: UUID) {
+        guard let license = licenseLoad.license else { return }
+        do {
+            try licenseDeviceStore.release(id, for: license)
+            licenseDeviceRevision += 1
+        } catch {
+            statusMessage = Self.deviceFailureText(error, language: LocalizationManager.shared.effectiveLanguage)
+        }
+    }
+
+    /// 设备操作的失败说明。**配额满必须指名建议释放哪一台**，不给人一句「已达上限」。
+    private static func deviceFailureText(_ error: Error, language: AppLanguage) -> String {
+        switch error {
+        case License.DeviceError.quotaExceeded(let max, let suggestion):
+            return LocalizedStrings.format(
+                .licAboutDeviceQuotaFull,
+                language: language,
+                String(max),
+                suggestion ?? "—"
+            )
+        case License.DeviceError.unknownDevice, License.DeviceError.alreadyRegistered:
+            return LocalizedStrings.text(.licAboutDevicesTitle, language: language)
+        default:
+            return LocalizedStrings.text(.licAboutDevicesTitle, language: language)
+        }
+    }
+
     /// 「账户」占位说明（R-23：语义未定，只放占位不实现登录）。
     @Published var isAccountNoticePresented = false
 

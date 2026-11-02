@@ -461,10 +461,24 @@ struct QueryToolbar: View {
 /// 「帮助与快捷键」sheet。清单只留一份，就不会出现"气泡里改了、sheet 里没改"。
 struct ShortcutHelpContent: View {
 
+    /// 授权状态那一行需要 `AppState`（Home 与这里读的是**同一份**装载结果）。
+    @EnvironmentObject private var appState: AppState
+
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.s) {
             Text(L(.helpShortcutsTitle))
                 .font(Theme.font(.bodyStrong))
+
+            // 授权状态与版本号（`FR-STD-WS-LIC-001` 判据 ③：「Home 与帮助里能查到」）。
+            // 同一个 `LicenseStatusLine` —— Home 那一行也走它，两处不可能各说一套。
+            Text(LicenseStatusLine.text(
+                version: Self.appVersion,
+                load: appState.licenseLoad,
+                language: LocalizationManager.shared.effectiveLanguage
+            ))
+            .font(Theme.font(.caption))
+            .foregroundStyle(Theme.text(.secondary))
+            .accessibilityIdentifier("help-license-status")
 
             ForEach(Array(Self.rows.enumerated()), id: \.offset) { _, row in
                 HStack(alignment: .firstTextBaseline, spacing: Spacing.m) {
@@ -478,6 +492,11 @@ struct ShortcutHelpContent: View {
             }
         }
         .padding(Spacing.l)
+    }
+
+    /// 版本号（与 Home / 「版本与许可证」页同源：都读 `CFBundleShortVersionString`）。
+    private static var appVersion: String {
+        (Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String) ?? "—"
     }
 
     /// 展示的条目（顺序即阅读顺序）。

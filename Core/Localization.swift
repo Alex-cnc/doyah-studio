@@ -485,6 +485,11 @@ public enum LKey: String, CaseIterable, Sendable {
     case licAboutDevicesTitle
     case licAboutDevices
     case licAboutNoDevices
+    /// 设备管理（`FR-STD-ALL-LIC-005`）：还剩几台 / 释放一台 / 把这台 Mac 登记进来。
+    case licAboutDeviceRemaining
+    case licAboutDeviceRelease
+    case licAboutDeviceRegister
+    case licAboutDeviceQuotaFull
     case licAboutUpgradeTitle
     case licAboutHidden
     /// 活动栏上**现在**有哪几项（"%@" 填项名清单）——把"哪一档给了什么"落到用户眼前那条栏上。
@@ -4054,6 +4059,10 @@ public enum LocalizedStrings {
         .licAboutDevicesTitle: [.simplifiedChinese: "设备配额", .english: "Device quota"],
         .licAboutDevices: [.simplifiedChinese: "已用 %@ / %@ 台：%@", .english: "Used %@ of %@: %@"],
         .licAboutNoDevices: [.simplifiedChinese: "许可证里还没有登记设备（配额 %@ 台）", .english: "No device is registered in the license yet (quota %@)"],
+        .licAboutDeviceRemaining: [.simplifiedChinese: "还能登记 %@ 台。换机时先释放旧机，再登记新机。", .english: "You can register %@ more. When switching machines, release the old one first."],
+        .licAboutDeviceRelease: [.simplifiedChinese: "释放这台设备", .english: "Release this device"],
+        .licAboutDeviceRegister: [.simplifiedChinese: "把这台 Mac 登记为授权设备", .english: "Register this Mac"],
+        .licAboutDeviceQuotaFull: [.simplifiedChinese: "配额已满（%@ 台）：先释放一台再登记（建议：%@）", .english: "Quota is full (%@ devices): release one first (suggested: %@)"],
         .licAboutUpgradeTitle: [.simplifiedChinese: "其它版本能做什么", .english: "What the other editions include"],
         .licAboutHidden: [.simplifiedChinese: "没授权的区不显示（不是灰掉诱导）：放上对应版本的许可证，它就出现在活动栏上。", .english: "Unauthorized areas are hidden outright (not greyed out as a tease): add the matching license and the area appears on the activity bar."],
         .licAboutActivityItems: [.simplifiedChinese: "活动栏上现在有：", .english: "Currently on the activity bar:"],

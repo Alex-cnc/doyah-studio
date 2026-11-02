@@ -387,6 +387,14 @@ struct WorkspaceHomeView: View {
             Text(L(.workspaceHomeBuildLine, Self.appVersion, Self.buildStamp))
                 .font(Theme.font(.caption))
                 .foregroundStyle(Theme.text(.tertiary))
+            // 授权状态与版本号**同一处可见**（`FR-STD-WS-LIC-001` 判据 ③）：这一行与帮助面板
+            // 里那一行由 `LicenseStatusLine` 一个函数拼出来 —— 两处各写一遍必然漂
+            // （一处改了档位名、另一处还写着旧的；一处说原因、另一处不说）。
+            Text(licenseStatusLine)
+                .font(Theme.font(.caption))
+                .foregroundStyle(Theme.text(.secondary))
+                .textSelection(.enabled)
+                .accessibilityIdentifier("home-license-status")
             Text(L(.workspaceHomeCopyright))
                 .font(Theme.font(.caption))
                 .foregroundStyle(Theme.text(.tertiary))
@@ -521,6 +529,15 @@ struct WorkspaceHomeView: View {
 
     private static var appVersion: String {
         (Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String) ?? "—"
+    }
+
+    /// 「版本 + 授权状态」那一行（唯一出处 = `LicenseStatusLine`，帮助面板里用的是同一个函数）。
+    private var licenseStatusLine: String {
+        LicenseStatusLine.text(
+            version: Self.appVersion,
+            load: appState.licenseLoad,
+            language: LocalizationManager.shared.effectiveLanguage
+        )
     }
 
     private static var appBuild: String {

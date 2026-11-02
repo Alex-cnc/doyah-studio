@@ -307,3 +307,17 @@
 - **下一项**：`FR-STD-ALL-LIC-002`（按授权呈现入口 + 「版本与许可证」页）。起跳先核三处：① 未授权时能力入口**不出现**（不是灰掉）；② 未授权 / 到期后文件树、编辑器、既有文件导出**照常可用**；③ 版本号与授权状态在 Home 与帮助里**同一处**可见。
 - **提交**：`43515702`，已推送（local = remote = 43515702）；锁已释放，工作树干净。
 - 证据 `.agent/evidence/2026-11-02-FR-STD-ALL-LIC-001.md`
+
+## v0.6.0 · C1 第二片（授权呈现面五条）· 2026-11-02
+
+- **一批收五条**：`FR-STD-ALL-LIC-002` / `-003` / `-004` / `-005` / `FR-STD-WS-LIC-001`（五条两列全 ✅）。C1 至此整批收口（`LIC-001` 上一跳 + 本片五条）。
+- **两处真缺口**：① `LIC-004` 的「桌面三块一套 / 移动端不管辖」只写在文档里 ⇒ 新 `Core/LicenseScope.swift`（移动端**不建位**，`governs` 恒 false）；② `LIC-005` 的「可释放」只有模型方法、界面上一台设备都列不出来 ⇒ 新 `Core/LicenseDeviceStore.swift`（本地台账 `license-devices.json`：配额只从 `license.maxDevices` 读、满了指名建议释放最早那台、释放后配额立刻回来、跨重启成立、续期不清设备、到期仍可换机）+ 「版本与许可证」页设备一节改成可操作（逐台一行 + 释放 + 登记本机 + 还能登记 N 台）。
+- **判据 ③ 第一次有读数**：新 `Core/LicenseStatusLine.swift` 一个函数拼「产品名 版本 · 档位 · 依据」，Home（`home-license-status`）与快捷键帮助面板（`help-license-status`）都调它 —— 「版本与授权状态在 Home 与帮助里能查到」从备注变成源树判据。
+- **顺带修的真缺陷**：设备台账第一版写 ISO8601、读默认 `Double` ⇒ 激活了但台账读回是空的（本族用例第一版 9 例 8 红）；编解码收成 `LicenseDeviceStore.encoder()/decoder()` 一处。
+- **读数**：`--filter License` **86 例 / 0 失败**（61 → +25）· `verify-core.sh` **5287 / 13 skipped / 0 失败** · `verify-ui-interactions.sh` **116 条全跑 / 无跳过** rc=0 · 文档门禁 `invariants / tables / numbers(5287 三向) / plan-coverage / status-consistency / doc-versions / doc-layout / version-scope / literal-language / language-registry / palette-wiring / panel-root-frames` rc=0 · `plan-batches --version 0.6.0 --check` rc=0（10 条待办，C1 已自动消失）。
+- **反例五段**（判红后 `sha256` 逐字节还原 `ac48ea25…` / `05ecc675…` / `92db9e19…` / `3a3ef419…` / `25b610e2…`）：移动端被纳入管辖 ⇒ 1 红 · 第 6 台仍激活 ⇒ 2 红 · 到期把数据锁住 ⇒ 1 红 · 未授权入口仍出现 ⇒ 2 红 · 帮助面板那行标识漂掉 ⇒ 1 红。
+- **队列口径（本片后实测）**：`plan.yaml` 重出 = **10 todo**（另 16 blocked，其中 11 条跨版携带只列表可见）；`batches.yaml` 剩 **C2 / C3 / C4（10 条）**；§4.2 v0.6.0 20 → **15**（10 / 5），未闭 129 → **124**（🟡 32 → 28 / ⬜ 97 → 96）。
+- **未验证（≠通过）**：真鼠标点活动栏 / 菜单项 / 「释放·登记」 / 看 Home 与帮助那一行**都未点** · 真许可证 0 份 · 真到期许可证未实测（走注入 `now`）· 设备台账不带签名可手改（ADR-34）· 移动端各端是否读许可证**未知** · `verify-all.sh` 第 11 / 18 项未执行；**`check-menu-language`（第 11 项）本轮跑了 8 分钟卡在真启动 App 那一步，已手工终止 ⇒ 记「未执行」**。
+- **存量红（与本片无关，逐条核过不在本片改动面上）**：`check-board-parity`（台账 `DIAG-006` 那行状态列被写成 `✅（…）`，解析崩）、`check-notes-capability-sync`（笔记能力章跨仓不同文 + §3.5 条目清单）、`check-note-module-isolation` / `check-plugin-assembly`（笔记源文件漏登清单）、`check-network-egress`（`AgentWebTools` 等未登记）、`check-format-arguments`（225 > 预算 188）。**都不是本片引入**：`--report` 里没有一处点名本片文件或新键。
+- **下一批 = C2（3 条）**：`NFR-ALL-GATE-PERF-001/002/003`（冷启动 ≤ 2 s · 1 万行 × 20 列 · 10 万行不 OOM）。起跳先核先例 `Scripts/result-scroll-baseline.json` + `check-result-scroll-ledger.py`：阈值只有一处、探针读它不写魔数。
+- 证据 `.agent/evidence/2026-11-02-C1.md`

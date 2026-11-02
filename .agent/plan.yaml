@@ -1,44 +1,9 @@
 # v0.6.0 横切面收口 · 执行队列（**派生件**）
 # 唯一事实源 = Docs/Doyah产品开发计划任务清单-macOS.md（活书台账）。
 # 本文件只做「下一跳」排序，不许反向改台账；台账一改就跑 --emit-plan 重出，别手改。
-# 生成于 2026-11-02，源 = 台账里 FR-STD-ALL-LIC-001 / FR-STD-ALL-LIC-002 / FR-STD-ALL-LIC-003 / FR-STD-ALL-LIC-004 / FR-STD-ALL-LIC-005 / FR-STD-WS-LIC-001 / FR-STD-ALL-PLUG-005 / FR-STD-ALL-PLUG-008 / NFR-ALL-GATE-PERF-001 / NFR-ALL-GATE-PERF-002 / NFR-ALL-GATE-PERF-003 / NFR-ALL-GATE-PERF-004 / NFR-ALL-GATE-COMP-001 / NFR-ALL-GATE-COMP-002 / NFR-ALL-GATE-COMP-003 / NFR-ALL-GATE-COMP-004 / NFR-ALL-GATE-COMP-005 / NFR-ALL-GATE-UI-001 / NFR-ALL-GATE-USE-005 / NFR-ALL-GATE-SEC-008 / NFR-ALL-GATE-LANG-001 未闭 20 条（15 🟡 / 5 ⬜）。
+# 生成于 2026-11-02，源 = 台账里 FR-STD-ALL-LIC-001 / FR-STD-ALL-LIC-002 / FR-STD-ALL-LIC-003 / FR-STD-ALL-LIC-004 / FR-STD-ALL-LIC-005 / FR-STD-WS-LIC-001 / FR-STD-ALL-PLUG-005 / FR-STD-ALL-PLUG-008 / NFR-ALL-GATE-PERF-001 / NFR-ALL-GATE-PERF-002 / NFR-ALL-GATE-PERF-003 / NFR-ALL-GATE-PERF-004 / NFR-ALL-GATE-COMP-001 / NFR-ALL-GATE-COMP-002 / NFR-ALL-GATE-COMP-003 / NFR-ALL-GATE-COMP-004 / NFR-ALL-GATE-COMP-005 / NFR-ALL-GATE-UI-001 / NFR-ALL-GATE-USE-005 / NFR-ALL-GATE-SEC-008 / NFR-ALL-GATE-LANG-001 未闭 15 条（11 🟡 / 4 ⬜）。
 tasks:
 # 另有 11 条上版遗留卡点（不在本版范围，仅列表可见）：FR-AGT-LINK-CHAN-003, FR-AGT-LINK-EXT-001, FR-AGT-LINK-EXT-002, FR-AGT-OPS-OBS-002, FR-AGT-PLAN-PLAN-001, FR-AGT-TOOL-MEDIA-001, FR-AGT-TOOL-SYS-002, FR-AGT-UX-CONV-001, FR-AGT-UX-SESS-001, FR-AGT-UX-SYNC-001, FR-NTS-NOTE-ORG-002
-  - id: FR-STD-ALL-LIC-002
-    goal: "按授权呈现入口 + 「版本与许可证」页"
-    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-ALL-LIC-002 | grep -q '✅'"
-    layer: "基线必备"
-    prio: "高"
-    status: todo
-    evidence: ""
-  - id: FR-STD-ALL-LIC-003
-    goal: "到期降级与数据归属（不锁数据）"
-    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-ALL-LIC-003 | grep -q '✅'"
-    layer: "基线必备"
-    prio: "中"
-    status: todo
-    evidence: ""
-  - id: FR-STD-ALL-LIC-004
-    goal: "授权范围口径（桌面三块一套 / 移动端不在管辖）"
-    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-ALL-LIC-004 | grep -q '✅'"
-    layer: "基线必备"
-    prio: "中"
-    status: todo
-    evidence: ""
-  - id: FR-STD-ALL-LIC-005
-    goal: "设备配额与设备管理（默认 5 台 / 可释放）"
-    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-ALL-LIC-005 | grep -q '✅'"
-    layer: "常用增强"
-    prio: "低"
-    status: todo
-    evidence: ""
-  - id: FR-STD-WS-LIC-001
-    goal: "**工作区里的授权呈现**（同一能力点 4.1.35 的界面侧，与上面五条同节、不另立节）：由授权决定**哪些入口出现**（不是灰掉诱导）；未授权时文件树与编辑器照常可用、既有文件可导出；授权状态与版本号在 Home 与帮助里能查到。"
-    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-WS-LIC-001 | grep -q '✅'"
-    layer: "基线必备"
-    prio: "中"
-    status: todo
-    evidence: ""
   - id: NFR-ALL-GATE-PERF-001
     goal: "App 冷启动到可交互 ≤ 2 s（本机 SSD）"
     done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py NFR-ALL-GATE-PERF-001 | grep -q '✅'"

@@ -121,13 +121,59 @@ struct AboutLicenseSheet: View {
 
             Divider()
 
+            deviceSection
+        }
+    }
+
+    // MARK: 设备配额与设备管理（FR-STD-ALL-LIC-005）
+
+    /// **可释放**是这一节的重点：配额满了不给人一句「已达上限」，而是把已登记的设备列出来，
+    /// 一台一行、行尾一枚「释放」。释放完配额立刻回来 —— 换机不锁。
+    ///
+    /// 台账是**本地**的（`license-devices.json`，见 `LicenseDeviceStore`）：许可证带签名、
+    /// 设备是使用过程中长出来的状态，本地改设备不能动签名载荷 —— 这条取舍写在那份文件头上。
+    private var deviceSection: some View {
+        VStack(alignment: .leading, spacing: Spacing.xs) {
             Text(L(.licAboutDevicesTitle))
                 .font(Theme.font(.bodyStrong))
+
             Text(deviceUsageText)
                 .font(Theme.font(.caption))
                 .foregroundStyle(Theme.text(.secondary))
                 .textSelection(.enabled)
                 .accessibilityIdentifier("license-devices")
+
+            ForEach(appState.licenseDevices) { device in
+                HStack(spacing: Spacing.s) {
+                    Text(device.name)
+                        .font(Theme.font(.caption))
+                        .accessibilityIdentifier("license-device-name-\(device.name)")
+                    Spacer(minLength: Spacing.s)
+                    DialogActionButton(
+                        systemName: "minus.circle",
+                        title: L(.licAboutDeviceRelease),
+                        role: .destructive
+                    ) {
+                        appState.releaseLicenseDevice(device.id)
+                    }
+                    .accessibilityIdentifier("license-device-release-\(device.name)")
+                }
+            }
+
+            HStack(spacing: Spacing.s) {
+                DialogActionButton(
+                    systemName: "plus.circle",
+                    title: L(.licAboutDeviceRegister)
+                ) {
+                    appState.registerThisDevice()
+                }
+                .accessibilityIdentifier("license-device-register")
+                Text(L(.licAboutDeviceRemaining, String(appState.licenseRemainingDevices)))
+                    .font(Theme.font(.caption))
+                    .foregroundStyle(Theme.text(.secondary))
+                    .accessibilityIdentifier("license-device-remaining")
+                Spacer(minLength: 0)
+            }
         }
     }
 
@@ -257,15 +303,17 @@ struct AboutLicenseSheet: View {
 
     /// 设备配额：**没登记设备就说没登记**，不写"0 台"糊过去（配额是防共享的引信，不是卖点）。
     private var deviceUsageText: String {
-        guard let license = appState.licenseLoad.license, !license.devices.isEmpty else {
-            let quota = appState.licenseLoad.license?.maxDevices ?? License.defaultMaxDevices
+        let license = appState.licenseLoad.license
+        let quota = license?.maxDevices ?? License.defaultMaxDevices
+        let devices = appState.licenseDevices
+        guard !devices.isEmpty else {
             return L(.licAboutNoDevices, String(quota))
         }
-        let names = license.devices.map(\.name).joined(separator: "、")
+        let names = devices.map(\.name).joined(separator: "、")
         return L(
             .licAboutDevices,
-            String(license.devices.count),
-            String(license.maxDevices),
+            String(devices.count),
+            String(quota),
             names
         )
     }
