@@ -1,5 +1,18 @@
 # 检查点
 
+## 派生件重出三处 + 生成器收下 `➖`（无台账行 · 闭环存量红）· 2026-11-03
+
+- **先答「这算不算第 4 个维护跳」**：不算 —— 判据一字未改、阈值一个没动、没有新增判据。修的是两类「判据没错、盘上东西过期」：① 三件派生件按真源重生成（上一跳三分标注的根因族 ③）；② `gen-studio-win-align.py` 的 `ALLOWED_STATUS` 比真值源更严 —— 台账按 2026-11-02 主人令写着 `➖`，生成器却判「取值非法」而整件停摆（判据比真值源严，红的是判据）。这属 v0.9.0 出口「`verify-all` 19 项全绿、0 处红」的机器面，不是「修判据把自己哄绿」。
+- **三处重出的读数**：`gen-studio-win-align --check` / `gen-platform-parity --check` / `gen-platform-board --check` 现在**全 rc=0**（重出前三条全红）；`Docs/archive/root-20261026/平台对齐-Studio-Windows对macOS.md` 由 405 条 FR 重写为 **411 条**（真源已加 6 条）；矩阵与看板只落 `.build/derived/`（不进版本库，缺/旧就重跑一条命令）。
+- **`➖` 的口径**：与 `check-status-gap.py` 同一档（不适用 / 挂起）—— 收下、**逐条点名**写进产出件抬头（`FR-STD-DB-META-002`、`NFR-ALL-GATE-COMP-002`），`Windows` 列同记 `➖`（GBase 8a 挂起令覆盖全平台，按 overrides/default 记会造出一片「未开工」的假读数）。**没有**把台账符号改成 `—`（那等于改主人拍板的痕迹）。
+- **带出来的一处夹具失效（本片修掉）**：`gen-platform-board --self-test` 第 ⑥ 例原用字面锚点 `、\`FR-STD-`（要靠「两条 FR-STD 并列」）；看板重出后 §3 的 FR-STD 都成了单条分组 ⇒ 锚点消失、整族报「1 例不符预期」。改成**结构锚点**（节边界 `## 3.` / `## 4.` + 编号正则），现 **9/9**；把旧锚点改回去当场判红，`sha256` 还原后复绿。
+- **反例三段**：临时根里把 `FR-STD-DB-META-002` 状态改 `🟠` ⇒ rc=1 点名（收了 `➖` 没放水）· 改 `✅` ⇒ rc=0 且该行 `✅ / — / ⬜`、不适用条数 2→1（这一格真被消费）· 旧锚点回填 ⇒ board 自检 rc=1。
+- **全量 `verify-all.sh --keep-going`（本跳实跑，日志 `.build/verify-20261103-043119.log`）**：项块 **19** · 失败 **10 项（29 处）** · 平台跳过 0 · **未执行项 = 无**；上一跳同口径 10 项 / 31 处 ⇒ **净减 2 处、无新增红**。第 1 项（隧道抖动）本轮绿、第 5 项 ✅、第 19 项 ✅（含重打包 + 真启动两档）。
+- **仍然红（28 处，本片一处未修）**：29 处里扣掉 `check-path-ownership` 那条「共享面未登记」（提交信息带 `shared-surface:` 就转绿，本跳已带）。剩下的是：`check-format-arguments`（230 > 预算 190）· 自检「绿对照」族（真仓库红 ⇒ 自检跟着红）· 夹具失效/脚本崩（`check-release-version --self-test` rc=2 找不到 `<string>3</string>`、`check-board-parity` Traceback）· `check-menu-language.py` 超时不返回 · 第 11 项真启动 dump 等不到（上一跳已判在「真启动取证」层）。
+- **未验证（≠通过）**：真鼠标未点（三件都是派生件）· `平台实现状态.json` 的 Linux / watchOS 列仍显式 0 条（对侧未开，矩阵那三列 `⬜ ⚠️` 是「未开工」不是「未对齐」）· `gen-studio-win-align.py` **仍无 `--self-test` 族**（反例是手跑，未进 `check-self-test-counts`）。
+- **下一项**：队列仍 **0 todo / 28 blocked**（`plan-batches --check` rc=0）。机器面按族继续清，下一族建议 **④ 夹具失效 / 脚本崩**（`check-release-version --self-test` 的 `<string>3</string>` 锚点、`check-board-parity` 的 Traceback —— 都属「脚本自己坏了」，修完能连带让 ① 自检族转绿）。
+- 证据 `.agent/evidence/2026-11-03-derived-artifacts-regenerate.md`。
+
 ## v0.7.0 收口跳：队列清零后的存量红三分标注（无台账行）· 2026-11-03
 
 - **本跳不开维护跳**：`rules.md`「判据维护跳的出口」第 5 条 —— 一个版本收口后维护跳总预算 ≤ 3 跳，v0.7.0 收口后已用满 3 跳（报数 / 判据 E · 217 证据 / 判据 F · 判据 F 接线）。本跳做的是同条**第 3 步的硬要求**（剩下的红三分标注写进 checkpoint），判据一字未改。

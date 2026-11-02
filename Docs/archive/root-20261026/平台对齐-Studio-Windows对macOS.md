@@ -5,30 +5,34 @@
 >
 > **用途**：`babyhippo`（Windows / Harmony 侧）对齐 macOS 版 Doyah Studio 开发进度时的**逐条索引** —— 每行 = 一条需求 → 所属域 → 层次 → macOS 状态 → **macOS 落点（去这里读实现）** → Windows 现状。
 >
-> **统计**：需求 **405** 条 · 有落点 **0** 条 · 追溯表有行未标路径 **0** 条 · 无追溯行（落点列 `—`）**405** 条 · 台账 Windows `overrides` **159 条**（缺失一律按 `⬜` 记 —— 整列 `⬜` = Windows Studio 未开工）。
-> 本表只列 **`FR` 类**（405 条 = 平台差异的判定面）；需求索引里另有 **NFR 48** 条 / **AC 12** 条不进本表 —— 它们不分平台，也不在平台等价矩阵里，进表只会在 `Windows` 列造出一片假 `⬜`。
+> **统计**：需求 **411** 条 · 有落点 **0** 条 · 追溯表有行未标路径 **0** 条 · 无追溯行（落点列 `—`）**411** 条 · 台账 Windows `overrides` **159 条**（缺失一律按 `⬜` 记 —— 整列 `⬜` = Windows Studio 未开工）。
+> 本表只列 **`FR` 类**（411 条 = 平台差异的判定面）；需求索引里另有 **NFR 48** 条 / **AC 12** 条不进本表 —— 它们不分平台，也不在平台等价矩阵里，进表只会在 `Windows` 列造出一片假 `⬜`。
 > 追溯表里另有 **0** 行不是需求编号（分组行 / 决定行，如 `NFR-PERF / COMP`），以及 **0** 行指向索引外的编号（范围行外沿 / 按 SRS 分工不进索引的 `FR-STD-ALL-DATA-*`（§5）与 `FR-STD-ALL-IFACE-*`（§6））—— 都不对应本索引里的单条需求 ⇒ 不进本表、不编落点。
 >
 > **口径**：`macOS` 列 = 一单 §3 台账状态格的**第一个取值**；`macOS 落点` = 追溯表该条所在行的**反引号片段**（前 3 个 + 「等 N 处」；同一编号出现在多行时取**最后一行**；范围行展开到每一条）。**无追溯行写 `—`、有行未标路径写「（追溯表有行、未标路径）」—— 两种都不编落点**。
 > `Windows` 列 = 台账**原值**（不带矩阵里的 ⚠️ 差异标记：等价判定在矩阵，本件只给落点索引）。
+> **不适用 / 挂起（逐条点名，不当逃生门）**：一单 §3 台账标 `➖` / `—` 的 **2** 条 —— `FR-STD-DB-META-002`、`NFR-ALL-GATE-COMP-002`；其中进本表（`FR` 类）的 **1** 条，`Windows` 列同记 `➖`（GBase 8a 挂起令覆盖全平台、不按 `overrides` / `default` 记），`NFR` 那条本就不进表。
 >
-> **与派单仓一次性快照的差异（1 行，如实登记）**：`DoyahDispatch` 的 `docs/平台对齐-Studio-Windows对macOS.md`（2026-10-14 前门一次性快照）把 `FR-STD-ALL-PLUG-004` 记成 `—` —— 该条的追溯格内有**转义竖线**（`CLI/main.swift`（`notes path\|legacy-path\|migrate`）），快照按裸 `|` 切格 ⇒ 整行错位、落点读不出来。本脚本按字面处理转义竖线 ⇒ 该条落点读得出来，故两处数目不同（快照 173 / 17 / **72**，本件 0 / 0 / **405**；合计均 405）。**以本件为准**（它可复跑）。
+> **与派单仓一次性快照的差异（1 行，如实登记）**：`DoyahDispatch` 的 `docs/平台对齐-Studio-Windows对macOS.md`（2026-10-14 前门一次性快照）把 `FR-STD-ALL-PLUG-004` 记成 `—` —— 该条的追溯格内有**转义竖线**（`CLI/main.swift`（`notes path\|legacy-path\|migrate`）），快照按裸 `|` 切格 ⇒ 整行错位、落点读不出来。本脚本按字面处理转义竖线 ⇒ 该条落点读得出来，故两处数目不同（快照 173 / 17 / **72**，本件 0 / 0 / **411**；合计均 411）。**以本件为准**（它可复跑）。
 
 | 编号 | 域 | 类别 | macOS | macOS 落点 | Windows |
 |---|---|---|---|---|---|
 | FR-RTR-REV-AI-001 | AI 复盘 | 常用增强 | ⬜ | — | ⬜ |
-| FR-STD-WS-VCS-001 | Git 状态 | 常用增强 | 🟡 | — | ⬜ |
-| FR-STD-WS-FS-001 | Home 页 | 常用增强 | 🟡 | — | ✅ |
+| FR-STD-WS-VCS-001 | Git 状态 | 常用增强 | ✅ | — | ⬜ |
+| FR-STD-WS-FS-001 | Home 页 | 常用增强 | ✅ | — | ✅ |
 | FR-AGT-LINK-CHAN-003 | IM 通道 | 常用增强 | 🟡 | — | ⬜ |
 | FR-AGT-LINK-EXT-001 | MCP | 进阶可选 | 🟡 | — | ⬜ |
 | FR-AGT-LINK-EXT-002 | MCP | 进阶可选 | 🟡 | — | ⬜ |
-| FR-STD-DB-CONN-020 | SSH 隧道 | 常用增强 | 🟡 | — | ⬜ |
+| FR-NTS-ALL-DIST-001 | Notes 作为独立产品的形态（[产品特有]） | 常用增强 | ⬜ | — | ⬜ |
+| FR-NTS-ALL-LIC-001 | Notes 作为独立产品的形态（[产品特有]） | 常用增强 | ✅ | — | ⬜ |
+| FR-NTS-ALL-PARITY-001 | Notes 作为独立产品的形态（[产品特有]） | 常用增强 | ⬜ | — | ⬜ |
+| FR-STD-DB-CONN-020 | SSH 隧道 | 常用增强 | ✅ | — | ⬜ |
 | FR-AGT-CORE-CTX-001 | 上下文先验 | 常用增强 | ✅ | — | ⬜ |
 | FR-AGT-KNOW-CTX-002 | 上下文压缩 | 常用增强 | ✅ | — | ⬜ |
 | FR-STD-DB-CONN-015 | 上下文栏 | 常用增强 | ✅ | — | ✅ |
 | FR-STD-DB-CONN-016 | 上下文栏 | 常用增强 | ✅ | — | ✅ |
 | FR-AGT-QUAL-VERIFY-003 | 不确定性表达 | 基线必备 | ✅ | — | ⬜ |
-| FR-NTS-TODO-LINK-001 | 与笔记互转 | 常用增强 | 🟡 | — | ⬜ |
+| FR-NTS-TODO-LINK-001 | 与笔记互转 | 常用增强 | ✅ | — | ⬜ |
 | FR-RTR-RSR-PROFILE-001 | 个股档案 | 基线必备 | ⬜ | — | ⬜ |
 | FR-RTR-RSR-PROFILE-002 | 个股档案 | 基线必备 | ⬜ | — | ⬜ |
 | FR-RTR-RSR-PROFILE-003 | 个股档案 | 基线必备 | ⬜ | — | ⬜ |
@@ -42,33 +46,34 @@
 | FR-RTR-REV-TRADE-004 | 交易记录 | 基线必备 | ⬜ | — | ⬜ |
 | FR-RTR-REV-TRADE-005 | 交易记录 | 基线必备 | ⬜ | — | ⬜ |
 | FR-RTR-REV-TRADE-006 | 交易记录 | 基线必备 | ⬜ | — | ⬜ |
-| FR-STD-WS-EDIT-017 | 代码折叠 | 常用增强 | 🟡 | — | ⬜ |
+| FR-STD-WS-EDIT-017 | 代码折叠 | 常用增强 | ✅ | — | ⬜ |
 | FR-AGT-PLAN-PLAN-001 | 任务分解 | 常用增强 | 🟡 | — | ⬜ |
 | FR-AGT-PLAN-PLAN-002 | 任务分解 | 基线必备 | ✅ | — | ⬜ |
-| FR-STD-DB-TASK-001 | 任务定义 | 常用增强 | 🟡 | — | ⬜ |
-| FR-STD-DB-SESS-002 | 会话与权限 | 常用增强 | 🟡 | — | ✅ |
-| FR-STD-DB-SESS-003 | 会话与权限 | 常用增强 | 🟡 | — | ✅ |
-| FR-STD-DB-SESS-004 | 会话与权限 | 进阶可选 | 🟡 | — | ⬜ |
+| FR-STD-DB-TASK-001 | 任务定义 | 常用增强 | ✅ | — | ⬜ |
+| FR-STD-DB-SESS-002 | 会话与权限 | 常用增强 | ✅ | — | ✅ |
+| FR-STD-DB-SESS-003 | 会话与权限 | 常用增强 | ✅ | — | ✅ |
+| FR-STD-DB-SESS-004 | 会话与权限 | 进阶可选 | ✅ | — | ⬜ |
 | FR-STD-DB-SESS-005 | 会话与权限 | 常用增强 | ✅ | — | ✅ |
 | FR-STD-DB-SESS-006 | 会话与权限 | 常用增强 | ✅ | — | ✅ |
-| FR-STD-WS-UI-004 | 会话恢复 | 常用增强 | 🟡 | — | ✅ |
+| FR-STD-WS-UI-004 | 会话恢复 | 常用增强 | ✅ | — | ✅ |
 | FR-AGT-CORE-SESS-001 | 会话持久化 | 常用增强 | ✅ | — | ⬜ |
 | FR-AGT-UX-SESS-001 | 会话生命周期 | 常用增强 | 🟡 | — | ⬜ |
-| FR-STD-WS-WEB-001 | 内嵌浏览器 | 常用增强 | 🟡 | — | ⬜ |
-| FR-STD-WS-WEB-002 | 内嵌浏览器 | 常用增强 | 🟡 | — | ✅ |
-| FR-STD-WS-WEB-003 | 内嵌浏览器 | 常用增强 | 🟡 | — | ⬜ |
-| FR-STD-WS-WEB-004 | 内嵌浏览器 | 常用增强 | 🟡 | — | ⬜ |
-| FR-NTS-NOTE-SYNC-002 | 冲突合并 | 常用增强 | 🟡 | — | ⬜ |
+| FR-NTS-ALL-HELP-001 | 关于页 | 常用增强 | ✅ | — | ⬜ |
+| FR-STD-WS-WEB-001 | 内嵌浏览器 | 常用增强 | ✅ | — | ⬜ |
+| FR-STD-WS-WEB-002 | 内嵌浏览器 | 常用增强 | ✅ | — | ✅ |
+| FR-STD-WS-WEB-003 | 内嵌浏览器 | 常用增强 | ✅ | — | ⬜ |
+| FR-STD-WS-WEB-004 | 内嵌浏览器 | 常用增强 | ✅ | — | ⬜ |
+| FR-NTS-NOTE-SYNC-002 | 冲突合并 | 常用增强 | ✅ | — | ⬜ |
 | FR-STD-DB-CONN-017 | 凭据 | 基线必备 | ✅ | — | ✅ |
 | FR-STD-DB-CONN-018 | 凭据 | 常用增强 | ✅ | — | ✅ |
 | FR-STD-DB-CONN-019 | 凭据 | 进阶可选 | ✅ | — | ✅ |
 | FR-STD-WS-UI-007 | 分屏 | 常用增强 | ✅ | — | ⬜ |
-| FR-NTS-NOTE-SEARCH-001 | 列表与检索 | 基线必备 | ✅ | — | ⬜ |
-| FR-STD-WS-FS-006 | 删除 | 基线必备 | 🟡 | — | ⬜ |
+| FR-NTS-NOTE-SEARCH-001 | 列表与检索 | 基线必备 | 🟡 | — | ⬜ |
+| FR-STD-WS-FS-006 | 删除 | 基线必备 | ✅ | — | ⬜ |
 | FR-NTS-NOTE-TRASH-001 | 删除与恢复 | 基线必备 | ✅ | — | ⬜ |
 | FR-STD-DB-META-013 | 刷新 | 进阶可选 | ✅ | — | ✅ |
 | FR-STD-DB-META-014 | 刷新 | 常用增强 | ✅ | — | ✅ |
-| FR-STD-DB-META-015 | 刷新 | 常用增强 | 🟡 | — | ✅ |
+| FR-STD-DB-META-015 | 刷新 | 常用增强 | ✅ | — | ✅ |
 | FR-STD-DB-EXEC-002 | 单次执行 | 基线必备 | ✅ | — | ✅ |
 | FR-STD-DB-EXEC-003 | 单次执行 | 常用增强 | ✅ | — | ✅ |
 | FR-STD-DB-EXEC-004 | 单次执行 | 常用增强 | ✅ | — | ✅ |
@@ -82,19 +87,19 @@
 | FR-RTR-RSR-SCENARIO-004 | 历史情形 | 基线必备 | ⬜ | — | ⬜ |
 | FR-RTR-RSR-SCENARIO-005 | 历史情形 | 基线必备 | ⬜ | — | ⬜ |
 | FR-RTR-RSR-SCENARIO-006 | 历史情形 | 常用增强 | ⬜ | — | ⬜ |
-| FR-NTS-NOTE-VERSION-001 | 历史版本 | 常用增强 | 🟡 | — | ⬜ |
+| FR-NTS-NOTE-VERSION-001 | 历史版本 | 常用增强 | ✅ | — | ⬜ |
 | FR-AGT-CORE-LOOP-007 | 及时刹停 | 基线必备 | ✅ | — | ⬜ |
 | FR-AGT-OPS-OBS-001 | 可观测 | 常用增强 | ✅ | — | ⬜ |
 | FR-AGT-OPS-OBS-003 | 可评测 | 进阶可选 | ✅ | — | ⬜ |
 | FR-AGT-OPS-OBS-002 | 可配置 | 常用增强 | 🟡 | — | ⬜ |
-| FR-NTS-NOTE-SYNC-001 | 同步与账号 | 基线必备 | ✅ | — | ⬜ |
+| FR-NTS-NOTE-SYNC-001 | 同步与账号 | 基线必备 | 🟡 | — | ⬜ |
 | FR-STD-ALL-CLI-001 | 命令行出口 | 常用增强 | ✅ | — | ✅ |
 | FR-STD-ALL-CLI-002 | 命令行出口 | 常用增强 | ✅ | — | ✅ |
 | FR-STD-ALL-CLI-003 | 命令行出口 | 常用增强 | ✅ | — | ✅ |
 | FR-STD-ALL-CLI-004 | 命令行出口 | 常用增强 | ✅ | — | ✅ |
 | FR-STD-ALL-CLI-005 | 命令行出口 | 常用增强 | ✅ | — | ✅ |
-| FR-STD-WS-UI-005 | 命令面板 | 常用增强 | 🟡 | — | ✅ |
-| FR-STD-WS-UI-006 | 命令面板 | 常用增强 | 🟡 | — | ✅ |
+| FR-STD-WS-UI-005 | 命令面板 | 常用增强 | ✅ | — | ✅ |
+| FR-STD-WS-UI-006 | 命令面板 | 常用增强 | ✅ | — | ✅ |
 | FR-RTR-RSR-BACKTEST-001 | 回测引擎 | 常用增强 | ⬜ | — | ⬜ |
 | FR-RTR-RSR-BACKTEST-002 | 回测引擎 | 常用增强 | ⬜ | — | ⬜ |
 | FR-RTR-RSR-BACKTEST-003 | 回测引擎 | 常用增强 | ⬜ | — | ⬜ |
@@ -116,29 +121,29 @@
 | FR-RTR-REV-QUERY-007 | 复盘查询 | 常用增强 | ⬜ | — | ⬜ |
 | FR-RTR-REV-QUERY-008 | 复盘查询 | 常用增强 | ⬜ | — | ⬜ |
 | FR-RTR-REV-QUERY-009 | 复盘查询 | 常用增强 | ⬜ | — | ⬜ |
-| FR-STD-WS-UI-008 | 外观与主题 | 进阶可选 | 🟡 | — | ⬜ |
+| FR-STD-WS-UI-008 | 外观与主题 | 进阶可选 | ✅ | — | ⬜ |
 | FR-STD-WS-UI-009 | 外观与主题 | 常用增强 | ✅ | — | ✅ |
 | FR-STD-WS-UI-011 | 外观与主题 | 常用增强 | ✅ | — | ⬜ |
 | FR-STD-WS-UI-012 | 外观与主题 | 基线必备 | ✅ | — | ⬜ |
 | FR-STD-WS-UI-013 | 外观与主题 | 基线必备 | ✅ | — | ⬜ |
-| FR-STD-WS-UI-014 | 外观与主题 | 基线必备 | 🟡 | — | ⬜ |
-| FR-STD-WS-FS-009 | 外部改动监听 | 常用增强 | 🟡 | — | ⬜ |
-| FR-STD-WS-EDIT-016 | 多光标 | 进阶可选 | 🟡 | — | ⬜ |
+| FR-STD-WS-UI-014 | 外观与主题 | 基线必备 | ✅ | — | ⬜ |
+| FR-STD-WS-FS-009 | 外部改动监听 | 常用增强 | ✅ | — | ⬜ |
+| FR-STD-WS-EDIT-016 | 多光标 | 进阶可选 | ✅ | — | ⬜ |
 | FR-AGT-UX-CONV-014 | 多端一致性 | 基线必备 | ✅ | — | ⬜ |
 | FR-AGT-UX-CONV-015 | 多端一致性 | 常用增强 | ✅ | — | ⬜ |
 | FR-AGT-UX-SYNC-001 | 多端一致性 | 常用增强 | 🟡 | — | ⬜ |
 | FR-STD-WS-EDIT-024 | 大文件承载 | 进阶可选 | ✅ | — | ✅ |
 | FR-STD-DB-RES-010 | 大结果承载 | 常用增强 | ✅ | — | ✅ |
-| FR-STD-DB-RES-011 | 大结果承载 | 常用增强 | 🟡 | — | ✅ |
+| FR-STD-DB-RES-011 | 大结果承载 | 常用增强 | ✅ | — | ✅ |
 | FR-STD-DB-RES-012 | 大结果承载 | 常用增强 | ✅ | — | ✅ |
-| FR-STD-DB-RES-013 | 大结果承载 | 进阶可选 | 🟡 | — | ✅ |
-| FR-STD-DB-RES-014 | 大结果承载 | 进阶可选 | 🟡 | — | ✅ |
+| FR-STD-DB-RES-013 | 大结果承载 | 进阶可选 | ✅ | — | ✅ |
+| FR-STD-DB-RES-014 | 大结果承载 | 进阶可选 | ✅ | — | ✅ |
 | FR-AGT-PLAN-PLAN-006 | 失败自恢复 | 基线必备 | ✅ | — | ⬜ |
 | FR-AGT-TOOL-SYS-002 | 子任务委派 | 常用增强 | 🟡 | — | ⬜ |
 | FR-AGT-TOOL-SYS-007 | 子任务委派 | 基线必备 | ✅ | — | ⬜ |
 | FR-AGT-TOOL-SYS-008 | 子任务委派 | 常用增强 | ✅ | — | ⬜ |
-| FR-NTS-TODO-STATE-001 | 完成与改期 | 基线必备 | 🟡 | — | ⬜ |
-| FR-NTS-TODO-STATE-002 | 完成与改期 | 基线必备 | 🟡 | — | ⬜ |
+| FR-NTS-TODO-STATE-001 | 完成与改期 | 基线必备 | ✅ | — | ⬜ |
+| FR-NTS-TODO-STATE-002 | 完成与改期 | 基线必备 | ✅ | — | ⬜ |
 | FR-AGT-PLAN-PLAN-005 | 完成判据 | 基线必备 | ✅ | — | ⬜ |
 | FR-AGT-TOOL-SCHED-001 | 定时与后台 | 基线必备 | ✅ | — | ⬜ |
 | FR-AGT-TOOL-SCHED-002 | 定时与后台 | 常用增强 | ✅ | — | ⬜ |
@@ -146,17 +151,17 @@
 | FR-RTR-FLOW-CRON-002 | 定时与提醒 | 常用增强 | ⬜ | — | ⬜ |
 | FR-RTR-FLOW-CRON-003 | 定时与提醒 | 常用增强 | ⬜ | — | ⬜ |
 | FR-RTR-FLOW-CRON-004 | 定时与提醒 | 常用增强 | ⬜ | — | ⬜ |
-| FR-STD-DB-TASK-002 | 审批 | 基线必备 | 🟡 | — | ⬜ |
+| FR-STD-DB-TASK-002 | 审批 | 基线必备 | ✅ | — | ⬜ |
 | FR-AGT-UX-CONV-001 | 对话 | 常用增强 | 🟡 | — | ⬜ |
 | FR-AGT-UX-CONV-002 | 对话 | 常用增强 | ✅ | — | ⬜ |
 | FR-AGT-UX-CONV-003 | 对话 | 常用增强 | ✅ | — | ⬜ |
-| FR-STD-DB-DIAG-006 | 对话式诊断 | 常用增强 | ⬜ | — | ⬜ |
-| FR-STD-DB-IO-006 | 导入 | 进阶可选 | 🟡 | — | ✅ |
-| FR-STD-DB-IO-007 | 导入 | 进阶可选 | 🟡 | — | ✅ |
+| FR-STD-DB-DIAG-006 | 对话式诊断 | 常用增强 | ✅ | — | ⬜ |
+| FR-STD-DB-IO-006 | 导入 | 进阶可选 | ✅ | — | ✅ |
+| FR-STD-DB-IO-007 | 导入 | 进阶可选 | ✅ | — | ✅ |
 | FR-STD-DB-IO-001 | 导出 | 基线必备 | ✅ | — | ✅ |
-| FR-STD-DB-IO-002 | 导出 | 常用增强 | 🟡 | — | 🟡 |
-| FR-STD-DB-IO-003 | 导出 | 常用增强 | 🟡 | — | ✅ |
-| FR-STD-DB-IO-004 | 导出 | 进阶可选 | 🟡 | — | 🟡 |
+| FR-STD-DB-IO-002 | 导出 | 常用增强 | ✅ | — | 🟡 |
+| FR-STD-DB-IO-003 | 导出 | 常用增强 | ✅ | — | ✅ |
+| FR-STD-DB-IO-004 | 导出 | 进阶可选 | ✅ | — | 🟡 |
 | FR-STD-DB-IO-005 | 导出 | 常用增强 | ✅ | — | ✅ |
 | FR-NTS-NOTE-EXPORT-001 | 导出与迁移 | 常用增强 | ✅ | — | ⬜ |
 | FR-AGT-TOOL-EDIT-001 | 局部精确编辑 | 基线必备 | ✅ | — | ⬜ |
@@ -165,8 +170,8 @@
 | FR-STD-DB-RES-003 | 展示 | 基线必备 | ✅ | — | ✅ |
 | FR-STD-DB-RES-004 | 展示 | 常用增强 | ✅ | — | ✅ |
 | FR-STD-DB-RES-005 | 展示 | 常用增强 | ✅ | — | ✅ |
-| FR-STD-DB-RES-006 | 展示 | 常用增强 | 🟡 | — | ✅ |
-| FR-STD-WS-FS-010 | 工作区切换 | 常用增强 | 🟡 | — | ⬜ |
+| FR-STD-DB-RES-006 | 展示 | 常用增强 | ✅ | — | ✅ |
+| FR-STD-WS-FS-010 | 工作区切换 | 常用增强 | ✅ | — | ⬜ |
 | FR-RTR-FLOW-ORCH-001 | 工作流编排 | 常用增强 | ⬜ | — | ⬜ |
 | FR-STD-DB-EXEC-014 | 工具栏与事务 | 常用增强 | ✅ | — | ✅ |
 | FR-STD-DB-EXEC-015 | 工具栏与事务 | 进阶可选 | ✅ | — | ✅ |
@@ -201,11 +206,11 @@
 | FR-AGT-CORE-LOOP-009 | 循环与工具 | 基线必备 | ✅ | — | ⬜ |
 | FR-AGT-CORE-LOOP-010 | 循环与工具 | 基线必备 | ✅ | — | ⬜ |
 | FR-AGT-CORE-LOOP-011 | 循环与工具 | 常用增强 | ✅ | — | ⬜ |
-| FR-NTS-NOTE-CAPTURE-001 | 快速捕获 | 基线必备 | 🟡 | — | ⬜ |
+| FR-NTS-NOTE-CAPTURE-001 | 快速捕获 | 基线必备 | ✅ | — | ⬜ |
 | FR-AGT-GUARD-COST-001 | 成本配额 | 常用增强 | ✅ | — | ⬜ |
 | FR-STD-WS-FS-007 | 打开与识别 | 基线必备 | ✅ | — | ✅ |
-| FR-STD-WS-FS-008 | 打开与识别 | 常用增强 | 🟡 | — | ✅ |
-| FR-STD-DB-TASK-003 | 执行回执 | 基线必备 | 🟡 | — | ⬜ |
+| FR-STD-WS-FS-008 | 打开与识别 | 常用增强 | ✅ | — | ✅ |
+| FR-STD-DB-TASK-003 | 执行回执 | 基线必备 | ✅ | — | ⬜ |
 | FR-STD-DB-DIAG-001 | 执行计划 | 基线必备 | ✅ | — | ✅ |
 | FR-STD-DB-DIAG-002 | 执行计划 | 常用增强 | ✅ | — | ✅ |
 | FR-AGT-KNOW-MEM-004 | 技能 | 常用增强 | ✅ | — | ⬜ |
@@ -215,15 +220,15 @@
 | FR-AGT-KNOW-MEM-008 | 技能 | 常用增强 | ✅ | — | ⬜ |
 | FR-AGT-KNOW-MEM-009 | 技能 | 常用增强 | ✅ | — | ⬜ |
 | FR-AGT-KNOW-MEM-010 | 技能 | 进阶可选 | ✅ | — | ⬜ |
-| FR-STD-ALL-LIC-001 | 授权与版本 | 基线必备 | 🟡 | — | ⬜ |
-| FR-STD-ALL-LIC-002 | 授权与版本 | 基线必备 | 🟡 | — | ⬜ |
-| FR-STD-ALL-LIC-003 | 授权与版本 | 基线必备 | 🟡 | — | ⬜ |
-| FR-STD-ALL-LIC-004 | 授权与版本 | 基线必备 | 🟡 | — | ⬜ |
-| FR-STD-ALL-LIC-005 | 授权与版本 | 常用增强 | 🟡 | — | ⬜ |
-| FR-STD-WS-LIC-001 | 授权与版本 | 基线必备 | ⬜ | — | ⬜ |
-| FR-STD-DB-RES-007 | 排序筛选 | 常用增强 | 🟡 | — | ✅ |
-| FR-STD-DB-RES-008 | 排序筛选 | 常用增强 | 🟡 | — | ✅ |
-| FR-STD-DB-RES-009 | 排序筛选 | 常用增强 | 🟡 | — | ✅ |
+| FR-STD-ALL-LIC-001 | 授权与版本 | 基线必备 | ✅ | — | ⬜ |
+| FR-STD-ALL-LIC-002 | 授权与版本 | 基线必备 | ✅ | — | ⬜ |
+| FR-STD-ALL-LIC-003 | 授权与版本 | 基线必备 | ✅ | — | ⬜ |
+| FR-STD-ALL-LIC-004 | 授权与版本 | 基线必备 | ✅ | — | ⬜ |
+| FR-STD-ALL-LIC-005 | 授权与版本 | 常用增强 | ✅ | — | ⬜ |
+| FR-STD-WS-LIC-001 | 授权与版本 | 基线必备 | ✅ | — | ⬜ |
+| FR-STD-DB-RES-007 | 排序筛选 | 常用增强 | ✅ | — | ✅ |
+| FR-STD-DB-RES-008 | 排序筛选 | 常用增强 | ✅ | — | ✅ |
+| FR-STD-DB-RES-009 | 排序筛选 | 常用增强 | ✅ | — | ✅ |
 | FR-AGT-LINK-EXT-003 | 插件 | 进阶可选 | ✅ | — | ⬜ |
 | FR-STD-ALL-PLUG-001 | 插件装配 | 基线必备 | ✅ | — | ✅ |
 | FR-STD-ALL-PLUG-002 | 插件装配 | 基线必备 | ✅ | — | ✅ |
@@ -232,12 +237,12 @@
 | FR-STD-ALL-PLUG-005 | 插件装配 | 基线必备 | 🟡 | — | ⬜ |
 | FR-STD-ALL-PLUG-006 | 插件装配 | 基线必备 | ✅ | — | ✅ |
 | FR-STD-ALL-PLUG-007 | 插件装配 | 基线必备 | ✅ | — | ✅ |
-| FR-STD-ALL-PLUG-008 | 插件装配 | 基线必备 | 🟡 | — | ✅ |
+| FR-STD-ALL-PLUG-008 | 插件装配 | 基线必备 | ✅ | — | ✅ |
 | FR-STD-WS-EDIT-011 | 搜索与定位 | 常用增强 | ✅ | — | ⬜ |
 | FR-STD-WS-EDIT-012 | 搜索与定位 | 常用增强 | ✅ | — | ✅ |
-| FR-STD-WS-EDIT-013 | 搜索与定位 | 常用增强 | 🟡 | — | ✅ |
-| FR-STD-WS-EDIT-014 | 撤回 | 常用增强 | 🟡 | — | ⬜ |
-| FR-STD-WS-EDIT-015 | 撤回 | 常用增强 | 🟡 | — | ⬜ |
+| FR-STD-WS-EDIT-013 | 搜索与定位 | 常用增强 | ✅ | — | ✅ |
+| FR-STD-WS-EDIT-014 | 撤回 | 常用增强 | ✅ | — | ⬜ |
+| FR-STD-WS-EDIT-015 | 撤回 | 常用增强 | ✅ | — | ⬜ |
 | FR-RTR-MKT-HEALTH-001 | 数据健康 | 常用增强 | ⬜ | — | ⬜ |
 | FR-RTR-MKT-HEALTH-002 | 数据健康 | 常用增强 | ⬜ | — | ⬜ |
 | FR-RTR-MKT-HEALTH-003 | 数据健康 | 常用增强 | ⬜ | — | ⬜ |
@@ -249,10 +254,10 @@
 | FR-NTS-NOTE-ORG-001 | 整理 | 常用增强 | ✅ | — | ⬜ |
 | FR-NTS-NOTE-ORG-002 | 整理 | 基线必备 | ⬜ | — | ⬜ |
 | FR-STD-WS-FS-002 | 文件树 | 常用增强 | ✅ | — | ✅ |
-| FR-STD-WS-FS-003 | 文件树 | 常用增强 | 🟡 | — | ✅ |
+| FR-STD-WS-FS-003 | 文件树 | 常用增强 | ✅ | — | ✅ |
 | FR-AGT-TOOL-INGEST-002 | 文档解析 | 常用增强 | ✅ | — | ⬜ |
 | FR-AGT-QUAL-VERIFY-004 | 断言可溯源 | 基线必备 | ✅ | — | ⬜ |
-| FR-STD-WS-FS-004 | 新建文件 | 基线必备 | 🟡 | — | ⬜ |
+| FR-STD-WS-FS-004 | 新建文件 | 基线必备 | ✅ | — | ⬜ |
 | FR-STD-DB-CONN-001 | 新建连接 | 基线必备 | ✅ | — | ✅ |
 | FR-STD-DB-CONN-002 | 新建连接 | 常用增强 | ✅ | — | ✅ |
 | FR-STD-DB-CONN-003 | 新建连接 | 基线必备 | ✅ | — | ✅ |
@@ -263,22 +268,23 @@
 | FR-STD-DB-DRV-002 | 方言差异 | 基线必备 | ✅ | — | ✅ |
 | FR-STD-DB-DRV-003 | 方言差异 | 常用增强 | ✅ | — | ✅ |
 | FR-STD-DB-DRV-004 | 方言差异 | 基线必备 | ✅ | — | ✅ |
-| FR-NTS-TODO-CALENDAR-001 | 日历 | 常用增强 | 🟡 | — | ⬜ |
-| FR-NTS-TODO-CALENDAR-002 | 日历 | 常用增强 | 🟡 | — | ⬜ |
+| FR-NTS-TODO-CALENDAR-001 | 日历 | 常用增强 | ✅ | — | ⬜ |
+| FR-NTS-TODO-CALENDAR-002 | 日历 | 常用增强 | ✅ | — | ⬜ |
+| FR-NTS-TODO-CALENDAR-003 | 日历连续翻页 | 常用增强 | ✅ | — | ⬜ |
 | FR-AGT-GUARD-PERM-001 | 权限与审批 | 基线必备 | ✅ | — | 🟡 |
 | FR-AGT-GUARD-PERM-002 | 权限与审批 | 常用增强 | ✅ | — | ⬜ |
 | FR-STD-WS-EDIT-010 | 查找替换 | 常用增强 | ✅ | — | ✅ |
 | FR-STD-DB-SESS-001 | 查询历史 | 常用增强 | ✅ | — | ✅ |
 | FR-STD-DB-META-001 | 树形浏览 | 基线必备 | ✅ | — | ✅ |
-| FR-STD-DB-META-002 | 树形浏览 | 常用增强 | 🟡 | — | ⬜ |
+| FR-STD-DB-META-002 | 树形浏览 | 常用增强 | ➖ | — | ➖ |
 | FR-STD-DB-META-003 | 树形浏览 | 基线必备 | ✅ | — | ✅ |
 | FR-STD-DB-META-004 | 树形浏览 | 常用增强 | ✅ | — | ✅ |
 | FR-STD-DB-META-005 | 树形浏览 | 进阶可选 | ✅ | — | ✅ |
-| FR-STD-DB-META-006 | 树形浏览 | 基线必备 | 🟡 | — | ✅ |
-| FR-STD-DB-META-007 | 树形浏览 | 基线必备 | 🟡 | — | 🟡 |
-| FR-STD-DB-META-008 | 树形浏览 | 进阶可选 | 🟡 | — | ✅ |
+| FR-STD-DB-META-006 | 树形浏览 | 基线必备 | ✅ | — | ✅ |
+| FR-STD-DB-META-007 | 树形浏览 | 基线必备 | ✅ | — | 🟡 |
+| FR-STD-DB-META-008 | 树形浏览 | 进阶可选 | ✅ | — | ✅ |
 | FR-STD-WS-NAV-013 | 格式化 | 常用增强 | ✅ | — | ✅ |
-| FR-STD-WS-NAV-014 | 格式化 | 常用增强 | 🟡 | — | ✅ |
+| FR-STD-WS-NAV-014 | 格式化 | 常用增强 | ✅ | — | ✅ |
 | FR-AGT-TOOL-MODEL-001 | 模型多档 | 常用增强 | ✅ | — | ⬜ |
 | FR-AGT-TOOL-MODEL-002 | 模型多档 | 常用增强 | ✅ | — | ⬜ |
 | FR-AGT-UX-CONV-009 | 求助通道 | 常用增强 | ✅ | — | ⬜ |
@@ -286,9 +292,9 @@
 | FR-AGT-UX-CONV-011 | 求助通道 | 基线必备 | ✅ | — | ⬜ |
 | FR-AGT-UX-CONV-012 | 求助通道 | 常用增强 | ✅ | — | ⬜ |
 | FR-AGT-UX-CONV-013 | 求助通道 | 常用增强 | ✅ | — | ⬜ |
-| FR-NTS-TODO-LIST-001 | 清单 | 基线必备 | 🟡 | — | ⬜ |
-| FR-NTS-TODO-LIST-002 | 清单 | 基线必备 | 🟡 | — | ⬜ |
-| FR-NTS-TODO-LIST-003 | 清单 | 常用增强 | 🟡 | — | ⬜ |
+| FR-NTS-TODO-LIST-001 | 清单 | 基线必备 | ✅ | — | ⬜ |
+| FR-NTS-TODO-LIST-002 | 清单 | 基线必备 | ✅ | — | ⬜ |
+| FR-NTS-TODO-LIST-003 | 清单 | 常用增强 | ✅ | — | ⬜ |
 | FR-AGT-GUARD-SOUL-001 | 灵魂 | 基线必备 | ✅ | — | ⬜ |
 | FR-RTR-RSR-FEATURE-001 | 特征模型 | 常用增强 | ⬜ | — | ⬜ |
 | FR-AGT-TOOL-SYS-001 | 界面操作 | 进阶可选 | ✅ | — | ⬜ |
@@ -297,7 +303,7 @@
 | FR-AGT-TOOL-SYS-005 | 界面操作 | 基线必备 | ✅ | — | ⬜ |
 | FR-AGT-TOOL-SYS-006 | 界面操作 | 常用增强 | ✅ | — | ⬜ |
 | FR-AGT-GUARD-SOUL-002 | 留痕 | 常用增强 | ✅ | — | ⬜ |
-| FR-STD-WS-VCS-002 | 看差异 | 常用增强 | 🟡 | — | ⬜ |
+| FR-STD-WS-VCS-002 | 看差异 | 常用增强 | ✅ | — | ⬜ |
 | FR-RTR-RSR-REPORT-001 | 研报生成 | 常用增强 | ⬜ | — | ⬜ |
 | FR-RTR-RSR-REPORT-002 | 研报生成 | 常用增强 | ⬜ | — | ⬜ |
 | FR-RTR-RSR-REPORT-003 | 研报生成 | 常用增强 | ⬜ | — | ⬜ |
@@ -307,7 +313,7 @@
 | FR-RTR-RSR-REPORT-007 | 研报生成 | 常用增强 | ⬜ | — | ⬜ |
 | FR-RTR-RSR-REPORT-008 | 研报生成 | 常用增强 | ⬜ | — | ⬜ |
 | FR-RTR-RSR-REPORT-009 | 研报生成 | 常用增强 | ⬜ | — | ⬜ |
-| FR-NTS-NOTE-PRIVACY-001 | 私密保护 | 常用增强 | ⬜ | — | ⬜ |
+| FR-NTS-NOTE-PRIVACY-001 | 私密保护 | 常用增强 | ✅ | — | ⬜ |
 | FR-STD-WS-TOOL-001 | 终端 | 常用增强 | 🟡 | — | ✅ |
 | FR-STD-WS-TOOL-002 | 终端 | 常用增强 | ✅ | — | ✅ |
 | FR-STD-DB-EXEC-009 | 结果与错误 | 常用增强 | ✅ | — | ✅ |
@@ -316,75 +322,75 @@
 | FR-STD-DB-EXEC-012 | 结果与错误 | 常用增强 | ✅ | — | ✅ |
 | FR-STD-DB-EXEC-013 | 结果与错误 | 进阶可选 | ✅ | — | ✅ |
 | FR-AGT-QUAL-VERIFY-001 | 结果自验 | 基线必备 | ✅ | — | ⬜ |
-| FR-STD-DB-DIAG-003 | 统计读数 | 进阶可选 | 🟡 | — | 🟡 |
-| FR-STD-DB-DIAG-004 | 统计读数 | 进阶可选 | 🟡 | — | ✅ |
-| FR-STD-WS-EDIT-023 | 编码与换行 | 常用增强 | 🟡 | — | ⬜ |
-| FR-STD-WS-AI-001 | 编码辅助 | 常用增强 | ⬜ | — | ⬜ |
+| FR-STD-DB-DIAG-003 | 统计读数 | 进阶可选 | ✅ | — | 🟡 |
+| FR-STD-DB-DIAG-004 | 统计读数 | 进阶可选 | ✅ | — | ✅ |
+| FR-STD-WS-EDIT-023 | 编码与换行 | 常用增强 | ✅ | — | ⬜ |
+| FR-STD-WS-AI-001 | 编码辅助 | 常用增强 | ✅ | — | ⬜ |
 | FR-STD-WS-EDIT-001 | 编辑与保存 | 常用增强 | ✅ | — | ⬜ |
 | FR-STD-WS-EDIT-002 | 编辑与保存 | 基线必备 | ✅ | — | ✅ |
 | FR-STD-WS-EDIT-003 | 编辑与保存 | 常用增强 | ✅ | — | ⬜ |
 | FR-STD-WS-EDIT-004 | 编辑与保存 | 常用增强 | ✅ | — | ✅ |
 | FR-STD-WS-EDIT-005 | 编辑与保存 | 常用增强 | ✅ | — | ✅ |
 | FR-NTS-NOTE-FORMAT-001 | 编辑与格式 | 基线必备 | ✅ | — | ⬜ |
-| FR-STD-WS-EDIT-006 | 编辑动作 | 常用增强 | 🟡 | — | ⬜ |
-| FR-STD-WS-EDIT-007 | 编辑动作 | 常用增强 | 🟡 | — | ⬜ |
-| FR-STD-WS-EDIT-008 | 编辑动作 | 常用增强 | 🟡 | — | ⬜ |
-| FR-STD-WS-EDIT-009 | 编辑动作 | 常用增强 | 🟡 | — | ⬜ |
+| FR-STD-WS-EDIT-006 | 编辑动作 | 常用增强 | ✅ | — | ⬜ |
+| FR-STD-WS-EDIT-007 | 编辑动作 | 常用增强 | ✅ | — | ⬜ |
+| FR-STD-WS-EDIT-008 | 编辑动作 | 常用增强 | ✅ | — | ⬜ |
+| FR-STD-WS-EDIT-009 | 编辑动作 | 常用增强 | ✅ | — | ⬜ |
 | FR-STD-WS-EDIT-018 | 缩进与括号 | 常用增强 | ✅ | — | ⬜ |
-| FR-STD-WS-EDIT-019 | 缩进与括号 | 常用增强 | 🟡 | — | ⬜ |
-| FR-STD-WS-EDIT-020 | 缩进与括号 | 常用增强 | 🟡 | — | ⬜ |
-| FR-STD-WS-EDIT-021 | 缩进与括号 | 常用增强 | 🟡 | — | ⬜ |
-| FR-STD-WS-EDIT-022 | 缩进与括号 | 常用增强 | 🟡 | — | ⬜ |
+| FR-STD-WS-EDIT-019 | 缩进与括号 | 常用增强 | ✅ | — | ⬜ |
+| FR-STD-WS-EDIT-020 | 缩进与括号 | 常用增强 | ✅ | — | ⬜ |
+| FR-STD-WS-EDIT-021 | 缩进与括号 | 常用增强 | ✅ | — | ⬜ |
+| FR-STD-WS-EDIT-022 | 缩进与括号 | 常用增强 | ✅ | — | ⬜ |
 | FR-AGT-LINK-CHAN-001 | 网关 | 基线必备 | ✅ | — | 🟡 |
 | FR-AGT-LINK-CHAN-002 | 网关 | 常用增强 | ✅ | — | ⬜ |
 | FR-AGT-TOOL-INGEST-001 | 网络检索 | 常用增强 | ✅ | — | ⬜ |
 | FR-AGT-TOOL-INGEST-004 | 网络检索 | 常用增强 | ✅ | — | ⬜ |
 | FR-STD-DB-EXEC-001 | 自动归档 | 常用增强 | ✅ | — | ⬜ |
 | FR-STD-WS-NAV-003 | 自动补全 | 常用增强 | ✅ | — | ✅ |
-| FR-STD-WS-NAV-004 | 自动补全 | 常用增强 | 🟡 | — | ⬜ |
-| FR-STD-WS-NAV-005 | 自动补全 | 进阶可选 | 🟡 | — | ⬜ |
+| FR-STD-WS-NAV-004 | 自动补全 | 常用增强 | ✅ | — | ⬜ |
+| FR-STD-WS-NAV-005 | 自动补全 | 进阶可选 | ✅ | — | ⬜ |
 | FR-RTR-MKT-FEED-001 | 行情接入 | 基线必备 | ⬜ | — | ⬜ |
 | FR-RTR-MKT-FEED-002 | 行情接入 | 基线必备 | ⬜ | — | ⬜ |
 | FR-RTR-MKT-FEED-003 | 行情接入 | 基线必备 | ⬜ | — | ⬜ |
 | FR-RTR-MKT-FEED-004 | 行情接入 | 基线必备 | ⬜ | — | ⬜ |
 | FR-RTR-MKT-FEED-005 | 行情接入 | 基线必备 | ⬜ | — | ⬜ |
 | FR-STD-DB-DATA-001 | 行编辑 | 基线必备 | ✅ | — | ✅ |
-| FR-STD-DB-DATA-002 | 行编辑 | 常用增强 | 🟡 | — | ✅ |
+| FR-STD-DB-DATA-002 | 行编辑 | 常用增强 | ✅ | — | ✅ |
 | FR-STD-DB-DATA-003 | 行编辑 | 常用增强 | ✅ | — | ✅ |
 | FR-STD-DB-DATA-004 | 行编辑 | 常用增强 | ✅ | — | ✅ |
-| FR-STD-DB-DATA-005 | 行编辑 | 进阶可选 | 🟡 | — | ✅ |
-| FR-STD-DB-DATA-006 | 行编辑 | 进阶可选 | 🟡 | — | ✅ |
+| FR-STD-DB-DATA-005 | 行编辑 | 进阶可选 | ✅ | — | ✅ |
+| FR-STD-DB-DATA-006 | 行编辑 | 进阶可选 | ✅ | — | ✅ |
 | FR-STD-DB-META-009 | 表结构 | 常用增强 | ✅ | — | ✅ |
 | FR-STD-DB-META-010 | 表结构 | 常用增强 | ✅ | — | ✅ |
-| FR-STD-DB-META-011 | 表结构 | 常用增强 | 🟡 | — | ✅ |
+| FR-STD-DB-META-011 | 表结构 | 常用增强 | ✅ | — | ✅ |
 | FR-STD-DB-META-012 | 表结构 | 基线必备 | ✅ | — | ✅ |
 | FR-STD-DB-DDL-001 | 表设计 | 常用增强 | ✅ | — | ✅ |
 | FR-STD-DB-DDL-002 | 表设计 | 进阶可选 | ✅ | — | ✅ |
-| FR-STD-DB-DDL-003 | 表设计 | 常用增强 | 🟡 | — | ✅ |
-| FR-STD-DB-DDL-004 | 表设计 | 进阶可选 | 🟡 | — | ✅ |
+| FR-STD-DB-DDL-003 | 表设计 | 常用增强 | ✅ | — | ✅ |
+| FR-STD-DB-DDL-004 | 表设计 | 进阶可选 | ✅ | — | ✅ |
 | FR-STD-DB-DDL-005 | 表设计 | 进阶可选 | ✅ | — | ✅ |
 | FR-AGT-PLAN-PLAN-003 | 计划修订 | 常用增强 | ✅ | — | ⬜ |
 | FR-AGT-PLAN-PLAN-004 | 计划修订 | 常用增强 | ✅ | — | ⬜ |
 | FR-AGT-KNOW-MEM-001 | 记忆 | 常用增强 | ✅ | — | ⬜ |
 | FR-AGT-KNOW-MEM-002 | 记忆 | 常用增强 | ✅ | — | ⬜ |
-| FR-AGT-KNOW-MEM-003 | 记忆 | 常用增强 | 🟡 | — | ⬜ |
+| FR-AGT-KNOW-MEM-003 | 记忆 | 常用增强 | ✅ | — | ⬜ |
 | FR-STD-WS-AI-002 | 许愿式编程 | 常用增强 | 🟡 | — | ⬜ |
 | FR-STD-WS-NAV-007 | 诊断 | 基线必备 | ✅ | — | ✅ |
 | FR-STD-WS-NAV-008 | 诊断 | 常用增强 | ✅ | — | ✅ |
 | FR-STD-WS-NAV-009 | 诊断 | 基线必备 | ✅ | — | ✅ |
 | FR-STD-WS-NAV-010 | 诊断 | 常用增强 | ✅ | — | ✅ |
 | FR-STD-WS-NAV-011 | 诊断 | 进阶可选 | ✅ | — | ✅ |
-| FR-STD-WS-NAV-012 | 诊断 | 常用增强 | 🟡 | — | ⬜ |
+| FR-STD-WS-NAV-012 | 诊断 | 常用增强 | ✅ | — | ⬜ |
 | FR-STD-WS-NAV-001 | 语法高亮 | 常用增强 | ✅ | — | ✅ |
-| FR-STD-WS-NAV-002 | 语法高亮 | 常用增强 | 🟡 | — | ✅ |
+| FR-STD-WS-NAV-002 | 语法高亮 | 常用增强 | ✅ | — | ✅ |
 | FR-AGT-TOOL-MEDIA-001 | 语音输入 | 进阶可选 | 🟡 | — | ⬜ |
 | FR-AGT-TOOL-MEDIA-002 | 语音输出 | 进阶可选 | ✅ | — | ⬜ |
-| FR-STD-WS-TOOL-003 | 调试器 | 进阶可选 | ⬜ | — | ⬜ |
+| FR-STD-WS-TOOL-003 | 调试器 | 进阶可选 | ✅ | — | ⬜ |
 | FR-RTR-MKT-FUND-001 | 财报与事件 | 常用增强 | ⬜ | — | ⬜ |
 | FR-RTR-MKT-FUND-002 | 财报与事件 | 常用增强 | ⬜ | — | ⬜ |
 | FR-RTR-MKT-FUND-003 | 财报与事件 | 常用增强 | ⬜ | — | ⬜ |
 | FR-RTR-MKT-FUND-004 | 财报与事件 | 常用增强 | ⬜ | — | ⬜ |
-| FR-STD-WS-NAV-006 | 跳转与大纲 | 进阶可选 | 🟡 | — | ⬜ |
+| FR-STD-WS-NAV-006 | 跳转与大纲 | 进阶可选 | ✅ | — | ⬜ |
 | FR-AGT-UX-CONV-006 | 过程可见 | 基线必备 | ✅ | — | ⬜ |
 | FR-STD-DB-CONN-021 | 连接失败 | 基线必备 | ✅ | — | ✅ |
 | FR-STD-DB-CONN-007 | 连接管理 | 基线必备 | ✅ | — | ✅ |
@@ -392,27 +398,28 @@
 | FR-STD-DB-CONN-009 | 连接管理 | 基线必备 | ✅ | — | ✅ |
 | FR-STD-DB-CONN-010 | 连接管理 | 进阶可选 | ✅ | — | ✅ |
 | FR-STD-DB-CONN-011 | 连接管理 | 常用增强 | ✅ | — | ✅ |
-| FR-STD-DB-CONN-012 | 连接组织 | 常用增强 | 🟡 | — | ✅ |
+| FR-STD-DB-CONN-012 | 连接组织 | 常用增强 | ✅ | — | ✅ |
 | FR-STD-DB-CONN-013 | 连接组织 | 常用增强 | ✅ | — | ✅ |
 | FR-STD-DB-CONN-014 | 连接组织 | 常用增强 | ✅ | — | ✅ |
 | FR-RTR-RSR-SCREEN-001 | 选股与筛选 | 常用增强 | ⬜ | — | ⬜ |
-| FR-STD-WS-FS-005 | 重命名 | 基线必备 | 🟡 | — | ⬜ |
+| FR-STD-WS-FS-005 | 重命名 | 基线必备 | ✅ | — | ⬜ |
 | FR-STD-DB-DIAG-005 | 锁与等待 | 进阶可选 | ✅ | — | ✅ |
 | FR-AGT-QUAL-VERIFY-002 | 长任务一致性 | 常用增强 | ✅ | — | ⬜ |
 | FR-AGT-CORE-LOOP-008 | 队列 | 常用增强 | ✅ | — | ⬜ |
-| FR-NTS-NOTE-ATTACH-001 | 附件与图片 | 常用增强 | 🟡 | — | ⬜ |
+| FR-NTS-NOTE-ATTACH-001 | 附件与图片 | 常用增强 | ✅ | — | ⬜ |
 | FR-AGT-GUARD-PERM-003 | 隔离执行 | 基线必备 | ✅ | — | ⬜ |
 | FR-STD-WS-UI-001 | 页签 | 基线必备 | ✅ | — | ✅ |
 | FR-STD-WS-UI-002 | 页签 | 常用增强 | ✅ | — | ✅ |
-| FR-STD-WS-UI-003 | 页签 | 常用增强 | 🟡 | — | ✅ |
+| FR-STD-WS-UI-003 | 页签 | 常用增强 | ✅ | — | ✅ |
 | FR-STD-WS-UI-010 | 页签 | 常用增强 | ✅ | — | ⬜ |
 | FR-AGT-KNOW-CTX-001 | 项目上下文 | 常用增强 | ✅ | — | ⬜ |
 | FR-AGT-KNOW-CTX-003 | 项目上下文 | 常用增强 | ✅ | — | ⬜ |
+| FR-NTS-ALL-HOME-001 | 首页与启动落页 | 常用增强 | ✅ | — | ⬜ |
 | FR-STD-DB-DRV-005 | 驱动接入 | 基线必备 | ✅ | — | ✅ |
 | FR-STD-DB-DRV-006 | 驱动接入 | 常用增强 | ✅ | — | ✅ |
 | FR-STD-DB-DRV-007 | 驱动接入 | 基线必备 | ✅ | — | ✅ |
 | FR-STD-DB-DRV-008 | 驱动接入 | 基线必备 | ✅ | — | ✅ |
-| FR-STD-DB-DRV-009 | 驱动接入 | 进阶可选 | 🟡 | — | ✅ |
+| FR-STD-DB-DRV-009 | 驱动接入 | 进阶可选 | ✅ | — | ✅ |
 | FR-STD-DB-DRV-010 | 驱动接入 | 常用增强 | ✅ | — | 🟡 |
 | FR-RTR-RSR-SAMPLE-001 | 验证与样本 | 常用增强 | ⬜ | — | ⬜ |
 | FR-RTR-RSR-SAMPLE-002 | 验证与样本 | 常用增强 | ⬜ | — | ⬜ |

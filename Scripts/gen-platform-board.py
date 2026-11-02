@@ -378,6 +378,28 @@ def _edit_board(old: str, new: str, count: int = 1):
     return setup
 
 
+def _edit_section_three_id(root: pathlib.Path) -> None:
+    """§3 里第一个需求编号改掉（行数 / 条数都不动）。
+
+    锚点是**结构**（节边界 `## 3.` / `## 4.` + 编号正则），不是字面串 ——
+    原夹具用 `、\`FR-STD-`（「两条 FR-STD 并列」才会有那个「、」），2026-11-03 看板按真源重生成后
+    §3 里的 FR-STD 都成了单条分组（1 条 / 行）⇒ 夹具目标字符串消失、第六例准备阶段就失败
+    （整族 9 例判「1 例不符预期」，红的是夹具不是看板）。改成结构锚点后，内容怎么漂都还能造这个负例。
+    """
+    path = root / ".build/derived/任务清单-按平台.md"
+    text = path.read_text(encoding="utf-8")
+    start = text.find("## 3.")
+    end = text.find("## 4.", start + 1) if start >= 0 else -1
+    if start < 0 or end < 0:
+        raise AssertionError("夹具前置：看板缺 §3 / §4 节边界（先跑 ⑧ 那条判据）")
+    body = text[start:end]
+    match = re.search(r"`FR-[A-Z0-9-]+-\d{3}`", body)
+    if match is None:
+        raise AssertionError("夹具目标：§3 里一个需求编号都没匹配到（编号形态变了？）")
+    edited = body[: match.start()] + "`FR-XXX-XXX-001`" + body[match.end() :]
+    path.write_text(text[:start] + edited + text[end:], encoding="utf-8")
+
+
 def _flip_ledger(setting: str):
     def setup(root: pathlib.Path) -> None:
         path = root / "Docs/平台实现状态.json"
@@ -446,7 +468,7 @@ def build_cases() -> list[dict]:
         },
         {
             "name": "⑥ §3 的编号被删一个（条数不动）⇒ --check 报红",
-            "setup": _edit_board("、`FR-STD-", "、`FR-XXX-", 1),
+            "setup": _edit_section_three_id,
             "steps": [(["--check"], 1, "不一致")],
         },
         {

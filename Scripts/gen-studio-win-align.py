@@ -56,6 +56,12 @@ OUT = ROOT / "Docs/archive/root-20261026/平台对齐-Studio-Windows对macOS.md"
 
 TARGET_PLATFORM = "windows"
 ALLOWED_STATUS = ("✅", "🟡", "⬜")
+# `➖`（挂起标记，2026-11-02 主人令「GBase 8a 暂不支持」那一族）与 `—`（不适用）不是合法进度值，
+# 但也不是「取值非法」：`check-status-gap.py` 从一开始就把这两档按**不适用**处理并逐条点名。
+# 本件原来只认三档 ⇒ 台账按令写下 `➖` 之后，整件生成器直接判「真值源不合口径」而停摆
+# （2026-11-03 实测：`FR-STD-DB-META-002` / `NFR-ALL-GATE-COMP-002` 两处）——
+# 判据比真值源更严，红的是判据，不是台账。处置 = 收下这两档、逐条点名，不静默、不逼人改台账符号。
+NOT_APPLICABLE = ("➖", "—")
 ID_RE = re.compile(r"^[A-Z]{2,4}(?:-[A-Z0-9]+){2,5}-\d{2,3}$")   # 5 段两级编号（`FR-RTR-MKT-FEED-001`）必须整串认
 RANGE_RE = re.compile(r"^(?P<prefix>[A-Z]{2,4}(?:-[A-Z0-9]+)+)-(?P<low>\d{2,3})\s*~\s*(?P<high>\d{2,3})$")
 FULL_RANGE_RE = re.compile(r"^(?P<left>[A-Z]{2,4}(?:-[A-Z0-9]+)+-\d{2,3})\s*~\s*(?P<right>[A-Z]{2,4}(?:-[A-Z0-9]+)+-\d{2,3})$")
@@ -138,17 +144,23 @@ def read_lines(path: pathlib.Path, label: str) -> list[str]:
     return path.read_text(encoding="utf-8").splitlines()
 
 
-def load_status() -> dict[str, str]:
-    """一单§3 需求状态台账 → {编号: 状态}（macOS 基线的唯一来源）。"""
+def load_status() -> tuple[dict[str, str], list[str]]:
+    """一单§3 需求状态台账 → ({编号: 状态}, 不适用/挂起编号)。macOS 基线的唯一来源。"""
     lines = read_lines(PLAN, "一单：§3 状态台账")
     rows = first_table(lines, ("编号", "状态"), 9)
     problems: list[str] = []
     status: dict[str, str] = {}
+    not_applicable: list[str] = []
     for cells in rows:
         identifier = cells[0].strip("`").strip()
         if not ID_RE.match(identifier):
             continue
         value = status_token(cells[5])
+        if value in NOT_APPLICABLE:
+            # 不适用 / 挂起：收下但逐条点名（不静默跳过 —— 那样「不适用」就成了逃生门）
+            not_applicable.append(identifier)
+            status[identifier] = value
+            continue
         if value not in ALLOWED_STATUS:
             problems.append(f"一单 §3 台账 {identifier} 的状态格取值非法（{cells[5]!r}）")
             continue
@@ -157,7 +169,7 @@ def load_status() -> dict[str, str]:
         problems.append("一单 §3 台账一条状态都没读到（锚点或表格形态变了）")
     if problems:
         raise SourceError(problems)
-    return status
+    return status, not_applicable
 
 
 def load_index(status: dict[str, str]) -> tuple[list[tuple[str, str, str, str]], int, int]:
@@ -315,6 +327,7 @@ def render(
     overrides: dict[str, str],
     non_identifier_rows: int,
     out_of_index: int,
+    not_applicable: list[str],
 ) -> str:
     rows: list[tuple[str, str, str, str, str, str]] = []
     for identifier, domain, layer, macos in index:
@@ -323,7 +336,11 @@ def render(
             target = "—"
         else:
             target = landing(cell) or "（追溯表有行、未标路径）"
-        rows.append((identifier, domain, layer, macos, target, overrides.get(identifier, default)))
+        # 本条在 macOS 上是「不适用 / 挂起」（`➖` / `—`）⇒ Windows 列同记 `➖`：
+        # GBase 8a 的挂起令覆盖全平台（另一台机器装不上，Windows 也没有这件事），
+        # 按 overrides/default 记会在 Windows 列造出一片「未开工」的假读数。
+        windows = "➖" if macos in NOT_APPLICABLE else overrides.get(identifier, default)
+        rows.append((identifier, domain, layer, macos, target, windows))
 
     with_target = sum(1 for row in rows if not row[4].startswith("—") and "未标路径" not in row[4])
     without_target = sum(1 for row in rows if "未标路径" in row[4])
@@ -371,6 +388,14 @@ def render(
     out.append(
         "> `Windows` 列 = 台账**原值**（不带矩阵里的 ⚠️ 差异标记：等价判定在矩阵，本件只给落点索引）。"
     )
+    if not_applicable:
+        suspended_in_table = [row[0] for row in rows if row[3] in NOT_APPLICABLE]
+        out.append(
+            "> **不适用 / 挂起（逐条点名，不当逃生门）**：一单 §3 台账标 `➖` / `—` 的 "
+            f"**{len(not_applicable)}** 条 —— {'、'.join(f'`{item}`' for item in not_applicable)}；"
+            f"其中进本表（`FR` 类）的 **{len(suspended_in_table)}** 条，`Windows` 列同记 `➖`"
+            "（GBase 8a 挂起令覆盖全平台、不按 `overrides` / `default` 记），`NFR` 那条本就不进表。"
+        )
     out.append(">")
     out.append(
         "> **与派单仓一次性快照的差异（1 行，如实登记）**：`DoyahDispatch` 的 "
@@ -395,7 +420,7 @@ def main() -> int:
         print(f"❌ 不认的参数：{' '.join(arguments)}（只支持 --check）")
         return 2
     try:
-        status = load_status()
+        status, not_applicable = load_status()
         index, nfr_rows, ac_rows = load_index(status)
         trace, non_identifier_rows, out_of_index = load_trace({row[0] for row in index})
         default, overrides = load_platform()
@@ -405,7 +430,7 @@ def main() -> int:
             print(f"   · {problem}")
         return 1
     updated = render(index, (nfr_rows, ac_rows), trace, default, overrides,
-                     non_identifier_rows, out_of_index)
+                     non_identifier_rows, out_of_index, not_applicable)
 
     if "--check" in sys.argv[1:]:
         current = OUT.read_text(encoding="utf-8") if OUT.exists() else ""
