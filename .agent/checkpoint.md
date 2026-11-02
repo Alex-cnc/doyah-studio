@@ -73,3 +73,14 @@
 - 三分：**确定性失败 1** `NotesEditorSaveProbeTests.testN24FailureIsVisibleAndNeverAPopup`（复现 = `./Scripts/run-manual-verification-probes.sh --filter NotesEditorSaveProbeTests`，本跳两次都红；根因 = 夹具只读 chmod 把 `PRAGMA journal_mode=WAL` 的写也弄坏）· **抖动 1** `SSHTunnelRuntimeTests.testBusyPortFailsFastWithoutStartingAnything`（单族连跑 3 次全绿）· **未复现 1** `QueryHistoryPaneProbeTests.testClearAndDeleteBothWaitForConfirmation`（给不出复现步骤）。
 - **未执行（≠通过）**：自检族全跑本跳未跑，8 族红读数沿用第十片。
 - **下一项改口径：v0.4.0**（`.agent/next-version.md`）—— 第一步是**补壳**：`FR-NTS-*` 那 12 条「一句话 / 判据」为 `—` 的行按 L0 需求书 §3.5 补齐，空壳行不许翻 ✅；之后按 N1–N4 派生队列（`--version 0.4.0` 或 `plan-notes.yaml`，须 `--check` 能复算）。**不再开判据维护跳。**
+
+## v0.4.0 开工 · 补壳（2026-11-02 · 无台账行 · 文档 + 门禁）
+
+- **队列仍是 0 todo / 1 blocked**（`META-002` GBase 8a 无实例）⇒ 本跳按 `.agent/next-version.md` 开工 v0.4.0 的**第一步：补壳**。
+- **做了什么**：台账「一句话」空壳 **129 → 0**（471 行全覆盖）。其中 **24 行状态早已 ✅ 却从没写过「做成什么样」**（7 条 `NTS` + 17 条 `AGT`/`AC`）—— 这正是 next-version 警告的假绿面。补法 = 按 L0 需求书同名行**逐字抄**（`.build/derived/fill-ledger-shells.py`，只填空格、不新造需求；0 行抄不到）。先补 v0.4.0 范围的 24 条 `NTS`，再补齐余下 105 条（82 条跨仓 `FR-RTR` + 23 条本仓）。
+- **同批加判据 D**（`Scripts/check-plan-coverage.py`）：「不许空壳行」，覆盖范围 = 台账**全 471 行**（含 `FR-RTR`）。只判「有没有句子」，**不判**句子与需求书是否逐字相同 —— 实测 52 行是改写过的短句，钉死会逼台账变成副本（判据自己制造返工）。
+- **读数**：`check-plan-coverage` ⇒ 索引 471 · 台账 471 · **空壳 0 行** rc=0；负例（把 `FR-NTS-NOTE-CAPTURE-001` 改回 `—`）⇒ rc=1 **点名该行**，还原后 sha256 `2dc4fc6c…` 逐字节一致；文档门禁九道 rc=0；`check-self-test-counts --no-run` 族 54 / 例 1055 / 锚点 86 rc=0。
+- **未验证（≠通过）**：代码套件本跳未跑（只动 Docs + 一个门禁脚本）· 那 24 条「早已 ✅ 的空壳」本跳**只补句子、没重判**（句子补上才第一次有可比的标准，重判归 v0.4.0 各批次）。
+- **下一项**：派生 v0.4.0 队列 —— `.agent/plan.yaml` 换成本版 14 条（`NOTE-CAPTURE/ATTACH/ORG-002/VERSION/SYNC-002/PRIVACY` + 8 条 `TODO`），`Scripts/plan-batches.py` 加 `--version 0.4.0` 规则表（N1–N4）并让 `--check` 能对着台账复算；之后从 **N1（采集 / 格式 / 附件）** 开工。
+- next_try（存量）：台账「层次 / 优先级」与需求书 2 处不一致（`NOTE-VERSION-001`、`NOTE-PRIVACY-001`）—— 改层次会动 §2 分档计数，留到 N 批次里与判据同批改。
+- 证据 `.agent/evidence/2026-11-02-v040-shell-fill.md`

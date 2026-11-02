@@ -1,5 +1,6 @@
 # Doyah产品开发计划任务清单 · macOS 端
 > 上游（活书）：同端《Doyah产品详细设计说明书 · macOS端》（`Docs/Doyah产品详细设计说明书-macOS.md`）> 需求规格说明书 > 概要设计说明书；本文件只记「要做什么」，不复制上游正文。
+> **版本** v1.0.130（2026-11-02 **v0.4.0 开工前置（补壳）：台账「一句话」空壳 129 行 → 0**。其中 **24 行状态早已 ✅ 却从没人写过「要做成什么样」**（7 条 `NTS` + 17 条 `AGT` / `AC`）—— 那不是完成，那是自己给自己判对（AGENTS.md 红线 3）。补法 = 按 L0《需求规格说明书》同名行**逐字抄**（`.build/derived/fill-ledger-shells.py`：只填空格、不新造需求；105 行一次补齐，0 行抄不到）。同批给 `Scripts/check-plan-coverage.py` 加**判据 D「不许空壳行」**（覆盖范围 = 台账**全 471 行**，含跨仓 `FR-RTR`；只判「有没有句子」，不判句子与需求书是否逐字相同 —— 实测 52 行是改写过的短句，钉死会逼台账变成副本）。负例：把 `FR-NTS-NOTE-CAPTURE-001` 改回 `—` ⇒ rc=1 点名该行，还原后 `git status --porcelain` 为空（与改坏前逐字节一致）。读数：`check-plan-coverage` ⇒ 索引 471 · 台账 471 · **空壳 0 行** rc=0；文档门禁九道 rc=0（tables 74 文件 / numbers 三向 / status 471 / version-scope 471 / doc-layout / doc-invariants / agents-index / req-index）；`check-self-test-counts --no-run` 族 54 / 例 1055 / 锚点 86 rc=0。**未验证**：代码套件本跳未跑（只动 Docs + 一个门禁脚本）· 台账「层次 / 优先级」仍与需求书有 2 处不一致（`NOTE-VERSION-001` / `NOTE-PRIVACY-001`），另记 next_try）
 > **版本** v1.0.129（2026-11-02 **v0.3.0 第十三跳 / `B7` 批次（连接与驱动）：`FR-STD-DB-CONN-012` 连接分组 · `FR-STD-DB-CONN-020` SSH 隧道 · `FR-STD-DB-DRV-009` GBase 8a 驱动 —— 三条两列全 ✅**。由头 = 三条的备注都停在「等环境 / 待人工」：`CONN-012` 是 2026-09-27 人工点验没过（折叠状态活不过一次活动栏切换）、`CONN-020` 只剩真跳板机握手、`DRV-009` 只剩 GBase 实例。本跳先核盘再补最后一段：① `CONN-012` 的修法（折叠状态上移 `AppState`）与离屏探针早就在盘，但探针**没接进** `verify-ui-interactions.sh`（115 条里 0 条）⇒ 接进去，判据才真的每批跑；② `CONN-020` 判据 ② 有真缺口 —— 隧道断掉时只报「连接已断开」，新增 `Core/SSHTunnelDiagnosis`（只有「配了隧道 + 隧道真死」才归因到隧道）+ `SSHTunnelProcess.markDeadIfExited`（`ssh` 被外部杀掉时状态停在 `.ready` 的洞）+ `AppState.tunnelAwareMessage` 一处收口（先改判、再归因、再作废这条连接）；③ `DRV-009` 用 `Scripts/test-mysql-driver.sh` 的假 MySQL 服务器真跑线协议（8 段全 ✅，第 8 段专判 GBase 档）。判据 = 新探针 `TestsUISnapshot/UISnapshotSidebarStateTests` 接进 UI 入口；Core +13 例（`SSHTunnelDiagnosisTests` 5 · `SSHTunnelWiringTests` 4 · `SSHTunnelRuntimeTests` 4）。读数：`./Scripts/verify-ui-interactions.sh` **116 条全绿 / 无跳过 / 源锚点全在**（115 → 116）；`env -u DOYAH_UI_SNAPSHOT ./Scripts/verify-core.sh` **5078 例 / 13 skipped / 0 失败**；反例三段（归因整段退成原样 6 红 · 去掉 `markDeadIfExited` 调用 1 红 · 进程还活着也改判 3 红）各判红后 `shasum -a 256` 逐字节还原。§4.2 v0.3.0 25 → **22**（22 / 0）。**覆盖边界（如实）**：真跳板机握手 0 次、真 GBase 实例 0 次、217 真库 0 次 ⇒ 这三处记「未知」，不是「通过」。)
 > **版本** v1.0.128（2026-11-02 **v0.3.0 第十二跳 / `B6` 批次（数据编辑与表结构）：`FR-STD-DB-DATA-002` 条件计数 · `FR-STD-DB-DATA-005` 单元格 / 单行详情 · `FR-STD-DB-DATA-006` 外键引用导航 · `FR-STD-DB-DDL-003` 表结构编辑器 · `FR-STD-DB-DDL-004` Schema 对比与同步 —— 五条两列全 ✅**。由头 = 五条备注都写「界面呈现 / 点击待人工点验」，核盘后缺的**不是**规则（`RowBrowsingQuery` / `CellInspector` / `ForeignKeyNavigation` / `TableDesign*` / `SchemaDiff` 早有单测），而是**从按下去到语句真的发出去**这一段：可以少发一条、可以把 WHERE 丢掉、可以把 DROP 塞进默认脚本、可以在没预览时也执行。落法两件真改动 + 五条判据：① `FR-DATA-006` 的入口按需求原文收口 —— **存在外键元数据时才呈现**（新 `ForeignKeyNavigation.forwardColumns` / `entryVisible` 一处判定 + `AppState.ensureForeignKeyColumns` 缓存 + `ResultGrid` 在 `menuNeedsUpdate` 里按**右键点的那一格**决定露不露；读不到就不露，不再给一个点下去只说「没有外键」的菜单项）；② **不许猜列类型** —— `TableDesignChangeSet.statements` / `createTablePlan` 对空类型**整批拒绝**（原先会生成 `ALTER TABLE t ALTER COLUMN c TYPE ;`），表格新增列不再预填 `text`（`TableDesign.blankColumn` 唯一构造口）。判据 = 新探针 `TestsUISnapshot/TableEditDDLProbeTests` **9 例**接进 `Scripts/verify-ui-interactions.sh`（106 → **115 条全绿 / 无跳过 / 源锚点全在**）；Core +6 例（`TableDesignCreatePlanTests` 4 · `ForeignKeyNavigationTests` 2）⇒ `env -u DOYAH_UI_SNAPSHOT ./Scripts/verify-core.sh` **5065 例 / 13 skipped / 0 失败**；反例三段（去掉空类型守卫 1 红 · `blankColumn` 预填 `text` 3 红 · 外键元数据不落缓存 1 红）各自判红后 `shasum -a 256` 逐字节还原。§4.2 v0.3.0 30 → **25**（25 / 0），未闭 90 → **85**。下一批 = `B7`（`CONN-012` 连接分组 · `CONN-020` SSH 隧道 · `DRV-009` GBase 8a 驱动）。)
 > **版本** v1.0.127（2026-11-02 **v0.3.0 第十一跳 / `B5` 收口：`FR-STD-DB-DIAG-006` 连接上下文里的诊断入口 —— 两列双 ✅**。由头 = 台账目标列一直是 `—`（需求书 §3.4 有原文、台账没落定义），而判据三条全在「点下去之后」：① 从对象树右键唤起且上下文自动带入；② 结论里的对象名可点、跳到对应节点；③ 没有统计读数时明说「未取到」，不编。落法三件：① `Core/DiagnosisScope` 把连接 / 库 / 对象 / 最近一次执行的读数收成**一个值**，并按对象类型给统计查询（表按 `relname` + `schemaname` 收窄、schema 聚合、库 / 实例各一条，只用 PG 12 起就有的视图；视图 / 函数 / 列 / 非 PG 方言**没有统计视图** ⇒ 给理由、一条语句都不发 —— 不给空表，空表会被读成「这张表从来没被扫过」）；② 「最近一次执行」的准入由 `LastExecution(receipt:)` 一处判：被拒（`refused`）与未发出的那一跑**没有服务端读数**，不算执行 —— 否则上下文里会写出「0 行 0 ms」这种编出来的读数；③ `Core/DiagnosisObjectLinks` 切段（长名优先 + 词边界：`orders_archive` 里不认出 `orders`）+ `doyah-object://` 身份链接，面板用 `AttributedString` + `OpenURLAction` 渲染（不弹浏览器），点了发一次性跳转请求，树在 `onChange` 里逐级展开路径并选中（找不到就说找不到）。判据 = 新探针 `TestsUISnapshot/ObjectDiagnosisProbeTests` **8 例**接进 `Scripts/verify-ui-interactions.sh`（98 → **106 条全绿 / 无跳过 / 源锚点全在**）；`env -u DOYAH_UI_SNAPSHOT ./Scripts/verify-core.sh` ⇒ **5059 例 / 13 skipped / 0 失败**；反例三段（统计不按对象收窄 2 红 · 去掉词边界 1 红 · 被拒的那一跑当成执行读数 1 红）各判红后 `shasum -a 256` 逐字节还原。本仓 ✅ 298 → **299**、🟡 74、未闭 91 → **90**（⬜ 17 → 16）；§4.2 v0.3.0 31 → **30**（30 / 0）。下一批 = `B6`（数据编辑与表结构：`DATA-002/005/006` · `DDL-003/004`）。)
@@ -126,38 +127,38 @@
 
 | 编号 | 一句话 | 领域 | 层次 | 优先级 | 状态 | 状态原值 | 版本 | 版本口径 |
 |---|---|---|---|---|---|---|---|---|
-| FR-RTR-MKT-HEALTH-003 | — | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
-| FR-RTR-FLOW-ORCH-001 | — | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
-| FR-RTR-FLOW-MARKET-001 | — | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
-| FR-RTR-REV-AI-001 | — | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
-| FR-RTR-RSR-FEATURE-001 | — | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
-| FR-RTR-RSR-SCREEN-001 | — | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
-| FR-RTR-RSR-SAMPLE-006 | — | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
-| FR-RTR-RSR-SCENARIO-006 | — | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
-| FR-NTS-NOTE-CAPTURE-001 | — | 3.5 Doyah Notes | 基线必备 | — | 🟡 | ⬜ | v0.1.0-alpha | — |
-| FR-NTS-NOTE-FORMAT-001 | — | 3.5 Doyah Notes | 基线必备 | 高 | ✅ | ⬜ | v0.1.0-alpha | — |
-| FR-NTS-NOTE-ATTACH-001 | — | 3.5 Doyah Notes | 常用增强 | 中 | 🟡 | ⬜ | v0.1.0-alpha | — |
-| FR-NTS-NOTE-SEARCH-001 | — | 3.5 Doyah Notes | 基线必备 | 高 | ✅ | ⬜ | v0.1.0-alpha | — |
-| FR-NTS-NOTE-ORG-001 | — | 3.5 Doyah Notes | 常用增强 | 中 | ✅ | ⬜ | v0.1.0-alpha | — |
-| FR-NTS-NOTE-ORG-002 | — | 3.5 Doyah Notes | 基线必备 | 高 | ⬜ | ⬜ | v0.1.0-alpha | — |
-| FR-NTS-NOTE-VERSION-001 | — | 3.5 Doyah Notes | 基线必备 | — | 🟡 | ⬜ | v0.1.0-alpha | — |
-| FR-NTS-NOTE-TRASH-001 | — | 3.5 Doyah Notes | 基线必备 | 高 | ✅ | ⬜ | v0.1.0-alpha | — |
-| FR-NTS-NOTE-SYNC-001 | — | 3.5 Doyah Notes | 基线必备 | 高 | ✅ | ⬜ | v0.1.0-alpha | — |
-| FR-NTS-NOTE-SYNC-002 | — | 3.5 Doyah Notes | 常用增强 | 高 | 🟡 | ⬜ | v0.1.0-alpha | — |
+| FR-RTR-MKT-HEALTH-003 | **数据健康**：查出缺口、跳空异常、成交量为零、复权前后对不上、日期不连续，并**拦住口径不一致的计算** | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
+| FR-RTR-FLOW-ORCH-001 | **工作流编排**：把取数 / 算特征 / 跑回测 / 生成文本 / 推送编成可命名、可复用、可定时的流水线 | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
+| FR-RTR-FLOW-MARKET-001 | **内置市场 skill**：把行业口径（放量 / 缩量 / 突破 / 回踩 / 背离 / 量价配合 / 板块轮动）固化成带参数的定义 | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
+| FR-RTR-REV-AI-001 | **AI 复盘**：检出异常操作（追高 / 频繁交易 / 不止损 / 逆势加仓），写成挂在原始记录上的复盘稿 | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
+| FR-RTR-RSR-FEATURE-001 | **特征模型**：把「牛股特征」写成可计算的定义（指标 + 阈值 + 时间窗），保存为可复用模型，能对任意标的与时间段求值 | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
+| FR-RTR-RSR-SCREEN-001 | **选股与筛选**：按一个或多个特征模型在指定股票池与时间段里跑出候选清单，**带命中原因** | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
+| FR-RTR-RSR-SAMPLE-006 | **回测与验证**：把特征模型放到历史区间跑出命中率、超额收益、最大回撤与样本数，并做**样本外验证** | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
+| FR-RTR-RSR-SCENARIO-006 | **历史情形**：给定当前形态，检索历史上相似情形，给样本量与后续 N 日涨跌分布（中位数 / 分位 / 最大回撤）—— **只描述过去，不预测未来** | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
+| FR-NTS-NOTE-CAPTURE-001 | 快速捕获：**一个动作**记下一条笔记（手机锁屏 / 桌面快捷键），不要求先选目录与标签 | 3.5 Doyah Notes | 基线必备 | — | 🟡 | ⬜ | v0.1.0-alpha | — |
+| FR-NTS-NOTE-FORMAT-001 | 编辑与格式：标题、列表、待办、引用、代码块、表格等基础格式，**所见即所得与源码可切换** | 3.5 Doyah Notes | 基线必备 | 高 | ✅ | ⬜ | v0.1.0-alpha | — |
+| FR-NTS-NOTE-ATTACH-001 | 附件与图片：插入图片与文件，**附件存文件系统、笔记里存引用**，原图不被压缩覆盖 | 3.5 Doyah Notes | 常用增强 | 中 | 🟡 | ⬜ | v0.1.0-alpha | — |
+| FR-NTS-NOTE-SEARCH-001 | 列表与检索：按时间 / 标签 / 关键词 / 语义检索，**两种检索都在**，语义不可用时降级并说出来 | 3.5 Doyah Notes | 基线必备 | 高 | ✅ | ⬜ | v0.1.0-alpha | — |
+| FR-NTS-NOTE-ORG-001 | 整理：标签、收藏、归档、置顶与批量操作，**批量操作前显示影响条数** | 3.5 Doyah Notes | 常用增强 | 中 | ✅ | ⬜ | v0.1.0-alpha | — |
+| FR-NTS-NOTE-ORG-002 | 笔记本归类：笔记可归入**一个笔记本**（单层，不做「架 → 笔记本」两层；未指定时落默认「收件箱」），**归属唯一**，跨笔记本移动只改归属 | 3.5 Doyah Notes | 基线必备 | 高 | ⬜ | ⬜ | v0.1.0-alpha | — |
+| FR-NTS-NOTE-VERSION-001 | 历史版本：每次保存留版本，可查看与回滚，**回滚本身也生成新版本** | 3.5 Doyah Notes | 基线必备 | — | 🟡 | ⬜ | v0.1.0-alpha | — |
+| FR-NTS-NOTE-TRASH-001 | 删除与恢复：删除进回收站，**可恢复，到期才彻底清除** | 3.5 Doyah Notes | 基线必备 | 高 | ✅ | ⬜ | v0.1.0-alpha | — |
+| FR-NTS-NOTE-SYNC-001 | 同步与账号：手机端与桌面端同步，**离线可用、联网合并**，冲突按 §3.5.9「记录级 LWW + 留两版」处理；**数据归用户所有、主存储在本地**，**联网时才同步到云端**（云端作多端交换与备份） | 3.5 Doyah Notes | 基线必备 | 高 | ✅ | ⬜ | v0.1.0-alpha | — |
+| FR-NTS-NOTE-SYNC-002 | 冲突合并：按**记录级 LWW（`rev` + `updatedAt`）+ 冲突留两版** —— 落败的那版原样留底、能打开并标来源设备与时间（**段落级并集 / CRDT 自动合并不在本条范围**，见能力书 5.1.9 的边界；这里只做记录级 LWW + 留两版） | 3.5 Doyah Notes | 常用增强 | 高 | 🟡 | ⬜ | v0.1.0-alpha | — |
 | FR-NTS-NOTE-EXPORT-001 | 导出与迁移：导出 Markdown / 纯文本 / 备份包，导入自己导出的包可完整还 | 3.5 Doyah Notes | 常用增强 | 中 | ✅ | ⬜ | v0.1.0-alpha | — |
 | FR-NTS-NOTE-PRIVACY-001 | 私密保护：可把单条笔记标为私密（不进搜索、不同步、不外发），需二次验证才可查看 | 3.5 Doyah Notes | 基线必备 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
-| AC-ALL-GATE-AI-001 | — | 7.4 智能体验收 | — | — | ⬜ | ⬜ | v0.1.0-alpha | — |
-| AC-ALL-GATE-AI-002 | — | 7.4 智能体验收 | — | — | ✅ | ✅ 已接线（T-57；真实实例端到端待执行） | v0.1.0-alpha | — |
-| AC-ALL-GATE-AI-003 | — | 7.4 智能体验收 | — | — | ✅ | ✅ 已接线（T-57；真实实例端到端待执行） | v0.1.0-alpha | — |
-| AC-ALL-GATE-AI-004 | — | 7.4 智能体验收 | — | — | ⬜ | ⬜ | v0.1.0-alpha | — |
-| AC-ALL-GATE-REL-001 | — | 7.1 发布门槛 | — | — | ✅ | ✅ 89/89（2026 | v0.1.0-alpha | — |
-| AC-ALL-GATE-REL-002 | — | 7.1 发布门槛 | — | — | ✅ | ✅ SwiftPM `P | v0.1.0-alpha | — |
-| AC-ALL-GATE-REL-003 | — | 7.1 发布门槛 | — | — | ✅ | ✅ 28/28（2026 | v0.1.0-alpha | — |
-| AC-ALL-GATE-REL-004 | — | 7.1 发布门槛 | — | — | 🟡 | 🟡 连接与查询已实测；对 | v0.1.0-alpha | — |
-| AC-ALL-GATE-REL-005 | — | 7.1 发布门槛 | — | — | ⬜ | ⬜ | v0.1.0-alpha | — |
-| AC-ALL-GATE-REL-006 | — | 7.1 发布门槛 | — | — | ⬜ | ⬜ | v0.1.0-alpha | — |
-| AC-ALL-GATE-REL-007 | — | 7.1 发布门槛 | — | — | ✅ | ✅ | v0.1.0-alpha | — |
-| AC-ALL-GATE-REL-008 | — | 7.1 发布门槛 | — | — | ✅ | ✅ v1.1 已核对 | v0.1.0-alpha | — |
+| AC-ALL-GATE-AI-001 | 关闭智能体总开关后，外发流量为 0（以外发日志或抓包核验） | 7.4 智能体验收 | — | — | ⬜ | ⬜ | v0.1.0-alpha | — |
+| AC-ALL-GATE-AI-002 | 只读模式下，智能体发起的所有写操作 / DDL 被拒绝并给出可读原因 | 7.4 智能体验收 | — | — | ✅ | ✅ 已接线（T-57；真实实例端到端待执行） | v0.1.0-alpha | — |
+| AC-ALL-GATE-AI-003 | 智能体产出的 SQL / 任务定义均可人工查看与修改，不存在「黑箱自动执行」 | 7.4 智能体验收 | — | — | ✅ | ✅ 已接线（T-57；真实实例端到端待执行） | v0.1.0-alpha | — |
+| AC-ALL-GATE-AI-004 | 提示注入用例：含注入指令的 schema 注释 / 数据内容不被当作指令执行 | 7.4 智能体验收 | — | — | ⬜ | ⬜ | v0.1.0-alpha | — |
+| AC-ALL-GATE-REL-001 | `./Scripts/verify-core.sh` 全部通过（0 失败） | 7.1 发布门槛 | — | — | ✅ | ✅ 89/89（2026 | v0.1.0-alpha | — |
+| AC-ALL-GATE-REL-002 | `DoyahStudio` 可构建为可运行 App | 7.1 发布门槛 | — | — | ✅ | ✅ SwiftPM `P | v0.1.0-alpha | — |
+| AC-ALL-GATE-REL-003 | `./Scripts/test-local-query-path.sh` 全部通过（含服务端取消 / DML 影响行数 / 建库权限三档） | 7.1 发布门槛 | — | — | ✅ | ✅ 28/28（2026 | v0.1.0-alpha | — |
+| AC-ALL-GATE-REL-004 | 对真实 PostgreSQL 完成：新建连接 → 测试连接 → 执行多语句 → 对象树展开 → 结果复制 → 语法检查 | 7.1 发布门槛 | — | — | 🟡 | 🟡 连接与查询已实测；对 | v0.1.0-alpha | — |
+| AC-ALL-GATE-REL-005 | 错误路径可读：错误密码、错误端口、不存在表、不合法 SQL | 7.1 发布门槛 | — | — | ⬜ | ⬜ | v0.1.0-alpha | — |
+| AC-ALL-GATE-REL-006 | 崩溃零容忍：上述全流程无崩溃日志 | 7.1 发布门槛 | — | — | ⬜ | ⬜ | v0.1.0-alpha | — |
+| AC-ALL-GATE-REL-007 | `README.md` 的「已接入 / 暂未接入」清单与代码一致 | 7.1 发布门槛 | — | — | ✅ | ✅ | v0.1.0-alpha | — |
+| AC-ALL-GATE-REL-008 | 需求条目与实现状态同步（条目在本文件、状态在一单 §3 台账） | 7.1 发布门槛 | — | — | ✅ | ✅ v1.1 已核对 | v0.1.0-alpha | — |
 | FR-AGT-LINK-CHAN-001 | 模型接入配置：可配置模型服务（本地 / 远端，OpenAI 兼容端点）、模型名、AP | 3.2 Doyah Agent | 基线必备 | 高 | ✅ | ✅ | v0.1.0-alpha | — |
 | FR-AGT-PLAN-CLAR-001 | 主动澄清：开跑前遇到目标不清 / 缺关键参数 / 两种做法代价差很大时，先问一句再动 | 3.2 Doyah Agent | 常用增强 | 高 | ✅ | ✅ | v1.1+ | `Core/AgentClarificationGate`：目标无动词/缺关键参数/代价差≥3 倍才问，其余直接干（判据 10 例） |
 | FR-AGT-PLAN-PLAN-004 | 计划修订：执行中发现原计划不成立时，说出为什么改并给出新计划，不静默换路 | 3.2 Doyah Agent | 常用增强 | 中 | ✅ | ✅ | v1.1+ | `Core/AgentPlanRevisionLog`：改道必带触发事实与理由，缺一拒收；可机械查出静默换路（判据同上） |
@@ -479,97 +480,97 @@
 | NFR-ALL-GATE-USE-003 | 长任务有进行中状态与可取消入口 | 4.4 NFR-USE | 常用增强 | — | ✅ | ✅ | v0.1.0-alpha | — |
 | NFR-ALL-GATE-USE-004 | 界面为原生 macOS 观感（NavigationSplitView、系统控件） | 4.4 NFR-USE | 常用增强 | — | ✅ | ✅ | v0.1.0-alpha | — |
 | NFR-ALL-GATE-USE-005 | 走不动的动作必须挑一种处置（灰着/给理由/不可达），禁第四种形状 | 4 非功能需求 | 基线必备 | 高 | ⬜ | — | v0.1.0-alpha | — |
-| FR-RTR-MKT-FEED-001 | — | 3.6 Doyah Retro | 基线必备 | 高 | ⬜ | ⬜ | v0.1.0-alpha | — |
-| FR-RTR-REV-TRADE-001 | — | 3.6 Doyah Retro | 基线必备 | 高 | ⬜ | ⬜ | v0.1.0-alpha | — |
-| FR-RTR-MKT-FEED-002 | — | 3.6 Doyah Retro | 基线必备 | 高 | ⬜ | ⬜ | v0.1.0-alpha | — |
-| FR-RTR-MKT-FEED-004 | — | 3.6 Doyah Retro | 基线必备 | 高 | ⬜ | ⬜ | v0.1.0-alpha | — |
-| FR-RTR-MKT-FEED-005 | — | 3.6 Doyah Retro | 基线必备 | 高 | ⬜ | ⬜ | v0.1.0-alpha | — |
-| FR-RTR-MKT-STORE-001 | — | 3.6 Doyah Retro | 基线必备 | 高 | ⬜ | ⬜ | v0.1.0-alpha | — |
-| FR-RTR-MKT-FEED-003 | — | 3.6 Doyah Retro | 基线必备 | 高 | ⬜ | ⬜ | v0.1.0-alpha | — |
-| FR-RTR-RSR-PROFILE-001 | — | 3.6 Doyah Retro | 基线必备 | 高 | ⬜ | ⬜ | v0.1.0-alpha | — |
-| FR-RTR-RSR-PROFILE-002 | — | 3.6 Doyah Retro | 基线必备 | 高 | ⬜ | ⬜ | v0.1.0-alpha | — |
-| FR-RTR-RSR-PROFILE-003 | — | 3.6 Doyah Retro | 基线必备 | 高 | ⬜ | ⬜ | v0.1.0-alpha | — |
-| FR-RTR-RSR-REPORT-001 | — | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
-| FR-RTR-RSR-REPORT-002 | — | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
-| FR-RTR-RSR-SCENARIO-001 | — | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
-| FR-RTR-RSR-SCENARIO-002 | — | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
-| FR-RTR-FLOW-CRON-001 | — | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
-| FR-RTR-FLOW-CRON-002 | — | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
-| FR-RTR-REV-ATTR-001 | — | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
-| FR-RTR-REV-ATTR-002 | — | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
-| FR-RTR-REV-ATTR-003 | — | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
-| FR-RTR-REV-QUERY-001 | — | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
-| FR-RTR-REV-QUERY-002 | — | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
-| FR-RTR-MKT-HEALTH-001 | — | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
-| FR-RTR-MKT-HEALTH-002 | — | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
-| FR-RTR-RSR-SCENARIO-003 | — | 3.6 Doyah Retro | 基线必备 | 高 | ⬜ | ⬜ | v0.1.0-alpha | — |
-| FR-RTR-RSR-SCENARIO-004 | — | 3.6 Doyah Retro | 基线必备 | 高 | ⬜ | ⬜ | v0.1.0-alpha | — |
-| FR-RTR-REV-QUERY-003 | — | 3.6 Doyah Retro | 基线必备 | 高 | ⬜ | ⬜ | v0.1.0-alpha | — |
-| FR-RTR-RSR-SCENARIO-005 | — | 3.6 Doyah Retro | 基线必备 | 高 | ⬜ | ⬜ | v0.1.0-alpha | — |
-| FR-RTR-REV-ATTR-004 | — | 3.6 Doyah Retro | 基线必备 | 高 | ⬜ | ⬜ | v0.1.0-alpha | — |
-| FR-RTR-REV-ATTR-005 | — | 3.6 Doyah Retro | 基线必备 | 高 | ⬜ | ⬜ | v0.1.0-alpha | — |
-| FR-RTR-REV-ATTR-006 | — | 3.6 Doyah Retro | 基线必备 | 高 | ⬜ | ⬜ | v0.1.0-alpha | — |
-| FR-RTR-REV-ATTR-007 | — | 3.6 Doyah Retro | 基线必备 | 高 | ⬜ | ⬜ | v0.1.0-alpha | — |
-| FR-RTR-REV-ATTR-008 | — | 3.6 Doyah Retro | 基线必备 | 高 | ⬜ | ⬜ | v0.1.0-alpha | — |
-| FR-RTR-REV-ATTR-009 | — | 3.6 Doyah Retro | 基线必备 | 高 | ⬜ | ⬜ | v0.1.0-alpha | — |
-| FR-RTR-REV-TRADE-002 | — | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
-| FR-RTR-REV-TRADE-003 | — | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
-| FR-RTR-REV-QUERY-004 | — | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
-| FR-RTR-REV-QUERY-005 | — | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
-| FR-RTR-REV-QUERY-006 | — | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
-| FR-RTR-REV-QUERY-007 | — | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
-| FR-RTR-REV-QUERY-008 | — | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
-| FR-RTR-FLOW-CRON-003 | — | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
-| FR-RTR-RSR-REPORT-003 | — | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
-| FR-RTR-RSR-REPORT-004 | — | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
-| FR-RTR-RSR-REPORT-005 | — | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
-| FR-RTR-RSR-REPORT-006 | — | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
-| FR-RTR-RSR-REPORT-007 | — | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
-| FR-RTR-RSR-REPORT-008 | — | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
-| FR-RTR-REV-QUERY-009 | — | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
-| FR-RTR-RSR-REPORT-009 | — | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
-| FR-RTR-FLOW-CRON-004 | — | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
-| FR-RTR-RSR-BACKTEST-001 | — | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
-| FR-RTR-RSR-BACKTEST-002 | — | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
-| FR-RTR-RSR-BACKTEST-003 | — | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
-| FR-RTR-RSR-BACKTEST-004 | — | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
-| FR-RTR-RSR-BACKTEST-005 | — | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
-| FR-RTR-RSR-BACKTEST-006 | — | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
-| FR-RTR-RSR-SAMPLE-001 | — | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
-| FR-RTR-MKT-FUND-001 | — | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
-| FR-RTR-MKT-FUND-002 | — | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
-| FR-RTR-MKT-FUND-003 | — | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
-| FR-RTR-MKT-FUND-004 | — | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
-| FR-RTR-RSR-BACKTEST-007 | — | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
-| FR-RTR-RSR-BACKTEST-008 | — | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
-| FR-RTR-RSR-SAMPLE-002 | — | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
-| FR-RTR-RSR-SAMPLE-003 | — | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
-| FR-RTR-RSR-SAMPLE-004 | — | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
-| FR-RTR-RSR-BACKTEST-009 | — | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
-| FR-RTR-RSR-SAMPLE-005 | — | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
-| FR-RTR-MKT-STORE-002 | — | 3.6 Doyah Retro | 基线必备 | 高 | ⬜ | ⬜ | v0.1.0-alpha | — |
-| FR-RTR-REV-TRADE-004 | — | 3.6 Doyah Retro | 基线必备 | 高 | ⬜ | ⬜ | v0.1.0-alpha | — |
-| FR-RTR-MKT-STORE-003 | — | 3.6 Doyah Retro | 基线必备 | 高 | ⬜ | ⬜ | v0.1.0-alpha | — |
-| FR-RTR-REV-TRADE-005 | — | 3.6 Doyah Retro | 基线必备 | 高 | ⬜ | ⬜ | v0.1.0-alpha | — |
-| FR-RTR-MKT-STORE-004 | — | 3.6 Doyah Retro | 基线必备 | 高 | ⬜ | ⬜ | v0.1.0-alpha | — |
-| FR-RTR-REV-TRADE-006 | — | 3.6 Doyah Retro | 基线必备 | 高 | ⬜ | ⬜ | v0.1.0-alpha | — |
-| FR-AGT-CORE-SESS-001 | — | 3.2 Doyah Agent | 常用增强 | 中 | ✅ | ✅ | v0.1.0-alpha | — |
-| FR-AGT-CORE-LOOP-008 | — | 3.2 Doyah Agent | 常用增强 | 中 | ✅ | ✅ | v0.1.0-alpha | — |
-| FR-AGT-CORE-LOOP-009 | — | 3.2 Doyah Agent | 基线必备 | 高 | ✅ | ✅ | 未排期 | 新增：单次任务预算 150 步 / 256K（能力书 3.1.1 · S-15） |
+| FR-RTR-MKT-FEED-001 | **盘后一键抓取**：对配置的自选池，一条命令 / 一次触发抓取行情（日线）、资金流、财务、板块数据，原始产物落文件系统并结构化入库 | 3.6 Doyah Retro | 基线必备 | 高 | ⬜ | ⬜ | v0.1.0-alpha | — |
+| FR-RTR-REV-TRADE-001 | **券商成交明细导入**：读入本人账户导出的对账单 / 交割单（CSV / Excel），按**统一中间格式**清洗后入库 | 3.6 Doyah Retro | 基线必备 | 高 | ⬜ | ⬜ | v0.1.0-alpha | — |
+| FR-RTR-MKT-FEED-002 | **复权口径与来源标注**：价格序列标明前 / 后复权与数据源，跨源对比时口径可对齐 | 3.6 Doyah Retro | 基线必备 | 高 | ⬜ | ⬜ | v0.1.0-alpha | — |
+| FR-RTR-MKT-FEED-004 | **行情文件导入**：读入本地行情文件（**CSV / JSON**），字段 = **时间 + 开高低收**，成交量可选（**缺列如实留空** —— 三分语义「缺失 ≠ 0」，**不按 0**）；支持周期 **1m / 5m / 1h / 1d**；**一个文件一个标的** | 3.6 Doyah Retro | 基线必备 | 高 | ⬜ | ⬜ | v0.1.0-alpha | — |
+| FR-RTR-MKT-FEED-005 | **内置样本数据**：随包内置**一份样本成交 + 一段样本行情**，保证**开箱能立刻走完四步**（导入 → 回放 → 标注 → 总结）；样本的**来源 / 处理方式 / 权利信息**随包说明 | 3.6 Doyah Retro | 基线必备 | 高 | ⬜ | ⬜ | v0.1.0-alpha | — |
+| FR-RTR-MKT-STORE-001 | **导入结果如实报数**：导入前预览、导入后报「**成功 N 条 / 跳过 M 条及原因**」；无法识别的行**不丢也不猜**，落「未识别行」清单 | 3.6 Doyah Retro | 基线必备 | 高 | ⬜ | ⬜ | v0.1.0-alpha | — |
+| FR-RTR-MKT-FEED-003 | **数据源适配层（可切换、可多源交叉）**：取数按「能力 → 适配器」组织，换源不改上层 | 3.6 Doyah Retro | 基线必备 | 高 | ⬜ | ⬜ | v0.1.0-alpha | — |
+| FR-RTR-RSR-PROFILE-001 | **一键生成个股跟踪档案**：由当日快照渲染「建立信息 + 一句话状态 + 核心数据表 + 关键价位 + 触发规则 + 跟踪日志」 | 3.6 Doyah Retro | 基线必备 | 高 | ⬜ | ⬜ | v0.1.0-alpha | — |
+| FR-RTR-RSR-PROFILE-002 | **分析报告生成**：由快照 + 当日档案渲染「结论先行 + 今天的数据 + 为什么动 + 走势复盘 + 证据审查 + 关键价位与情景 + 附录」 | 3.6 Doyah Retro | 基线必备 | 高 | ⬜ | ⬜ | v0.1.0-alpha | — |
+| FR-RTR-RSR-PROFILE-003 | **产物归档进宿主笔记**：档案 / 报告按命名规范写入宿主笔记，带标签与时间线 | 3.6 Doyah Retro | 基线必备 | 高 | ⬜ | ⬜ | v0.1.0-alpha | — |
+| FR-RTR-RSR-REPORT-001 | **周报草稿生成**：按主题（如芯片 / 半导体）与日期区间，汇总本期多标的的数据与事件，生成周报草稿 | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
+| FR-RTR-RSR-REPORT-002 | **周报转笔记**：把周报按「笔记的一种形态」写入宿主笔记（正文 markdown + 内嵌表格 + 标签），可被宿主全文检索 | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
+| FR-RTR-RSR-SCENARIO-001 | **按标的 / 时间段回溯查询**：输入标的 + 日期区间，拉出行情、资金流、基本面的时间序列对比，并同屏对照**当时的跟踪日志与周报观点** | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
+| FR-RTR-RSR-SCENARIO-002 | **导出**：查询结果 / 档案 / 周报可导出 markdown 与 CSV | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
+| FR-RTR-FLOW-CRON-001 | **触发规则登记与持久化**：把档案里的「价格 / 资金 / 事件」三类触发条件与动作结构化入库，跨会话可查、可停用 | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
+| FR-RTR-FLOW-CRON-002 | **触发检查与提醒投递**：按调度检查规则命中情况，命中后**复用宿主提醒能力**投递，并留痕 | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
+| FR-RTR-REV-ATTR-001 | **异常操作检出**：基于成交记录识别「高买低卖 / 逆趋势加仓 / 超预设仓位」等操作，输出异常清单 | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
+| FR-RTR-REV-ATTR-002 | **同行 / 板块对比面板**：对自定义板块展示多标的的日线、资金流、估值对比 | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
+| FR-RTR-REV-ATTR-003 | **策略 / 模型提炼（策略卡片）**：从多期周报与跟踪日志中提取用户反复使用的判断逻辑，形成可复用卡片 | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
+| FR-RTR-REV-QUERY-001 | **可溯源上下文检索接口**：给出「某标的 + 区间」的结构化上下文（数据 + 当时的日志 / 周报观点 + 来源指针） | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
+| FR-RTR-REV-QUERY-002 | **对话式复盘**：用户对某标的某段历史要求 AI 分析对错，**结论必须可溯源到原始记录** | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
+| FR-RTR-MKT-HEALTH-001 | **抓取记录与接口健康**：每次抓取记录各接口的响应码、耗时、空字段率，可查历史 | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
+| FR-RTR-MKT-HEALTH-002 | **断档与字段漂移告警**：交易日数据缺失、字段名变化（库升级 / 接口改版）时告警并建议备用源 | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
+| FR-RTR-RSR-SCENARIO-003 | **逐根 K 线回放（行情为底）**：按所选周期逐根推进 K 线，支持**播放 / 暂停 / 单步 / 后退**、**速度可调**、**隐藏后续**（看不到未来） | 3.6 Doyah Retro | 基线必备 | 高 | ⬜ | ⬜ | v0.1.0-alpha | — |
+| FR-RTR-RSR-SCENARIO-004 | **成交驱动回放（成交回放为主）**：时间轴以**我自己的成交**为主轴推进 —— 推到某笔成交时**停下**、标出该笔的买入 / 卖出点与这笔的盈亏；可继续推进或单笔跳转 | 3.6 Doyah Retro | 基线必备 | 高 | ⬜ | ⬜ | v0.1.0-alpha | — |
+| FR-RTR-REV-QUERY-003 | **回放会话归档**：一次回放可以存成一次**复盘会话**（含当时的标注与结论），下次能直接打开接着看 | 3.6 Doyah Retro | 基线必备 | 高 | ⬜ | ⬜ | v0.1.0-alpha | — |
+| FR-RTR-RSR-SCENARIO-005 | **成交 ↔ 行情对齐**：把成交与行情放进**同一时间轴 + 同一标的**，容差规则显式可配、可解释 | 3.6 Doyah Retro | 基线必备 | 高 | ⬜ | ⬜ | v0.1.0-alpha | — |
+| FR-RTR-REV-ATTR-004 | **七件套指标**：胜率 / 盈亏比（profit factor）/ 期望值（expectancy）/ 平均 R 倍数 / 最大回撤 / 最大连续盈亏 / 盈利因子 | 3.6 Doyah Retro | 基线必备 | 高 | ⬜ | ⬜ | v0.1.0-alpha | — |
+| FR-RTR-REV-ATTR-005 | **权益曲线**：按时间画出账户权益 / 累计盈亏，可叠加回撤区 | 3.6 Doyah Retro | 基线必备 | 高 | ⬜ | ⬜ | v0.1.0-alpha | — |
+| FR-RTR-REV-ATTR-006 | **月历热力图**：按月历展示每日盈亏（颜色深浅 = 幅度），点某天看当天成交 | 3.6 Doyah Retro | 基线必备 | 高 | ⬜ | ⬜ | v0.1.0-alpha | — |
+| FR-RTR-REV-ATTR-007 | **分组统计**：按标的 / 时段（星期几、小时）/ 标签分组统计 | 3.6 Doyah Retro | 基线必备 | 高 | ⬜ | ⬜ | v0.1.0-alpha | — |
+| FR-RTR-REV-ATTR-008 | **MFE / MAE（进出场效率）**：每笔的最大浮盈 / 最大浮亏，回答「该走的时候走了吗」 | 3.6 Doyah Retro | 基线必备 | 高 | ⬜ | ⬜ | v0.1.0-alpha | — |
+| FR-RTR-REV-ATTR-009 | **A 股税费口径**：佣金 / 印花税 / 过户费按可配置费率计入成本（海外的复盘产品都不管这块） | 3.6 Doyah Retro | 基线必备 | 高 | ⬜ | ⬜ | v0.1.0-alpha | — |
+| FR-RTR-REV-TRADE-002 | **笔记钉在 K 线 / 成交上**：一条笔记可挂在某根 K 线或某笔成交上（图标标记），点图标即看；另有一份**列表视图**可回看全部笔记 | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
+| FR-RTR-REV-TRADE-003 | **标签体系**：成交可打标签（预设：入场理由 / 出场理由 / 错误类型 / 情绪），标签可自定义 | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
+| FR-RTR-REV-QUERY-004 | **左侧导航列表**：展示**已发布**的周报条目（期号 / 标题 / 发布日期 / 封面缩略图），按发布日倒序，当前阅读项高亮 | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
+| FR-RTR-REV-QUERY-005 | **右侧主工作区正文**：选中左栏任意一项，右侧渲染该期正文（Markdown 标题 / 段落 / 列表 / 引用 / 表格 / 代码块） | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
+| FR-RTR-REV-QUERY-006 | **多媒体内联**：正文里的图片 / 视频**就地在正文位置渲染** —— 图片可点开看原图；视频可播（进度 / 音量 / 全屏） | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
+| FR-RTR-REV-QUERY-007 | **周报包导入 + 本机存储**：按**周报包契约**（见《Doyah Retro 需求规范书》§6.5）从指定目录导入，正文与媒体**随包落本机**；已导入的离线可读 | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
+| FR-RTR-REV-QUERY-008 | **与鲸鱼娘产出的格式契约**：把「周报包」定为**跨化身交换面**（鲸鱼娘写、Retro 读），并写明**不变量**（目录结构 / `index.json` 字段 / 媒体命名与格式白名单 / 期号规则） | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
+| FR-RTR-FLOW-CRON-003 | **定时生成与缺期口径**：按节拍**自动生成**周报 —— 由**生成侧（前门 dsh）定时调度 → 生成 → 投递**；**Retro 本体不做定时任务、不调 LLM、不做网络抓取** | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
+| FR-RTR-RSR-REPORT-003 | **用户自定义规则与要求**：用户可配「生成什么、按什么口径」—— **可编辑模板（Markdown + 变量占位）为骨架**；**自然语言要求为逃生口**；**常用字段落结构化表单** | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
+| FR-RTR-RSR-REPORT-004 | **产物 = 报告（本仓可读 + 笔记形态并行）**：报告 = **`FR-STD-ALL-IFACE-005` 周报包**（`index.json` + `report.md` + `assets/`）⇒ **本仓独立报告视图可读**（`FR-RTR-REV-QUERY-009`）；**并行走 `FR-STD-ALL-IFACE-006`** 落成 **Notes 笔记**（保留原口径 ⑤/⑥） | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
+| FR-RTR-RSR-REPORT-005 | **单篇 + 幂等覆盖 + 固定标签 + 可配归属**：幂等键 **`uid = 规则ID + 周期`**（**重跑覆盖同一篇**）；标签固定 **`#周报`** 与 **`#自动生成`**；归属笔记本**可配**；**必须有「自动生成」标记** | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
+| FR-RTR-RSR-REPORT-006 | **可编辑 + 改后不覆盖（前置规则 ①）**：自动生成的笔记**允许用户编辑**；**一旦用户编辑过 ⇒ 该篇转为「用户自己的笔记」，自动版下一期另开新篇** | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
+| FR-RTR-RSR-REPORT-007 | **交换面（走契约交换面，不走同库直写）**：Retro（或生成侧）产出**中间文件 → Notes 导入** ⇒ 落成笔记；**复用 Notes 现有导入 / 备份格式**；**明令禁止「同库直写」** | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
+| FR-RTR-RSR-REPORT-008 | **MVP（最小可讨论版 · 2026-10-06 改）**：生成侧**每周一跳** → 按模板（含一段自然语言要求）生成 **`FR-STD-ALL-IFACE-005` 周报包** → 放进 Retro 扫描目录 ⇒ **macOS 端先行**：左卡片列表 + 右富文本渲染可读（**含图片与视频**）；**并行走 `FR-STD-ALL-IFACE-006`** 落 Notes 笔记 | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
+| FR-RTR-REV-QUERY-009 | **本仓独立报告视图（新增 · 2026-10-06）**：**复用 `FR-R-12` 的呈现契约与 `FR-STD-ALL-IFACE-005` 的周报包** —— **左侧 = 周报卡片式列表**（每期一张卡：期号 / 日期范围 / 标题 / 标签 / 封面缩略图 / 生成时间；支持按年·月折叠与关键词过滤）；**右侧 = 主工作区**（富文本正文渲染：标题层级 / 段落 / 引用 / 表格 / 列表 / **图片内联** / **视频内联播放器**）；**M0 = 只读**（不做编辑器）；显示设定（字号 / 目录锚点 / 导出）**不得改变包内容** | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
+| FR-RTR-RSR-REPORT-009 | **多媒体契约（新增 · 2026-10-06，媒体形态 = 组合）**：**图片** = 包内 `assets/` 相对路径**内联显示**；**视频** = **① 本地文件内联播放**（白名单 `mp4` / H.264 + AAC，见 `FR-STD-ALL-IFACE-005` 不变量 5）+ **② 外链点击打开**（浏览器 / 系统播放器，**视图内不嵌 iframe**）；白名单外格式**原位降级为占位**（不报错、不崩）；媒体缺失 / 路径越界（`../`）⇒ **逐条报告 + 占位** | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
+| FR-RTR-FLOW-CRON-004 | **触发面（新增 · 2026-10-09 人类主人拍板 C）**：① **手动**「生成本期」按钮（调用本机生成侧）② **用户可配置的本地定时触发**（周期 / 时刻 / 开关）③ 触发入口 = 调用本机 `dsh headless "<周报生成任务>"`（等价入口）④ **失败与缺期**：触发失败 ⇒ 记一行「缺期」+ 界面明确提示（**不静默、不补历史**）⑤ **不变量**：Retro 进程**无对外网络出口**、不持密钥、不直写 Notes 库 | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
+| FR-RTR-RSR-BACKTEST-001 | **时间游标语义收口**（日线为主、周线辅助；日/周推进共用一条游标） | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
+| FR-RTR-RSR-BACKTEST-002 | **防未来函数判据（硬）**：任何计算所读数据行满足 `date ≤ 游标日` | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
+| FR-RTR-RSR-BACKTEST-003 | **复权口径切换**（前复权 / 不复权；与 `FR-RTR-MKT-FEED-002` 的来源标注一致） | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
+| FR-RTR-RSR-BACKTEST-004 | **买卖规则定义**（入场 / 出场 / 仓位规则集，人类可读文本、可 diff、可复用） | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
+| FR-RTR-RSR-BACKTEST-005 | **自定义信号表达式**（如 `close > ma20 and vol > vol_ma5 * 2`） | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
+| FR-RTR-RSR-BACKTEST-006 | **规则驱动回放 · 逐日自动标记触发**（买 / 卖点；成交价口径写死并标注） | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
+| FR-RTR-RSR-SAMPLE-001 | **策略绩效输出**（每笔盈亏 / 胜率 / 盈亏比 / 最大回撤 / 持仓天数 / 交易次数） | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
+| FR-RTR-MKT-FUND-001 | **事件叠加 · 财报与业绩预告** | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
+| FR-RTR-MKT-FUND-002 | **事件叠加 · 涨跌停与放量突破**（阈值可配） | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
+| FR-RTR-MKT-FUND-003 | **事件叠加 · 股东增减持 / 回购** | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
+| FR-RTR-MKT-FUND-004 | **事件叠加 · 行业政策 / 新闻节点**（手工录入 + 来源链接 + 录入时刻） | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
+| FR-RTR-RSR-BACKTEST-007 | **板块联动读数**（同板块其他标的当日涨跌 / 放量） | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
+| FR-RTR-RSR-BACKTEST-008 | **同期多股同步回放**（同一天、同板块 N 只，共享一条游标） | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
+| FR-RTR-RSR-SAMPLE-002 | **特征筛选回放**（条件 → 历史全部命中时点 → 逐个回放 → 统计走牛比例 / 平均涨幅 / 失败样本） | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
+| FR-RTR-RSR-SAMPLE-003 | **牛股倒推**（已知大牛股 → 回放到启动前 → 列出当时信号 → 同信号反扫其他标的） | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
+| FR-RTR-RSR-SAMPLE-004 | **失败案例库**（同形态失败样本入库存档并可回放） | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
+| FR-RTR-RSR-BACKTEST-009 | **复盘标签与笔记落到回放**（"启动点" / "诱多" 等自定义标签 + 当时为什么买 / 没买） | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
+| FR-RTR-RSR-SAMPLE-005 | **模式库**（把验证有效的形态 / 规则存成可复用条目，带出处与命中统计） | 3.6 Doyah Retro | 常用增强 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
+| FR-RTR-MKT-STORE-002 | **真实口径**：**只记真实成交与持仓**（**禁用回测 / 模拟数据充数**）；每笔含 **时间 · 标的 · 方向 · 数量 · 价格 · 费用 · 账户** | 3.6 Doyah Retro | 基线必备 | 高 | ⬜ | ⬜ | v0.1.0-alpha | — |
+| FR-RTR-REV-TRADE-004 | **决策留痕（依据指针）**：每笔调仓**必须挂决策依据指针**（当时的证据：**数据项 / 研报 / 规则条号**，如基本法或投资纪律的条号）；**没有依据的必须显式标 `无依据`** | 3.6 Doyah Retro | 基线必备 | 高 | ⬜ | ⬜ | v0.1.0-alpha | — |
+| FR-RTR-MKT-STORE-003 | **净值记账**：按**日**（或**周**）算**净值曲线**，**计入费用与成本**；可选**基准对比**；**口径单点定义**（含**分红 / 送转 / 资金进出**） | 3.6 Doyah Retro | 基线必备 | 高 | ⬜ | ⬜ | v0.1.0-alpha | — |
+| FR-RTR-REV-TRADE-005 | **每月决策复盘**：**复盘「决策」而不是「行情」** —— 逐笔看**当时的依据是否成立 + 结果如何**；产出**可拍板的规则修订候选**（沉淀进规则库） | 3.6 Doyah Retro | 基线必备 | 高 | ⬜ | ⬜ | v0.1.0-alpha | — |
+| FR-RTR-MKT-STORE-004 | **数据主权与录入方式**：**Retro 是持仓与决策记录的「真值源」**；智能体记忆 / 笔记里的持仓只作**副本或指针**，**不得作为记账依据**；录入方式 = **手工录入** + **券商导出文件手工导入**（**不做自动同步、不做券商 API 对接**）；现有散落数据**一次性迁移**入账后，**记忆侧只留指针** | 3.6 Doyah Retro | 基线必备 | 高 | ⬜ | ⬜ | v0.1.0-alpha | — |
+| FR-RTR-REV-TRADE-006 | **只读不交易（安全不变量 · 不可砍项）**：**永不**下单 / 撤单 / 改单 / 资金划转；**不连交易通道**；本工具链**任何组件**不得持有交易权限；**「不连交易通道」≠「不许导入」**（导入 = 只读文件 / 手工录入） | 3.6 Doyah Retro | 基线必备 | 高 | ⬜ | ⬜ | v0.1.0-alpha | — |
+| FR-AGT-CORE-SESS-001 | 会话持久化：**会话可保存、可恢复** —— 关掉应用再打开，能接着上次的对话与进度往下走；上下文与已调用的工具一并留住 | 3.2 Doyah Agent | 常用增强 | 中 | ✅ | ✅ | v0.1.0-alpha | — |
+| FR-AGT-CORE-LOOP-008 | 队列：**多个任务排队执行** —— 可查看排队、调整顺序、取消未开始的任务；同一工作区不并发跑两条会互相踩的任务 | 3.2 Doyah Agent | 常用增强 | 中 | ✅ | ✅ | v0.1.0-alpha | — |
+| FR-AGT-CORE-LOOP-009 | **单次任务的预算**：一次任务最多 **150 步**、**256K token**（能力书 3.1.1 · S-15）；新任务重新计数、不结转 | 3.2 Doyah Agent | 基线必备 | 高 | ✅ | ✅ | 未排期 | 新增：单次任务预算 150 步 / 256K（能力书 3.1.1 · S-15） |
 | FR-AGT-CORE-LOOP-010 | 工具按需发现：检索目录 → 取 schema → 调用，未取回不许调用 | 3.2 Doyah Agent | 基线必备 | 高 | ✅ | ✅ | v1.1+ | `Core/AgentToolDiscovery`：检索→取 schema→调用三段记账，**没取 schema 调用即拒**；空目录/查不到如实说（判据 6 例） |
 | FR-AGT-CORE-LOOP-011 | 工具目录口径：内置+接入两类、schema 可缓存、空目录如实说 | 3.2 Doyah Agent | 常用增强 | 中 | ✅ | ✅ | v1.0 | v1.0 已交付（注册表真源 + 可见性由 profile 决定） |
-| FR-AGT-PLAN-PLAN-005 | — | 3.2 Doyah Agent | 基线必备 | 高 | ✅ | ✅ | v0.1.0-alpha | — |
-| FR-AGT-PLAN-PLAN-006 | — | 3.2 Doyah Agent | 基线必备 | 高 | ✅ | ✅ | v0.1.0-alpha | — |
-| FR-AGT-KNOW-CTX-001 | — | 3.2 Doyah Agent | 常用增强 | 中 | ✅ | ✅ | v0.1.0-alpha | — |
-| FR-AGT-KNOW-CTX-002 | — | 3.2 Doyah Agent | 常用增强 | 中 | ✅ | ✅ | v0.1.0-alpha | — |
-| FR-AGT-TOOL-EDIT-001 | — | 3.2 Doyah Agent | 基线必备 | 高 | ✅ | ✅ | v0.1.0-alpha | — |
+| FR-AGT-PLAN-PLAN-005 | 完成判据：**任务完成必须有可检验的判据** —— 「看起来做完了」不算；每条任务**开工前**先给出「怎么算做完」，做完按它自检。**分工**：本条管**事前立判据**；产出前的自验动作（跑测试 / 对输出）见 `FR-AGT-QUAL-VERIFY-001`，两条不互相代偿 | 3.2 Doyah Agent | 基线必备 | 高 | ✅ | ✅ | v0.1.0-alpha | — |
+| FR-AGT-PLAN-PLAN-006 | 失败自恢复：**工具失败可重试或换路** —— 可重试的先重试，不可重试的换手段；连续失败要**停下来说明**，不无限重试烧钱。**分工**：本条管**工具执行失败**（命令非零退出 / 文件写不进 / 查询报错）；**模型调用**失败的分类、退避与观察回灌见 `FR-AGT-UX-CONV-004` | 3.2 Doyah Agent | 基线必备 | 高 | ✅ | ✅ | v0.1.0-alpha | — |
+| FR-AGT-KNOW-CTX-001 | 项目上下文：**开跑前自动带上看料** —— 工作区结构、当前分支与未提交改动、关键文件摘要，不必用户手贴 | 3.2 Doyah Agent | 常用增强 | 中 | ✅ | ✅ | v0.1.0-alpha | — |
+| FR-AGT-KNOW-CTX-002 | **压缩**（**分工**：跨进程的**检查点续跑**在 `FR-AGT-UX-CONV-004` ③，本条只管会话内超限时怎么压）：**超限时有损但如实地压** —— 压掉的是细节，留的是结论、决定与可续跑的位置；压缩发生时要说明 | 3.2 Doyah Agent | 常用增强 | 中 | ✅ | ✅ | v0.1.0-alpha | — |
+| FR-AGT-TOOL-EDIT-001 | 局部精确编辑：**按行或按块改** —— 不做整文件重写；改完给差异，用户能看清动了哪几行 | 3.2 Doyah Agent | 基线必备 | 高 | ✅ | ✅ | v0.1.0-alpha | — |
 | FR-AGT-LINK-CHAN-003 | IM 通道（QQ 优先）：从聊天里收发任务 —— 手机发一句话派活，长任务完成推回结论，权限与桌面端同一套 | 3.2 Doyah Agent | 常用增强 | 中 | 🟡 | ✅。**2026-10-28 第四十三批：官方 REST 外发（收尾片）**：新增 `Core/AgentIMOutboundSend.swift` —— 私聊 / 群两条官方端点（`openid` 先过窄放行集再拼路径，`/` `..` 当场拒）· 被动回复 `msg_id` + `msg_seq` 落盘（同一条结果重发复用序号）· 六档结局（401 / 403 / 429 / 5xx / 2xx 非 JSON 仍算发出 / 其余原样带码）· `AgentIMOutboundDrain` 只补官方条目；传输层 `replayPending` 改走 `relayPending()`（官方帧不再糊上网关）；`AppState` 交付口一处岔 + 连上补发 + 面板多一行外发人话。判据 `Tests/AgentIMOutboundSendTests` **18 例** + `Tests/AgentIMInboundRunTests` **18 例**，反例四段各判红。**（第四十一批那条「外发帧 `op=reply`」自本批起只服务自建中继 —— 官方路径已走 REST。）****2026-10-28 第四十二批：★0 凭据口径纠正（地址不再由用户填）**：新增 `Core/AgentIMQQProvisioning.swift` —— 环境两档（正式 / 沙箱）× 取 token（`bots.qq.com/app/getAppAccessToken`）→ 取网关（`GET /gateway`，`Authorization: QQBot <token>`）→ 取不到用该环境的固定地址（`discovered` / `fallback` / `relay` 三档）· `AgentIMQQTokenVault`（只在内存 / 到期前换 / 单飞 / 换不到未过期就继续用）· 失败分档可读（401 凭据 / 403 权限 / 429 限流 / 5xx 对方 / 非 JSON / 缺 token / 其余原样带码）· 官方 op 码（Identify 2 / 心跳 1 带 seq / 恢复 6 / Hello 10 / dispatch 解成入站任务）；配置面四样 → 三样（环境 / AppID / Secret），旧 `gatewayURL` 读成自建中继、再存即迁形；面板删地址格、加环境选择器与「去 QQ 开放平台」按钮、自建中继降为高级项、画出程序取到的地址与 token 尾 4 位；传输层加 `AgentIMGatewayHandshake`（nil = 自建中继原样）。判据 `Tests/AgentIMQQProvisioningTests` **18 例** + `Tests/AgentIMSettingsTests` **27 例**，反例十段。**2026-10-28 第四十一批：★2 入站任务真跑 + 结果推回**：新增 `Core/AgentIMInboundRun.swift`（策略 → 去重 → 建任务 → 跑 → 入队 → 推 → **推成才 ack** 一条链；平台消息号落盘去重；抛错也回一句「没跑成」；停在审批上只回「等桌面批准」；长结论截断指路；外发帧 `op=reply`）+ `AppState` 接线（结果队列在 `start()` 前接上、同一时刻只跑一条、面板分开报两个数）+ `AgentChatModel.adoptSession`（两个 chat 不共用上下文）；判据 `Tests/AgentIMInboundRunTests` **17 例**，反例六段。**2026-10-28 第四十批：配置面收口（判据补齐）**：新增 `Core/AgentIMSettings.swift` —— 地址/标识校验一次列全（只认 ws/wss、上限 64）· 配齐判定四样一处（地址非空但认不出也算缺）· 状态行四档**以配置为先**（传输层说在线也不许画绿）· 入站策略三档 · 测试连接四档（**只有收到一帧才算通**，open 成功不算）· 落盘面扩为「AppID + 网关端点 + 机器人标识 + 接收任务」且老文件（只有 appID）仍能读、只改 AppID 不冲掉配置面；面板补全为「能配 · 能看状态 · 能测」并接真 WebSocket 通路，判据 `Tests/AgentIMSettingsTests` **26 例**（反例五段）。**实现仍 🟡**（配置面与状态/测试已上界面，`AppState` 持传输层；~~差真 QQ 网关 URL 与 AppID/Secret~~（**2026-10-28 第四十二批作废**：地址由程序自己取，不再向人要） ⇒ **差**真 AppID + Secret + 一次端到端点验；入站任务已接进对话并可推回结论（第四十一批），官方 op 码已在第四十二批对齐，仍差真网关端到端）。**2026-10-26 契约层落地（QQ 优先）**：新增 `Core/AgentIMChannel.swift` —— `AgentIMSessionMap`（chat→会话号落盘，重启不漂 ⇒ 验收①「桌面看到同一条会话」的类型保证）、`AgentIMResultQueue`（结果追加落盘、**ack 前永不丢**，重连补发 ⇒ 验收③）、`AgentIMTask`（**没有免审字段**，`alwaysRequiresDesktopApproval` 恒为真 ⇒ 验收②）；判据 `Tests/AgentIMChannelTests` 5 例全绿。**传输层未接**：QQ 官方机器人网关（AppID / Secret 走系统凭据存储、WebSocket 心跳与重连）待人类主人给凭据后另行实现，本轮不假装连过。**2026-10-27 第二十批：凭据放置点已落**（上一条「等凭据」的写法不准 —— 当时没有可放的地方）：`Core/AgentIMCredentials.swift` + `Platform/macOS/KeychainAgentIMSecretStore.swift`（条目 `agent-im-qq`）+ CLI `agent im set / status / clear`（Secret 只读 stdin / 文件）+ 面板「IM 通道（QQ）」一节，判据 `Tests/AgentIMCredentialsTests` 10 例；**2026-10-27 第二十三批：传输层已落** —— `Core/AgentIMTransport.swift`（状态机 / 心跳判死 / 退避阶梯 / 停止不再连 / 连上补发未 ack / HMAC-SHA256 签名）+ 真线 `Platform/macOS/URLSessionAgentIMSocket.swift`，判据 `Tests/AgentIMTransportTests` 10 例。状态位仍不动：真连 QQ 还差**网关 URL 与官方握手/op 码对齐**（外部口径）和 AppID+Secret —— 能真连上才轮到改这一格 | v0.1.0-alpha | — |
 | FR-AGT-LINK-EXT-003 | 第三方能力以插件接入 —— 插件须声明权限与数据边界，装了才生效，卸了不留残留 | 3.2 Doyah Agent | 进阶可选 | 低 | ✅ | ✅ | v0.1.0-alpha | — |
-| FR-AGT-UX-CONV-006 | — | 3.2 Doyah Agent | 基线必备 | 高 | ✅ | ✅ | v0.1.0-alpha | — |
+| FR-AGT-UX-CONV-006 | 过程可见：**每一步都在界面上看得到** —— 调了什么工具、读了哪个文件、跑了哪条命令，按时间排列可回看 | 3.2 Doyah Agent | 基线必备 | 高 | ✅ | ✅ | v0.1.0-alpha | — |
 | FR-AGT-UX-CONV-014 | 斜杠命令：`/help` `/model` `/clear` `/compact` `/sessions` `/theme` `/stop` `/steer`（插话纠偏）`/queue`（本轮后排发），本地执行不进模型 | 3.2 Doyah Agent | 基线必备 | 高 | ✅ | ✅ | v1.1+ | 解析 `Core/AgentSlashCommandParser`（8 例）+ 落地形状 `Core/AgentSlashCommandRuntime`（11 例，`Tests/AgentSlashCommandRuntimeTests`）；**输入框已接线**（`AgentChatModel.send()` 抢在排队之前判定，命令不进模型 / 不占队列）：`/help` 出清单、`/clear` 清上下文（`AgentChatState.clearTranscript()`，不动盘上会话文件与授权）、`/sessions` 按标题检索、`/stop` 中断（没在跑如实说）。**边界如实**：`/compact` **无手动触发点**（压缩只在 `AgentLoop` 请求边界按预算自动发生）⇒ 命令只如实说、审计记 `noManualTrigger`；**候选提示已落（2026-10-26）**：`Core/AgentSlashSuggestion.swift` 的 `AgentSlashCompleter`（前缀匹配 / 大小写不敏感 / 只敲 `/` 出全表 / 进参数区即收 / 精确命中排第一 / 别名 `/sessions` 同指），界面在输入框上方出候选条、点一下填字，`Tests/AgentSlashSuggestionTests` **12 例**；**↑↓ 键选与 Esc 收起未接**；**人类主人 2026-10-26 20:18 点验通过**：输入框敲 `/` 即出候选；判据补登（2026-10-28 第三十一批）：`AgentSlashCommandTests` 8 + `AgentSlashCommandRuntimeTests` 11 + `AgentSlashSuggestionTests` 12（大小写不敏感 / 可带参数 / 只留一行审计 / 改配置照走审批 / 补全建议），合 31 例全绿 |
 | FR-AGT-UX-CONV-015 | 斜杠命令落地：大小写不敏感、可带参数、只留一行审计、改配置照走审批 | 3.2 Doyah Agent | 常用增强 | 中 | ✅ | ✅ | v1.1+ | 大小写不敏感 / 带参 / 单行审计已判据化；**审批已接线**：`/model` `/theme` 只出单（`AgentSlashPendingChange` + 复用 `AgentApproval` 状态机），输入框上方给批准 / 拒绝，**批准之前不动配置**、先落审计再落地；审计一条命令一条（`AgentActionRecord.makeToolCall(toolName: slash)` 走既有追加通道，`executed` / `pendingApproval` / `denied` / `failed` 按事实写）。**落地能力边界**：`/theme` 真落（`AppState.appearanceMode`）；`/model` 本版**无落地入口**（归 `FR-AGT-OPS-OBS-002` 设置面板）⇒ 批准后如实说「没有写配置的入口」，不假装改过；判据补登（2026-10-28 第三十一批）：同 `FR-AGT-UX-CONV-014` 的 31 例（这一条是落地面：命令真改到配置、真出审计行），全绿 |
 | FR-AGT-UX-SESS-001 | 会话生命周期：**新建 / 归档 / 删除 / 导出** —— 删除即真删（不留副本），导出可带走 | 3.2 Doyah Agent | 常用增强 | 中 | 🟡 | ✅ | v0.1.0-alpha | — |
-| FR-AGT-QUAL-VERIFY-001 | — | 3.2 Doyah Agent | 基线必备 | 高 | ✅ | ✅ | v0.1.0-alpha | — |
+| FR-AGT-QUAL-VERIFY-001 | 结果自验：**产出前先自查** —— 能跑的跑一遍、能对的对一遍，再报完成；验不过就说验不过。**分工**：本条管**事后怎么验**；判据由谁定见 `FR-AGT-PLAN-PLAN-005` | 3.2 Doyah Agent | 基线必备 | 高 | ✅ | ✅ | v0.1.0-alpha | — |
 | FR-AGT-QUAL-VERIFY-002 | 跨小时不丢目标（`Core/AgentResumeBrief.swift` + `AgentCheckpoint.goalDigest`；`Tests/AgentResumeBriefTests` **11 例** | 3.2 Doyah Agent | 常用增强 | 中 | ✅ | ✅ | v0.1.0-alpha | — |
 | FR-AGT-QUAL-VERIFY-003 | 不确定性表达：**不确定就说** —— 给出把握程度与依据，不把猜测说成事实 | 3.2 Doyah Agent | 基线必备 | 高 | ✅ | ✅。**2026-10-26 第十七批收口：替代方案由模型给** —— 协议两半补齐：① 提示词第 8 条要求「拿不准的结论后紧跟一行 `备选：…`」（`AgentAlternativeProtocol.rule`，文本取语言表的语言无关槽位 ⇒ 模型侧保持中文单语、调用点零字面量）；② 解析认这一行并**挂到它前面那条结论**（`AgentAnswerAuditor.segments`：中英标记 + 半角冒号变体、行首列表符号、同条去重、孤儿行忽略、空备选不算数），`AgentClaim.alternatives` 从此真的有值，`AgentClaimTrace` 的「备选」行也跟着出；判据 `Tests/AgentAnswerAuditTests` **20 例**（本批 +5）：**历史留痕****2026-10-26 第九批复核**：契约 + 真链路都齐了 —— 三态必填 / 低把握必须给替代方案（`Core/AgentClaimProvenance.swift` + `Tests/AgentClaimProvenanceTests` 14 例）；**循环已按 claim 产出**：`seal()` 用 `AgentEvidenceLedger`（只取本轮真做过的动作）+ `AgentAnswerAuditor` 把成文答复切成结论并逐条定状态（`Tests/AgentAnswerAuditTests` 15 例，含脚本化假模型两跳端到端）；还缺：低把握的**替代方案由模型给**（第十六批已把**正文逐条标签**上屏 —— `Core/AgentClaimTrace` + `Tests/AgentClaimTraceTests` 14 例，故本条缺口由两处缩到一处）） | v0.1.0-alpha | — |
 | FR-AGT-QUAL-VERIFY-004 | 断言可溯源：**每条结论能指到出处** —— 文件路径行号 / 命令输出 / 日志 / 文档链接，读者能自己复核 | 3.2 Doyah Agent | 基线必备 | 高 | ✅ | ✅（**2026-10-26 第十六批收口：逐条出处已上屏** —— `Core/AgentClaimTrace` 把一份出处账投影成**逐行**：结论行带三档字形 `✓` / `≈` / `?` 与档位标签、出处行缩进在它下面且自带可复制文本（`copyableBasis`）、备选行只在低把握时出、每条结论带「可交付」标记、空账不出块；界面收尾把整块挂成**答复之后的时间线事件**（`App/AgentChatModel.finish` → `state.appendNotice`，**不改写正文**：改写等于替模型发言，且 `statements(in:)` 会把代码块切碎）。判据 `Tests/AgentClaimTraceTests` **14 例**（正常 / 该拒 / 边界 + 界面接线扫源码三条断言）。**已知边界（如实登记，不算过）**：会话回看（`AgentSessionReplay`）只搬跳的 `text` ⇒ 重开老会话看不到这道标签块（答复正文与工具跳仍在，出处行可在会话留痕里检索）；真机观感归人工点验）。🟡 期证据（2026-10-26 第九批复核：四类出处 + 可复制文本 + 同出处只标一次（14 例）；**交付物出口已按它拦**：`AgentDeliverableDecision` 只把合格结论拼成交付内容（`deliverableText`），拦下几条就在页内提示条点名几条（`App/AgentChatModel.finish` 挂 `notifyBanner`），`Tests/AgentAnswerAuditTests` 15 例覆盖「没读过的路径不算出处 / 缺出处不进交付内容 / 一句都交不出也出条」；还缺：正文逐条标签的视图渲染（现在只出汇总条，结论段仍是模型原文）） | v0.1.0-alpha | — |
@@ -578,25 +579,25 @@
 | FR-STD-WS-FS-006 | 删除：删除文件或目录进废纸篓（不是直接抹掉），可恢复；删除前显示将影响几个文件 | 3.3 Doyah Studio · 工作区 | 基线必备 | 高 | ✅ | ✅（`WorkspaceFileOperations.delete` 只走 `trashItem`（不做 `removeItem`）+ 删前「将删几项」（`deletionSummary`，数到 500 标截断）+ **支持一次撤销**（`WorkspaceFileUndo.deletion`：`restore` 从废纸篓搬回原处，废纸篓副本没了 / 原位置被占都如实拒）+ 结果行「撤销」一枚（`workspace-undo`，有账才出现）。判据 `Tests/WorkspaceFileOperationsTests`（回收站 / 根不可删 / 项数）+ `Tests/WorkspaceFileUndoTests`（三条撤销路 + 两条拒因）。剩：界面上点一次（人工）） ｜ 2026-11-01 取证：`TestsUISnapshot/WorkspaceFileTrashUndoProbeTests` **5/5**（临时目录真删：进废纸篓不是抹掉 · 一次撤销整棵搬回 · 废纸篓副本没了/原位置被占都如实拒 · 删前显示影响几个文件 · 根不可删）；Core `WorkspaceFileOperationsTests` + `WorkspaceFileUndoTests`。 | v0.1.0-alpha | — |
 | FR-STD-WS-EDIT-023 | 编码与换行：**按文件真实编码与换行符打开**（UTF-8 / GB18030、LF / CRLF），保存时不悄悄改掉；状态栏可切换 | 3.3 Doyah Studio · 工作区 | 常用增强 | 中 | ✅ | ✅（`Core/TextFileFormat.swift` —— 打开形态收成一个值：编码（判定交给 `TextFileDecoder`，不另写一套）· 换行三档 LF / CRLF / **混排**（混排不猜：硬判成一种就会在保存时静默改写另一种行）· 有无 BOM（有的保留、没有的不许凭空加）；**内部一律 LF**（打开归一、保存按形态写回），混排原样写回；切换编码只改口径、切换换行同时把文本统一（点了 CRLF 就地落地，不留下状态栏与正文相抵）。接线：`WorkspaceTab.format` / `savedFormat`（**切形态也算脏**）+ 保存走 `format.bytes(for:)`（编不出来回 `nil`，不写残缺文件）+ 状态栏一格与菜单（编码两档 / 换行两档 / 混排只读一行 / 按文件重新判定）+ 会话快照增 `encoding` / `lineEnding` / `byteOrderMark` 三栏（老快照按盘上字节重判）。判据 `Tests/TextFileFormatTests` **10 例**（CRLF 往返逐字节相等 / LF 不被顺手统一 / 混排如实且原样写回 / GB18030 中文解得出且写回仍是 GB18030 / BOM 有的保留没有的不加 / 切编码不动文本而切换行落地 / GB18030 编完解回来逐字相等 / 只切形态也算脏 / 快照带形态回来 / 老快照问盘不落缺省）+ `Tests/TextFileFormatSourceTests` **3 例**（打开 / 保存 / 状态栏三条接线锚点 + 反向禁止保存再写死 UTF-8）；反例五段各判红后逐字节还原） — （差人工点一次：① 打开一份 Windows 记事本存的 CRLF 文件，状态栏那一格应显示 `UTF-8 · CRLF`、底下提示条说「用的是 CRLF 换行」；② 改一个字 ⌘S，`git diff` 应只有那一行（不是整篇）；③ 状态栏把编码切到 GB18030，页签出现未保存标记、⌘S 之后文件在别的工具里仍是 GB18030） ｜ 2026-11-01 取证：`TestsUISnapshot/TextFileFormatProbeTests` **5/5**（临时目录造 CRLF 与 GB18030 夹具：按真实编码与换行打开、保存不悄悄改掉、状态栏读数与文件字节一致）；Core `TextFileFormatTests` 10 + `TextFileFormatSourceTests` 3 例。 | v0.1.0-alpha | — |
 | FR-STD-WS-VCS-002 | 差异视图：对 Git 工作区的改动可逐个文件看逐行 +/-，可忽略空白、可折叠上下文、大文件按需渲染；差异只读，改动仍在编辑器里做 | 3.3 Doyah Studio · 工作区 | 常用增强 | 中 | ✅ | ✅ · ✅（`Core/GitDiffRequest.swift`（取值口径一个值 · 开关插在 `--` 之前 · 忽略空白走 git `-w` 不本地过滤 · 上下文 3/12/40）+ `Core/GitDiffPresentation.swift`（长段上下文折成一行 · 折叠锚按首行号+条数 · **改动行永不折** · 一页 400 行按需渲染 · 折与分页各自记账）+ 接线三处（`GitWorktreeProbe.loadDiff(request:)` / `GitChangesModel` 持开关与折叠分页状态 / 面板顶栏勾选与档位、折行点开、末尾多页）+ 语言表 6 键中英齐；判据 `Tests/GitDiffRequestTests` 8 例 + `Tests/GitDiffPresentationTests` 14 例 + `Tests/GitDiffPanelSourceTests` 4 例（探针不许自己拼开关 / 视图不许绕过呈现层），反例六段各判红后逐字节还原；解析上限 4000 → 50000（只兜底病态输入，不再拿它当渲染性能的挡箭牌）） — （界面已接线，差人工点一次：① 打开一份只改了缩进的文件，勾「忽略空白」应当什么都不剩；② 上下文切到 40 行，长段的未变行应折成「⋯ N 行未变」、点一下就地展开；③ 打开一份上万行改动的文件，应当一屏出来不卡、末尾有「还有 N 行」）；**收口（2026-11-01）**：Core `GitDiffRequest` + 测试 `GitDiffPanelSourceTests`（全量套件 5021 例 0 failures）+ App 已引用该类型 ⇒ 实现与判据同时成立 | v0.1.0-alpha | — |
-| FR-STD-WS-LIC-001 | — | 3.1 共性需求 | 基线必备 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
+| FR-STD-WS-LIC-001 | **工作区里的授权呈现**（同一能力点 4.1.35 的界面侧，与上面五条同节、不另立节）：由授权决定**哪些入口出现**（不是灰掉诱导）；未授权时文件树与编辑器照常可用、既有文件可导出；授权状态与版本号在 Home 与帮助里能查到。 | 3.1 共性需求 | 基线必备 | 中 | ⬜ | ⬜ | v0.1.0-alpha | — |
 | FR-STD-DB-DIAG-006 | **连接上下文里的诊断入口**：可从当前连接 / 库 / 对象唤起诊断，把连接、库、对象与最近一次执行的读数一并带进上下文；结论必须能点回具体对象与统计读数。 | 3.4 Doyah Studio · 数据库 | 常用增强 | 中 | ✅（`Core/DiagnosisScope.swift` 把「连接上下文」收成**一个值**（连接不含口令 / 库 / 对象 / 最近一次执行读数）+ 按对象类型的统计查询：表按 `relname` + `schemaname` 收窄、schema 聚合、库 / 实例各一条（只用 PG 12 起就有的视图），视图 / 函数 / 列 / 非 PG 方言**没有统计视图** ⇒ 给理由、不给空表 + 取证计划「语句 → 执行计划 → 对象统计 → 最近一次执行」；`Core/DiagnosisObjectLinks.swift` 切段（长名优先 + 词边界，`orders_archive` 里不认出 `orders`）并给出 `doyah-object://` 身份链接。接线：`AppState.beginObjectDiagnosis` **一处**带入上下文（被拒 / 未发出的那一跑不算执行，由 `LastExecution(receipt:)` 判）、`diagnosisTargetSQL` 按对象给、`diagnosisContext` 的目标段补上库与对象、`jumpToDiagnosisObject` 发一次性跳转请求；两套右键菜单（AppKit 生产路径 + SwiftUI 那份）都加「诊断这个对象…」并接同一收口；`ObjectTreeView` 收请求后逐级展开路径并选中（找不到如实报「找不到」）；`DiagnosisPanel` 新增上下文区（连接 / 库 / 对象 / 最近一次执行读数或「未取到」）、结论改用 `DiagnosisLinkedText`（`OpenURLAction` 截住，绝不弹浏览器）；语言键 31 个中英齐） | ✅（`TestsUISnapshot/ObjectDiagnosisProbeTests` **8 例**挂进 `Scripts/verify-ui-interactions.sh`（98 → **106 条全绿 / 无跳过 / 源锚点全在**）：① 作用域带齐连接 / 库 / 对象 / 最近一次执行读数（12 ms · 3 行 · 影响 2 行）且诊断语句按对象给；② 右键项在两套渲染里都在，按菜单项自己的 target/action 派发后上下文落进 `objectDiagnosisScope`；③ 表级取证恰好 2 条语句（EXPLAIN + 统计）、统计按 `relname='orders'` 与 `schemaname='public'` 收窄、证据顺序 statement→executionPlan→objectStats→lastExecution；④ 列 / 视图 / 非 PG 方言：一条语句都不发、记「未取到」且不给空行；⑤ 结论里的 `public.orders` 带链接、解得回 table/orders/public，点了发出的跳转请求逐字段对上且面板收起；⑥ 词边界：`orders_archive` / `myorders` 里不认出 `orders`；⑦ 提示词带齐连接 / 库 / 对象 / 耗时 / 执行语句。反例三段各判红后 `shasum -a 256` 逐字节还原：统计不按对象收窄（2 红）· 去掉词边界（1 红）· 被拒的那一跑当成执行读数（1 红）；`env -u DOYAH_UI_SNAPSHOT ./Scripts/verify-core.sh` ⇒ **5059 例 / 13 skipped / 0 失败**。**未验证（≠ 通过）**：217 真库（`192.168.5.217:5432`）本跳仍连不通 ⇒ 真 `pg_stat_user_tables` 读数 0 次，记「未知」；真鼠标点一下结论里的链接由人承担；树的展开 / 选中画得对不对归快照层） | v0.1.0-alpha | — |
 | FR-STD-DB-TASK-001 | **一句话 → 一条可执行任务**：任务定义落在连接上（目标库、只读 / 可写、影响行数上限、是否需审批），保存后可复用；定义与实际执行参数不一致时拒绝执行。 | 3.4 Doyah Studio · 数据库 | 常用增强 | 中 | ✅ | ✅（`Core/SQLTaskDefinition.swift` —— 三处收口：① **定义实体**（连接 / 目标库 / 读写模式（缺省**只读**）/ 影响行数上限（选填，>0）/ 是否需审批（缺省**真**）+ 名称与语句；`issues()` 把空名 / 空语句 / 空库 / 上限非正**一次列全**）；② `SQLTaskStore`（`sql-tasks.json`；**唯一写入口**里做「定义不完整」与「同名不同 id」两条拒 —— 同名同 id 是原地改、创建时刻跟第一次保存走；文件里就是一条 JSON 数组，没有第二份真相）；③ `SQLTaskGuard.check` 逐项核对定义与实际参数：**目标库不符 / 连接不符 / 只读任务里出现写语句 / 可写任务遇只读连接 / 上限没带或放宽**一律 `refused`（理由写出定义与实际的**两**个值，涉事语句逐条列），「收紧上限」放行（不是绕过）；审批只在**真会改东西**时给（`needsApproval`，纯读任务不打扰）；执行后 `rowVerdict` 按**实测**影响行数判上限，`exceeded`（超）与 `unmeasured`（拿不到读数）分开 —— 没读数不许当「动了 0 行」。接线：`AppState`（启动读回 / 存盘即绑定 / 载入时一并切连接与库 / 关页签解绑）、`executeQuery` 在**建连接之前**过判定（拒绝不进确认流程）、工具栏「任务」菜单（存 / 取 / 删 / 解绑，一行写「叫什么 · 哪个库 · 只读还是可写 · 上限」）、保存表单 `App/Views/SQLTaskSheet.swift`、语言键 20 个中英齐。判据 `Tests/SQLTaskDefinitionTests` **21 例**（默认值 / 存盘复用 / 同名拒 / 原地改 / 定义不完整一次列全 / 删除 / 库不符说两个库 / 没选库不猜 / 连接不符 / 只读写语句拒且列条数 / 纯读放行 / 可写遇只读连接拒 / 上限没带与放宽两拒 / 收紧放行 / 需审批 / 不需审批 / 手改定义执行前再拒 / `rowVerdict` 四档 / 没读数不等于 0 / 写语句识别与 `ExecutionSafety` 同口径 / 编解码往返）+ 反例五段（只读检查拿掉 ⇒ 2 红 / 库比较恒真 ⇒ 6 红 / 放宽不拦 ⇒ 2 红 / 没读数当 0 ⇒ 3 红 / 同名不判 ⇒ 4 红），逐段还原后复跑 0 failures）。与 `FR-STD-DB-TASK-002`（逐条审批）同族但**不是同一条**：那条管「高危语句发给谁看」，本条管「这条任务该在哪个库上、动不动得了上限」。 — （界面已接线：工具栏「任务」菜单 + `SQLTaskSheet`；差人工点一次 —— ① 存一条任务后**换一个库**执行，应被拒并写出「定义：A；这次：B」；② 只读任务里放一条 `UPDATE`，应被拒且一条语句都不发；③ 上限写 1 行、跑一条改 3 行的语句，执行后应报「超过上限」） ＋ `TestsUISnapshot/SQLTaskMenuProbeTests` **6 例**（第九批：真 `NSMenu` 按行派发 —— 菜单行四段文案 / 空册子给理由且「保存」跟着语句走 / 点载入切语句·库·连接并绑上 / 点解绑松开页签而任务还在 / 点删除册子与盘上各少一条 / 源锚点钉住工具栏走同一份判定；反例五段各判红后逐字节还原） **第九批（B1 第二片）**：这一格从 🟡 翻 ✅ 的依据**不是**又写了一版逻辑，而是「点了之后到底发生什么」第一次被量到 —— 菜单内容收进 `Core/SQLTaskMenuPlan`（纯值：行文案四段 **名字 · 目标库 · 只读/可写 · 上限**、行序 = 册子序、绑定项从册子里取所以删掉之后不会残留、`saveEnabled` 判「页签里有没有非空白语句」），铺设收进 `App/Views/SQLTaskAppKitMenu.swift`（真 `NSButton` + 真 `NSMenu`：SwiftUI `Menu` 在离屏宿主里不落任何可点控件，与 `PanelIconButton` 同一条实测），动作接线收进 `SQLTaskAppKitMenu.actions`（工具栏与探针**读同一处**）。探针 6 例按文案认行、再让行自己的 `target/action` 派发，判 `AppState` 里的语句 / 选中库 / 选中连接 / 绑定 / 册子条数与盘上文件。**边界**：不真弹菜单（`NSMenu.popUp` 是模态的，无人值守不该弹）· 保存表单的字段与落盘仍归 `Tests/SQLTaskDefinitionTests` 21 例 · 真鼠标点按钮那一跳由人承担。 | v0.1.0-alpha | — |
 | FR-STD-DB-TASK-002 | **高危任务执行前逐条列出**：将要执行的语句、目标库、预估影响范围，等人工确认；确认才发送，拒绝即中止并留痕。 | 3.4 Doyah Studio · 数据库 | 基线必备 | 高 | ✅ | ✅（`Core/HighRiskTaskApproval.swift` —— 把待审脚本拆成**一条语句一行**（序号 1 起 / 原文 / `kind` 首词 / 目标库逐条各带），影响面**逐条各存一份**（`pending` / `rows(N)` / `unavailable(原因码)` 三档分开 —— 估不出来不冒充 0 行）；决策只有 `outcome(for:decision:)` 一处：批准 ⇒ 整批按原序交出，拒绝 ⇒ 交出一张**空表**（「未确认不发送任何语句」是结构性的，不是约定）。审批单同轮接成逐条呈现（`AgentApprovalSheet` 每条一行：#序号 · 类别 / 目标库 / 这条的预计影响行数 / 原文，多条时不再显示整批合计）；`AppState.decideAgentAction` 由这份判定决定「发还是不发」，数据任务被拒的那一次执行改记 `TaskRunRecord.Status.rejected`（**「已拒绝」与「已跳过」分开**，历史里读得出是有人否决了它）。判据 `Tests/HighRiskTaskApprovalTests` **18 例**（拆句 / 序号 / 类别 / 目标库 / 空计划拒建 / 整批原序 / 拒绝空表 / 影响面三档 / 序号越界不增行 / 指纹稳定且逐处敏感 / 拒绝状态与跳过相异 + 历史往返；含端到端：覆盖写入任务真的编译出 `TRUNCATE` + `INSERT` 两条并各自可列）+ 反例四段（拒绝也发 ⇒ 红 / 缺省影响面当 0 行 ⇒ 红 / 指纹不隔语句边界 ⇒ 红 / 拒绝状态冒充「已跳过」⇒ 红）） — （差人工在审批单上点一次：覆盖写入任务应列出两条、目标库与各自行数分开、点拒绝后历史读作「已拒绝」） ＋ **B1 批次第四片（第十一批）**：这一格从 🟡 翻 ✅ 的依据不是又写了一版判定，而是「点下去之后到底发生什么」第一次被量到 —— 两枚动作由 SwiftUI `DialogActionButton` 换成真 `NSButton`（`App/Views/AgentApprovalDecisionRow.swift`：`AgentApprovalActionButton` 真按钮 + `AgentApprovalDecisionWiring.make` 一处接线，**审批单与探针读同一份** `wiring.row(isWorking:)`），审计落点补了可注入的 `agentAuditLogOverride`（探针不往用户真账写一行）。`TestsUISnapshot/AgentApprovalDecisionProbeTests` **4 例**挂进 `verify-ui-interactions.sh`（该入口 53 → **62 条全绿 / 无跳过**）：① 两枚真按钮都在、各带各的提示、批准是回车等价、在途时两枚全灰；② 点拒绝 ⇒ 待审批队列清空、审批单关掉、历史最后一条 `rejected` 且带备注、内存与盘上都没有 `executed`；③ 覆盖写入拆成 `TRUNCATE` + `INSERT` 两条、各带目标库、序号 1 起、问之前不冒充 0 行、拒绝交出 **0 条**；④ 源锚点：审批单走这一份（旧 `decide(approve:)` 与两枚 SwiftUI 按钮不许回来）。反例四段各判红后逐字节还原（拒绝接成批准 / 在途不变灰 / 备注丢掉 / 审批单自己拼一行）。边界：不是真数据库（「批准之后按原序真的打上库」归 `run-manual-verification-probes.sh`）；审批单本体不整张装宿主（要问优化器估影响面）。 | v0.1.0-alpha | — |
 | FR-STD-DB-TASK-003 | **执行回执**：记录成功 / 失败、影响行数、耗时、错误原文与执行时刻，挂在会话上可作为审计依据；回执不含口令与敏感字面量。 | 3.4 Doyah Studio · 数据库 | 基线必备 | 中 | ✅ | ✅（`Core/ExecutionReceipt.swift` —— ① **结局四档**（成功 / 失败 / **已取消** / **未发出**）：取消不许记成成功（R-31），「被拦下」与「执行失败」也要分开（前者一条语句都没发出去）；② **影响行数 `Int?`**：`nil` = 没测到，渲染成「未测到」而不是 0 行（「没读数」与「动了 0 行」是两条结论）；③ **结果集读数**（几个 / 共几行 / 最宽几列 / 几个被截断）；④ **脱敏在 `init` 里做** —— 口令子句 / 等号冒号式 / 命令行开关 / 连接串 userinfo 四类形状抹成 `***` 并记账，**原文不进结构**，解码也过同一个口；⑤ `render(labels:)` 可复制文本（Core 不留面向用户的字面量，文案由界面从语言表搬进来）+ `exportData()` 确定性 JSON（sortedKeys + ISO8601，两遍逐字节相同）；⑥ `ExecutionReceiptLog` 挂页签、满 200 条丢最旧。接线：`QueryTab.receiptLog` + `recordReceipt` 唯一写入口接六处出口（成功 / 失败 / 取消 / 只读连接拦下 / 任务定义拦下 / 事务态拦下）+ 下方面板「回执」页（`LowerPaneTab.receipts` · `ExecutionReceiptPane`：等宽可选文本、左侧色条按结局取色、复制 / 导出 / 清空三枚常驻且空数据给理由）+ 语言表 35 键中英齐。判据 `Tests/ExecutionReceiptTests` **25 例**（四项读数与执行时刻 / 失败保留错误原文 / 未发出与失败相异 / 取消不与成功同读 / 没测到不等于 0 行而真的 0 行读 0 / 截断如实报 / 四类脱敏各一 / 错误原文也脱敏 / 无害 SQL 不动 / 幂等 / 渲染与导出确定性 / 解码重新脱敏 / 册子容量与导出）+ `Tests/ExecutionReceiptSourceTests` **4 例**（六处出口都记 / 构造即脱敏 / 页签与面板真的挂上 / 复制导出走渲染后的那份；反向禁止 `self.sql = sql`）；反例六段各判红后逐字节还原） — （界面已接线：下方面板「回执」页；差人工点一次 —— ① 跑一条普通查询，回执里应能看到结局 / 影响行数 / 耗时 / 执行时刻 / 结果集读数；② 跑一条会报错的语句（如 `select * from 不存在的表`），失败也要留一条回执且带错误原文；③ 在只读连接上跑一条 `UPDATE`（被拦下），回执应读「未发出」并把理由写出来；④ 点「复制」贴到文本框、点「导出」得到一个 `.json` 文件） 2026-11-01 **B1 批次第一片：实现 🟡 → ✅（判据早绿，本片补交付面）**。判据 = `TestsUISnapshot/ExecutionReceiptPaneProbeTests` **7 例**，挂在 `Scripts/verify-ui-interactions.sh`（该入口现 **42 条全绿 / 无跳过 / 源锚点全在**）。量法 = 挂真 `ExecutionReceiptPane` 进离屏真窗口 → 从视图树里取**真 `NSButton`** → `performClick(nil)` → 读真 `NSPasteboard` / `tab.receiptLog` / 状态栏那句话。读数：① 三枚动作都在、各带各的提示、读屏标签与提示一致、提示互不相同（按提示认按钮，不写死次序）；② 点复制 ⇒ 剪贴板 = 整本回执（旧 → 新）**逐字节等于** `log.exportText(labels:)`，四项读数与执行时刻都在；③ 复制里**没有口令原文**、但留下 `***`（复制绕过 render 的那次事故的回归钉）；④ 空态点复制 / 清空都不动剪贴板、只给一句理由；⑤ 点清空 ⇒ 册子真空了、面板回空态（前后两张快照内容占比 0.035 → 0.015）；⑥ 导出走 `writeReceipts(_:to:)`（面板之后那一半，按钮点的也是它）⇒ 写出的字节与 `exportData()` 逐字节相同、能解回两条、口令原文不在里面、错误原文还在、状态栏读「2 条 → 文件名」；⑦ 三条回执的画面内容占比比一条多（0.033 vs 0.026 ⇒ 每条都画了）。**同批改了一件结构**：三枚动作由 SwiftUI `Button` 换成真 `NSButton`（`App/Views/PanelIconButton.swift`）—— 换的理由只有「量得到」，与 `ResultFilterPopup` 换 `NSPopUpButton` 同源（SwiftUI 按钮在离屏宿主里不落 `NSButton`、无障碍树也不构建，本机实测合成鼠标事件投进去 action 不动）。反例五段（复制接错页签 / 空态不给理由 / 清空不清册子 / 导出另拼一份漏脱敏 / 按钮不带提示）各判红后逐字节还原，shasum 一致。**覆盖边界**：导出按钮后面那个模态保存面板没点（无人值守的机器上不该弹窗，由人承担；面板之后的落盘那一半由 ⑥ 判住）；回执正文逐字判不到（SwiftUI `Text` 不落 `NSTextField`，那一面归 `Tests/ExecutionReceiptTests`）；真鼠标拖选正文不在本条验收要点里。 | v0.1.0-alpha | — |
-| FR-NTS-TODO-LIST-001 | — | 3.5 Doyah Notes | 基线必备 | 高 | 🟡 | ⬜ | 未排期 | 版本规划待概要设计完成后统一排（人类主人 2026-10-20 令） |
-| FR-NTS-TODO-LIST-002 | — | 3.5 Doyah Notes | 基线必备 | 高 | 🟡 | ⬜ | 未排期 | 版本规划待概要设计完成后统一排（人类主人 2026-10-20 令） |
-| FR-NTS-TODO-LIST-003 | — | 3.5 Doyah Notes | 常用增强 | 中 | 🟡 | ⬜ | 未排期 | 版本规划待概要设计完成后统一排（人类主人 2026-10-20 令） |
-| FR-NTS-TODO-CALENDAR-001 | — | 3.5 Doyah Notes | 常用增强 | 中 | 🟡 | ⬜ | 未排期 | 版本规划待概要设计完成后统一排（人类主人 2026-10-20 令） |
-| FR-NTS-TODO-CALENDAR-002 | — | 3.5 Doyah Notes | 常用增强 | 中 | 🟡 | ⬜ | 未排期 | 版本规划待概要设计完成后统一排（人类主人 2026-10-20 令） |
-| FR-NTS-TODO-STATE-001 | — | 3.5 Doyah Notes | 基线必备 | 高 | 🟡 | ⬜ | 未排期 | 版本规划待概要设计完成后统一排（人类主人 2026-10-20 令） |
-| FR-NTS-TODO-STATE-002 | — | 3.5 Doyah Notes | 基线必备 | 高 | 🟡 | ⬜ | 未排期 | 版本规划待概要设计完成后统一排（人类主人 2026-10-20 令） |
-| FR-NTS-ALL-HOME-001 | — | 3.5 Doyah Notes | 常用增强 | 中 | ⬜ | ⬜ | 未排期 | 契约已落四书（2026-10-30 · 派单 T-20261030-401：能力书 5.3.2 / 需求 §3.5.18 / 概设 §15.17 / 详设-Android §3.9），各端均未实现；安卓当前固定落待办日历。**合并说明（2026-11-01）**：此行为远侧（babyhippo）按派单所加，随手一单同步合入本侧 —— 一单是它唯一有权改的文档 |
-| FR-NTS-ALL-DIST-001 | — | 3.5 Doyah Notes | [产品特有] | 中 | ⬜ | ⬜ | v1.0 | 契约已落四书（2026-11-01 · 主人点头：能力书 §5.3.3 / 需求 §3.5.19 / 概设 §15.18）；实现未做 —— 移动三端应用包与「PC 不出独立 Notes 客户端」的边界尚未按本条校验 |
-| FR-NTS-ALL-PARITY-001 | — | 3.5 Doyah Notes | [产品特有] | 中 | ⬜ | ⬜ | v1.0 | 契约已落四书；实现未做 —— 端间差异必须落在《平台对齐-移动端-以安卓为基准》并标注等价/偏离/未实现，当前无判据脚本核这一条 |
-| FR-NTS-ALL-LIC-001 | — | 3.5 Doyah Notes | [产品特有] | 中 | ⬜ | ⬜ | v1.0 | 契约已落四书；实现侧事实已核（`BillingClient` 命中数 0、无许可证校验）⇒ 判据 ③ 的「不出现计费代码」当前成立，但尚无脚本化判据 |
-| FR-NTS-ALL-HELP-001 | — | 3.5 Doyah Notes | 常用增强 | 中 | ✅ | ✅ | v1.0 | Android 基准端已交付（`beta1.10`→`beta1.12`，远侧一单 #17 记 3 次迭代）：左图标 / 右产品名 → 版权 → 版本版式、版权归豆丫科技；判据在需求书 §3.5.16。**合并说明（2026-11-01）**：同上 |
-| FR-NTS-TODO-CALENDAR-003 | — | 3.5 Doyah Notes | 常用增强 | 中 | ✅ | ✅ | v1.0 | Android 基准端已交付（`beta1.13`→`beta1.17`，远侧一单 #16 记 5 次迭代）：左右滑翻月/翻周、与 ‹ › 箭头同入口同效果、邻页跟手从边缘进入；判据在需求书 §3.5.17。**合并说明（2026-11-01）**：远侧已实现，本侧补台账行（一单由大河马同步） |
-| FR-NTS-TODO-LINK-001 | — | 3.5 Doyah Notes | 常用增强 | 中 | 🟡 | ⬜ | 未排期 | 版本规划待概要设计完成后统一排（人类主人 2026-10-20 令） |
+| FR-NTS-TODO-LIST-001 | 待办事项本体：**标题 / 截止时间 / 重复规则 / 完成态**，与笔记**同级**，共用同一套同步与加密 | 3.5 Doyah Notes | 基线必备 | 高 | 🟡 | ⬜ | 未排期 | 版本规划待概要设计完成后统一排（人类主人 2026-10-20 令） |
+| FR-NTS-TODO-LIST-002 | **清单式列出各种任务**（标题 / 截止时间 / 完成态 / 优先级 / 标签），支持新建 / 编辑 / 完成 / 删除 / 排序 | 3.5 Doyah Notes | 基线必备 | 高 | 🟡 | ⬜ | 未排期 | 版本规划待概要设计完成后统一排（人类主人 2026-10-20 令） |
+| FR-NTS-TODO-LIST-003 | **组织与检索**：分组（按时间 / 按状态 / **按标签**）· 筛选（今天 / 本周 / 已过期 / 无截止）· 排序 | 3.5 Doyah Notes | 常用增强 | 中 | 🟡 | ⬜ | 未排期 | 版本规划待概要设计完成后统一排（人类主人 2026-10-20 令） |
+| FR-NTS-TODO-CALENDAR-001 | **月视图**（可切周视图）把任务**铺在日期上**（按截止时间；有提醒的日子同时打点） | 3.5 Doyah Notes | 常用增强 | 中 | 🟡 | ⬜ | 未排期 | 版本规划待概要设计完成后统一排（人类主人 2026-10-20 令） |
+| FR-NTS-TODO-CALENDAR-002 | 点某天看当天任务、点任务进详情；**逾期任务显式标识** | 3.5 Doyah Notes | 常用增强 | 中 | 🟡 | ⬜ | 未排期 | 版本规划待概要设计完成后统一排（人类主人 2026-10-20 令） |
+| FR-NTS-TODO-STATE-001 | **完成 / 改期**在清单与日历上是**同一次写入、同一事务**；日历上可直接完成 / 改期（拖拽或长按） | 3.5 Doyah Notes | 基线必备 | 高 | 🟡 | ⬜ | 未排期 | 版本规划待概要设计完成后统一排（人类主人 2026-10-20 令） |
+| FR-NTS-TODO-STATE-002 | **清单是唯一事实源**：任务数据只有一份，日历不另存、切视图不复制、不产生第二套状态 | 3.5 Doyah Notes | 基线必备 | 高 | 🟡 | ⬜ | 未排期 | 版本规划待概要设计完成后统一排（人类主人 2026-10-20 令） |
+| FR-NTS-ALL-HOME-001 | **首页可配置（默认落页）**：App 打开落在哪一页由用户**显式二选一**（待办 / 笔记）并记住；**未设置时落待办**（不改老用户体感）；取值是**用户偏好**，不是端内常量 | 3.5 Doyah Notes | 常用增强 | 中 | ⬜ | ⬜ | 未排期 | 契约已落四书（2026-10-30 · 派单 T-20261030-401：能力书 5.3.2 / 需求 §3.5.18 / 概设 §15.17 / 详设-Android §3.9），各端均未实现；安卓当前固定落待办日历。**合并说明（2026-11-01）**：此行为远侧（babyhippo）按派单所加，随手一单同步合入本侧 —— 一单是它唯一有权改的文档 |
+| FR-NTS-ALL-DIST-001 | **分发形态**：Notes 以**独立应用**分发，三端（安卓 / iOS / 鸿蒙），应用名随系统语言显示（中文「豆丫笔记」、英文「Doyah Notes」）；**PC 端的笔记功能不单独分发** —— 它作为 Doyah Studio 的一部分提供 | 3.5 Doyah Notes | [产品特有] | 中 | ⬜ | ⬜ | v1.0 | 契约已落四书（2026-11-01 · 主人点头：能力书 §5.3.3 / 需求 §3.5.19 / 概设 §15.18）；实现未做 —— 移动三端应用包与「PC 不出独立 Notes 客户端」的边界尚未按本条校验 |
+| FR-NTS-ALL-PARITY-001 | **安卓为基准端的对外承诺**：新能力**先在安卓落地并出包**，iOS / 鸿蒙向它对齐；端间任何行为差异都必须**显式登记**（等价 / 偏离 / 未实现），未登记的差异视为缺陷 | 3.5 Doyah Notes | [产品特有] | 中 | ⬜ | ⬜ | v1.0 | 契约已落四书；实现未做 —— 端间差异必须落在《平台对齐-移动端-以安卓为基准》并标注等价/偏离/未实现，当前无判据脚本核这一条 |
+| FR-NTS-ALL-LIC-001 | **授权与定价：当前不设付费墙** —— 无内购、无订阅、无许可证校验；将来若引入收费，必须先由人类主人拍板**并先改本条**，不得先实现后补条文 | 3.5 Doyah Notes | [产品特有] | 中 | ⬜ | ⬜ | v1.0 | 契约已落四书；实现侧事实已核（`BillingClient` 命中数 0、无许可证校验）⇒ 判据 ③ 的「不出现计费代码」当前成立，但尚无脚本化判据 |
+| FR-NTS-ALL-HELP-001 | **关于页（版权 / 品牌 / 版式）**：集中展示品牌抬头与版本信息，**版权归豆丫科技** —— 左 = 产品图标；右侧上部 = 产品名；名称下 = 版权所有；再下是版本与开发者等常见关于信息 | 3.5 Doyah Notes | 常用增强 | 中 | ✅ | ✅ | v1.0 | Android 基准端已交付（`beta1.10`→`beta1.12`，远侧一单 #17 记 3 次迭代）：左图标 / 右产品名 → 版权 → 版本版式、版权归豆丫科技；判据在需求书 §3.5.16。**合并说明（2026-11-01）**：同上 |
+| FR-NTS-TODO-CALENDAR-003 | **日历连续翻页**：左右滑动翻页，**月视图翻月、周视图翻周**，与页面上方 ‹ › **箭头同一入口、同一效果**；翻页过程连续（邻页跟手从对应边缘进入画面），不是「旧页停住、新页再飞进来」 | 3.5 Doyah Notes | 常用增强 | 中 | ✅ | ✅ | v1.0 | Android 基准端已交付（`beta1.13`→`beta1.17`，远侧一单 #16 记 5 次迭代）：左右滑翻月/翻周、与 ‹ › 箭头同入口同效果、邻页跟手从边缘进入；判据在需求书 §3.5.17。**合并说明（2026-11-01）**：远侧已实现，本侧补台账行（一单由大河马同步） |
+| FR-NTS-TODO-LINK-001 | 任务 ↔ 笔记**双向转化**：笔记生成任务、任务记成笔记，带回指，可撤销 | 3.5 Doyah Notes | 常用增强 | 中 | 🟡 | ⬜ | 未排期 | 版本规划待概要设计完成后统一排（人类主人 2026-10-20 令） |
 
 ## 3. 半成品（🟡 76 条 · 2026-11-01 重算）—— 三类成因
 
