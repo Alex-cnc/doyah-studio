@@ -100,15 +100,22 @@ public struct TodoDayTasks: Equatable, Sendable {
     public let open: [Todo]
     /// 当天已完成（同一套口径）。
     public let done: [Todo]
-    /// 当天**逾期未完成**的条数（`> 0` ⇒ 格子上画告警色的点）。
-    public let overdue: Int
+    /// 当天**逾期未完成**的那些（`FR-NTS-TODO-CALENDAR-002` 判据③「显式标识」的数据面）。
+    ///
+    /// 为什么留整条而不是只留一个数：界面要在行上点出「哪一条逾期了」（一句标 + 一枚危险色），
+    /// 只给条数就只能给整块刷颜色 ——「显式」的要求是**说得清是哪一条**，不是「看起来发红」。
+    /// 判定仍只有 `TodoDue.isOverdue(_:on:todayStart:)` 一处（参照日 = 这一格）。
+    public let overdueTodos: [Todo]
 
-    public init(date: Date, open: [Todo], done: [Todo], overdue: Int) {
+    public init(date: Date, open: [Todo], done: [Todo], overdueTodos: [Todo]) {
         self.date = date
         self.open = open
         self.done = done
-        self.overdue = overdue
+        self.overdueTodos = overdueTodos
     }
+
+    /// 当天**逾期未完成**的条数（格子上画告警色的点用它 —— 与 `overdueTodos` 同源，不另数一遍）。
+    public var overdue: Int { overdueTodos.count }
 
     /// 当天任务总数（格子上点数上限用）。
     public var total: Int { open.count + done.count }
@@ -259,10 +266,10 @@ public enum TodoCalendar {
             let sections = TodoPresentation.sections(rows)
             let open = sections.first { $0.kind == .open }?.todos ?? []
             let done = sections.first { $0.kind == .completed }?.todos ?? []
-            let overdue = open.filter {
-                TodoDue.isOverdue(cell.date, done: $0.done, todayStart: todayStart)
-            }.count
-            return TodoDayTasks(date: cell.date, open: open, done: done, overdue: overdue)
+            let overdueTodos = open.filter {
+                TodoDue.isOverdue($0, on: cell.date, todayStart: todayStart)
+            }
+            return TodoDayTasks(date: cell.date, open: open, done: done, overdueTodos: overdueTodos)
         }
     }
 

@@ -12145,6 +12145,47 @@ final class AppState: ObservableObject {
         }
     }
 
+    // MARK: - 日历：选中日的逾期读数 + 拖拽改期（`FR-NTS-TODO-CALENDAR-002` / `STATE-001`）
+
+    /// 选中那一天里**逾期未完成**的条数（判据③的显式标识；判定与格子上的点同源 —— 都来自
+    /// `TodoCalendar.tasksByDay` 的 `TodoDayTasks.overdueTodos`，这里不另数一遍）。
+    var todoCalendarSelectedDayOverdue: Int {
+        guard let day = todoCalendarSelectedDay,
+              let tasks = todoCalendarDays[TodoCalendar.calendarDay(of: day, calendar: .current)]
+        else { return 0 }
+        return tasks.overdue
+    }
+
+    /// 拖拽载荷（**唯一生产点**：视图不自己拼字符串 —— 拼法与解法不一致时拖拽会静默失败）。
+    func todoDragPayload(_ todo: Todo) -> String {
+        TodoDragPayload.encode(todo.id)
+    }
+
+    /// 把一行**拖到日历的某一格** = 改期到那一天（`FR-NTS-TODO-STATE-001` 判据③）。
+    ///
+    /// 三条口径：
+    ///  ① **写路不新开**：摆一份改期草稿再走 `applyReschedule()` —— 与清单 / 日历上那张改期框
+    ///     是同一条 `upsert`（判据①「同一次写入、同一事务」）。这里若自己再 `upsert` 一次，
+    ///     就会出现「拖拽改期」和「改期框」两条写路，迟早一处刷新一处不刷新；
+    ///  ② **钟点沿用原截止**（`TodoOccurrence.momentMatching`）：拖拽只改日子，不该顺手把 09:00 改成 00:00；
+    ///  ③ **拖拽只可能是整串那一档**：拖拽没有「问哪一头」的交互位 —— 要「只改这一天」走行上那枚改期。
+    func rescheduleTodo(_ todo: Todo, to day: Date) async {
+        let dueAt = TodoOccurrence.momentMatching(day, like: todo.dueAt, calendar: .current)
+        todoRescheduleDraft = TodoRescheduleDraft(id: todo.id, dueAt: dueAt, day: nil, scope: .initial)
+        await applyReschedule()
+    }
+
+    /// 落点入口：解载荷 → 找到那一条 → 交给上面那一条路。解不出 ⇒ 什么都不做（不猜是哪一条）；
+    /// 认得出 id 但库里已经没有它 ⇒ 如实说一句（与改期框那一支同一句，不假装改成了）。
+    func handleTodoDrop(payload: String?, on day: Date) async {
+        guard let id = TodoDragPayload.decode(payload) else { return }
+        guard let todo = todos.first(where: { $0.id == id }) else {
+            statusMessage = L(.todoMissing)
+            return
+        }
+        await rescheduleTodo(todo, to: day)
+    }
+
     // MARK: - 跨笔记本移动（队列 `L-97` 界面半第三片）
 
     /// 菜单要的那份「能移到哪」——**规则与顺序只在 Core 一处**（`NotebookMovePrompt.targets`）。

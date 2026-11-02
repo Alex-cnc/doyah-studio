@@ -770,6 +770,10 @@ public enum LKey: String, CaseIterable, Sendable {
     case todoCalendarNext
     case todoCalendarNoDay
     case todoCalendarDayCount
+    // `FR-NTS-TODO-CALENDAR-002` 判据③：逾期要**说出来**，不是只换个颜色。
+    // 一枚行上的「逾期」标 + 选中日那一区顶上的「其中逾期 N 条」。
+    case todoOverdueBadge
+    case todoCalendarOverdueCount
     // 片 `TD-CAL-1`（派单 `T-20261009-026`）：日历「选中日」那两枚入口 —— 新建待办 / 写笔记。
     case todoCalendarNewTodo
     case todoCalendarWriteNote
@@ -4213,6 +4217,10 @@ public enum LocalizedStrings {
         .todoCalendarNext: [.simplifiedChinese: "往后翻", .english: "Next"],
         .todoCalendarNoDay: [.simplifiedChinese: "这一天没有任务", .english: "Nothing on this day"],
         .todoCalendarDayCount: [.simplifiedChinese: "这一天 %@ 条", .english: "%@ on this day"],
+        // 逾期两句（`FR-NTS-TODO-CALENDAR-002` 判据③）：标只回答「这一条逾期了」，
+        // 顶部那句回答「这一天里几条逾期」—— 两者都是**事实陈述**，不写「请尽快处理」这类命令。
+        .todoOverdueBadge: [.simplifiedChinese: "逾期", .english: "Overdue"],
+        .todoCalendarOverdueCount: [.simplifiedChinese: "其中逾期 %@ 条", .english: "%@ overdue"],
         // 片 `TD-CAL-1`：日历「选中日」那两枚入口（两枚都是**动作**，提示句与按钮语义同一句）。
         .todoCalendarNewTodo: [.simplifiedChinese: "新建待办", .english: "New todo"],
         .todoCalendarWriteNote: [.simplifiedChinese: "写笔记", .english: "Write note"],

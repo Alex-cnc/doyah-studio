@@ -1,7 +1,7 @@
 # v0.4.0 笔记与任务闭环 · 执行队列（**派生件**）
 # 唯一事实源 = Docs/Doyah产品开发计划任务清单-macOS.md（活书台账）。
 # 本文件只做「下一跳」排序，不许反向改台账；台账一改就跑 --emit-plan 重出，别手改。
-# 生成于 2026-11-02，源 = 台账里 FR-NTS-NOTE- / FR-NTS-TODO- 未闭 4 条（3 🟡 / 1 ⬜）。
+# 生成于 2026-11-02，源 = 台账里 FR-NTS-NOTE- / FR-NTS-TODO- 未闭 1 条（0 🟡 / 1 ⬜）。
 tasks:
   - id: FR-NTS-NOTE-ORG-002
     goal: "笔记本归类：笔记可归入**一个笔记本**（单层，不做「架 → 笔记本」两层；未指定时落默认「收件箱」），**归属唯一**，跨笔记本移动只改归属"
@@ -11,24 +11,3 @@ tasks:
     status: blocked
     evidence: ""
     next_try: "等契约所有者裁决：需求书 §3.5 ORG-002 要单层笔记本（不做架→笔记本两层），契约 §2.12 与已上盘 shelf/notebook 两层冲突；裁决后要么改契约+拆两层，要么改需求书条文"
-  - id: FR-NTS-TODO-CALENDAR-002
-    goal: "点某天看当天任务、点任务进详情；**逾期任务显式标识**"
-    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-NTS-TODO-CALENDAR-002 | grep -q '✅'"
-    layer: "常用增强"
-    prio: "中"
-    status: todo
-    evidence: ""
-  - id: FR-NTS-TODO-STATE-001
-    goal: "**完成 / 改期**在清单与日历上是**同一次写入、同一事务**；日历上可直接完成 / 改期（拖拽或长按）"
-    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-NTS-TODO-STATE-001 | grep -q '✅'"
-    layer: "基线必备"
-    prio: "高"
-    status: todo
-    evidence: ""
-  - id: FR-NTS-TODO-STATE-002
-    goal: "**清单是唯一事实源**：任务数据只有一份，日历不另存、切视图不复制、不产生第二套状态"
-    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-NTS-TODO-STATE-002 | grep -q '✅'"
-    layer: "基线必备"
-    prio: "高"
-    status: todo
-    evidence: ""

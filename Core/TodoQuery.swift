@@ -125,6 +125,17 @@ public enum TodoDue {
     public static func isOverdue(_ todo: Todo, todayStart: Date) -> Bool {
         isOverdue(todo.dueAt, done: todo.done, todayStart: todayStart)
     }
+
+    /// **按「这一天」判**（`FR-NTS-TODO-CALENDAR-002` 判据③）：`day` = 日历上的那一格（某一次发生日）；
+    /// 清单那一屏传 `nil` ⇒ 退成「原截止早于今天」那一支（同一个出处，两屏不会有两个答案）。
+    ///
+    /// 为什么要这一支：日历上同一条重复任务会出现在好几格里。拿「原截止早于今天」去判，
+    /// 上一次没做完就会把后面每一天都刷成逾期 —— 而后面那几天**还没到**，
+    /// 说它们逾期是假话（用户会以为整串都欠着）。
+    public static func isOverdue(_ todo: Todo, on day: Date?, todayStart: Date) -> Bool {
+        guard let day else { return isOverdue(todo.dueAt, done: todo.done, todayStart: todayStart) }
+        return !todo.done && day < todayStart
+    }
 }
 
 /// 清单的**本地关键字检索**（`FR-NOTE-37` 的「检索」那一半）—— 判定只落这一处。

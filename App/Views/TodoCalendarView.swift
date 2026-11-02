@@ -224,6 +224,14 @@ struct TodoCalendarPane: View {
         )
         .contentShape(Rectangle())
         .onTapGesture { appState.selectTodoCalendarDay(cell.date) }
+        // **拖到这一格 = 改到这一天**（`FR-NTS-TODO-STATE-001` 判据③「日历上可直接改期」）：
+        // 落库走 `AppState.handleTodoDrop` —— 与改期框是同一条写路（同一次 `upsert`）；
+        // 这一层不碰库、也不自己算「改到哪天那一个钟点」（`TodoOccurrence.momentMatching` 一处出）。
+        .dropDestination(for: String.self) { items, _ in
+            guard let payload = items.first else { return false }
+            Task { await appState.handleTodoDrop(payload: payload, on: cell.date) }
+            return true
+        }
         .help(cellHelp(day))
         .accessibilityIdentifier("todo-calendar-cell-\(calendarDayIdentifier(cell.date))")
     }
@@ -257,6 +265,14 @@ struct TodoCalendarPane: View {
                 Text(selectedDayTitle)
                     .font(Theme.font(.title))
                     .lineLimit(1)
+                // **逾期要显式说出来**（`FR-NTS-TODO-CALENDAR-002` 判据③）：这一天里几条逾期 ——
+                // 只靠格子上的红点说不清「有几条」，也不说「是哪些」。
+                if appState.todoCalendarSelectedDayOverdue > 0 {
+                    Text(L(.todoCalendarOverdueCount, "\(appState.todoCalendarSelectedDayOverdue)"))
+                        .font(Theme.font(.caption))
+                        .foregroundStyle(Theme.status(.danger))
+                        .accessibilityIdentifier("todo-calendar-overdue-count")
+                }
                 Spacer(minLength: Spacing.xs)
                 // **「选中日」那两枚入口**（片 `TD-CAL-1` · 派单 `T-20261009-026`）：
                 //   ① 新建待办 —— 截止预填**选中日 09:00**（摆草稿走 `AppState.newTodoOn(selectedDay:)`）；
@@ -400,6 +416,11 @@ struct TodoRowView: View {
     var body: some View {
         if appState.todoInlineEditingID == todo.id {
             inlineEditor
+        } else if occurrenceDay != nil {
+            // **日历画出来的行可以拖**（`FR-NTS-TODO-STATE-001` 判据③）：落点是日历的格子。
+            // 清单那一屏不给拖 —— 那一屏没有落点，拖起来只会弹回去（看着像坏了）。
+            // 载荷只由 `AppState.todoDragPayload` 生产（拼法只有一处，解不开时静默失败的那种坑就不再出现）。
+            readRow.draggable(appState.todoDragPayload(todo))
         } else {
             readRow
         }
@@ -437,6 +458,16 @@ struct TodoRowView: View {
                     .buttonStyle(.plain)
                     .help(L(.todoReschedule))
                     .accessibilityIdentifier("todo-cell-due-\(todo.id.uuidString)")
+                    // **逾期的显式标识**（`FR-NTS-TODO-CALENDAR-002` 判据③）：一枚写着「逾期」的标，
+                    // 不是只把日期染红 —— 红字在色弱 / 灰度屏上等于没说，而且说不清是「今天」还是「欠着」。
+                    // 判定只调 `TodoDue.isOverdue(_:on:todayStart:)`（日历行按**那一格**判，清单行按原截止判）。
+                    if isOverdue {
+                        Text(L(.todoOverdueBadge))
+                            .font(Theme.font(.caption))
+                            .foregroundStyle(Theme.status(.danger))
+                            .help(L(.todoOverdueBadge))
+                            .accessibilityIdentifier("todo-overdue-badge-\(todo.id.uuidString)")
+                    }
                     // ④ 优先级：点它 ⇒ 三档菜单 ⇒ 只改这一格（一次 `upsert`，不经过编辑面）。
                     Menu {
                         ForEach(TodoPriority.allCases, id: \.self) { priority in
@@ -609,11 +640,19 @@ struct TodoRowView: View {
         .accessibilityIdentifier("todo-inline-editor-\(todo.id.uuidString)")
     }
 
+    /// 这一行是不是逾期（`FR-NTS-TODO-CALENDAR-002` 判据③）。
+    ///
+    /// **日历行按那一格判、清单行按原截止判** —— 判定只有 `TodoDue.isOverdue(_:on:todayStart:)` 一处；
+    /// 视图不自己比 `Date`（重复任务「上一次没做完」就不该把后面每一天都算逾期）。
+    private var isOverdue: Bool {
+        TodoDue.isOverdue(todo, on: occurrenceDay, todayStart: appState.todoWindow.todayStart)
+    }
+
     /// 带 → 颜色：**逾期**（未完成 且 早于今天零点）是危险色（`FR-NOTE-38` 的「显式标识」），
     /// 今天最高对比，其余次级 —— 判定只调 Core（`TodoDue` / `TodoQuery.band`），视图不比 `Date`。
     private func dueTone(_ todo: Todo) -> Color {
         let window = appState.todoWindow
-        if TodoDue.isOverdue(todo, window: window) { return Theme.status(.danger) }
+        if isOverdue { return Theme.status(.danger) }
         switch TodoQuery.band(of: todo, window: window) {
         case .today: return Theme.text(.primary)
         case .overdue, .thisWeek, .later, .noDue: return Theme.text(.secondary)
