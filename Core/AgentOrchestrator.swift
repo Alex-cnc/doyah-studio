@@ -37,6 +37,9 @@ public struct AgentSubtaskResult: Equatable, Sendable {
     public var artifacts: [String]
     /// 需要主控批的指纹（`needsApproval` 时非空）。
     public var approvalFingerprint: String?
+    /// 这一路**自己**花掉的配额（`NFR-ALL-GATE-AI-004` 判据 ①：派出去的调用也要计入主账）。
+    /// `nil` = 这一路没记账（宿主没接配额 / 旧调用方）—— 与 0 区分开，别把「没记」说成「没花」。
+    public var quotaUsage: AgentQuotaLedger?
 
     public var source: String { "\(label)#\(subtaskID)" }
 }

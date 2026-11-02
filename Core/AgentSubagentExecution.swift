@@ -151,10 +151,17 @@ public struct AgentLoopSubtaskRunner: AgentSubtaskRunner {
     public var loop: AgentLoop
     /// 主控这一轮的上下文模板（提示词、请求模板、工作区都从它来）。
     public var template: AgentLoopContext
+    /// 派活那一刻**主控已经用掉多少**（`NFR-ALL-GATE-AI-004` 判据 ①）。
+    ///
+    /// 子循环从这里起算 ⇒ ① 主控用过的量也压着子代理（配额不会被「派出去」绕过）；
+    /// ② 收尾时「末 − 始」正好是**这一路自己花的**，不会把主控早先那几跳算第二遍。
+    public var baseLedger: AgentQuotaLedger
 
-    public init(loop: AgentLoop, template: AgentLoopContext) {
+    public init(loop: AgentLoop, template: AgentLoopContext,
+                baseLedger: AgentQuotaLedger = .empty) {
         self.loop = loop
         self.template = template
+        self.baseLedger = baseLedger
     }
 
     public func run(_ spec: AgentSubtaskSpec, budgetSeconds: TimeInterval) async -> AgentSubtaskResult {
@@ -167,8 +174,17 @@ public struct AgentLoopSubtaskRunner: AgentSubtaskRunner {
                                      workspace: template.workspace,
                                      chainID: "chain:\(childSession)",
                                      checkpointScopeID: childSession)
-        let result = await loop.run(context: child)
-        return Self.map(result, spec: spec, budgetSeconds: budgetSeconds)
+        // 子循环从**主控当前账本**起算（不是从循环被造出来时的那个数）——
+        // 少了这一句，主控前面跑过的跳在子代理那边等于没花。
+        var childLoop = loop
+        childLoop.quotaLedger = baseLedger
+        let result = await childLoop.run(context: child)
+        var mapped = Self.map(result, spec: spec, budgetSeconds: budgetSeconds)
+        // 这一路自己花掉的 = 末 − 始（主控要把它计进主账，见调用处）。
+        if let end = result.quotaLedger {
+            mapped.quotaUsage = end.delta(since: baseLedger)
+        }
+        return mapped
     }
 
     /// 循环结局 → 子任务结局（机器码进 `summary`，人话由渲染入口给）。

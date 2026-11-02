@@ -445,32 +445,38 @@ public struct AgentLoop: Sendable {
     /// ① 宿主没给 `subagentPolicy` ⇒ 如实拒 `unavailable`（不假装能派）；
     /// ② 深度只许**一层**：子会话号里带 `#sub-` 的再派 ⇒ 拒 `subagentNesting`（否则一路派下去没人收口）；
     /// ③ 参数解析不出来 / 一路都没有 ⇒ 拒 `badArguments`，**不替模型编提示词**。
+    ///
+    /// 返回值多带一项**这一批子代理花掉的配额**（`NFR-ALL-GATE-AI-004` 判据 ①）：
+    /// 派出去的模型调用同样是这次会话的调用，主控不收这笔账就等于配额会被这条路绕过。
     private func runSubagentDispatch(invocation: AgentToolInvocation,
-                                     context: AgentLoopContext) async -> AgentToolOutcome {
+                                     context: AgentLoopContext,
+                                     baseLedger: AgentQuotaLedger) async -> (AgentToolOutcome, AgentQuotaLedger) {
         guard let policy = subagentPolicy else {
-            return .refused(.unavailable, detail: "subagent-disabled")
+            return (.refused(.unavailable, detail: "subagent-disabled"), .empty)
         }
         guard !context.sessionID.contains("#sub-") else {
-            return .refused(.subagentNesting, detail: context.sessionID)
+            return (.refused(.subagentNesting, detail: context.sessionID), .empty)
         }
         let specs: [AgentSubtaskSpec]
         switch AgentSubtaskSpecList.parse(argumentsJSON: invocation.argumentsJSON) {
         case .success(let parsed):
             specs = parsed
         case .failure(let problem):
-            return .refused(.badArguments, detail: problem.rawValue)
+            return (.refused(.badArguments, detail: problem.rawValue), .empty)
         }
         guard !specs.isEmpty else {
-            return .refused(.badArguments, detail: "tasks-empty")
+            return (.refused(.badArguments, detail: "tasks-empty"), .empty)
         }
         let executor = AgentSubagentExecutor(
             policy: policy,
-            runner: AgentLoopSubtaskRunner(loop: self, template: context))
+            runner: AgentLoopSubtaskRunner(loop: self, template: context, baseLedger: baseLedger))
         let report = await executor.run(specs)
         let header = "completed=\(report.completedCount) failed=\(report.failures.count)"
         let text = header + "\n" + report.mergedSummary
-        return .file(AgentToolFileOutput(path: "dispatch_subtasks", text: text,
-                                         truncated: false, totalBytes: text.utf8.count))
+        // 各路的账加总（`nil` = 那一路没记账，不计入；不当它花 0）。
+        let spent = report.results.compactMap(\.quotaUsage).reduce(AgentQuotaLedger.empty) { $0.merged(with: $1) }
+        return (.file(AgentToolFileOutput(path: "dispatch_subtasks", text: text,
+                                          truncated: false, totalBytes: text.utf8.count)), spent)
     }
 
     public func run(context: AgentLoopContext,
@@ -969,7 +975,14 @@ public struct AgentLoop: Sendable {
                 /// 已经推给界面的那张单（等审批时先推、再等；下方记录分支不要重复推一次）。
                 var approvalAnnounced: String?
                 if definition.capability == .dispatchSubtasks {
-                    outcome = await runSubagentDispatch(invocation: invocation, context: context)
+                    let dispatched = await runSubagentDispatch(invocation: invocation, context: context,
+                                                               baseLedger: quotaLedger)
+                    outcome = dispatched.0
+                    // **子代理的调用也进主账**（`NFR-ALL-GATE-AI-004` ①）：这一批各路自己花的加总，
+                    // 立刻压回主控账本 —— 下一跳的配额判定、以及交回宿主的账本都算上它。
+                    if quota != nil, dispatched.1 != .empty {
+                        quotaLedger = quotaLedger.merged(with: dispatched.1)
+                    }
                 } else {
                     // `run_command` 要 await 真 shell 里的执行 ⇒ 走异步入口；
                     // 其余文件类工具在 `dispatchAsync` 内部原样落到同步 `dispatch`（行为不变）。

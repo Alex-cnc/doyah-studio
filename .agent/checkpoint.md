@@ -1,5 +1,20 @@
 # 检查点
 
+## v0.5.0 · A1 收口（第三片：成本与配额）· 2026-11-02
+
+- **收一条**：`NFR-ALL-GATE-AI-004`（token / 调用次数上限与超时）两列全 ✅；A1 批次到此清空。
+  - 洞不在判定：`AgentQuota.decision` / `AgentLoop` 逐跳判定 / 两个上限的单测早已在。缺的是**谁在用它**与**账本活多久** ——
+    ① 编辑区 AI 辅助、`testAgentConnection` 两条真实外发路径直接造请求就发（配额对它们不存在）；
+    ② 账本只在 `AppState` 内存里（注释写着「单次会话，退出即清零」）⇒ 与判据 ③「重启后计数不重置」**正相反**；
+    ③ 子代理那批的模型调用一路都不进主账（配额被「派出去」绕过）。
+  - 落法 = `Core/AgentQuotaLedgerStore`（两键 JSON；读不出标 `degraded`；清零真删文件）+ `AppState` 读盘幂等 `agentQuotaLedgerForNextCall()` 与**唯一**记账出口 `recordAgentQuota()` + `AgentLoopSubtaskRunner.baseLedger` / `AgentSubtaskResult.quotaUsage`（末 − 始，回主账）+ 面板「已用 N 次 · M token」「重置用量」（账本不随退出清零 ⇒ 没有清零入口上限就是死路）。
+- **读数**：`--filter AgentQuotaPersistenceTests` **9 例 / 0 失败** · `verify-core.sh` **5228 / 13 skipped / 0 失败**（5219 → +9）· `verify-ui-interactions.sh` **116 条全跑 / 无跳过** rc=0 · 文档门禁十道 rc=0（numbers 三向 5228）· `plan-batches --version 0.5.0 --check` rc=0。
+- **反例四段**（判红后 `sha256` 逐字节还原）：撤子代理并账 ⇒ 2 红 · `load()` 恒返回空 ⇒ **6 红**（重启后拦不住且真发出 1 条）· 编辑区闸门改恒真 ⇒ 源锚点判红 · 记账不落盘 ⇒ 源锚点判红（出口 0 处）。**当场修掉一条假绿**：源锚点原先只查 `LLMError.quotaExceeded` 字样，闸门写成恒真仍判绿 ⇒ 改成钉 `guard quotaDecision.isAllowed else`。
+- **未验证（≠ 通过）**：真抓包 0 次（量的是账本与调用点）· 并发派活各路从同一起点起算 ⇒ 最坏超出「并发路数 − 1」次，**不是精确限流** · 端点不回 `usage` 时 token 不涨（存量口径）· **超时只核到判定面在位**（`timeoutInterval` 与配置校验），没有新判据量「真会中断」，不报通过 · `verify-all.sh` 第 11 / 18 项本跳未执行。
+- **队列口径（本片后实测）**：`plan.yaml` = **13 todo + 11 blocked**；`batches.yaml` = **A2 3 条**（A1 已空、自动消失）；台账 §4.2 v0.5.0 14 → **13**（11 / 2）。
+- **下一项 = A2 整批**：`FR-AGT-KNOW-MEM-003`（记忆可检视 / 删除 / 解释）· `NFR-ALL-GATE-AI-006`（本地 OpenAI 兼容端点）· `NFR-ALL-GATE-AI-007`（会话持久化与长上下文）。起跳先核：`AgentMemoryStore` 有没有真界面调用点（`.worktrees/ai-memory*` 里有旧分支，别当已收口）、端点预填面板是不是只认远端预设、压缩与检查点的「续跑位置」是不是同一个落点。
+- 证据 `.agent/evidence/2026-11-02-NFR-ALL-GATE-AI-004.md`
+
 ## v0.5.0 · A1（第二片：提示注入不执行）· 2026-11-02
 
 - **收一条**：`AC-ALL-GATE-AI-004`（含注入指令的 schema 注释 / 数据内容不被当作指令执行）两列全 ✅。

@@ -2,19 +2,11 @@
 #
 # 唯一事实源 = Docs/Doyah产品开发计划任务清单-macOS.md（活书台账）。
 # 本文件只决定「一跳做哪几条」，不许反向改台账。
-# 生成于 2026-11-02，源 = plan.yaml 里 4 条 status: todo（另有 11 条 blocked，不在批次里：FR-AGT-TOOL-MEDIA-001, FR-AGT-TOOL-SYS-002, FR-AGT-OPS-OBS-002, FR-AGT-UX-SYNC-001, FR-AGT-UX-CONV-001, FR-AGT-PLAN-PLAN-001, FR-AGT-LINK-EXT-001, FR-AGT-LINK-EXT-002, FR-AGT-LINK-CHAN-003, FR-AGT-UX-SESS-001, FR-NTS-NOTE-ORG-002）
+# 生成于 2026-11-02，源 = plan.yaml 里 3 条 status: todo（另有 11 条 blocked，不在批次里：FR-AGT-TOOL-MEDIA-001, FR-AGT-TOOL-SYS-002, FR-AGT-OPS-OBS-002, FR-AGT-UX-SYNC-001, FR-AGT-UX-CONV-001, FR-AGT-PLAN-PLAN-001, FR-AGT-LINK-EXT-001, FR-AGT-LINK-EXT-002, FR-AGT-LINK-CHAN-003, FR-AGT-UX-SESS-001, FR-NTS-NOTE-ORG-002）
 #
 # 生成命令：python3 Scripts/plan-batches.py --write   （--check 只比对不写盘）
 
 batches:
-
-  - id: A1
-    title: "智能体闸门：总开关零外发 / 提示注入不执行 / 配额与超时"
-    status: todo
-    est_min: 70
-    items: [NFR-ALL-GATE-AI-004]
-    why: "三条都是「拦住它别乱来」的同一族：外发口、指令来源、花费上限 —— 判据都要在一个外发/执行收口处读手数，分开做会把同一根探针写三遍"
-    exit: "3 行两列全 ✅；每条配一条「故意违规必须判红」的负例（关总开关仍发 / 注入内容被当指令 / 超配额仍发）"
 
   - id: A2
     title: "上下文与端点：记忆可检视删解释 / 本地 OpenAI 兼容端点 / 会话持久化与长上下文"
@@ -24,5 +16,5 @@ batches:
     why: "三条都在「一次对话前后用什么上下文、连谁」这一层：记忆写入与界面、端点预填与本地档、超限压缩与续跑位置；共用 `AgentMemoryStore` / `AgentModelPresets` / 压缩那条路"
     exit: "3 行两列全 ✅；记忆写入要有真调用点（不是只有测试调）"
 
-# 合计 4 条，覆盖 plan.yaml 全部 todo。
-# 粗估 140 分钟 ≈ 2.3 小时（原一格一条的节奏按 20 分钟/条算）。
+# 合计 3 条，覆盖 plan.yaml 全部 todo。
+# 粗估 70 分钟 ≈ 1.2 小时（原一格一条的节奏按 20 分钟/条算）。

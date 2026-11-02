@@ -4468,9 +4468,10 @@ final class AppState: ObservableObject {
                              policyBaseline: agentRuntimeConfig.snapshot.approvalPolicy,
                              // `NFR-AI-04` 配额：**对话这条路上此前根本没接**（`AgentQuota` 只接在
                              // 自然语言生成 SQL 那条路上）⇒ 长跑时会把配额悄悄烧掉。现在每跳发送前判定，
-                             // 账本由 `AppState.agentQuotaLedger` 跨轮累计（跑完回写，见 `finish`）。
+                             // 账本由 `AppState.agentQuotaLedger` 跨轮累计（跑完回写，见 `finish`），
+                             // 且**跨重启**（判据 ③）：开跑前先读盘拿回上一次的用量。
                              quota: agentConfiguration.quota,
-                             quotaLedger: agentQuotaLedger,
+                             quotaLedger: agentQuotaLedgerForNextCall(),
                              // `FR-AI-31` ③ 长跑监控：空转 / 反复重试 / 预算将尽各出一条可读告警；
                              // 「卡住」那一档由界面看门狗按秒判（循环卡在 await 里喊不出来），
                              // 两边共用 `AgentRunMonitor.stallAlert` 这一条判定。
@@ -5614,19 +5615,72 @@ final class AppState: ObservableObject {
         return ColumnSpecParser.columns(from: result)
     }
 
-    /// **本次运行**的智能体用量账本（NFR-AI-04）。
+    /// **跨调用、跨重启**的智能体用量账本（`NFR-ALL-GATE-AI-004`）。
     ///
-    /// 为什么必须留在内存里跨调用累计：配额判定的输入就是它 —— 每次都传 `.empty` 的话，
-    /// 「调用次数上限 / 累计 token 上限」**永远触发不了**（本轮发现的真缺口）。
-    /// 按需求口径它是「单次会话」，所以退出应用即清零，不落盘。
+    /// 为什么必须跨调用累计：配额判定的输入就是它 —— 每次都传 `.empty` 的话，
+    /// 「调用次数上限 / 累计 token 上限」**永远触发不了**（v3.88 修掉的那条真缺口）。
+    ///
+    /// 为什么还要**落盘**：判据 ③ 写的是「跨调用累计，**重启后计数不重置**」。
+    /// 此前这里只活在内存里（注释写着「单次会话，退出即清零」）—— 那句话与判据 ③ 相反：
+    /// 关一次应用就把两个上限清零，配额只对「连续不关机地长跑」有效。
+    /// 落盘位置与日配额账本同一个目录（`agent-quota-ledger.json`）。
     @Published private(set) var agentQuotaLedger: AgentQuotaLedger = .empty
+    /// 账本文件存在但读不出来（按 0 计，面板照实说一句，不把「坏了」说成「没用过」）。
+    @Published private(set) var agentQuotaLedgerDegraded = false
+    private var agentQuotaLedgerLoaded = false
 
-    /// **对话那条路的配额回写**（`NFR-AI-04` + `FR-AI-31` ③）：一轮跑完把账本交回来。
+    /// 账本在盘上的那一份（与其余本机数据同一目录，不另开文件体系）。
+    private var agentQuotaLedgerStore: AgentQuotaLedgerStore {
+        AgentQuotaLedgerStore(directory: AgentSessionStore.defaultDirectory)
+    }
+
+    /// 读一次盘（幂等）。**每次发请求之前都要走一遍** —— 所有调用路径共用这一个读数，
+    /// 免得「对话记了、生成 SQL 没记」这类分叉再次出现。
+    @discardableResult
+    func loadAgentQuotaLedgerIfNeeded() -> AgentQuotaLedger {
+        guard !agentQuotaLedgerLoaded else { return agentQuotaLedger }
+        agentQuotaLedgerLoaded = true
+        let reading = agentQuotaLedgerStore.load()
+        agentQuotaLedger = reading.ledger
+        agentQuotaLedgerDegraded = reading.degraded
+        return agentQuotaLedger
+    }
+
+    /// 本次调用该带上的账本（读盘幂等后的那一份）。
+    func agentQuotaLedgerForNextCall() -> AgentQuotaLedger {
+        loadAgentQuotaLedgerIfNeeded()
+    }
+
+    /// 记账：内存 + 盘上一起更新。写不进去只标降级 —— 记账是旁路，不能把这一轮跑失败。
+    func recordAgentQuota(_ ledger: AgentQuotaLedger) {
+        agentQuotaLedger = ledger
+        if !agentQuotaLedgerStore.save(ledger) {
+            agentQuotaLedgerDegraded = true
+        }
+    }
+
+    /// **对话那条路的配额回写**（`NFR-AI-04` + `FR-AGT-AI-004` ③）：一轮跑完把账本交回来。
     ///
     /// 不接这一步 ⇒ 每轮都从同一个旧账本起算，「调用次数 / 累计 token」两个上限在真实路径上
     /// 仍然永远不会触发（v3.88 修掉的那条第 1 项缺口在对话侧原样复发）。
     func recordAgentChatQuota(_ ledger: AgentQuotaLedger) {
-        agentQuotaLedger = ledger
+        recordAgentQuota(ledger)
+    }
+
+    /// 清零（面板上那一枚「重置用量」的落点）。
+    ///
+    /// 为什么要有：账本跨重启累计以后，上限一旦用满就是**永久**的 —— 没有清零入口时，
+    /// 用户只能改上限或删文件，等于让「配额」变成一条死路。真删文件，不写一份 0。
+    func resetAgentQuotaUsage() {
+        agentQuotaLedgerLoaded = true
+        agentQuotaLedger = .empty
+        agentQuotaLedgerDegraded = !agentQuotaLedgerStore.reset()
+    }
+
+    /// 面板读数：已用多少（次数 / token）+ 当前上限 + 账本是否降级。
+    func agentQuotaUsageReading() -> (ledger: AgentQuotaLedger, degraded: Bool) {
+        loadAgentQuotaLedgerIfNeeded()
+        return (agentQuotaLedger, agentQuotaLedgerDegraded)
     }
 
     // MARK: - 运行策略（`FR-AGT-OPS-OBS-002`：可配置 + 立即生效 + 有据可查）
@@ -5889,6 +5943,16 @@ final class AppState: ObservableObject {
             throw LLMError.forbidden(L(.editAssistRefusedEndpoint))
         }
         let started = Date()
+        // **配额闸**（`NFR-ALL-GATE-AI-004` ①②）：编辑区辅助也是**真的发一次模型调用**，
+        // 不算账就等于这条路上配额不存在 —— 判定放在组装请求之前，超限时一次请求都不发。
+        let ledgerBeforeCall = agentQuotaLedgerForNextCall()
+        let quotaDecision = agentConfiguration.quota.decision(
+            ledger: ledgerBeforeCall,
+            requestedOutputTokens: agentConfiguration.quota.maxOutputTokensPerRequest
+        )
+        guard quotaDecision.isAllowed else {
+            throw LLMError.quotaExceeded(quotaDecision.message)
+        }
         let llmRequest = LLMRequest(
             endpoint: url,
             model: agentConfiguration.model,
@@ -5907,6 +5971,9 @@ final class AppState: ObservableObject {
         )
         do {
             let response = try await client.complete(llmRequest)
+            // 记账（判据 ①③）：这条路上的调用同样进账本 —— 次数 +1、token 按端点报的量累加。
+            recordAgentQuota(agentConfiguration.quota.record(ledger: ledgerBeforeCall,
+                                                             usedTokens: response.usage.billableTokens))
             await recordAgentModelCall(summary: request.action.rawValue, outcome: .generated, since: started)
             return response
         } catch {
@@ -5936,8 +6003,8 @@ final class AppState: ObservableObject {
                 apiKey: agentAPIKey,
                 // 只读模式 / 白名单来自配置（FR-AI-09），不再写死默认策略。
                 policy: agentGuardPolicy,
-                // 传**累计账本**，否则配额永远触发不了（见 agentQuotaLedger 的说明）。
-                ledger: agentQuotaLedger,
+                // 传**累计账本**（含跨重启读回的那一份），否则配额永远触发不了。
+                ledger: agentQuotaLedgerForNextCall(),
                 client: RetryingLLMClient(
                     base: OpenAICompatibleClient(
                     transport: EgressRecordingTransport(
@@ -5948,8 +6015,8 @@ final class AppState: ObservableObject {
                 )
             )
             await recordAgentModelCall(summary: instruction, outcome: .generated, since: started)
-            // 记账：下一次调用的配额判定要用它（NFR-AI-04）。
-            agentQuotaLedger = result.quotaLedger
+            // 记账：下一次调用的配额判定要用它（NFR-ALL-GATE-AI-004）—— 内存与盘上一起更新。
+            recordAgentQuota(result.quotaLedger)
             return result
         } catch {
             // 失败的调用同样留痕：审计要能回答「哪次调用失败了、花了多久」（NFR-AI-03）。
@@ -6017,6 +6084,16 @@ final class AppState: ObservableObject {
         // **踩过的坑（2026-10-16 实机 401）**：第一版这里漏了 `apiKey` ⇒ 发出去的是**裸请求**，
         // 端点原样回 401，看上去像"用户的 key 不对"。密钥是靠 `LLMRequest.apiKey` 进 `Authorization` 头的
         // （`LLMClient.swift` 里那一处唯一出口）—— 任何新造的请求都必须显式带上它，否则必然 401。
+        // **配额闸**（`NFR-ALL-GATE-AI-004` ①②）：这一次也是真发一次模型往返 ——
+        // 超限时如实拒（说清是配额，不是连不通），且一次请求都不发。
+        let quotaLedgerBeforeTest = agentQuotaLedgerForNextCall()
+        let quotaDecision = agentConfiguration.quota.decision(
+            ledger: quotaLedgerBeforeTest,
+            requestedOutputTokens: agentConfiguration.quota.maxOutputTokensPerRequest
+        )
+        guard quotaDecision.isAllowed else {
+            return .failed(quotaDecision.message)
+        }
         // 面板里刚输入的那份优先（空 = 没填，退回已保存的那份）
         let draft = apiKeyOverride?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         let effectiveKey = draft.isEmpty ? agentAPIKey : draft
@@ -6032,6 +6109,8 @@ final class AppState: ObservableObject {
             for try await event in stream {
                 if case .done = event { break }
             }
+            // 记账（判据 ①）：测试连接也是一次调用 —— 次数 +1（token 端点若不报就不涨）。
+            recordAgentQuota(configuration.quota.record(ledger: quotaLedgerBeforeTest, usedTokens: 0))
             return .passed(model: configuration.model,
                            millis: Int(Date().timeIntervalSince(started) * 1000))
         } catch {
@@ -6059,7 +6138,8 @@ final class AppState: ObservableObject {
                 apiKey: agentAPIKey,
                 // 只读模式 / 白名单来自配置（FR-AI-09），与其它智能体路径同一份策略。
                 policy: agentGuardPolicy,
-                ledger: agentQuotaLedger,
+                // 传**累计账本**（含跨重启读回的那一份）：这条路的调用同样要压着配额。
+                ledger: agentQuotaLedgerForNextCall(),
                 client: OpenAICompatibleClient(
                     transport: EgressRecordingTransport(
                         origin: "智能体 · 数据任务规格",
@@ -6068,8 +6148,8 @@ final class AppState: ObservableObject {
                 )
             )
             await recordAgentModelCall(summary: specs, outcome: .generated, since: started)
-            // 记账：下一次调用的配额判定要用它（NFR-AI-04）。
-            agentQuotaLedger = result.quotaLedger
+            // 记账：下一次调用的配额判定要用它（NFR-ALL-GATE-AI-004）—— 内存与盘上一起更新。
+            recordAgentQuota(result.quotaLedger)
             return result
         } catch {
             await recordAgentModelCall(

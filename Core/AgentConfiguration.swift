@@ -515,6 +515,23 @@ public struct AgentQuotaLedger: Codable, Equatable, Sendable {
     }
 
     public static let empty = AgentQuotaLedger()
+
+    /// 把两份账并成一份（只加不减）。
+    ///
+    /// 有什么用：子代理那一批是**并行**跑的，每一路各自记账、各自返回一份账本，
+    /// 主控要把它们**全部**计进来（否则派出去的调用在「调用次数 / 累计 token」上是不存在的，
+    /// 配额会被这一条路悄悄绕过）。减法只用在同一处：算「一路子代理自己花了多少」= 末 − 始。
+    public func merged(with other: AgentQuotaLedger) -> AgentQuotaLedger {
+        AgentQuotaLedger(requestCount: requestCount + other.requestCount,
+                         totalTokens: totalTokens + other.totalTokens)
+    }
+
+    /// 两份账的差（算「这一段自己花了多少」）；任何一项算成负的都按 0 ——
+    /// 负数是调用方把顺序搞反了，不该变成「凭空退配额」。
+    public func delta(since start: AgentQuotaLedger) -> AgentQuotaLedger {
+        AgentQuotaLedger(requestCount: max(0, requestCount - start.requestCount),
+                         totalTokens: max(0, totalTokens - start.totalTokens))
+    }
 }
 
 /// 配额判定结果。

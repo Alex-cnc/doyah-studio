@@ -2068,6 +2068,10 @@ public enum LKey: String, CaseIterable, Sendable {
     case agentMaxRequests
     case agentMaxOutputTokens
     case agentMaxTotalTokens
+    case agentQuotaUsage
+    case agentQuotaUsageDegraded
+    case agentQuotaReset
+    case agentQuotaResetDone
     case agentAPIKey
     case agentAPIKeyConfigured
     case agentAPIKeyMissing
@@ -5536,6 +5540,10 @@ public enum LocalizedStrings {
         .agentMaxRequests: [.simplifiedChinese: "单次会话调用次数上限", .english: "Max requests per session"],
         .agentMaxOutputTokens: [.simplifiedChinese: "单次输出 token 上限", .english: "Max output tokens per request"],
         .agentMaxTotalTokens: [.simplifiedChinese: "累计 token 上限", .english: "Max total tokens"],
+        .agentQuotaUsage: [.simplifiedChinese: "已用 %d 次调用 · %d token（跨重启累计，重置前不清零）", .english: "Used %d calls · %d tokens (kept across restarts until reset)"],
+        .agentQuotaUsageDegraded: [.simplifiedChinese: "用量账本读不出来，已按 0 计 —— 上面这两个数现在不可信。", .english: "The usage ledger could not be read and is counted as 0 — the two numbers above are not reliable."],
+        .agentQuotaReset: [.simplifiedChinese: "重置用量", .english: "Reset usage"],
+        .agentQuotaResetDone: [.simplifiedChinese: "用量已清零（下一次调用从 0 起算）。", .english: "Usage reset — the next call starts from zero."],
         .agentAPIKey: [.simplifiedChinese: "API Key", .english: "API Key"],
         .agentAPIKeyConfigured: [.simplifiedChinese: "已配置（存于系统钥匙串，不写入配置文件）", .english: "Configured (kept in Keychain, never in the config file)"],
         .agentAPIKeyMissing: [.simplifiedChinese: "未配置。远端端点需要 API Key；本地端点不需要。", .english: "Not configured. Remote endpoints need one; local endpoints do not."],

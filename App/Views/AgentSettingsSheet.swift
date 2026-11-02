@@ -27,6 +27,8 @@ struct AgentSettingsSheet: View {
     @State private var maxRequests = ""
     @State private var maxOutputTokens = ""
     @State private var maxTotalTokens = ""
+    /// 配额清零那一枚的结论（点完给一句，不然按了没反应）。
+    @State private var quotaLine = ""
     /// 新输入的 Key；为空表示「不改动已保存的 Key」。
     @State private var apiKeyInput = ""
     /// IM 通道凭据（`FR-AGT-LINK-CHAN-003`）：AppID 明文 + Secret 草稿。
@@ -259,6 +261,20 @@ struct AgentSettingsSheet: View {
                     TextField(L(.agentMaxRequests), text: $maxRequests)
                     TextField(L(.agentMaxOutputTokens), text: $maxOutputTokens)
                     TextField(L(.agentMaxTotalTokens), text: $maxTotalTokens)
+                    // 已用量（判据 ③ 的「有据可查」那一面）：账本跨重启累计，人得看得见用了多少，
+                    // 否则「到了上限」是一句没有上下文的话。
+                    quotaUsageLine
+                    // **清零入口**：账本不再随退出清零以后，没有这一枚，上限一旦用满就是死路。
+                    Button(L(.agentQuotaReset)) {
+                        appState.resetAgentQuotaUsage()
+                        quotaLine = L(.agentQuotaResetDone)
+                    }
+                    .help(L(.agentQuotaReset))
+                    if !quotaLine.isEmpty {
+                        Text(quotaLine)
+                            .font(Theme.font(.caption))
+                            .foregroundStyle(Theme.text(.secondary))
+                    }
                 }
 
                 Section(L(.agentScopeSection)) {
@@ -902,6 +918,26 @@ struct AgentSettingsSheet: View {
         return Text(L(.agentRuntimeTodayUsage, used, quota))
             .font(Theme.font(.caption))
             .foregroundStyle(used >= quota ? Theme.status(.warning) : Theme.text(.secondary))
+    }
+
+    /// 配额已用量那一行（`NFR-ALL-GATE-AI-004` ③）：次数 / token 两个数 + 账本坏了的如实提示。
+    ///
+    /// 两个数落成显式 `Int` 局部量再进模板（同 `todayUsageLine`：门禁 `check-format-arguments`
+    /// 认不出 `.used` 这种冒号取值的类型）。
+    private var quotaUsageLine: some View {
+        let reading = appState.agentQuotaUsageReading()
+        let requests: Int = reading.ledger.requestCount
+        let tokens: Int = reading.ledger.totalTokens
+        return VStack(alignment: .leading, spacing: Spacing.xs) {
+            Text(L(.agentQuotaUsage, requests, tokens))
+                .font(Theme.font(.caption))
+                .foregroundStyle(Theme.text(.secondary))
+            if reading.degraded {
+                Text(L(.agentQuotaUsageDegraded))
+                    .font(Theme.font(.caption))
+                    .foregroundStyle(Theme.status(.warning))
+            }
+        }
     }
 
     /// 保存运行策略：差异 → 原子校验 → 落盘 → 换内存那份；结论列在按钮右边。
