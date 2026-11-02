@@ -22,8 +22,12 @@ L-55 文档数字 / L-72 例数 / 本条）。
 
 ## 判据（四条，全部机械）
 
-* **A 台账自洽**：`Scripts/release-version.json` 结构完整（值 / 形状 / 权威处 / 镜像处 / 生成器登记 /
-  锚点 / 范围外），值不是空串，镜像处不许为空。
+* **A 台账自洽 + 身份是派生的**：`Scripts/release-version.json` 结构完整（值 / 形状 / 派生规则 /
+  权威处 / 镜像处 / 生成器登记 / 锚点 / 范围外），镜像处不许为空。身份两半：
+  `marketingVersion` 由发布标签派生（`beta1.0` → `1.0.0`，台账存快照、判据**复算后比对**）；
+  `buildVersion` 是**每次构建的提交数**（不登记字面量 —— 写死一个数下一秒就过期，
+  2026-11-03 实测：台账写 `3`、产物是 `2257`）。派生式由 `assignmentAnchor` **逐字**钉住，
+  退回字面量 / 换了写法都判红（否则脚本与判据两条路各算各的）。
 * **B 三处逐字一致**：B1 权威处 = `Scripts/build-app.sh` 的 `<<'PLIST'` heredoc 里那两个键
   （**恰好各一处**）；B2 `project.yml` 应用目标的 `MARKETING_VERSION` / `CURRENT_PROJECT_VERSION`；
   B3 生成物里**该目标自己的每一个构建配置**（`Debug` / `Release`，少一档判红）的同名键。
@@ -57,7 +61,7 @@ L-55 文档数字 / L-72 例数 / 本条）。
 
     python3 Scripts/check-release-version.py              # 判真仓库
     python3 Scripts/check-release-version.py --root <目录> # 判别的仓库（自测夹具用它）
-    python3 Scripts/check-release-version.py --self-test   # 判据自己的证据（16 例）
+    python3 Scripts/check-release-version.py --self-test   # 判据自己的证据（19 例）
 
 退出码：0 = 全绿；1 = 判红（逐条点名文件与行号）；2 = 用法 / 夹具错误。
 """
@@ -85,8 +89,13 @@ FLOOR_ANCHOR_SITES = 3
 # --------------------------------------------------------------------------------------
 # 解析：`Scripts/build-app.sh` 的 Info.plist 模板
 # --------------------------------------------------------------------------------------
-def parse_plist_template(text: str):
-    """从 build-app.sh 里取出 Info.plist 模板的键值（key → [(值, 行号), …]）。"""
+def parse_plist_template(text: str, derived: dict = None):
+    """从 build-app.sh 里取出 Info.plist 模板的键值（key → [(值, 行号), …]）。
+
+    `derived` = 由台账登记、由判据按同一规则算出来的派生值（`{变量名: 值}`）。
+    模板里写 `${VAR}` 而 `VAR` 是命令替换（`VAR="$(…)"`）时，**只认台账登记过规则的那种**
+    —— 没登记就判红（「模板说它是派生的，台账却说不出怎么派生」= 判据没有基准）。
+    """
     lines = text.split("\n")
     start = None
     quoted = False
@@ -144,18 +153,80 @@ def parse_plist_template(text: str):
                 if len(definitions) != 1:
                     return None, ("模板第 %d 行用 `${%s}` 派生，但这个变量在本脚本里有 %d 处定义"
                                   "（只许一处）" % (line, name, len(definitions)))
-                value = definitions[0][0]
+                definition, _line, computed = definitions[0]
+                if computed:
+                    if not derived or name not in derived:
+                        return None, ("模板第 %d 行用 `${%s}` 派生，而这个变量的定义是命令替换"
+                                      "（`%s=\"$(…)\"`）—— 台账没登记它的派生规则，判据没有基准"
+                                      "（`derivations` 里补一条）" % (line, name, name))
+                    value = derived[name]   # `None` = 派生值本次取不到，比对处会明说
+                else:
+                    value = definition
             entries.append((value, line))
         resolved[key] = entries
     return resolved, None
 
 
+def read_shell_value(rest: str):
+    """读一个赋值右侧：`"字面量"` 或 `"$(…)"`。返回 `(值, 是否派生)`；认不出返回 `(None, False)`。
+
+    为什么要逐字符扫而不是一条正则：**派生式的值里必然带引号**（`$(printf '%s' "${RELEASE_LABEL}" …)`），
+    而旧正则 `NAME="([^"]*)"` 遇到内层引号就整行不认 ⇒ 派生变量被读成「0 处定义」，
+    判据会冤枉一个写得对的脚本（2026-11-03 实测：`MARKETING_VERSION` 明明定义在第 70 行）。
+    """
+    if not rest.startswith('"'):
+        return None, False
+    out = []
+    index = 1
+    depth = 0           # `$(` 嵌套层数
+    in_single = False   # 命令替换内部：单引号段
+    in_double = False   # 命令替换内部：双引号段
+    while index < len(rest):
+        char = rest[index]
+        if char == "\\" and index + 1 < len(rest):
+            out.append(rest[index:index + 2])
+            index += 2
+            continue
+        if char == "$" and rest[index:index + 2] == "$(":
+            depth += 1
+            out.append("$(")
+            index += 2
+            continue
+        if depth > 0:
+            if char == "'" and not in_double:
+                in_single = not in_single
+            elif char == '"' and not in_single:
+                in_double = not in_double
+            elif char == ")" and not in_single and not in_double:
+                depth -= 1
+            out.append(char)
+            index += 1
+            continue
+        if char == '"':
+            break
+        out.append(char)
+        index += 1
+    else:  # 没有闭合引号
+        return None, False
+    if rest[index + 1:].strip():
+        return None, False  # 引号后还有别的东西（`X="a" && …`）—— 不当成一次干净赋值
+    if depth != 0:
+        return None, False
+    value = "".join(out)
+    return value, value.startswith("$(") and value.endswith(")")
+
+
 def shell_assignments(text: str):
-    """shell 里的字面量赋值：{变量名: [(值, 行号), …]}（只认 `NAME="值"` 独占一行的形状）。"""
+    """shell 里的赋值：{变量名: [(值, 行号, 是否派生), …]}（只认 `NAME="…"` 独占一行的形状）。"""
     found: dict = {}
-    for match in re.finditer(r"^[ \t]*([A-Za-z_][A-Za-z0-9_]*)=\"([^\"]*)\"[ \t]*$", text, re.M):
-        line = text[:match.start()].count("\n") + 1
-        found.setdefault(match.group(1), []).append((match.group(2), line))
+    for number, line in enumerate(text.split("\n"), start=1):
+        match = re.match(r"^[ \t]*([A-Za-z_][A-Za-z0-9_]*)=", line)
+        if not match:
+            continue
+        value, computed = read_shell_value(line[match.end():])
+        if value is None:
+            continue
+        found.setdefault(match.group(1), []).append((value, number, computed))
     return found
 
 
@@ -428,14 +499,38 @@ def load_ledger(root: pathlib.Path, report: Report):
     # A 台账自洽
     if not isinstance(ledger.get("version"), int):
         report.bad("[台账] version 缺失或不是整数")
+    # 值：**派生**字段允许不写字面量（每次构建都变的提交数没法写死），但必须登记派生规则
+    derivations = ledger.get("derivations") or {}
+    if not isinstance(derivations, dict):
+        report.bad("[台账] derivations 不是对象")
+        derivations = {}
     for field in ("marketingVersion", "buildVersion"):
         value = ledger.get(field)
-        if not isinstance(value, str) or not value.strip():
-            report.bad("[台账] %s 缺失或为空" % field)
-    if not re.match(r"^\d+(\.\d+)*$", str(ledger.get("marketingVersion", ""))):
-        report.bad("[台账] marketingVersion 形状不对（期望 `主.次.修订`）：%r" % ledger.get("marketingVersion"))
-    if not re.match(r"^\d+$", str(ledger.get("buildVersion", ""))):
-        report.bad("[台账] buildVersion 形状不对（期望纯数字）：%r" % ledger.get("buildVersion"))
+        if not derivations.get(field) and (not isinstance(value, str) or not value.strip()):
+            report.bad("[台账] %s 缺失或为空，且没有登记派生规则（%s 里补一条，或写一个字面量）"
+                       % (field, "derivations"))
+            continue
+        if isinstance(value, str) and value.strip():
+            if field == "marketingVersion" and not re.match(r"^\d+(\.\d+)*$", value):
+                report.bad("[台账] marketingVersion 形状不对（期望 `主.次.修订`）：%r" % value)
+            if field == "buildVersion" and not re.match(r"^\d+$", value):
+                report.bad("[台账] buildVersion 形状不对（期望纯数字）：%r" % value)
+    for field, rule in derivations.items():
+        if field not in ("marketingVersion", "buildVersion"):
+            report.bad("[台账] derivations 里有一条不认识的字段 `%s`（只认两个版本键）" % field)
+            continue
+        if not isinstance(rule, dict):
+            report.bad("[台账] derivations.%s 不是对象" % field)
+            continue
+        for key in ("kind", "assignmentAnchor", "productCheck"):
+            if not rule.get(key):
+                report.bad("[台账] derivations.%s.%s 缺失" % (field, key))
+        if (rule.get("productCheck") or "") not in ("exact", "shape"):
+            report.bad("[台账] derivations.%s.productCheck = %r（只认 `exact` / `shape`）"
+                       % (field, rule.get("productCheck")))
+        source = rule.get("source") or {}
+        if not (source.get("path") and source.get("variable")):
+            report.bad("[台账] derivations.%s.source 缺 path / variable" % field)
     authority = ledger.get("authority") or {}
     if not authority.get("path"):
         report.bad("[台账] authority.path 缺失（谁是权威不写清 = 判据没有基准）")
@@ -468,14 +563,113 @@ def load_ledger(root: pathlib.Path, report: Report):
     return ledger
 
 
-def check_authority(root: pathlib.Path, ledger: dict, report: Report):
+KIND_LABEL_STRIP = "label-strip-milestone-pad3"
+KIND_COMMIT_COUNT = "git-commit-count"
+
+
+def marketing_version_from_label(label: str) -> str:
+    """`beta1.0` → `1.0.0`。
+
+    与 `Scripts/build-app.sh` 第 70 行**同一条规则**：去掉里程碑前缀（`alpha|beta|rc`）、
+    按 `.` 切、不足三段补 `.0`。规则在判据里必须复写一份 —— 但脚本那一行由
+    `derivations.*.assignmentAnchor` **逐字**钉住，换写法就判红，逼两条路同批改。
+    """
+    stripped = re.sub(r"^(alpha|beta|rc)", "", label)
+    parts = stripped.split(".")
+    if len(parts) >= 3:
+        return ".".join(parts[:3])
+    return ".".join(parts + ["0"] * (3 - len(parts)))
+
+
+def commit_count(root: pathlib.Path, report: Report):
+    """`git rev-list --count HEAD`；取不到（夹具 / 干净导出 / 没装 git）返回 None 并**高声说**。"""
+    import subprocess
+    try:
+        done = subprocess.run(["git", "-C", str(root), "rev-list", "--count", "HEAD"],
+                              capture_output=True, text=True, timeout=60)
+    except (OSError, subprocess.SubprocessError) as error:  # pragma: no cover - 环境问题
+        report.note("取不到提交数（%s）⇒ `buildVersion` 只判形状，不判值" % error)
+        return None
+    if done.returncode != 0:
+        report.note("取不到提交数（`git rev-list` 退出 %d）⇒ `buildVersion` 只判形状，不判值"
+                    "（夹具 / 无 `.git` 的导出树就是这样）" % done.returncode)
+        return None
+    value = done.stdout.strip()
+    if not value.isdigit():
+        report.note("`git rev-list --count HEAD` 输出不是数字（`%s`）⇒ 只判形状" % value)
+        return None
+    return value
+
+
+def derive_identity(root: pathlib.Path, ledger: dict, report: Report):
+    """把台账登记为**派生**的身份算出来：返回 `(identity, derived_vars)`。
+
+    * `identity` = {字段: 值}：派生字段覆盖台账里的字面量快照（字面量还在时**必须等于算出来的值**，
+      否则判红 —— 发布标签换了、台账没跟，正是 2026-11-03 那次真红）。
+    * `derived_vars` = {shell 变量名: 值}：给 Info.plist 模板解析用（模板里写 `${变量}`）。
+    """
+    identity = dict(ledger)
+    derived_vars: dict = {}
+    for field, rule in (ledger.get("derivations") or {}).items():
+        if not isinstance(rule, dict):
+            report.bad("[台账] derivations.%s 不是对象" % field)
+            continue
+        kind = rule.get("kind")
+        source = rule.get("source") or {}
+        relative = source.get("path")
+        variable = source.get("variable")
+        anchor = rule.get("assignmentAnchor")
+        if not (relative and variable and anchor and kind):
+            report.bad("[台账] derivations.%s 缺 kind / source.path / source.variable / assignmentAnchor"
+                       "（派生规则写不全 = 判据只能猜）" % field)
+            continue
+        text = read_text(root, relative, report)
+        if text is None:
+            continue
+        sites = shell_assignments(text).get(variable) or []
+        if len(sites) != 1:
+            report.bad("%s：`%s` 定义了 %d 处（派生变量只许一处）" % (relative, variable, len(sites)))
+            continue
+        value_text, line, computed = sites[0]
+        if not computed:
+            report.bad("%s:%d 的 `%s` 是**字面量** `%s`，台账登记它是派生值（%s）——"
+                       "「一处定义、多处派生」退化成手抄" % (relative, line, variable, value_text, kind))
+            continue
+        if anchor not in text:
+            report.bad("%s：`%s` 的派生式变了 —— 找不到台账登记的 `%s`"
+                       "（改了写法就要同批改台账与判据，否则两条路各算各的）"
+                       % (relative, field, anchor))
+            continue
+        if kind == KIND_LABEL_STRIP:
+            value = marketing_version_from_label(ledger["releaseLabel"])
+        elif kind == KIND_COMMIT_COUNT:
+            value = commit_count(root, report)
+        else:
+            report.bad("[台账] derivations.%s.kind = `%s` 不认识（判据不猜）" % (field, kind))
+            continue
+        identity[field] = value          # None = 本次不可判（夹具 / 无 `.git`），比对处会明说
+        derived_vars[variable] = value
+        if value is None:
+            report.note("%s 的派生值本次**取不到** ⇒ 只判形状，不判值（这是「未知」，不是通过）" % field)
+            continue
+        report.note("%s = `%s`（派生 `%s`，出自 `%s` 的 `%s` 第 %d 行）"
+                    % (field, value, kind, relative, variable, line))
+        snapshot = ledger.get(field)
+        if isinstance(snapshot, str) and snapshot and snapshot != value:
+            report.bad("[台账] %s 快照 = `%s`，按派生规则算出来 = `%s`"
+                       "（标签 / 提交数变了，台账要同批跟；真实物也要重出一次包才跟得上）"
+                       % (field, snapshot, value))
+    return identity, derived_vars
+
+
+def check_authority(root: pathlib.Path, ledger: dict, report: Report, identity: dict, derived_vars: dict):
     """B1 —— 权威处：build-app.sh 的 Info.plist 模板。"""
     relative = ledger["authority"]["path"]
     keys = ledger["authority"].get("keys") or {}
     text = read_text(root, relative, report)
     if text is None:
         return
-    table, error = parse_plist_template(text)
+    table, error = parse_plist_template(text, derived_vars)
     if table is None:
         report.bad("%s：%s" % (relative, error))
         return
@@ -492,13 +686,38 @@ def check_authority(root: pathlib.Path, ledger: dict, report: Report):
             report.bad("%s：Info.plist 模板里 `%s` 出现 %d 次（只许一处，否则又是多处副本）"
                        % (relative, plist_key, len(sites)))
         for value, line in sites:
+            if value is None or identity.get(field) is None:
+                report.note("%s:%d 的 `%s` 本次不可判（派生值取不到 —— 夹具 / 无 `.git`），不计入比对点"
+                            % (relative, line, plist_key))
+                continue
             report.sites += 1
-            if value != ledger[field]:
+            if value != identity[field]:
                 report.bad("%s:%d 的 `%s` = `%s`，台账 `%s` = `%s`（权威处与台账不一致）"
-                           % (relative, line, plist_key, value, field, ledger[field]))
+                           % (relative, line, plist_key, value, field, identity[field]))
 
 
-def check_project_yml(root: pathlib.Path, ledger: dict, report: Report):
+def mirror_key_specs(mirror: dict, report: Report):
+    """把 `mirrors[].keys` 归一成 `[(字段, 键名, 是否逐字比, 不比的理由)]`。
+
+    键值可以写成字符串（= 必须逐字等于发布身份），也可以写成对象：
+    `{"key": "CURRENT_PROJECT_VERSION", "enforcement": "shape", "why": "…"}`。
+    `enforcement != "exact"` 的**仍然要解析到**（缺键仍判红），只是不逐字比 ——
+    每一次实跑都会把它打印出来，不许静默放过（红线 13：覆盖不全只许报「未知」）。
+    """
+    specs = []
+    for field, spec in (mirror.get("keys") or {}).items():
+        if isinstance(spec, str):
+            specs.append((field, spec, True, ""))
+        elif isinstance(spec, dict):
+            enforcement = spec.get("enforcement") or "exact"
+            specs.append((field, spec.get("key"), enforcement == "exact", spec.get("why") or ""))
+        else:
+            report.bad("[台账] mirrors `%s` 的 `%s` 写成了 %r（只认字符串或对象）"
+                       % (mirror.get("path"), field, spec))
+    return specs
+
+
+def check_project_yml(root: pathlib.Path, ledger: dict, report: Report, identity: dict):
     """B2 —— 源：project.yml 应用目标的版本键。"""
     text = read_text(root, "project.yml", report)
     if text is None:
@@ -515,21 +734,28 @@ def check_project_yml(root: pathlib.Path, ledger: dict, report: Report):
             report.bad("project.yml：台账点名的目标 `%s` 不在 spec 里（目标被改名 / 删掉了？）"
                        % mirror.get("target"))
             continue
-        for field, key in (mirror.get("keys") or {}).items():
+        for field, key, enforce, why in mirror_key_specs(mirror, report):
+            if not key:
+                report.bad("[台账] project.yml 镜像缺 `%s` 的键名" % field)
+                continue
             entry = target["version_keys"].get(key)
             if entry is None:
                 report.bad("project.yml:%d（目标 `%s`）没有 `%s` —— 缺键就是第 57 轮那个现场"
                            % (target["line"], mirror["target"], key))
                 continue
             value, line = entry
+            if not enforce:
+                report.note("project.yml:%d 的 `%s` = `%s` —— **不逐字比**（%s）"
+                            % (line, key, value, why or "派生的每次构建值"))
+                continue
             report.sites += 1
-            if value != ledger[field]:
+            if value != identity[field]:
                 report.bad("project.yml:%d 的 `%s` = `%s`，台账 `%s` = `%s`"
-                           % (line, key, value, field, ledger[field]))
+                           % (line, key, value, field, identity[field]))
     return targets
 
 
-def check_pbxproj(root: pathlib.Path, ledger: dict, report: Report):
+def check_pbxproj(root: pathlib.Path, ledger: dict, report: Report, identity: dict):
     """B3 —— 生成物：该目标每个构建配置的版本键。"""
     relative = None
     for mirror in ledger["mirrors"]:
@@ -562,17 +788,28 @@ def check_pbxproj(root: pathlib.Path, ledger: dict, report: Report):
         report.bad("%s：目标 `%s` 只解析到 %d 档构建配置（少于 %d 档 = 有一档没人守）"
                    % (relative, wanted["target"], len(entries), FLOOR_BUILD_CONFIGS))
     seen_names = set()
+    skipped_values: dict = {}
     for name, entry in entries:
         seen_names.add(name)
-        for field, key in (wanted.get("keys") or {}).items():
+        for field, key, enforce, why in mirror_key_specs(wanted, report):
+            if not key:
+                report.bad("[台账] 生成物镜像缺 `%s` 的键名" % field)
+                continue
             value = entry["keys"].get(key)
             if value is None:
                 report.bad("%s：目标 `%s` 的 `%s` 配置里没有 `%s`" % (relative, wanted["target"], name, key))
                 continue
+            if not enforce:
+                skipped_values.setdefault((key, why), set()).add(value)
+                continue
             report.sites += 1
-            if value != ledger[field]:
+            if value != identity[field]:
                 report.bad("%s：目标 `%s` 的 `%s` 配置里 `%s` = `%s`，台账 `%s` = `%s`"
-                           % (relative, wanted["target"], name, key, value, field, ledger[field]))
+                           % (relative, wanted["target"], name, key, value, field, identity[field]))
+    for (key, why), values in skipped_values.items():
+        report.note("%s：目标 `%s` 的 `%s` = %s —— **不逐字比**（%s）"
+                    % (relative, wanted["target"], key, "、".join(sorted(values)),
+                       why or "派生的每次构建值"))
     expected = set(ledger.get("buildConfigurations") or [])
     missing = expected - seen_names
     if missing:
@@ -702,7 +939,7 @@ def check_structure(root: pathlib.Path, ledger: dict, targets, pbx, report: Repo
         report.note("本机没有 `%s`（判据不需要它 —— 比对的是文件内容，不是「谁跑过」）" % generator.get("tool"))
 
 
-def check_release_label(root: pathlib.Path, ledger: dict, report: Report):
+def check_release_label(root: pathlib.Path, ledger: dict, report: Report, derived_vars: dict):
     """B4 —— 发布标签：一处定义，产物名与 Info.plist 两处派生（派活单 `T-20261002-028`）。"""
     label = ledger["releaseLabel"]
     source = ledger["releaseLabelSource"]
@@ -719,9 +956,9 @@ def check_release_label(root: pathlib.Path, ledger: dict, report: Report):
     elif len(sites) > 1:
         report.bad("%s：`%s` 定义了 %d 次（%s）—— 只许一处，否则又是多处副本"
                    % (relative, variable, len(sites),
-                      "、".join("第 %d 行" % line for _, line in sites)))
+                      "、".join("第 %d 行" % line for _, line, _computed in sites)))
     else:
-        value, line = sites[0]
+        value, line, _computed = sites[0]
         report.sites += 1
         if value != label:
             report.bad("%s:%d 的 `%s` = `%s`，台账 `releaseLabel` = `%s`"
@@ -730,7 +967,7 @@ def check_release_label(root: pathlib.Path, ledger: dict, report: Report):
     if anchor not in text:
         report.bad("%s：找不到产物名派生式 `%s`（产物名被写死了 / 不再跟着发布标签走）"
                    % (relative, anchor))
-    table, error = parse_plist_template(text)
+    table, error = parse_plist_template(text, derived_vars)
     if table is None:
         report.bad("%s：%s" % (relative, error))
         return
@@ -749,7 +986,7 @@ def check_release_label(root: pathlib.Path, ledger: dict, report: Report):
                        % (relative, line, plist_key, value, label))
 
 
-def check_dist(root: pathlib.Path, ledger: dict, report: Report):
+def check_dist(root: pathlib.Path, ledger: dict, report: Report, identity: dict):
     """C5 —— `dist/` 实物：带版本号的包才是身份，别名只许是软链（派活单 `T-20261002-028`）。"""
     policy = ledger["distPolicy"]
     dist = root / "dist"
@@ -785,15 +1022,33 @@ def check_dist(root: pathlib.Path, ledger: dict, report: Report):
         if plist_path.is_file():
             plist_text = plist_path.read_text(encoding="utf-8", errors="replace")
             for key, field in (("CFBundleShortVersionString", "marketingVersion"),
-                               ("DoyahReleaseLabel", "releaseLabel")):
+                               ("DoyahReleaseLabel", "releaseLabel"),
+                               ("CFBundleVersion", "buildVersion")):
                 entry = re.search(r"<key>%s</key>[ \t]*\n[ \t]*<string>([^<]*)</string>" % re.escape(key), plist_text)
                 if entry is None:
                     report.bad("%s 的 Info.plist 里没有 `%s`" % (wanted.name, key))
                     continue
+                product_check = ((ledger.get("derivations") or {}).get(field) or {}).get("productCheck") or "exact"
+                if product_check == "shape":
+                    # 每次构建都变的派生值（提交数）：产物那一处**只判形状**，不判逐字 ——
+                    # 逐字相等由 `build-app.sh` 在构建那一刻写盘后读回自证（判据脚本判不到「那次构建」）。
+                    report.sites += 1
+                    if not re.match(r"^\d+$", entry.group(1)):
+                        report.bad("%s 的 Info.plist `%s` = `%s`，不是纯数字（构建号必须是单调整数）"
+                                   % (wanted.name, key, entry.group(1)))
+                    else:
+                        report.note("%s 的 Info.plist `%s` = `%s` —— 派生的每次构建值，只判形状"
+                                    "（逐字相等在构建那一刻由 `build-app.sh` 读回自证）"
+                                    % (wanted.name, key, entry.group(1)))
+                    continue
+                if identity.get(field) is None:
+                    report.note("%s 的 `%s` 本次不可判（派生值取不到，不计入比对点）"
+                                % (wanted.name, key))
+                    continue
                 report.sites += 1
-                if entry.group(1) != ledger[field]:
+                if entry.group(1) != identity[field]:
                     report.bad("%s 的 Info.plist `%s` = `%s`，台账 `%s` = `%s`"
-                               % (wanted.name, key, entry.group(1), field, ledger[field]))
+                               % (wanted.name, key, entry.group(1), field, identity[field]))
         else:
             report.bad("%s 里没有 Contents/Info.plist（包不完整）" % wanted.name)
     alias = dist / "DoyahStudio.app"
@@ -811,7 +1066,7 @@ def check_dist(root: pathlib.Path, ledger: dict, report: Report):
                 % (len(packages), "、".join(p.name for p in packages) or "无", keep, policy["policy"]))
 
 
-def check_anchors(root: pathlib.Path, ledger: dict, report: Report):
+def check_anchors(root: pathlib.Path, ledger: dict, report: Report, identity: dict):
     """C4 —— 文档里的现状声明逐处对账。"""
     for anchor in ledger.get("anchors") or []:
         relative = anchor.get("path")
@@ -834,14 +1089,23 @@ def check_anchors(root: pathlib.Path, ledger: dict, report: Report):
             report.bad("锚点 %s（%s）命中 %d 处，少于 minSites %d —— 现状声明被删了 / 改写了？"
                        % (relative, anchor.get("note") or "", len(hits), minimum))
             continue
+        if not captures:
+            # 无捕获组的锚点 = **只判「这句话还在」**（派生值没法在文档里写死，
+            # 但「构建号是派生的」这句现状声明不许被删）。
+            report.sites += len(hits)
+            continue
         for hit in hits:
             for index, field in enumerate(captures):
                 value = hit.group(index + 1)
+                if identity.get(field) is None:
+                    report.note("%s：`%s` 本次不可判（派生值取不到，不计入比对点）"
+                                % (relative, field))
+                    continue
                 report.sites += 1
-                if value != ledger[field]:
+                if value != identity[field]:
                     line = text[:hit.start()].count("\n") + 1
                     report.bad("%s:%d 写的是 `%s`，台账 `%s` = `%s`"
-                               % (relative, line, value, field, ledger[field]))
+                               % (relative, line, value, field, identity[field]))
 
 
 def check(root: pathlib.Path):
@@ -849,13 +1113,14 @@ def check(root: pathlib.Path):
     ledger = load_ledger(root, report)
     if ledger is None:
         return report
-    check_authority(root, ledger, report)
-    targets = check_project_yml(root, ledger, report)
-    pbx = check_pbxproj(root, ledger, report)
+    identity, derived_vars = derive_identity(root, ledger, report)
+    check_authority(root, ledger, report, identity, derived_vars)
+    targets = check_project_yml(root, ledger, report, identity)
+    pbx = check_pbxproj(root, ledger, report, identity)
     check_structure(root, ledger, targets, pbx, report)
-    check_anchors(root, ledger, report)
-    check_release_label(root, ledger, report)
-    check_dist(root, ledger, report)
+    check_anchors(root, ledger, report, identity)
+    check_release_label(root, ledger, report, derived_vars)
+    check_dist(root, ledger, report, identity)
     if report.sites < FLOOR_ANCHOR_SITES:
         report.bad("空跑防护：全部比对点只有 %d 处（少于下限 %d）—— 判据被掏空了？"
                    % (report.sites, FLOOR_ANCHOR_SITES))
@@ -937,7 +1202,8 @@ def edit(path: pathlib.Path, old: str, new: str) -> None:
 
 
 def make_fixture_dist(fixture: pathlib.Path, label: str, marketing: str,
-                      plist_label=None, alias_target=None, alias_as_dir: bool = False) -> None:
+                      plist_label=None, alias_target=None, alias_as_dir: bool = False,
+                      build: str = "2258") -> None:
     """合成一个 `dist/` 夹具（真产物几十 MB 且不进库）：只写判据会读的那几行。"""
     dist = fixture / "dist"
     package = dist / ("DoyahStudio-%s.app" % label)
@@ -945,8 +1211,9 @@ def make_fixture_dist(fixture: pathlib.Path, label: str, marketing: str,
     (package / "Contents" / "Info.plist").write_text(
         "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<plist version=\"1.0\">\n<dict>\n"
         "    <key>CFBundleShortVersionString</key>\n    <string>%s</string>\n"
+        "    <key>CFBundleVersion</key>\n    <string>%s</string>\n"
         "    <key>DoyahReleaseLabel</key>\n    <string>%s</string>\n"
-        "</dict>\n</plist>\n" % (marketing, plist_label or label), encoding="utf-8")
+        "</dict>\n</plist>\n" % (marketing, build, plist_label or label), encoding="utf-8")
     alias = dist / "DoyahStudio.app"
     if alias_as_dir:
         alias.mkdir()
@@ -966,7 +1233,6 @@ def run_self_test() -> int:
         ledger_path = real_root / LEDGER
         ledger = json.loads(ledger_path.read_text(encoding="utf-8"))
         marketing = ledger["marketingVersion"]
-        build = ledger["buildVersion"]
         label = ledger["releaseLabel"]
         variable = ledger["releaseLabelSource"]["variable"]
         shas_before = {
@@ -996,20 +1262,21 @@ def run_self_test() -> int:
         record("例 2 只改 project.yml 的版本 ⇒ 判红", any("project.yml" in p and "9.9.9" in p for p in problems),
                "；".join(problems[:2]))
 
-        # 例 3：只改生成物一处 ⇒ 判红
+        # 例 3：只改生成物一处（版本号，逐字比的那一半）⇒ 判红
         fixture = build_fixture(scratch, real_root)
         edit(fixture / "DoyahStudio.xcodeproj/project.pbxproj",
-             "CURRENT_PROJECT_VERSION = %s;" % build, "CURRENT_PROJECT_VERSION = 99;")
+             "MARKETING_VERSION = %s;" % marketing, "MARKETING_VERSION = 9.9.9;")
         problems = check(fixture).problems
-        record("例 3 只改生成物的构建号 ⇒ 判红", any("pbxproj" in p and "99" in p for p in problems),
+        record("例 3 只改生成物的版本号 ⇒ 判红", any("pbxproj" in p and "9.9.9" in p for p in problems),
                "；".join(problems[:2]))
 
-        # 例 4：只改权威处（Info.plist 模板）⇒ 判红
+        # 例 4：只改权威处（Info.plist 模板）—— 把 `${MARKETING_VERSION}` 手抄成字面量 ⇒ 判红
         fixture = build_fixture(scratch, real_root)
-        edit(fixture / "Scripts/build-app.sh", "<string>%s</string>" % build, "<string>99</string>")
+        edit(fixture / "Scripts/build-app.sh", "<string>${MARKETING_VERSION}</string>",
+             "<string>9.9.9</string>")
         problems = check(fixture).problems
-        record("例 4 只改权威处（Info.plist 模板）⇒ 判红",
-               any("build-app.sh" in p and "99" in p for p in problems), "；".join(problems[:2]))
+        record("例 4 权威处手抄一首版本号（不再引用派生变量）⇒ 判红",
+               any("build-app.sh" in p and "9.9.9" in p for p in problems), "；".join(problems[:2]))
 
         # 例 5：只改台账 ⇒ 判红（三处都与台账不一致）
         fixture = build_fixture(scratch, real_root)
@@ -1017,7 +1284,8 @@ def run_self_test() -> int:
         (fixture / LEDGER).write_text(text.replace('"marketingVersion": "%s"' % marketing,
                                                    '"marketingVersion": "9.9.9"', 1), encoding="utf-8")
         problems = check(fixture).problems
-        record("例 5 只改台账的值 ⇒ 判红", len(problems) >= 3, "；".join(problems[:2]))
+        record("例 5 只改台账的版本快照（与派生规则算出来的不符）⇒ 判红",
+               any("快照" in p for p in problems), "；".join(problems[:2]))
 
         # 例 6：生成物缺一个目标（改了 yml 忘重生成）⇒ 判红
         fixture = build_fixture(scratch, real_root)
@@ -1048,12 +1316,12 @@ def run_self_test() -> int:
         record("例 8 掏空生成物 ⇒ 判红（空跑防护）",
                any("一个 PBXNativeTarget 都没解析到" in p for p in problems), "；".join(problems[:2]))
 
-        # 例 9：文档锚点写错 ⇒ 判红
+        # 例 9：文档锚点写错 ⇒ 判红（锚的是**活文档** `AGENT-SPEC.md`；归档件不再锚，见 notInScope）
         fixture = build_fixture(scratch, real_root)
-        edit(fixture / "Docs/archive/root-20261026/发布方案.md", "| `%s` | `%s` |" % ("CFBundleVersion", build),
-             "| `CFBundleVersion` | `7` |")
+        edit(fixture / "AGENT-SPEC.md", "（本版 `%s`" % marketing, "（本版 `9.9.9`")
         problems = check(fixture).problems
-        record("例 9 文档锚点写错 ⇒ 判红", any("发布方案.md" in p for p in problems), "；".join(problems[:2]))
+        record("例 9 文档锚点写错 ⇒ 判红", any("AGENT-SPEC.md" in p and "9.9.9" in p for p in problems),
+               "；".join(problems[:2]))
 
         # 例 11：发布标签的定义值被改 ⇒ 判红并点名
         fixture = build_fixture(scratch, real_root)
@@ -1101,6 +1369,28 @@ def run_self_test() -> int:
         problems = check(fixture).problems
         record("例 16 别名做成真目录 ⇒ 判红",
                any("只许是软链" in p for p in problems), "；".join(problems[:2]))
+
+        # 例 17：派生变量退回字面量（构建号写死）⇒ 判红
+        fixture = build_fixture(scratch, real_root)
+        build_anchor = ledger["derivations"]["buildVersion"]["assignmentAnchor"]
+        edit(fixture / "Scripts/build-app.sh", build_anchor, 'BUILD_COUNT="2258"')
+        problems = check(fixture).problems
+        record("例 17 派生变量退回字面量（构建号写死）⇒ 判红",
+               any("字面量" in p for p in problems), "；".join(problems[:2]))
+
+        # 例 18：删掉一处「构建号是派生的」现状声明 ⇒ 判红（minSites 2，删一处就只剩一处）
+        fixture = build_fixture(scratch, real_root)
+        edit(fixture / "AGENT-SPEC.md", "；构建号 = 提交数（每次构建递增，不手抄）", "")
+        problems = check(fixture).problems
+        record("例 18 删掉一处「构建号是派生的」声明 ⇒ 判红",
+               any("现状声明被删了" in p for p in problems), "；".join(problems[:2]))
+
+        # 例 19：产物的构建号不是数字 ⇒ 判红（`productCheck = shape` 不是放行）
+        fixture = build_fixture(scratch, real_root)
+        make_fixture_dist(fixture, label, marketing, build="abc")
+        problems = check(fixture).problems
+        record("例 19 产物构建号不是纯数字 ⇒ 判红",
+               any("不是纯数字" in p for p in problems), "；".join(problems[:2]))
 
         # 例 10：真仓库 —— 四份文件逐字节未变 + 真仓库实跑绿
         shas_after = {

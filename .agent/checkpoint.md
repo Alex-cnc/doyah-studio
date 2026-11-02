@@ -1,5 +1,18 @@
 # 检查点
 
+## 发布身份族：派生值收进台账模型（判据不崩 + 台账不再落后于产物）· 2026-11-03
+
+- **无台账行**（判据维护 · 台账模型级）：本跳清上一跳点名的第 2 族 `check-release-version`。两件事：① 判据把**写对的脚本**读成错；② **真红** —— 发布身份早改成派生值，台账仍写 `0.3.0` / `3`。
+- **① 判据自伤**：`shell_assignments()` 只认 `NAME="字面量"`，而 `MARKETING_VERSION="$(printf … | sed … | awk …)"` 的值里必然带引号 ⇒ 整行不认 ⇒ 报「0 处定义」；同一处让自检例 4 的锚点 `<string>3</string>` 失效 ⇒ **rc=2 夹具错误**（`bash test` 里写死的那句话早就不在模板里）。
+- **② 真红（模型缺一档）**：`beta1.0` → `MARKETING_VERSION=1.0.0`、`BUILD_COUNT=$(git rev-list --count HEAD)` → 产物 `CFBundleVersion=2257`；台账写 `0.3.0` / `3`、`project.yml` + 生成物也停在旧字面量。**把「每次提交都变的数」当字面量比**，这个模型注定下一秒过期。
+- **落法**：`read_shell_value()` 逐字符扫赋值右侧（认 `$(…)` 嵌套与内层引号）· `derivations` 认两档（`label-strip-milestone-pad3` / `git-commit-count`，认不出判红不猜）· 派生式由 `assignmentAnchor` **逐字**钉住（退回字面量 / 换写法 ⇒ 红）· `marketingVersion` 存快照（判据复算比对）· `buildVersion` 只存规则 + `productCheck: shape`（产物只判纯数字）· `mirrors[].keys` 支持 `{key, enforcement, why}`，`CURRENT_PROJECT_VERSION` 两处只解析不逐字比（Xcode 路线不参与发布链），每次实跑打印 · 锚点从**已归档**的 `Docs/发布方案.md` / `发布计划.md` 移回活文档 `AGENT-SPEC.md`（两处逐字 + 两处「构建号 = 提交数」**只判这句话还在**的无捕获锚点）· `build-app.sh` 写完 Info.plist 用 `PlistBuddy` 读回三值自证（判据脚本判不到「这一次构建」）· `xcodegen generate` 重出工程（C3 过期 12 个 `.swift` 一并跟上）。
+- **读数**：`check-release-version` **rc=0**（比对点 17；修前 ❌ 9 处）· `--self-test` **19/19**（16 → 19；修前 rc=2）· 读回自证正例 rc=0 / 反例（构建号差一）rc=1 · 文档门禁十道 rc=0（numbers 三向 · status 471 · version-scope 471 · doc-versions 17 · agents-index 15）· `check-self-test-counts --no-run` 族 56 / 例 **1077** / 锚点 86 · `plan-batches --check` rc=0（0 条待办）。
+- **反例五段**（判红后逐字节还原）：`BUILD_COUNT` 退回字面量 ⇒ 红「是**字面量**」· 删一处「构建号 = 提交数」声明 ⇒ 红「现状声明被删了」· 产物构建号写 `abc` ⇒ 红「不是纯数字」· plist 模板手抄 `9.9.9` ⇒ 红 · 只改生成物版本号 / 文档锚点写错 ⇒ 各红。三条新负例已进自检（例 17/18/19），台账与 `verify-all.sh` 注释同批跟版。
+- **未验证（≠ 通过）**：**真产物没重建** —— `dist/` 那份仍是 `2257`，读回自证**没在真构建里跑过**（`build-app.sh` 只做 `bash -n`）· 产物 `buildVersion` 只判形状（「是不是那次构建的提交数」要重出包才判得了）· `project.yml` 的 `CURRENT_PROJECT_VERSION` 仍是 `3`（已声明不比）· 归档件两处旧版本声明未改（冻结快照，`notInScope` 写明）· `AGENT-SPEC.md` / 需求书里仍有多处**引用**已归档文档路径（另一族文档漂移，本片未动）。
+- **全量 `verify-all.sh --keep-going`（本跳实跑，日志 `.build/verify-20261103-055409.log`）**：见本文件末尾同批追加行。
+- **下一项**：队列仍 **0 todo / 28 blocked**（全卡外部）。机器面下一族 = **自检「绿对照」族**（真仓库红 ⇒ 自检跟着红：`editor-surface-tokens` / `agent-provider-presets` / `terminal-tabs` / `tri-repo-parity` / `plugin-assembly` 例 20）—— `release-version` 就是这族第 6 个成员，同一手法可收。
+- 证据 `.agent/evidence/2026-11-03-release-version-identity.md`。
+
 ## 看板族：状态格非裸符号（判据崩溃 + 看板少算 2 条）· 2026-11-03
 
 - **无台账行**（判据维护 · 脚本级）：本跳清的是上一跳点名的「夹具失效 / 脚本崩」族第 1 件。两处**同一个根因**：台账状态格里允许两种非裸写法。

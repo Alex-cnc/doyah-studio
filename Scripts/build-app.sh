@@ -221,6 +221,23 @@ cat > "${APP}/Contents/Info.plist" <<PLIST
 </plist>
 PLIST
 
+# 版本身份**写盘后立刻读回来核**（2026-11-03）。
+# 为什么在构建脚本里也要判一次：`check-release-version.py` 只能判「模板与台账」——
+# 它判不到**这一次构建**真写进了什么；而构建号是 `git rev-list --count HEAD` 的派生值，
+# 每次提交都变，台账里根本存不住一个字面量去逐字比。所以「写进包里的三个值 == 这次算出来的三个值」
+# 这一步只能在构建那一刻自证；读回不一致就直接失败（不出一个身份不对的包）。
+for PAIR in "CFBundleShortVersionString:${MARKETING_VERSION}" \
+            "CFBundleVersion:${BUILD_COUNT}" \
+            "DoyahReleaseLabel:${RELEASE_LABEL}"; do
+  PLIST_KEY="${PAIR%%:*}"
+  PLIST_WANT="${PAIR#*:}"
+  PLIST_GOT="$(/usr/libexec/PlistBuddy -c "Print :${PLIST_KEY}" "${APP}/Contents/Info.plist" 2>/dev/null || echo '<读不到>')"
+  if [ "${PLIST_GOT}" != "${PLIST_WANT}" ]; then
+    echo "错误：产物 Info.plist 的 ${PLIST_KEY} 读回 = ${PLIST_GOT}，期望 ${PLIST_WANT}" >&2
+    exit 1
+  fi
+done
+
 # 应用图标（法斗 Doyah）：App/Resources/AppIcon.icns。
 # 用 sips/iconutil 校验过含全部 10 个尺寸；缺了它 Dock 与访达里就是白纸图标。
 ICON="${ROOT}/App/Resources/AppIcon.icns"
