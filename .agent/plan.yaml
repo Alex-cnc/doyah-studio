@@ -1,8 +1,131 @@
-# v0.4.0 笔记与任务闭环 · 执行队列（**派生件**）
+# v0.5.0 智能体进阶层 · 执行队列（**派生件**）
 # 唯一事实源 = Docs/Doyah产品开发计划任务清单-macOS.md（活书台账）。
 # 本文件只做「下一跳」排序，不许反向改台账；台账一改就跑 --emit-plan 重出，别手改。
-# 生成于 2026-11-02，源 = 台账里 FR-NTS-NOTE- / FR-NTS-TODO- 未闭 1 条（0 🟡 / 1 ⬜）。
+# 生成于 2026-11-02，源 = 台账里 FR-AGT-TOOL- / FR-AGT-OPS-OBS-002 / FR-AGT-UX- / FR-AGT-PLAN-PLAN-001 / FR-AGT-LINK-EXT- / FR-AGT-LINK-CHAN-003 / FR-AGT-KNOW-MEM-003 / NFR-ALL-GATE-AI-004 / NFR-ALL-GATE-AI-006 / NFR-ALL-GATE-AI-007 / AC-ALL-GATE-AI-001 / AC-ALL-GATE-AI-004 未闭 16 条（13 🟡 / 3 ⬜）。
 tasks:
+# 另有 1 条上版遗留卡点（不在本版范围，仅列表可见）：FR-NTS-NOTE-ORG-002
+  - id: AC-ALL-GATE-AI-001
+    goal: "关闭智能体总开关后，外发流量为 0（以外发日志或抓包核验）"
+    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py AC-ALL-GATE-AI-001 | grep -q '✅'"
+    layer: "—"
+    prio: "—"
+    status: todo
+    evidence: ""
+  - id: AC-ALL-GATE-AI-004
+    goal: "提示注入用例：含注入指令的 schema 注释 / 数据内容不被当作指令执行"
+    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py AC-ALL-GATE-AI-004 | grep -q '✅'"
+    layer: "—"
+    prio: "—"
+    status: todo
+    evidence: ""
+  - id: NFR-ALL-GATE-AI-004
+    goal: "成本与配额：提供 token / 调用次数上限与超时"
+    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py NFR-ALL-GATE-AI-004 | grep -q '✅'"
+    layer: "常用增强"
+    prio: "—"
+    status: todo
+    evidence: ""
+  - id: FR-AGT-KNOW-MEM-003
+    goal: "对话记忆（跨会话的长期记忆）：可检视 / 删除 / 解释"
+    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-AGT-KNOW-MEM-003 | grep -q '✅'"
+    layer: "常用增强"
+    prio: "中"
+    status: todo
+    evidence: ""
+  - id: NFR-ALL-GATE-AI-006
+    goal: "本地模型优先：支持 OpenAI 兼容的本地端点（如 Ollama / vLLM），"
+    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py NFR-ALL-GATE-AI-006 | grep -q '✅'"
+    layer: "常用增强"
+    prio: "—"
+    status: todo
+    evidence: ""
+  - id: NFR-ALL-GATE-AI-007
+    goal: "会话持久化与长上下文（压缩 / 检查点）"
+    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py NFR-ALL-GATE-AI-007 | grep -q '✅'"
+    layer: "常用增强"
+    prio: "—"
+    status: todo
+    evidence: ""
+  - id: FR-AGT-TOOL-MEDIA-001
+    goal: "语音输入：把一段语音转成文字再进对话，转写错误可回看原文"
+    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-AGT-TOOL-MEDIA-001 | grep -q '✅'"
+    layer: "进阶可选"
+    prio: "低"
+    status: blocked
+    evidence: ""
+    next_try: "等主人改口径或给替代入口：麦克风按令不做（录音采集面 0 命中），可选的替代 = 「音频文件入口」"
+  - id: FR-AGT-TOOL-SYS-002
+    goal: "子任务委派：把独立子任务派给子代理并行做，结果汇总回主任务并标明来源"
+    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-AGT-TOOL-SYS-002 | grep -q '✅'"
+    layer: "常用增强"
+    prio: "中"
+    status: blocked
+    evidence: ""
+    next_try: "等人工点验：执行器与来源标注已在盘（13 例），余「对话侧当工具调起的观感」；异步入口按台账留到下一轮"
+  - id: FR-AGT-OPS-OBS-002
+    goal: "可配置：模型、工具白名单、审批策略、配额、通知规则都可配置，且改完立即生效并有据可查"
+    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-AGT-OPS-OBS-002 | grep -q '✅'"
+    layer: "常用增强"
+    prio: "中"
+    status: blocked
+    evidence: ""
+    next_try: "等人工点验：六项配置 + 四条生效面 10 例全绿（含并发上限真限流），余「改配置到下一次派活的观感」"
+  - id: FR-AGT-UX-SYNC-001
+    goal: "多端一致性：同一会话在桌面与手机上看到的消息、审批与结论一致（壳不同，内容同）"
+    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-AGT-UX-SYNC-001 | grep -q '✅'"
+    layer: "常用增强"
+    prio: "中"
+    status: blocked
+    evidence: ""
+    next_try: "等主人定端云同步传输面（§7 阻塞 2）：语义面 19 例已绿，App 侧 0 调用点，且无第二端可对"
+  - id: FR-AGT-UX-CONV-001
+    goal: "对话式诊断：解读执行计划、慢查询与锁阻塞，给出可执行建议"
+    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-AGT-UX-CONV-001 | grep -q '✅'"
+    layer: "常用增强"
+    prio: "中"
+    status: blocked
+    evidence: ""
+    next_try: "等主人给模型名 + 密钥（或指一个可用档）：`agent.json` 的 `profiles[0].model` 是空串，真模型端点未配 ⇒ 对话式诊断无输入"
+  - id: FR-AGT-PLAN-PLAN-001
+    goal: "DBA 维护任务编排：由自然语言描述生成并执行维护任务（备份 / 恢复、VACUUM"
+    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-AGT-PLAN-PLAN-001 | grep -q '✅'"
+    layer: "常用增强"
+    prio: "中"
+    status: blocked
+    evidence: ""
+    next_try: "同上：DBA 维护编排要真模型先生成计划，端点未配 ⇒ 无从验收"
+  - id: FR-AGT-LINK-EXT-001
+    goal: "互操作接口（MCP 双向）：① 作为 host 接入外部 MCP 服务器"
+    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-AGT-LINK-EXT-001 | grep -q '✅'"
+    layer: "进阶可选"
+    prio: "低"
+    status: blocked
+    evidence: ""
+    next_try: "等主人给一个可连的 MCP server（命令或 URL）：`resources/read` 仍 0 命中、host 方向仍批处理式，无真对端可验"
+  - id: FR-AGT-LINK-EXT-002
+    goal: "MCP client（用户自配 server 面）：配置 name / transp"
+    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-AGT-LINK-EXT-002 | grep -q '✅'"
+    layer: "进阶可选"
+    prio: "低"
+    status: blocked
+    evidence: ""
+    next_try: "等主人装一个真 MCP server 并把配置面板点一遍：判据四族 8+20+15+23 例已全绿，余「真 server 端到端 + 面板观感」"
+  - id: FR-AGT-LINK-CHAN-003
+    goal: "IM 通道（QQ 优先）：从聊天里收发任务 —— 手机发一句话派活，长任务完成推回结论，权限与桌面端同一套"
+    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-AGT-LINK-CHAN-003 | grep -q '✅'"
+    layer: "常用增强"
+    prio: "中"
+    status: blocked
+    evidence: ""
+    next_try: "等真 QQ 凭据 + 官方网关：配置面 / 入站任务 / 官方 REST 外发三段已在盘，真 WS 握手与「手机派活→手机收结论」要真账号"
+  - id: FR-AGT-UX-SESS-001
+    goal: "会话生命周期：**新建 / 归档 / 删除 / 导出** —— 删除即真删（不留副本），导出可带走"
+    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-AGT-UX-SESS-001 | grep -q '✅'"
+    layer: "常用增强"
+    prio: "中"
+    status: blocked
+    evidence: ""
+    next_try: "等人工点验：8+10+6 例全绿（含删除真删的文件面），余「归档→恢复 / 导出再导入 / 删一条看盘」三下"
   - id: FR-NTS-NOTE-ORG-002
     goal: "笔记本归类：笔记可归入**一个笔记本**（单层，不做「架 → 笔记本」两层；未指定时落默认「收件箱」），**归属唯一**，跨笔记本移动只改归属"
     done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-NTS-NOTE-ORG-002 | grep -q '✅'"

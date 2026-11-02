@@ -8,11 +8,15 @@
     python3 Scripts/plan-batches.py --check                 # 只比对，不写盘；不一致 rc=1
     python3 Scripts/plan-batches.py --write                 # 重出 batches.yaml
     python3 Scripts/plan-batches.py --emit-plan --write     # 先按台账重出 plan.yaml，再重出批次
-    python3 Scripts/plan-batches.py --version 0.3.0 --check # 历史版（只比 batches.yaml ↔ plan.yaml）
+    python3 Scripts/plan-batches.py --version 0.4.0 --check # 历史版（只比 batches.yaml ↔ plan.yaml）
 
 覆盖声明（**分版本，别混**）：
-- `--version 0.4.0`（默认，当前版）**读台账**。范围 = 台账里 `FR-NTS-NOTE-*` / `FR-NTS-TODO-*`
-  且状态未 ✅ 的行（`FR-NTS-ALL-*` 不在范围；已 ✅ 的 `NOTE-EXPORT-001` / `TODO-CALENDAR-003` 自然落选）。
+- `--version 0.5.0`（默认，当前版）**读台账**。范围 = 台账 §4.2 那一行点名的前缀与具名条目
+  （`FR-AGT-TOOL-*` / `FR-AGT-UX-*` / `FR-AGT-LINK-EXT-*` + `OPS-OBS-002` / `PLAN-PLAN-001` /
+  `LINK-CHAN-003` / `KNOW-MEM-003` / `NFR-ALL-GATE-AI-004·006·007` / `AC-ALL-GATE-AI-001·004`），
+  且状态未 ✅。卡点由 `BLOCKED_V050` **写死在规则表里**（台账 §7.1 的十条外部卡点），
+  `--emit-plan` 重出时保留 `status: blocked` + `next_try`，不刷回 todo；上一版遗留卡点跨版本携带、只列表可见。
+- `--version 0.4.0`（历史，需把 `plan.yaml` 切回那一版）范围 = `FR-NTS-NOTE-*` / `FR-NTS-TODO-*` 未 ✅。
   `--check` 做两件事：① `plan.yaml` 的 todo 集合 == 台账复算集合（缺一条 / 多一条 / 台账已闭而队列仍 todo，都判红）；
   ② `batches.yaml` == 按 `plan.yaml` 重出的结果，且没有条目掉进「未归堆」。
 - `--version 0.3.0`（历史）只认 `plan.yaml` 的 `- id:` / `status:` 两列，**不读台账** ——
@@ -142,7 +146,57 @@ BATCHES_V040: list[dict] = [
     ),
 ]
 
+# --------------------------------------------------------------------------- #
+# v0.5.0：智能体进阶层，A1–A2（16 条未闭里只有 6 条是「自己能开工」的，见 BLOCKED_V050）
+# --------------------------------------------------------------------------- #
+BATCHES_V050: list[dict] = [
+    dict(
+        id="A1",
+        title="智能体闸门：总开关零外发 / 提示注入不执行 / 配额与超时",
+        est_min=70,
+        match=["AC-ALL-GATE-AI-001", "AC-ALL-GATE-AI-004", "NFR-ALL-GATE-AI-004"],
+        why="三条都是「拦住它别乱来」的同一族：外发口、指令来源、花费上限 —— 判据都要在一个"
+            "外发/执行收口处读手数，分开做会把同一根探针写三遍",
+        exit="3 行两列全 ✅；每条配一条「故意违规必须判红」的负例（关总开关仍发 / 注入内容被当指令 / 超配额仍发）",
+    ),
+    dict(
+        id="A2",
+        title="上下文与端点：记忆可检视删解释 / 本地 OpenAI 兼容端点 / 会话持久化与长上下文",
+        est_min=70,
+        match=["FR-AGT-KNOW-MEM-003", "NFR-ALL-GATE-AI-006", "NFR-ALL-GATE-AI-007"],
+        why="三条都在「一次对话前后用什么上下文、连谁」这一层：记忆写入与界面、端点预填与本地档、"
+            "超限压缩与续跑位置；共用 `AgentMemoryStore` / `AgentModelPresets` / 压缩那条路",
+        exit="3 行两列全 ✅；记忆写入要有真调用点（不是只有测试调）",
+    ),
+]
+
+# 台账 §7.1（2026-10-27 逐条核验）+ 各行备注已把卡点写死：这 10 条机器面做不了，
+# 卡在主人 / 外部实例。队列里必须**看得见**它们 ⇒ 落 blocked + next_try（不是删掉）。
+BLOCKED_V050: dict[str, str] = {
+    "FR-AGT-UX-CONV-001": "等主人给模型名 + 密钥（或指一个可用档）：`agent.json` 的 `profiles[0].model` 是空串，真模型端点未配 ⇒ 对话式诊断无输入",
+    "FR-AGT-PLAN-PLAN-001": "同上：DBA 维护编排要真模型先生成计划，端点未配 ⇒ 无从验收",
+    "FR-AGT-LINK-EXT-001": "等主人给一个可连的 MCP server（命令或 URL）：`resources/read` 仍 0 命中、host 方向仍批处理式，无真对端可验",
+    "FR-AGT-LINK-EXT-002": "等主人装一个真 MCP server 并把配置面板点一遍：判据四族 8+20+15+23 例已全绿，余「真 server 端到端 + 面板观感」",
+    "FR-AGT-LINK-CHAN-003": "等真 QQ 凭据 + 官方网关：配置面 / 入站任务 / 官方 REST 外发三段已在盘，真 WS 握手与「手机派活→手机收结论」要真账号",
+    "FR-AGT-TOOL-MEDIA-001": "等主人改口径或给替代入口：麦克风按令不做（录音采集面 0 命中），可选的替代 = 「音频文件入口」",
+    "FR-AGT-TOOL-SYS-002": "等人工点验：执行器与来源标注已在盘（13 例），余「对话侧当工具调起的观感」；异步入口按台账留到下一轮",
+    "FR-AGT-OPS-OBS-002": "等人工点验：六项配置 + 四条生效面 10 例全绿（含并发上限真限流），余「改配置到下一次派活的观感」",
+    "FR-AGT-UX-SYNC-001": "等主人定端云同步传输面（§7 阻塞 2）：语义面 19 例已绿，App 侧 0 调用点，且无第二端可对",
+    "FR-AGT-UX-SESS-001": "等人工点验：8+10+6 例全绿（含删除真删的文件面），余「归档→恢复 / 导出再导入 / 删一条看盘」三下",
+}
+
 VERSION_SPECS: dict[str, dict] = {
+    "0.5.0": dict(
+        title="v0.5.0 智能体进阶层",
+        rest_id="A9",
+        # 台账 §4.2 那一行点名的范围（含跨前缀的 8 条具名条目），逐项照抄，不自己扩。
+        ledger_scope=("FR-AGT-TOOL-", "FR-AGT-OPS-OBS-002", "FR-AGT-UX-",
+                      "FR-AGT-PLAN-PLAN-001", "FR-AGT-LINK-EXT-", "FR-AGT-LINK-CHAN-003",
+                      "FR-AGT-KNOW-MEM-003", "NFR-ALL-GATE-AI-004", "NFR-ALL-GATE-AI-006",
+                      "NFR-ALL-GATE-AI-007", "AC-ALL-GATE-AI-001", "AC-ALL-GATE-AI-004"),
+        batches=BATCHES_V050,
+        blocked=BLOCKED_V050,
+    ),
     "0.4.0": dict(
         title="v0.4.0 笔记与任务闭环",
         rest_id="N9",
@@ -156,7 +210,7 @@ VERSION_SPECS: dict[str, dict] = {
         batches=BATCHES_V030,
     ),
 }
-DEFAULT_VERSION = "0.4.0"
+DEFAULT_VERSION = "0.5.0"
 EVIDENCE_CMD = "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py {id} | grep -q '✅'"
 
 
@@ -209,7 +263,7 @@ def read_ledger() -> list[dict]:
 def ledger_open(scope: tuple[str, ...] | None) -> list[dict]:
     rows = read_ledger()
     if scope is not None:
-        rows = [r for r in rows if r["id"].startswith(scope)]
+        rows = [r for r in rows if matches(r["id"], list(scope))]
     return [r for r in rows if r["status"] != "✅"]
 
 
@@ -278,6 +332,27 @@ def render_batches(batches: list[tuple[dict, list[str]]], todos: list[str], spec
     return "\n".join(lines) + "\n"
 
 
+def read_previous_plan_blocked() -> dict[str, dict]:
+    """上一次 `plan.yaml` 里所有 blocked（id → {goal, next_try}）。
+
+    为什么要它：换版本时新范围以外的卡点（例：v0.4.0 的 `NOTE-ORG-002` 等契约所有者裁决）
+    如果直接丢掉，队列里就「没人看得见」—— 那正是 blocked 不许静默消失的理由。
+    """
+    text = PLAN.read_text(encoding="utf-8") if PLAN.exists() else ""
+    out: dict[str, dict] = {}
+    for block in re.split(r"\n(?=  - id: )", text):
+        ident = re.search(r"- id: (\S+)", block)
+        status = re.search(r"status: (\w+)", block)
+        if not ident or not status or status.group(1) != "blocked":
+            continue
+        nxt = re.search(r'next_try: "((?:[^"\\]|\\.)*)"', block)
+        if not nxt or not nxt.group(1).strip():
+            continue
+        goal = re.search(r'goal: "((?:[^"\\]|\\.)*)"', block)
+        out[ident.group(1)] = dict(goal=goal.group(1) if goal else "", next_try=nxt.group(1))
+    return out
+
+
 def render_plan(rows: list[dict], spec_version: dict) -> str:
     """按台账未闭行重出 plan.yaml（派生队列，不许手写）。"""
     order: dict[str, int] = {}
@@ -295,7 +370,10 @@ def render_plan(rows: list[dict], spec_version: dict) -> str:
         f"{' / '.join(spec_version['ledger_scope'])} 未闭 {len(rows)} 条（{yellow} 🟡 / {white} ⬜）。",
         "tasks:",
     ]
-    blocked = read_blocked()
+    in_scope = {r["id"] for r in rows}
+    # 本版规则表里写死的卡点 + 上一次 plan.yaml 里本版范围内已声明的卡点（后者优先）
+    blocked = dict(spec_version.get("blocked") or {})
+    blocked.update({k: v for k, v in read_blocked().items() if k in in_scope})
     for r in rows:
         lines += [
             f"  - id: {r['id']}",
@@ -308,6 +386,24 @@ def render_plan(rows: list[dict], spec_version: dict) -> str:
         ]
         if r["id"] in blocked:
             lines.append(f"    next_try: {yaml_str(blocked[r['id']])}")
+    # 跨版本携带：上一版留下的卡点（不在本版范围内）照样列出来，不许静默消失。
+    carry = {k: v for k, v in read_previous_plan_blocked().items() if k not in in_scope}
+    if carry:
+        ledger_goals = {r["id"]: r for r in read_ledger()}
+        lines.insert(lines.index("tasks:") + 1,
+                     f"# 另有 {len(carry)} 条上版遗留卡点（不在本版范围，仅列表可见）：{', '.join(sorted(carry))}")
+        for ident in sorted(carry):
+            row = ledger_goals.get(ident)
+            lines += [
+                f"  - id: {ident}",
+                f"    goal: {yaml_str(row['goal'] if row else carry[ident]['goal'])}",
+                f"    done_when: {yaml_str(EVIDENCE_CMD.format(id=ident))}",
+                f"    layer: {yaml_str(row['layer'] if row else '—')}",
+                f"    prio: {yaml_str(row['prio'] if row else '—')}",
+                "    status: blocked",
+                '    evidence: ""',
+                f"    next_try: {yaml_str(carry[ident]['next_try'])}",
+            ]
     return "\n".join(lines) + "\n"
 
 
@@ -338,7 +434,7 @@ def main(argv: list[str]) -> int:
     if "--version" in argv:
         idx = argv.index("--version")
         if idx + 1 >= len(argv):
-            print("✗ --version 后面缺版本号（0.3.0 / 0.4.0）", file=sys.stderr)
+            print("✗ --version 后面缺版本号（0.3.0 / 0.4.0 / 0.5.0）", file=sys.stderr)
             return 2
         version = argv[idx + 1]
     if version not in VERSION_SPECS:
@@ -379,7 +475,7 @@ def main(argv: list[str]) -> int:
         OUT.write_text(text, encoding="utf-8")
         print(f"✅ 已重出 .agent/batches.yaml（{len(todos)} 条待办）")
         return 0
-    print("用法：--check | --write [--emit-plan] [--version 0.3.0|0.4.0]")
+    print("用法：--check | --write [--emit-plan] [--version 0.3.0|0.4.0|0.5.0]")
     return 2
 
 
