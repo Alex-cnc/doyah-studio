@@ -209,6 +209,16 @@ public final class SSHTunnelProcess: @unchecked Sendable {
         while Date() < deadline {
             if !process.isRunning {
                 cleanUpTemporaryFiles()
+                // **ssh 自己说「端口被占」也算端口被占**（2026-11-03）：预检探测与 ssh 真正 bind
+                // 之间有窗口（另一个进程刚占上、或者探测面与 bind 面不同），这时 ssh 会带着
+                // `Address already in use` 立刻退出。归到 `.processExited` 会把人引去查跳板机与口令，
+                // 而归到 `.portInUse` 才说得清「谁的错、改什么」。判据 = `SSHTunnelRuntimeTests`
+                // 的 `testBusyPortFailsFastWithoutStartingAnything`（它要的就是这个分类）。
+                if diagnosticText.range(of: "Address already in use", options: [.caseInsensitive]) != nil {
+                    let reason = SSHTunnelError.portInUse(localPort).describe(language: language)
+                    setState(.failed(reason))
+                    throw SSHTunnelError.portInUse(localPort)
+                }
                 let reason = diagnosticText.isEmpty
                     ? LocalizedStrings.text(.sshTunnelProcessExitedSilently, language: language)
                     : LocalizedStrings.format(.sshTunnelProcessExited, language: language, diagnosticText)
