@@ -11,6 +11,7 @@
 - **两条存量红（HEAD 已有，非本批引入，各自核过）**：① `check-doc-numbers` rc=1 —— `check-status-gap.py` 未接进 `verify-all.sh`（`git show HEAD:Scripts/verify-all.sh` 命中 0；HEAD `e725c3fc` 提交信息自述「留作下一步」，加第 19 项要同批重编 18 处项块）；② `check-status-gap` rc=1 —— **16 行**实现 ✅ 判据 ⬜/🟡（8 条 Notes + `WS-AI-001` + 7 条 `WS-*`），在 HEAD 版台账上复跑同为这 16 行。
 - **未验证（≠ 通过）**：真 macOS 14 / 15 未测 · 真 Intel 硬件未测（Rosetta 是近似）· Windows / Linux 笔记模块未实现（0 处 note DDL）⇒ 三端表一致记未知 · `test-universal-build.sh` 未单跑 · `verify-all.sh` 第 11 / 18 项未执行。
 - **下一批 = `C4`**（`NFR-ALL-GATE-SEC-008` 统一外发日志 · `NFR-ALL-GATE-USE-005` 走不动的动作三选一 · `NFR-ALL-GATE-LANG-001` 简体中文界面 · `NFR-ALL-GATE-UI-001` 设计语言统一）。**另有一件压在队列前的活**：`check-status-gap` 那 16 行要按「补判据 = 点名已有测试 + 跑一次读数」逐行补，并且把这条门禁接进闭环（第 19 项，连带 `doc-numbers.json` 的 `gate-items` 与「十八项」四处形状）。
+- 提交：`d411c010`（local = remote，已推送；pre-commit 三项全过）。
 - 证据 `.agent/evidence/2026-11-02-C3.md`
 
 ## v0.6.0 · C2 收口（性能读数表三条）· 2026-11-02
