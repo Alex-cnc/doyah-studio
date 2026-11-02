@@ -19,6 +19,9 @@ public struct NoteSource: Codable, Equatable, Sendable {
         case sql
         /// AI 攒出来的 skill / 提示词（DOYAH-10 的核心场景）
         case skill
+        /// **快速捕获**（`FR-NTS-NOTE-CAPTURE-001`）：桌面快捷键 / 手机锁屏一个动作记下来的那条。
+        /// 与 `.manual` 分开记，是因为「这条是怎么来的」要能回答 —— 捕获不选笔记本，正文往往是半句话。
+        case quickCapture
 
         public var displayName: String { rawValue }
     }
