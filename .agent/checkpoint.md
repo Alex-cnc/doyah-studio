@@ -511,3 +511,17 @@
 - **再下一项 = `FR-STD-WS-AI-001`**（判据 ⬜，实现 ✅，备注已写 `EditAssistTests` 23 + `EditAssistProbeTests` 6）：起跳逐条核四条契约（差异先出、模型与端点可见、数据边界默认保守、不重复造本机能力），核得上就翻 ✅，核不上降实现列。
 - **门禁债**：`check-status-gap.py` 尚未接进 `verify-all.sh`（`check-doc-numbers` 的 `checkScriptParity` 一笔红）—— 等上面两行清零后同批接进去，别在还有红行时接（接了等于让 `verify-all` 天天红）。
 - 证据 `.agent/evidence/2026-11-02-FR-STD-WS-batch.md`
+
+## v0.7.0 · D1 落账（接管跳）+ D2 第一条：`FR-NTS-ALL-LIC-001` 不设付费墙判据化 · 2026-11-02
+
+- **接管上一跳**：上一跳做完 D1 三条（`FR-NTS-NOTE-FORMAT-001` / `-ORG-001` / `-TRASH-001`）并 `git add` 后进程消失、锁留在盘上（45 分钟未释放）。本跳先在**同一棵树上复跑读数**再落账，没有拿上一跳的自述当通过：`verify-core` **5336 / 13 skipped / 0 失败**（首跑 `SSHTunnelRuntimeTests.testBusyPortFailsFastWithoutStartingAnything` 存量抖动一场，单族复跑 4 例 0 失败）· `verify-ui-interactions` **133 条全跑无跳过** rc=0 · 文档门禁九道 rc=0 · `plan-batches --version 0.7.0 --check` rc=0 ⇒ 提交 **2bcabf15**，已推送（local = remote）。
+- **本跳做的一条**：`FR-NTS-ALL-LIC-001`（两列全 ✅）。这一条原来只有一句**人查过的备注**（「`BillingClient` 命中数 0」），不是判据。落法 = 新 `Tests/NoPaywallTests` **5 例**，把需求书三条判据逐条变成断言：
+  ① `testProductSourcesCarryNoBillingCode` —— 扫 `App`/`Core`/`Plugins`/`Tools` **581 份** `.swift` + `Package.swift`（**去注释**，块注释可嵌套）零计费符号与付费墙文案（17 个符号，刻意不收「订阅」一词 —— 那是 Combine 的常用词，收了就天天假红）；
+  ② `testStandardEditionCoversTheNotesSurface`（无许可证 = Standard 档**必须**含 `.notes` 位）+ `testNotesSourcesContainNoLicenseGating`（Notes **33 份**源文件零授权符号 —— 不读许可证就没有降级）；
+  ③ `testPaywallBanIsBoundToTheLedgerRow` —— 判据**钉在台账那一行的「需求」格**上：口径一改成不再写「不设付费墙」，这组断言立刻红，逼「先改条文再改实现」（需求 ③ 的原话）。
+- **读数**：`--filter NoPaywallTests` **5 例 / 0 失败** · `verify-core` **5341 / 13 skipped / 0 失败**（5336 → +5）· 文档门禁 invariants / tables / numbers(5341 三向) / plan-coverage / status-consistency / version-scope / doc-layout / agents-index / status-gap 全 rc=0 · `plan-batches --version 0.7.0 --check` rc=0。
+- **反例两段**（判红后 `sha256` 逐字节还原 `d6592569…` / `20e0e880…`）：真注入 `import StoreKit` ⇒ ① 红 1 例 · 台账口径改「按订阅收费」⇒ ③ 红 1 例 · 族内负例另钉「字面量命中 / 注释不命中」。
+- **队列口径（本片后实测）**：`plan.yaml` = **3 todo / 28 blocked**；`batches.yaml` 只剩 **D2（3 条）**。
+- **未验证（≠通过）**：静态扫描判不住藏在 xcframework / 二进制依赖里的计费与系统收据校验付费 · 真支付流程未做（本条要求的就是「没有」）· ② 只到源树与能力位，界面逐面板点验未做 · `verify-all.sh` 全量本跳未跑（只跑 `verify-core` + 九道文档门禁）。
+- **下一批 = D2 余三条**：`FR-NTS-ALL-HOME-001`（默认落页：用户显式二选一、未设置落待办、`UserDefaults` 记住 —— 先核 `Core/LanguagePreference` 那种「一处解析 + 一处键」的做法照抄）/ `FR-NTS-NOTE-EXPORT-001`（备份包 + 格式版本号 + 导入还原创 `NoteBodyProjection.exportMarkdown` 已有的一半）/ `FR-STD-WS-FS-008`（① 的另一半：图片等按各自视图，不许再走 `openAsText` 当二进制拒绝）。
+- 证据 `.agent/evidence/2026-11-02-FR-NTS-ALL-LIC-001.md`（D1 那份 `.agent/evidence/2026-11-02-D1.md` 随 2bcabf15 一并落库）
