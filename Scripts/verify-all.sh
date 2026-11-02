@@ -51,6 +51,9 @@ set -euo pipefail
 #        台账 §3 的 `版本` / `版本口径` 两列就是范围台账，判据 = 版本 ⊆ 四档 / alpha 行口径必为 `—` /
 #        非 alpha 行口径非空 / 编号唯一 / 空跑防护。旧做法（需求行内写 `[alpha 不含]` +
 #        独立账 `alpha-fr-dispositions.json`）已退役，文件归档在 `Scripts/archive/`。
+#      + **台账 ↔ 需求索引覆盖 + §4.2 条数**（`check-plan-coverage.py`，2026-11-03 接进闭环）
+#      + **派生队列 ↔ 台账一致 + `next_try` 只认规则表**（`plan-batches.py --check`，2026-11-03
+#        接进闭环；覆盖范围 = 规则表里有条目的 blocked，跨版携带的逐条打印「未经规则表核对」）
 #   6. 设计令牌棘轮（App/ 里的裸颜色 / 裸字号 / 裸间距不得比基线更差）
 #   7. 平台等价矩阵（§10.10 ↔ `Docs/平台实现状态.json` 台账，列由台账决定）+ 台账校验自检
 #      + `P-*` 平台差异登记的两侧对账（§10.9 ↔ 概要设计 §4：双向覆盖 + 同号同物
@@ -546,7 +549,7 @@ python3 Scripts/check-pending-agenda.py --self-test
 python3 Scripts/check-self-test-counts.py
 python3 Scripts/check-self-test-counts.py --self-test
 
-echo "==> 5/19 文档口径对账（状态括注 / 版本范围 / 台账↔需求索引覆盖 / §4.2 条数）"
+echo "==> 5/19 文档口径对账（状态括注 / 版本范围 / 台账↔需求索引覆盖 / §4.2 条数 / 派生队列与 next_try）"
 python3 Scripts/check-status-consistency.py
 # L-69 ③（2026-09-28 第 56 轮）：上面那条管的是「其它文档括注 ↔ 台账**状态一致**」（2026-10-20 改口径，
 # 原为「索引 ↔ 定义行」），管不了「这条 🟡 到底算不算本版范围」。
@@ -569,6 +572,20 @@ python3 Scripts/check-version-scope.py --self-test
 # 负例 `--self-test` 6 例（现状绿 + 改坏未闭行 / 已闭行 / 插孤儿行 / 改头部总数 / 改 §3 标题），全程在内存里改文本。
 python3 Scripts/check-plan-coverage.py
 python3 Scripts/check-plan-coverage.py --self-test
+
+# **派生队列 ↔ 台账一致 + `next_try` 只认规则表**（2026-11-03 接进闭环 · 判据 F 的收尾）：
+# 这一条原先只在手工 `python3 Scripts/plan-batches.py --check` 里生效 —— 「有判据、没闭环」，
+# 队列漂了没人知道（实测：规则表三处已改成 TCP 复测当证据，`plan.yaml` 里还留着旧话
+# 「217 ping 全丢」，而 `ping` 在本 shell 有假阴性，按 skill 不许作判据）。
+#   判据 = ① 台账未闭集合 == 队列 todo ∪ blocked（缺 / 多 / 台账已闭仍 todo，逐条点名）；
+#          ② **每个 blocked 的 `next_try` 逐字等于规则表**（`BLOCKED_V050/V060/V070` 旧→新合并）；
+#          ③ `batches.yaml` == 按 `plan.yaml` 重出的结果，没有条目掉进「未归堆」。
+#   覆盖范围（红线 13）：第 ② 条只认规则表里有条目的 blocked；跨版携带的那些（现 1 条
+#   `FR-NTS-NOTE-ORG-002`）没有可比对的规则 ⇒ 运行时打印「覆盖 27/28 · 未经规则表核对：<id>」，
+#   不静默算通过。不加 `--version`：跟着脚本的 `DEFAULT_VERSION`（= 当前队列版本）走，
+#   换版时门禁不会停在旧版上判绿。
+#   负例（2026-11-03 实测）：手改 `plan.yaml` 一条 `next_try` ⇒ rc=1 点名该 id；还原后复绿。
+python3 Scripts/plan-batches.py --check
 
 echo "==> 6/19 设计令牌棘轮 + 外观样张与产品同源 + 主题集（三选一）"
 python3 Scripts/check-design-tokens.py

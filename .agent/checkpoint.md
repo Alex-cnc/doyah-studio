@@ -1,5 +1,16 @@
 # 检查点
 
+## 判据 F 接进闭环第 5 项（无台账行 · 门禁接线）· 2026-11-03
+
+- **没有台账行**（不改任何需求状态）；由来 = 上一片自己留的 next_try「判据 F 还没接进 `verify-all`，只在手工 `--check` 里生效」= 有判据没闭环。
+- **落法两件**：① `Scripts/verify-all.sh` 第 5 项末尾接 `python3 Scripts/plan-batches.py --check`（**不加 `--version`**，跟 `DEFAULT_VERSION` 走，免得换版后门禁停在旧版判绿；抬头目录行与项标同批补）—— 判据 ①台账未闭集合 == 队列 todo ∪ blocked ②每个 blocked 的 `next_try` **逐字**等于规则表 ③`batches.yaml` == 重出结果、无未归堆；② `plan-batches.py` 的判据 F 补**覆盖声明**（红线 13）：只认规则表里有条目的 blocked，跑时打印「覆盖 27/28 · 未经规则表核对（跨版携带）：`FR-NTS-NOTE-ORG-002`」，不再静默跳过。
+- **为什么覆盖那 1 条不判红**：它没有规则表条目，判红会逼我替它现编一句卡点措辞（= 自己给自己判对）；静默跳过又是「覆盖不全还说通过」。按红线 13 只能报「未知」并点名。
+- **读数**：`plan-batches --check` **rc=0**（`ℹ️ 判据 F 覆盖 27/28 条 blocked`）· `test-verify-all-gate` **8/8**（项数仍 19）· `check-doc-numbers` / `tables 74` / `invariants 5` / `plan-coverage`（未闭 26 · §4.2 自检 6/6）/ `agents-index 15` / `self-test-counts --no-run`（56 族 / 1074 例 / 86 锚点）全 rc=0。
+- **反例两段**：① 手改 `plan.yaml` 里 `AC-ALL-GATE-REL-004` 的 `next_try` ⇒ `--check` **rc=1 点名该 id**；② 同一个坏派生件下把第 5 项的 37 行命令块从 `verify-all.sh` 原样抽出、在 `set -euo pipefail` 下执行 ⇒ **rc=1**（前四条判据全绿，红就落在新接线那一行）；`sha256 5b38829357fdb341…` 逐字节还原后复跑 rc=0。
+- **全量 `verify-all.sh --keep-going`（本跳实跑）**：项块 **19** · 失败 **11 项（33 处）** · 平台跳过 0 · **未执行项 = 无**；**第 5 项 ✅**（新接线在内）· 第 19 项 ✅。与上一跳基线（10 项 / 32 处）差 **1 项 1 处 = 第 1 项**，唯一失败是 `SSHTunnelRuntimeTests.testBusyPortFailsFastWithoutStartingAnything`（期望 `portInUse(50506)`，实测 `processExited` 里是 `OSError: [Errno 48] Address already in use`）—— 单族连跑 3 次 = 0 / 1 / 1 failures ⇒ **存量抖动**，本片未碰隧道；其余 10 项与基线逐项同名。
+- **未验证（≠通过）**：第 1–4 / 6–19 项**未在坏派生件下**逐项复跑（反例 B 抽的是第 5 项那 37 行）· 跨版携带那条只判非空不判逐字（已点名）· 第 1 项那次失败没修（既有 next_try：把 `ssh` 的 `Address already in use` 归因成 `portInUse`）· `plan-batches.py` **仍无自检族**（反例是手跑，未进 `check-self-test-counts`）。
+- 证据 `.agent/evidence/2026-11-03-plan-batches-gate-F.md`。**下一项**：队列仍 **0 todo / 28 blocked**（余账全卡外部：217 开机 · 真 MySQL / PG / GBase · 真云端 · 真 MCP 对端 · 真 QQ 凭据，以及 `LANG-001` ① 与 `LANG-003` ② 待主人拍板）；机器面可做的只剩 33 处存量红逐条找根因。
+
 ## 217 可达性证据换成判得住的那种 + 派生件 `next_try` 不许覆盖规则表 · 2026-11-03
 
 - **没有台账行**（换证据、修派生件取词方向，不改需求状态）。由来 = 开轮按 skill `doyah-real-db-verification` 复核 217，发现台账 §4.2 两格与 `plan.yaml` 三处 `next_try` 都拿「217 **ping 全丢**」当不可达的证据 —— 而该 skill 明写 `ping`/`nc`/`arp` 在本 shell 会假阴性、可达性只认 TCP 握手（铁律 13/15：判不住的证据不许当结论）。

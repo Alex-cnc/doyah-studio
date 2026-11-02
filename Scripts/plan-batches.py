@@ -608,6 +608,9 @@ def render_plan(rows: list[dict], spec_version: dict) -> str:
     return "\n".join(lines) + "\n"
 
 
+COVERAGE: list[str] = []
+
+
 def check_next_try_matches_rules(spec_version: dict) -> list[str]:
     """本版范围内 blocked 的 `next_try` 必须逐字来自规则表。
 
@@ -615,13 +618,29 @@ def check_next_try_matches_rules(spec_version: dict) -> list[str]:
     留旧话，规则表改了没人知道 —— 2026-11-03 实测：规则表三处已改成 TCP 复测，
     plan.yaml 里仍是「217 ping 全丢」（`ping` 在本 shell 有假阴性，按 skill 不许作判据）。
     派生件落后或被人手改 ⇒ 判红，点名到具体 id。
+
+    **覆盖范围（红线第 13 条，写在这里而不是只写在文档里）**：只认**规则表里有条目**的 blocked。
+    跨版携带的 blocked（`BLOCKED_*` 都没写它，`next_try` 从上一次 `plan.yaml` 抄来）没有可比对的
+    规则 ⇒ 如实计数并**逐条点名**打印「未经规则表核对」，不许静默当成通过。
     """
     problems: list[str] = []
+    checked: list[str] = []
+    unchecked: list[str] = []
     for ident, text in read_blocked().items():
         want = ALL_BLOCKED.get(ident)
-        if want is not None and want != text:
+        if want is None:
+            unchecked.append(ident)
+            continue
+        if want != text:
             problems.append(
                 f"next_try 与规则表不一致：{ident}（派生件落后或被手改 ⇒ 跑 --emit-plan 重出）")
+        else:
+            checked.append(ident)
+    COVERAGE.clear()
+    COVERAGE.append(
+        f"判据 F 覆盖 {len(checked) + len(problems)}/{len(read_blocked())} 条 blocked"
+        + (f"；未经规则表核对（跨版携带，只判非空不判逐字）：{', '.join(sorted(unchecked))}"
+           if unchecked else "；无未覆盖条目"))
     return problems
 
 
@@ -681,6 +700,10 @@ def main(argv: list[str]) -> int:
             problems += check_next_try_matches_rules(spec_version)
             for line in problems:
                 print(f"✗ {line}")
+            # 覆盖范围如实打印（红线 13）：红了也要说清「比了几条、哪几条比不了」，
+            # 否则一条未覆盖的 blocked 会顶着「全绿」混过去。
+            for line in COVERAGE:
+                print(f"ℹ️ {line}")
             if problems:
                 rc = 1
         rest = next((items for spec, items in batches if spec["id"] == spec_version["rest_id"]), [])
