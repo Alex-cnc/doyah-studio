@@ -165,9 +165,11 @@ final class AgentChatTests: XCTestCase {
     // MARK: - ① 对话页签挂在 **Home 区页签条**上（不是新开侧栏 / 分栏）
 
     func testAgentChatIsAWorkspaceTabKindAndReusesTheSingleTab() {
-        // 对话是 `WorkspaceTab` 的第三种，而不是另立门户
+        // 对话是 `WorkspaceTab` 的第三种，而不是另立门户。
+        // 第四种 `.image` 是 `FR-STD-WS-FS-008` ① 加的（图片按自己的视图打开）——
+        // 种类是**封闭集合**，加一档必须在这里显式登记，否则「多出来一种页签」没人知道。
         let kinds = WorkspaceTab.Kind.allCases
-        XCTAssertEqual(kinds, [.home, .file, .agentChat], "对话页签是 Home 区页签条上的一种")
+        XCTAssertEqual(kinds, [.home, .file, .agentChat, .image], "对话页签是 Home 区页签条上的一种")
         let chat = WorkspaceTab.agentChat(title: "对话")
         XCTAssertTrue(chat.isAgentChat)
         XCTAssertFalse(chat.isHome, "**对话页签不是 Home 欢迎页**")

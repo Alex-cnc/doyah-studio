@@ -84,7 +84,11 @@ final class CodeFormattingTests: XCTestCase {
     /// 于是这一档在表里**空了**。这条判据钉的是「谁再登记一个没有内置档的语言就会红」——
     /// 那时要问的是「它的空白是不是内容」：证明得了就给档，证明不了就照实说「点了不会有反应」。
     func testEveryRegisteredLanguageHasABuiltinNow() {
-        for definition in CodeLanguageRegistry.all where definition.language != .plainText {
+        // 范围 = **进编辑器的那一档**：`defaultView != .editor` 的类型（浏览器 / 图片，
+        // `FR-STD-WS-FS-008` ①）根本没有「格式化一个文件」这回事 —— 它们不是文本。
+        // 回落值 `plainText` 也排除在外（它认不出语言 ⇒ 如实拒绝，见下一条用例）。
+        for definition in CodeLanguageRegistry.all
+        where definition.defaultView == .editor && definition.language != .plainText {
             if case .refused(.noFormatter(let language)) = decision(definition.language) {
                 XCTFail("\(language.rawValue) 登记了格式化却没有内置档 ⇒ 界面上点了会如实拒绝")
             }

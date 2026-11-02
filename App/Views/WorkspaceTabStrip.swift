@@ -167,7 +167,8 @@ struct WorkspaceTabStrip: View {
     private func tabButton(_ tab: WorkspaceTab) -> some View {
         let isSelected = tab.id == tabs.selectedTab?.id
         return HStack(spacing: Spacing.xs) {
-            Image(systemName: tab.isHome ? "house" : "doc.text")
+            // 图标按页签种类给（`FR-STD-WS-FS-008` ①：图片页也给得出「这是张图」这个事实）。
+            Image(systemName: tab.isHome ? "house" : (tab.isImage ? "photo" : "doc.text"))
                 .font(Theme.font(.caption))
                 .foregroundStyle(isSelected ? Theme.accentColor : Theme.text(.secondary))
 

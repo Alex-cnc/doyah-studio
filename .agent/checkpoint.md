@@ -1,5 +1,22 @@
 # 检查点
 
+## v0.7.0 · D2 第四条：`FR-STD-WS-FS-008` 图片按各自的视图 · 2026-11-03
+
+- **一条两列全 ✅**：`FR-STD-WS-FS-008`（v0.7.0 机器面队列**归零**：`plan.yaml` 0 todo / 28 blocked）。缺的只有需求 ① 的后半句「图片等按各自视图」—— 盘上只有「浏览器 / 文本」两档，双击 `a.png` 走 `openAsText`，字节里有 0x00 ⇒ 判成「二进制文件」，用户点自己刚截的图得到一句「looks like a binary file」。
+- **落法（三处，都在既有单一口径上扩档，不新造路由）**：① 语言登记表加第三档 `CodeDefaultView.image`（`.png/.jpg/.jpeg/.gif/.bmp/.tiff/.tif/.heic/.heif/.webp/.ico/.icns` 12 个扩展名，零语法规则、不是回落值）；② `WorkspaceTab.Kind.image`（`WorkspaceTab.image(path:)`，无正文 ⇒ `isDirty` 恒假、关页签不问保存）+ `WorkspaceTabSet.openingImage`（按路径去重，与文本文件同一条纪律）；③ 新 `App/Views/WorkspaceImageView.swift`（等比显示、小图不放大；底部一行像素 × 大小 × 帧数）+ `App/WorkspaceImageInfo.swift`（ImageIO 读宽高与字节，**打不开在打开那一刻就判**）。
+- **两处真坑当场堵住**：① `WorkspaceTabsModel.save` 若照旧走文本那条路，⌘S 会拿空正文写回原路径 ⇒ **一次快捷键把用户的图写成 0 字节**（反例实测 `0 bytes ≠ 70 bytes`）—— 现 `save` 对图片页直接返回 false；② 会话恢复若让它走读文本那条路，二进制必然读不出 ⇒ 一张好好的图被记成「文件找不到了」并顶着空页签回来 —— 现 `WorkspaceSessionSnapshot.restore` 对图片页**不读文本**，只在盘上真没有时报找不到。
+- **读数（本跳实跑）**：`verify-core` **5361 / 13 skipped / 0 失败**（Core 目标 +7；同批 `TestsUISnapshot` 目标另有 7 例，那个 bundle 的 463 不进本读数）· `verify-ui-interactions` **133 条全跑、无跳过** · `--filter "WorkspaceImageOpenTests|WorkspaceImageRoutingProbeTests"` **7 + 7 例 / 0 失败** · 文档门禁十一道 + `plan-batches --version 0.7.0 --check`（**0 条待办，台账复算一致**）全 rc=0。
+- **反例三段**（各判红后 `sha256` 逐字节还原 `e7f190a9…` / `d091c519…` / `803fb7be…`）：撤 `save()` 的图片守卫 ⇒ 2 红（图真被写成 0 字节）· 把 `.png` 的 `defaultView` 改回 `.editor` ⇒ Core 25 断言红 + 探针 10 红（回到「二进制拒绝」）· 删会话恢复的图片早退 ⇒ 3 红。
+- **同批跟版**：`doc-numbers.json` + `AGENT-SPEC.md` 两处 5354 → **5361**；`panel-root-frames` 台账 `scannedFiles` 120 → 121（新视图文件，固定尺寸 frame 46 处一条不变）；`language-registry` 同名枚举台账补登 `CodeDefaultView` / `Kind`（两个枚举的 `.image` 是**呈现档位与页签种类**，不是语言身份）；`check-language-registry.py` 自检例 9 换成新锚点并**修掉它自己的假绿**（原来只换 `openFile` 一处时 `supportsWebPagePreview` 仍留着 `defaultView` ⇒ 该例其实一直判绿；改成一并处全换后 16/16）。
+- **未验证（≠通过）**：真鼠标双击一张图未点（判据在模型出口与登记表）· 图片视图的观感 / 缩放未看 · 「等」字里的 PDF / SVG / 动画 GIF 播放未做 · 移动端不在本仓。
+- **存量红（HEAD 上就有、本片未碰该文件）**：`check-empty-action-buttons` 1 条（`App/AppState.swift` `purgeTrashBeyondLimits` 的空守卫未登记）。
+- 证据 `.agent/evidence/2026-11-03-FR-STD-WS-FS-008.md`。
+
+## 下一项：v0.7.0 机器面已无 todo ⇒ 派 v0.8.0 队列
+
+- `plan.yaml` **0 todo / 28 blocked**（10 条本版外部卡点 + 18 条跨版携带）；`batches.yaml` 空。下一跳按 `.agent/next-version.md` 派生下一版，**派生依据只能是台账里现成的未闭条目**（不许自己发明需求）；起跳先复算 §4.2（那张表仍欠 +11，属单独的报数跳）。
+- 台账 §4.2 v0.7.0 那一行的数**本跳没动**（改表要连 §2 / header / 合计一起复算，是另一跳）。
+
 ## v0.7.0 · D1 批次（笔记的撤与删：格式撤销粒度 / 整理可撤销与归档 / 回收站）· 2026-11-02
 
 - **本跳收 3 条（两列全 ✅）**：`FR-NTS-NOTE-FORMAT-001` · `FR-NTS-NOTE-ORG-001` · `FR-NTS-NOTE-TRASH-001`。三条的判据列原先都是 🟡，逐点核下来**要点不在盘上**（撤销只有 `allowsUndo`、没有批量撤销、没有归档、没有恢复路与彻底清除），不是「判据没写」。

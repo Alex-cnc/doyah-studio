@@ -263,6 +263,18 @@ public struct WorkspaceSessionSnapshot: Codable, Sendable, Equatable {
             }
             sawHome = sawHome || storedKind == .home
 
+            // 图片页（`FR-STD-WS-FS-008` ①）：**不读文本**。
+            // 走底下那条读盘路的话，二进制里几乎必然有 0x00 ⇒ `readText` 返回 nil ⇒
+            // 一张好好的图片会被记成「文件找不到了」并顶着一个空页签回来。
+            //
+            // 比的是**落盘形态的字符串**（快照里 `kind` 存的就是 `Kind.rawValue`），
+            // 不是代码里的语言身份分支。
+            if stored.kind == WorkspaceTab.Kind.image.rawValue {
+                if !FileManager.default.fileExists(atPath: path) { result.missingPaths.append(path) }
+                result.tabs.append(WorkspaceTab.image(path: path))
+                continue
+            }
+
             let onDisk = readFile(path)
             if onDisk == nil { result.missingPaths.append(path) }
 
@@ -322,7 +334,7 @@ public struct WorkspaceSessionSnapshot: Codable, Sendable, Equatable {
             // 越界的偏移一律**夹进文档范围**——「记下来的位置」与「恢复后的文档」长度不一定一致
             // （文件在两次启动之间被改短了），原样塞给 `setSelectedRange` 会让光标静默跳到别处
             // 或者干脆不动（两种都是「恢复了但不对」，比不恢复更难查）。
-            if !result.tabs[index].isHome {
+            if !result.tabs[index].isHome && !result.tabs[index].isImage {
                 if let caret = snapshot.caretOffset {
                     result.caretOffset = clampCaret(caret, in: result.tabs[index].content)
                 }

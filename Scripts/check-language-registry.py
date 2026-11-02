@@ -660,9 +660,12 @@ def run_self_test() -> int:
         expect_red(CASES[8], lambda t: mutate(t, VIEW_CONSUMER_FILES[0],
                                               VIEW_HANDOFF_ANCHOR,
                                               "browserHandoffHook", 999))
+        # 唯一消费者改成写死扩展名：**两处** `defaultView` 读取都要拿掉（`openFile` 的路由
+        # 与 `supportsWebPagePreview`）—— 只拿掉一处的话门禁仍然找得到 `defaultView`，
+        # 那一例就变成假绿（2026-11-03 实测：只剩 openFile 那一处被换掉时 exit 0）。
         expect_red(CASES[9], lambda t: mutate(t, VIEW_CONSUMER_FILES[0],
-                                              "if CodeLanguageRegistry." + VIEW_CONSUMER_TOKEN + "(forPath: path) == .browser",
-                                              'if path.hasSuffix(".html")'))
+                                              "CodeLanguageRegistry." + VIEW_CONSUMER_TOKEN + "(forPath: path)",
+                                              'path.hasSuffix(".html")', 999))
         # A 档的面与判定物（2026-10-14 修 · 原单 T-20261010-048）
         expect_red(CASES[11], lambda t: (t / "Core/PlantedSurfaceConsumer.swift").write_text(
             "import Foundation\n\nfunc plantedSurface(_ language: TextLanguage) -> Bool { language == .sql }\n",

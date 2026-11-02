@@ -64,7 +64,11 @@ struct WorkspaceAreaView: View {
             // 浏览器页签在工作区（`L-149`）：与 Home / 文件页签同一处呈现。
             BrowserTabView(page: page)
         } else if let tab = tabs.selectedTab {
-            if tab.isHome {
+            if tab.isImage {
+                // 图片页按**自己的视图**呈现（`FR-STD-WS-FS-008` ①）：没有编辑器、没有
+                // 编码 / 换行 / 缩进那一排（那些对一张 PNG 一个字节都不适用）。
+                WorkspaceImageView(path: tab.path ?? "")
+            } else if tab.isHome {
                 WorkspaceHomeView()
             } else if tab.isAgentChat {
                 // 对话页签：**就在 Home 区这一格里**呈现（不自带侧栏 / 分栏 —— `FR-AI-25` ①）。

@@ -16,6 +16,9 @@ public struct WorkspaceTab: Identifiable, Sendable, Equatable {
         case file
         /// 智能体对话页签。
         case agentChat
+        /// 图片页（`FR-STD-WS-FS-008` ①）：**不进文本编辑器**，由图片查看器呈现。
+        /// 它没有 `content`（图片不是文本），因此永远不是「脏」的。
+        case image
     }
 
     public let id: UUID
@@ -76,6 +79,12 @@ public struct WorkspaceTab: Identifiable, Sendable, Equatable {
     /// 是不是对话页签（`FR-AI-25`）。
     public var isAgentChat: Bool { kind == .agentChat }
 
+    /// 是不是图片页（`FR-STD-WS-FS-008` ①）。
+    ///
+    /// 用它而不是 `language == .image`：那是一句「按语言身份分支」，
+    /// 正是 `FR-EDIT-38` ① 要清掉的形状（门禁 A 档会判红）。种类是页签自己的事实。
+    public var isImage: Bool { kind == .image }
+
     /// 有未保存改动。
     ///
     /// **内容或形态任一不同都算脏**（`FR-STD-WS-EDIT-023`）：用户只把编码从 UTF-8 切到
@@ -115,6 +124,20 @@ public struct WorkspaceTab: Identifiable, Sendable, Equatable {
     /// 对话页签（`FR-AI-25` ①）。标题同样由调用点从语言表取。
     public static func agentChat(title: String) -> WorkspaceTab {
         WorkspaceTab(title: title, language: .plainText, kind: .agentChat)
+    }
+
+    /// 图片页签（`FR-STD-WS-FS-008` ①）：有路径、没有文本。
+    ///
+    /// **内容留空、`format` 取缺省**，于是 `isDirty` 恒为假（图片没有「未保存的编辑」这回事）：
+    /// 关页签时不会被问「要不要保存」，也不会写盘。语言标识取登记表里那一条
+    /// （`TextLanguage.detect` 会把它判成 `.image`，两处同一个事实）。
+    public static func image(path: String) -> WorkspaceTab {
+        WorkspaceTab(
+            title: WorkspaceTabSet.title(for: path),
+            path: path,
+            language: TextLanguage.detect(path: path),
+            kind: .image
+        )
     }
 
     /// 存盘成功：把"已保存内容"与"已保存形态"一起对齐到当前值。
@@ -159,6 +182,16 @@ public enum WorkspaceTabSet {
             return (tabs, existing.id)
         }
         let tab = WorkspaceTab.file(path: path, content: content, format: format)
+        return (tabs + [tab], tab.id)
+    }
+
+    /// 打开一张图片（`FR-STD-WS-FS-008` ①）：与文本文件同一条去重纪律 —— 同一个路径
+    /// **只许一页**（开成两页的话「关一页」与「切回去」会给出不同答案）。
+    public static func openingImage(path: String, in tabs: [WorkspaceTab]) -> (tabs: [WorkspaceTab], selected: UUID) {
+        if let existing = tabs.first(where: { $0.path == path }) {
+            return (tabs, existing.id)
+        }
+        let tab = WorkspaceTab.image(path: path)
         return (tabs + [tab], tab.id)
     }
 

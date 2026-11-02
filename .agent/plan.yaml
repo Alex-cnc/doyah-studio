@@ -1,23 +1,9 @@
 # v0.7.0 余账收口 · 执行队列（**派生件**）
 # 唯一事实源 = Docs/Doyah产品开发计划任务清单-macOS.md（活书台账）。
 # 本文件只做「下一跳」排序，不许反向改台账；台账一改就跑 --emit-plan 重出，别手改。
-# 生成于 2026-11-02，源 = 台账里 FR-NTS-NOTE-FORMAT-001 / FR-NTS-NOTE-SEARCH-001 / FR-NTS-NOTE-ORG-001 / FR-NTS-NOTE-TRASH-001 / FR-NTS-NOTE-SYNC-001 / FR-NTS-NOTE-EXPORT-001 / FR-NTS-ALL-HOME-001 / FR-NTS-ALL-LIC-001 / FR-NTS-ALL-DIST-001 / FR-NTS-ALL-PARITY-001 / FR-STD-WS-FS-008 / FR-STD-WS-TOOL-001 / FR-STD-WS-AI-002 / AC-ALL-GATE-REL-004 / AC-ALL-GATE-REL-005 / AC-ALL-GATE-REL-006 / FR-STD-DB-META-002 未闭 12 条（7 🟡 / 4 ⬜ / 1 其他（挂起或带复核注））。
+# 生成于 2026-11-03，源 = 台账里 FR-NTS-NOTE-FORMAT-001 / FR-NTS-NOTE-SEARCH-001 / FR-NTS-NOTE-ORG-001 / FR-NTS-NOTE-TRASH-001 / FR-NTS-NOTE-SYNC-001 / FR-NTS-NOTE-EXPORT-001 / FR-NTS-ALL-HOME-001 / FR-NTS-ALL-LIC-001 / FR-NTS-ALL-DIST-001 / FR-NTS-ALL-PARITY-001 / FR-STD-WS-FS-008 / FR-STD-WS-TOOL-001 / FR-STD-WS-AI-002 / AC-ALL-GATE-REL-004 / AC-ALL-GATE-REL-005 / AC-ALL-GATE-REL-006 / FR-STD-DB-META-002 未闭 10 条（5 🟡 / 4 ⬜ / 1 其他（挂起或带复核注））。
 tasks:
 # 另有 18 条上版遗留卡点（不在本版范围，仅列表可见）：FR-AGT-LINK-CHAN-003, FR-AGT-LINK-EXT-001, FR-AGT-LINK-EXT-002, FR-AGT-OPS-OBS-002, FR-AGT-PLAN-PLAN-001, FR-AGT-TOOL-MEDIA-001, FR-AGT-TOOL-SYS-002, FR-AGT-UX-CONV-001, FR-AGT-UX-SESS-001, FR-AGT-UX-SYNC-001, FR-NTS-NOTE-ORG-002, FR-STD-ALL-PLUG-005, NFR-ALL-GATE-COMP-001, NFR-ALL-GATE-COMP-002, NFR-ALL-GATE-COMP-003, NFR-ALL-GATE-LANG-001, NFR-ALL-GATE-PERF-004, NFR-ALL-GATE-UI-001
-  - id: FR-NTS-NOTE-EXPORT-001
-    goal: "导出与迁移：导出 Markdown / 纯文本 / 备份包，导入自己导出的包可完整还"
-    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-NTS-NOTE-EXPORT-001 | grep -q '✅'"
-    layer: "常用增强"
-    prio: "中"
-    status: done
-    evidence: ".agent/evidence/2026-11-02-FR-NTS-NOTE-EXPORT-001.md"
-  - id: FR-STD-WS-FS-008
-    goal: "在工作区里点文件直接打开，并按文件类别匹配呈现：文本 / 代码文件在编辑器区打开"
-    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-WS-FS-008 | grep -q '✅'"
-    layer: "常用增强"
-    prio: "中"
-    status: todo
-    evidence: ""
   - id: FR-NTS-NOTE-SEARCH-001
     goal: "列表与检索：按时间 / 标签 / 关键词 / 语义检索，**两种检索都在**，语义不可用时降级并说出来"
     done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-NTS-NOTE-SEARCH-001 | grep -q '✅'"

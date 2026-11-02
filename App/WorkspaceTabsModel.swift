@@ -15,6 +15,12 @@ final class WorkspaceTabsModel: ObservableObject {
     /// 会把界面卡死，而"能打开但卡死"比"明确说不打开"糟得多。
     static let maximumFileSize = 2 * 1024 * 1024
 
+    /// 图片文件的大小上限（`FR-STD-WS-FS-008` ①）。
+    ///
+    /// 与文本那道 2 MB 的门槛**不是同一件事**：文本超限是真的排不动版，而图片是
+    /// 「一次性塞进显存」的量 —— 64 MB 之后先如实拒绝，别让一次双击把界面顶住。
+    static let maximumImageFileSize = 64 * 1024 * 1024
+
     @Published private(set) var tabs: [WorkspaceTab] = [.home(title: L(.workspaceTabHome))]
     @Published private(set) var selectedID: UUID?
     @Published private(set) var history = WorkspaceHistory()
@@ -292,17 +298,29 @@ final class WorkspaceTabsModel: ObservableObject {
     ///
     /// **去哪儿开由语言登记表说**（`FR-EDIT-36` 的消费者口径）：登记项声明
     /// `defaultView == .browser` 的那一类（今天 = `.html` / `.htm` / `.xhtml`）交给工作区的
-    /// 浏览器页签；其余（含认不出的）当文本打开。**这里刻意不写「扩展名 == "html"」** ——
+    /// 浏览器页签；`defaultView == .image` 的那一类（`FR-STD-WS-FS-008` ①）交给图片查看器；
+    /// 其余（含认不出的）当文本打开。**这里刻意不写「扩展名 == "html"」** ——
     /// 那是把语言知识搬回核心代码，正是 `FR-EDIT-38` ① 要清掉的形状
     /// （判据 `Scripts/check-language-registry.py` 的 E 档守着「读这一档的地方只有一处」）。
     func openFile(at url: URL) {
         let path = url.path
-        if CodeLanguageRegistry.defaultView(forPath: path) == .browser, let openInBrowserTab {
+        // 类型写在局部变量上（而不是直接 `switch` 调用结果）：门禁 A 档按**类型**分辨
+        // 「语言身份分支」与「呈现档位分支」——写清楚了它才判得出这是后者。
+        let route: CodeDefaultView = CodeLanguageRegistry.defaultView(forPath: path)
+        switch route {
+        case .browser:
+            // 没接浏览器那一侧就退回文本编辑器（不静默丢失）：这条兜底与旧行为逐字相同。
+            guard let openInBrowserTab else {
+                openAsText(url)
+                return
+            }
             openInBrowserTab(url)
             record(file: path)
-            return
+        case .image:
+            openAsImage(url)
+        case .editor:
+            openAsText(url)
         }
-        openAsText(url)
     }
 
     /// 当文本打开这一段（路由之外的唯一实现）。
@@ -362,11 +380,56 @@ final class WorkspaceTabsModel: ObservableObject {
         }
     }
 
+    /// 当图片打开这一段（`FR-STD-WS-FS-008` ①「图片等按各自视图」）。
+    ///
+    /// 旧行为：图片走 `openAsText` ⇒ 字节里几乎必然有 0x00 ⇒ 判成「二进制」拒绝。
+    /// 说得清但指错了方向 —— 用户点的是图片，不是坏文件。
+    ///
+    /// 三条拒绝各自说清（都不留空页签）：
+    /// ① 是目录；② 超过图片上限（两个数都给）；③ 元数据读不出来（压根不是一张能显示的图）。
+    private func openAsImage(_ url: URL) {
+        let path = url.path
+        if let existing = tabs.first(where: { $0.path == path }) {
+            selectedID = existing.id
+            return
+        }
+        do {
+            let values = try url.resourceValues(forKeys: [.isDirectoryKey, .fileSizeKey])
+            guard values.isDirectory != true else {
+                errorText = L(.workspaceOpenFailedDirectory, url.lastPathComponent)
+                return
+            }
+            if let size = values.fileSize, size > Self.maximumImageFileSize {
+                errorText = L(
+                    .workspaceImageTooLarge,
+                    url.lastPathComponent,
+                    Self.sizeText(Int64(size)),
+                    Self.sizeText(Int64(Self.maximumImageFileSize))
+                )
+                return
+            }
+            // 「能不能显示」在打开这一刻判：读不出像素尺寸就不是一张能显示的图。
+            guard WorkspaceImageInfo.read(path: path) != nil else {
+                errorText = L(.workspaceImageUnreadable, url.lastPathComponent)
+                return
+            }
+            let opened = WorkspaceTabSet.openingImage(path: path, in: tabs)
+            tabs = opened.tabs
+            selectedID = opened.selected
+            record(file: path)
+        } catch {
+            errorText = L(.workspaceOpenFailed, url.lastPathComponent, error.localizedDescription)
+        }
+    }
+
     /// 保存（⌘S）：写回原路径。返回**是否写成功** —— 「保存并关闭」那条路要靠它决定关不关
     /// （`FR-EDIT-46`：保存失败就不关，见 `WorkspaceClosePolicy.keepsTab`）。
     @discardableResult
     func save(_ id: UUID) -> Bool {
         guard let index = tabs.firstIndex(where: { $0.id == id }) else { return false }
+        // 图片页**没有「保存」这回事**（`FR-STD-WS-FS-008` ①）。少了这一句，⌘S 会拿空正文
+        // 写回原路径 —— 一次快捷键就把用户的图片写成 0 字节，是这条功能最贵的那个坑。
+        guard !tabs[index].isImage else { return false }
         guard let path = tabs[index].path else { return false }
         let format = tabs[index].format
         // **按这一页自己的形态写回**（`FR-STD-WS-EDIT-023`）：编码、换行、BOM 三样都跟打开时
@@ -561,7 +624,7 @@ final class WorkspaceTabsModel: ObservableObject {
         selectedID = restored.selectedTabID ?? restoredTabs.first?.id
         // 会话恢复也要算一遍标记（与「打开文件」同一条路）：否则恢复出来的页签上
         // 「有块可折」的行一个标记都没有，用户以为折叠坏了。
-        for tab in restoredTabs where !tab.isHome && !tab.isAgentChat {
+        for tab in restoredTabs where !tab.isHome && !tab.isAgentChat && !tab.isImage {
             refreshFolds(tabID: tab.id)
         }
 
@@ -684,6 +747,12 @@ final class WorkspaceTabsModel: ObservableObject {
         guard let tab = selectedTab, !tab.isHome else {
             // 工作区首页不是文件：这句话本身也是「说说清楚」，不是静默 return。
             errorText = L(.workspaceFormatNoFile)
+            return
+        }
+        // 图片页没有文本可格式化（`FR-STD-WS-FS-008` ①）：不能落到「没有这个语言的格式化器」
+        // 那一档 —— 那句话会让用户以为「装上某个工具就能格式化一张 PNG」。
+        guard !tab.isImage else {
+            errorText = L(.workspaceFormatNoText)
             return
         }
         let language = tab.language

@@ -1608,6 +1608,9 @@ public enum LKey: String, CaseIterable, Sendable {
     case workspaceOpenFailedDirectory
     case workspaceFileTooLarge
     case workspaceFileBinary
+    // 图片按各自的视图打开（`FR-STD-WS-FS-008` ①）：超上限 / 打不开两种拒绝各一句。
+    case workspaceImageTooLarge
+    case workspaceImageUnreadable
     case workspaceOpenFailed
     case workspaceOpenedWithEncoding
     // 编码与换行（`FR-STD-WS-EDIT-023`）：打开提示 / 状态栏菜单 / 判定失败与保存失败各一句。
@@ -1624,6 +1627,8 @@ public enum LKey: String, CaseIterable, Sendable {
     // 代码格式化（FR-EDIT-39）：**如实说明用了哪一种**、认不出就说明为什么
     case workspaceFormatMenuItem
     case workspaceFormatNoFile
+    /// 图片页上按格式化（`FR-STD-WS-FS-008` ①）：图片没有文本，不能落到「没有这个语言的格式化器」。
+    case workspaceFormatNoText
     case workspaceFormatDone
     case workspaceFormatUnchanged
     case workspaceFormatEngineBuiltin
@@ -5224,6 +5229,10 @@ public enum LocalizedStrings {
         .workspaceOpenFailedDirectory: [.simplifiedChinese: "%@ 是目录，不能当文件打开", .english: "%@ is a folder, not a file"],
         .workspaceFileTooLarge: [.simplifiedChinese: "%@ 有 %@，超过上限 %@ —— 暂不在编辑器里打开", .english: "%@ is %@, above the %@ limit — not opening it in the editor"],
         .workspaceFileBinary: [.simplifiedChinese: "%@ 看起来是二进制文件，不在编辑器里打开", .english: "%@ looks like a binary file — not opening it in the editor"],
+        // 图片走自己的视图（`FR-STD-WS-FS-008` ①）：这两句是**图片这一档**的拒绝，
+        // 与上面那句「二进制」分开说 —— 用户点的是图片，不是坏文件。
+        .workspaceImageTooLarge: [.simplifiedChinese: "%@ 有 %@，超过图片上限 %@ —— 暂不打开", .english: "%@ is %@, above the %@ image limit — not opening it"],
+        .workspaceImageUnreadable: [.simplifiedChinese: "%@ 不是能显示的图片（读不出宽高）", .english: "%@ is not an image that can be displayed (its size cannot be read)"],
         .workspaceOpenFailed: [.simplifiedChinese: "打开 %@ 失败：%@", .english: "Could not open %@: %@"],
         .workspaceOpenedWithEncoding: [.simplifiedChinese: "%@ 不是 UTF-8，已按 %@ 打开", .english: "%@ is not UTF-8; opened as %@"],
         .workspaceOpenedWithLineEnding: [.simplifiedChinese: "%@ 用的是 %@ 换行，保存时照原样写回", .english: "%@ uses %@ line endings; they are kept on save"],
@@ -5242,6 +5251,10 @@ public enum LocalizedStrings {
         .workspaceFormatNoFile: [
             .simplifiedChinese: "当前没有可格式化的文件页签（工作区首页不做格式化）",
             .english: "No file tab to format (the workspace home is not a file)"
+        ],
+        .workspaceFormatNoText: [
+            .simplifiedChinese: "这一页没有可格式化的文本（图片按它自己的视图显示）",
+            .english: "There is no text to format on this tab (images open in their own view)"
         ],
         .workspaceFormatDone: [
             .simplifiedChinese: "格式化完成：%@；⌘Z 可撤销",

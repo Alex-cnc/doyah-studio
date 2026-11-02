@@ -11,6 +11,14 @@
     {
       "type": "CodeFormatBuiltin",
       "reason": "格式化风格枚举（`none` / `whitespace` / `braceIndent` / `sql` / `json` / …）与语言标识**同名**：`Core/CodeFormatting.swift` 的 `switch style { case .sql: … }`switch 的是**工具风格**不是语言身份 ⇒ 不算身份分支（原单 T-20261010-048 ㈢ 的 6 处假阳）。"
+    },
+    {
+      "type": "CodeDefaultView",
+      "reason": "「这个文件默认用哪种视图打开」的枚举（`editor` / `browser` / `image`）与语言标识**同名**：`App/WorkspaceTabsModel.swift` 的 `switch route { case .image: … }` 判的是**呈现档位**不是语言身份（`FR-STD-WS-FS-008` ① 加的第三档）⇒ 不算身份分支。"
+    },
+    {
+      "type": "Kind",
+      "reason": "工作区页签种类（`home` / `file` / `agentChat` / `image`）与语言标识**同名**：`Core/WorkspaceTab.swift` 的 `kind == .image` 问的是「这一页是不是图片页」—— 页签自己的事实，不是语言身份（`FR-STD-WS-FS-008` ①）。"
     }
   ]
 }

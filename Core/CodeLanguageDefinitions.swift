@@ -34,6 +34,12 @@ public enum CodeDefaultView: String, Sendable, Equatable, CaseIterable {
     case editor
     /// 内嵌浏览器（工作区里的一类页签；标记语言走这一档 —— 浏览器**不是** SQL 工作台的页签）。
     case browser
+    /// 图片查看器（`FR-STD-WS-FS-008` ①：图片按各自的视图打开，**不进文本编辑器**）。
+    ///
+    /// 为什么这一档也要进登记表：`png` / `jpg` 这类文件的核心事实不是「用什么语言着色」
+    /// （它们根本没有文本），而是「**该用哪种视图呈现**」—— 与 `.html` 走浏览器是同一件事。
+    /// 写在这里，工作区那一侧只多一个 `case`，加一种新的「图片式」类型仍然是改一行登记。
+    case image
 }
 
 /// 一个语言的**全部知识**：它叫什么、认哪些扩展名 / 文件名、按什么规则着色、是不是代码。
@@ -577,6 +583,21 @@ public enum CodeLanguageRegistry {
             isFallback: true
         ),
 
+        // **图片按各自的视图打开**（`FR-STD-WS-FS-008` ①）。
+        //
+        // 这一条不是「一种语言」（图片没有文本、没有关键字），它登记的是**呈现档位**：
+        // 扩展名 → `defaultView == .image` ⇒ 工作区把它交给图片查看器，而不是当二进制
+        // 拒绝（旧行为）也不是硬塞进编辑器。字符串界定符显式清空：反正一个字都不会被着色，
+        // 但定义必须与 `plainText` 一样是「零规则」—— 免得哪天有人拿它去跑词法器。
+        CodeLanguageDefinition(
+            .image,
+            displayName: "Image",
+            fileExtensions: ["png", "jpg", "jpeg", "gif", "bmp", "tiff", "tif", "heic", "heif", "webp", "ico", "icns"],
+            isCode: false,
+            syntax: CodeSyntax(stringDelimiters: []),
+            defaultView: .image
+        ),
+
         // MARK: Alpha 2 · 常见编程语言前 10（FR-EDIT-38 ②，2026-09-30 需求提出者口径：
         // 按「人真在写什么」取 —— Stack Overflow 使用率 + GitHub 活跃仓库，不用 TIOBE 榜）
         // 上面前端那一批（JS / TS / HTML / CSS / JSON / Python / SQL）已在前 10 里，这里补其余 5 个。
@@ -1085,6 +1106,9 @@ extension TextLanguage {
     public static let arkts = TextLanguage(registered: "arkts")
     /// 认不出就是它（FR-EDIT-38 ④）—— 登记表最后一条，与 `detect` 的回落同一个值。
     public static let plainText = TextLanguage(registered: "plainText")
+    /// 图片（`FR-STD-WS-FS-008` ①）：不是语言，是**呈现档位** —— 它的 `defaultView` 是 `.image`，
+    /// 工作区据此交给图片查看器。放在回落值之后：`detect` 的回落仍然是 `plainText`。
+    public static let image = TextLanguage(registered: "image")
 }
 
 // MARK: - 各语言共用的规则片段
