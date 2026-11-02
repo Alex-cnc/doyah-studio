@@ -14,6 +14,9 @@
    - `swift test`（全量，实测约 25 秒）；
    - `./Scripts/verify-ui-interactions.sh`（29 条探针，一次跑完，**不许每条一跳跑一次**）；
    - 文档门禁：`check-doc-tables` / `check-doc-numbers` / `check-plan-coverage` / `check-status-consistency` / `check-version-scope`；
+   - **状态缺口门禁 `python3 Scripts/check-status-gap.py`（必跑，rc 必须 0）**：它抓「实现列已 ✅ 但判据列还 ⬜/🟡」的行。
+     这类行不许留着不管 —— 收口只认双 ✅，拿实现列当收口标准等于自己给自己判对（2026-11-02 人类主人点名 v0.4.0 的真实缺陷）；
+     真要挂着，必须在台账的「版本口径」格里写清为什么（例：`—（判据待补，见 R-0xx）`），并在本批证据的「未验证」里点名。
    - 每条用 `python3 Scripts/ledger-row.py <ID>` 抽查它那一行翻没翻；
 5. 落盘（**一份**，不是每条一份）：
    - 台账逐行翻 ✅（实现列与判据列分开翻）；
