@@ -35,7 +35,7 @@ macOS 状态在一单 §3 台账）。派生视图的通病是「真值改了、
 用法：
 
     python3 Scripts/check-board-parity.py                # 查（rc=0 = 全绿）
-    python3 Scripts/check-board-parity.py --self-test    # 判据自己的证据（15 例负例，写坏只在临时目录）
+    python3 Scripts/check-board-parity.py --self-test    # 判据自己的证据（16 例负例，写坏只在临时目录）
     DOYAH_ROOT=<工程根> python3 Scripts/check-board-parity.py
 """
 
@@ -102,6 +102,31 @@ def plain(cell: str) -> str:
 def status_of(raw: str) -> str:
     """把矩阵的一个格归一到状态取值（`⚠️` 是「与基线不一致」的标记，不是状态）。"""
     return raw.replace("⚠️", "").strip()
+
+
+SUSPEND_MARKERS = ("➖", "—")
+
+
+def ledger_status(raw: str) -> str:
+    """台账状态格 → 桶位（`✅` / `🟡` / `⬜`）；认不出就**原样返回**，由调用方判红。
+
+    台账里允许两种非裸符号写法（既有事实，不是本判据新开的门）：
+    ① **带证据尾巴** —— `✅（…怎么验的…）` ⇒ 按**首字符**取符号（`check-status-gap.py` 与
+       `gen-studio-win-align.py` 早同口径）；
+    ② **挂起 / 不适用标记** —— `➖` / `—` ⇒ 记 `⬜`（看板 §1 的口径：⬜ = 未开工 / 未落地；
+       挂起**不等于**收口）。每一条被这样归一的编号由 `gen-platform-board.py` 在看板 §1
+       脚注里**逐条点名**。
+
+    归一规则在**本文件与 `gen-platform-board.py` 里各写一份**，有意为之：判据若复用生成器的
+    归一函数，「归一写错了」就会自己判自己绿 —— 那就不是独立验收层了。
+    """
+    text = raw.strip()
+    for symbol in STATUSES:
+        if text.startswith(symbol):
+            return symbol
+    if text[:1] in SUSPEND_MARKERS:
+        return "⬜"
+    return text
 
 
 def table_rows(lines: list[str], header_index: int) -> tuple[list[str], list[list[str]]]:
@@ -180,15 +205,22 @@ def model_from_source() -> dict:
         raise Problems(["`load_rows()` 读到 0 条需求 ⇒ 空跑判红（需求索引 / 状态台账的锚点变了？）"])
     columns = [BASELINE] + [platform["label"] for platform in platforms]
     rows: list[dict] = []
+    problems: list[str] = []
     for identifier, macos, _ in loaded:
         code = identifier.split("-")[-2]
-        status = {BASELINE: macos}
+        baseline = ledger_status(macos)
+        status = {BASELINE: baseline}
         alert: set[str] = set()
         for platform in platforms:
-            value = platform["overrides"].get(identifier, default)
+            raw = platform["overrides"].get(identifier, default)
+            value = ledger_status(raw)
             status[platform["label"]] = value
-            if value != macos:
+            if value != baseline:
                 alert.add(platform["label"])
+        for column, value in status.items():
+            if value not in STATUSES:
+                problems.append(f"真源台账 `{identifier}` 的 `{column}` 列状态格取值 `{str(status[column])[:40]}` "
+                                f"不在 ✅/🟡/⬜ 里（挂起标记 ➖ / — 按 ⬜ 记）—— 不猜它算哪一档")
         rows.append({
             "id": identifier,
             "line": identifier.split("-")[1],
@@ -196,6 +228,8 @@ def model_from_source() -> dict:
             "status": status,
             "alert": alert,
         })
+    if problems:
+        raise Problems(problems)
     groups: list[dict] = []
     seen: dict[tuple[str, str], dict] = {}
     for row in rows:
@@ -506,7 +540,7 @@ def main() -> int:
         matrix = parse_matrix()
         board = parse_board()
     except Problems as error:
-        print("❌ 《任务清单·按平台》派生计数判据未通过（读不到该读的东西 = 空跑）：")
+        print("❌ 《任务清单·按平台》派生计数判据未通过（读不到该读的东西 = 空跑；读到了但读不懂同样判红，不猜）：")
         for item in error.items:
             print(f"   · {item}")
         return 1
@@ -556,7 +590,7 @@ def run_script(root: pathlib.Path, argv: list[str]) -> subprocess.CompletedProce
 
 
 def build_cases() -> list[dict]:
-    """15 例：14 条负例（各形一处写坏必须判红）+ 1 条未改动的对照绿。"""
+    """16 例：15 条负例（各形一处写坏必须判红）+ 1 条未改动的对照绿。"""
     board = pathlib.Path(".build/derived/任务清单-按平台.md")
     srs = pathlib.Path("Docs/Doyah产品需求规格说明书.md")
 
@@ -583,6 +617,28 @@ def build_cases() -> list[dict]:
     def wipe_status_ledger(work: pathlib.Path) -> None:
         """一单§3 状态台账的标题改坏 ⇒ 回退路径读到 0 条，必须判红（不许零命中=通过）。"""
         _edit(work / "Docs/Doyah产品开发计划任务清单-macOS.md", "## 3 需求状态台账", "## 3x 需求状态台账")
+
+    def corrupt_ledger_status(identifier: str, replacement: str):
+        """把一单§3 台账某条的状态格（第 6 格）换成**认不出的符号** ⇒ 判据必须判红并点名。
+
+        反向的那一半（`✅（…证据…）` / `➖` 这两种非裸符号要**按首字符**认下来、不许借此判红）
+        由 ①「未改动的副本 ⇒ 全绿」这一例兜着 —— 真仓库里这两条都在盘。
+        """
+        def setup(work: pathlib.Path) -> None:
+            path = work / "Docs/Doyah产品开发计划任务清单-macOS.md"
+            lines = path.read_text(encoding="utf-8").splitlines(keepends=True)
+            for index, line in enumerate(lines):
+                if not line.startswith(f"| {identifier} "):
+                    continue
+                parts = line.rstrip("\n").split("|")
+                if len(parts) < 9:
+                    raise AssertionError(f"台账 `{identifier}` 行的格数不够（{len(parts)}）：口径变了？")
+                parts[6] = f" {replacement} "
+                lines[index] = "|".join(parts) + "\n"
+                path.write_text("".join(lines), encoding="utf-8")
+                return
+            raise AssertionError(f"台账里找不到 `{identifier}` 这一行")
+        return setup
 
     # 夹具里的数字**一律现读**（不写死）：真值源多一域 / 改一个数，夹具自己跟着走。
     text = board.read_text(encoding="utf-8") if board.exists() else ""
@@ -706,6 +762,11 @@ def build_cases() -> list[dict]:
             "name": "⑮ 本文件 §1 的表头被删（空跑不许当通过）",
             "setup": edit_board("| 平台 | 归属 | 项数 | ✅ | 🟡 | ⬜ | 完成度 | 一句话 |\n", ""),
             "steps": [([], 1, "空跑判红")],
+        },
+        {
+            "name": "⑯ 真源台账的状态格写成认不出的符号（DIAG-006 的 `✅（…）` → `🟠（…）`）⇒ 判红并点名（归一不是放水）",
+            "setup": corrupt_ledger_status("FR-STD-DB-DIAG-006", "🟠（夹具：认不出的符号）"),
+            "steps": [([], 1, "不在 ✅/🟡/⬜ 里")],
         },
     ]
 

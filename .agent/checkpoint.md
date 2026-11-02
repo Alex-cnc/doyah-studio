@@ -1,5 +1,20 @@
 # 检查点
 
+## 看板族：状态格非裸符号（判据崩溃 + 看板少算 2 条）· 2026-11-03
+
+- **无台账行**（判据维护 · 脚本级）：本跳清的是上一跳点名的「夹具失效 / 脚本崩」族第 1 件。两处**同一个根因**：台账状态格里允许两种非裸写法。
+- **① 判据直接崩**：`check-board-parity.py` 抛 `KeyError: '✅（`Core/DiagnosisScope.swift` …）'` —— `FR-STD-DB-DIAG-006` 的状态格是 `✅（…证据…）`、`FR-STD-DB-META-002` 是挂起标记 `➖`，两个值都不在 `✅/🟡/⬜` 里，`counts[...][value] += 1` 当场炸。
+- **② 生成器不崩但少算（更坏）**：`gen-platform-board.py` 按**整格等于**三档计数 ⇒ 这两条从三个桶里**一起蒸发**：看板 §1 抬头写「共 411 条」而 macOS 行是 **409**（309✅/15🟡/85⬜）。少算的两条里有一条是**挂起的 GBase 8a** —— 挂起被静默吃掉，等于把「没做」从完成度分母里抹掉。
+- **落法**：`status_symbol()`（生成器）与 `ledger_status()`（判据）**各写一份**同一规则 —— 带证据尾巴按**首字符**取符号（`check-status-gap` / `gen-studio-win-align` 早同口径）、`➖`/`—` 记 `⬜`（看板口径「⬜ = 未开工」，挂起 ≠ 收口）、**认不出的符号判红不猜**。§1 加一行**逐条点名**脚注（哪几条被归一、归到哪档）。判据不跟生成器共用归一函数 —— 否则「归一写歪」会自己判绿。台账**一字未改**（`✅（…）` 与 `➖` 都是既有写法，改它等于抹掉别人留的证据）。
+- **读数**：第 7 项整块 8 条 **全 rc=0**（`check-p-parity` + self-test · `gen-studio-win-align --check` · `gen-platform-parity --check` · `gen-platform-board --check` + **9/9** · `check-board-parity` + **16/16**）；看板重出 = **411 / 310✅ / 15🟡 / 86⬜ / 75%**；文档门禁 9 道 rc=0（tables 74 · numbers 三向 · plan-coverage · status 471 · version-scope 471 · invariants 5/5 · layout 0 · versions 17 · agents-index 15）。
+- **反例**：台账 `DIAG-006` 状态格 `✅（…）` → `🟠（反例）` ⇒ **生成器 `--check` rc=1 与判据 rc=1 各自点名该 id**（归一不是放水）；台账按 `sha256 451bb8849393…` 逐字节还原。自检新增第 ⑯ 例把同一注入做成常驻负例（15 → **16 例**）。反向那一半（`✅（…）` / `➖` 必须被认下来、不许据此判红）由「① 未改动副本 ⇒ 全绿」兜着。
+- **全量 `verify-all.sh --keep-going`（本跳实跑，日志 `.build/verify-20261103-051241.log`）**：项块 **19** · 失败 **10 项（共 28 处）** · 平台跳过 0 · **未执行项 = 无**；上一跳 10 项 / 29 处 ⇒ 与上一跳逐条比对，**唯一被消掉的一条 = 第 7 项的 `check-board-parity.py`（那次 Traceback）**。
+- **⚠️ 一处自伤，如实记**：第 7 项这轮仍红 1 处，是**本跳自己**造成的 —— 跑到一半我把崩时抬头的措辞从「读不到该读的东西 = 空跑」改成「…= 空跑；读到了但读不懂同样判红」，而自检第 ⑬ 例断言输出里必须有 `空跑`。改回带 `空跑` 后单跑 **16/16**、整块 8 条 rc=0 ⇒ 修后应为 **9 项 / 27 处**，但**修后未重跑全量**（不靠推算报绿）。
+- **未验证（≠ 通过）**：全量未在修后重跑 · 看板是派生件（`.build/derived/`，不进版本库）⇒ 干净克隆上要先 `python3 Scripts/gen-platform-board.py` · 挂起条目按 `⬜` 记是**看板口径**，`check-status-gap` / `plan-batches` 仍按各自口径算 · 本族未碰产品代码，`swift test` 未单跑（改动面不含 Swift）。
+- **顺手记下的两处文档漂移（未改，超出本片）**：`AGENT-SPEC.md:186` 仍写「项数 = 矩阵行数 = 需求条数 **379**」（实 411）、仍指看板在 `Docs/任务清单-按平台.md`（实在 `.build/derived/`）。
+- **下一项**：`check-release-version` 族 —— ① `--self-test` rc=2（例 4 的夹具锚点 `<string>3</string>` 在 `build-app.sh` 里已不存在）；② 更重的真红：**发布身份早改成派生值而台账没跟** —— `build-app.sh` 模板写 `${MARKETING_VERSION}`（由 `RELEASE_LABEL=beta1.0` 派生成 `1.0.0`）与 `${BUILD_COUNT}`（`git rev-list --count HEAD` = 2257），而 `Scripts/release-version.json` 仍写 `0.3.0` / `3`、`project.yml`+`pbxproj` 也停在旧字面量；`release-version.json` 的两条 anchors 还指着已归档的 `Docs/发布方案.md` / `Docs/发布计划.md`（文件已不在根）。⇒ 要动的是**台账模型**（收下「派生版本号」这一档 + 镜像列同步），不是改判据阈值；连带的 `check-doc-numbers` / AGENT-SPEC 两处 `--self-test` 例数也要跟版。
+- 证据 `.agent/evidence/2026-11-03-board-status-normalize.md`。
+
 ## 派生件重出三处 + 生成器收下 `➖`（无台账行 · 闭环存量红）· 2026-11-03
 
 - **先答「这算不算第 4 个维护跳」**：不算 —— 判据一字未改、阈值一个没动、没有新增判据。修的是两类「判据没错、盘上东西过期」：① 三件派生件按真源重生成（上一跳三分标注的根因族 ③）；② `gen-studio-win-align.py` 的 `ALLOWED_STATUS` 比真值源更严 —— 台账按 2026-11-02 主人令写着 `➖`，生成器却判「取值非法」而整件停摆（判据比真值源严，红的是判据）。这属 v0.9.0 出口「`verify-all` 19 项全绿、0 处红」的机器面，不是「修判据把自己哄绿」。

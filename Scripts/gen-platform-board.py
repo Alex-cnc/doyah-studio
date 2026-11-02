@@ -112,17 +112,28 @@ def build_model() -> dict:
 
     columns = ["macOS"] + [platform["label"] for platform in platforms]
     status: dict[str, dict[str, str]] = {}
+    raw_status: dict[str, dict[str, str]] = {}
     lines: dict[str, str] = {}
     domains: dict[str, str] = {}
     summaries: dict[str, str] = {}
+    problems: list[str] = []
     for identifier, macos, summary in rows:
         line, code = line_of(identifier), domain_of(identifier)
         lines[identifier] = line
         domains[identifier] = source.DOMAIN_LABEL.get(f"FR-{code}", f"FR-{code}")
         summaries[identifier] = summary
-        status[identifier] = {"macOS": macos}
+        raw_status[identifier] = {"macOS": macos}
+        status[identifier] = {"macOS": status_symbol(macos)}
         for platform in platforms:
-            status[identifier][platform["label"]] = platform["overrides"].get(identifier, default)
+            raw = platform["overrides"].get(identifier, default)
+            raw_status[identifier][platform["label"]] = raw
+            status[identifier][platform["label"]] = status_symbol(raw)
+        for column, value in status[identifier].items():
+            if value not in STATUSES:
+                problems.append(f"{identifier} 的 `{column}` 列状态格取值 `{raw_status[identifier][column][:40]}` "
+                                f"不在 ✅/🟡/⬜ 里（挂起标记 ➖ / — 按 ⬜ 记）—— 不猜它算哪一档")
+    if problems:
+        raise BoardError(problems)
 
     counts = {
         column: {value: sum(1 for identifier in status if status[identifier][column] == value)
@@ -136,6 +147,7 @@ def build_model() -> dict:
         "not_platforms": not_platforms,
         "default": default,
         "status": status,
+        "raw_status": raw_status,
         "lines": lines,
         "domains": domains,
         "summaries": summaries,
@@ -156,6 +168,29 @@ PL_LABEL = {
 def percent(done: int, total: int) -> int:
     """完成度 —— 表达式与 `check-board-parity.py` 逐字相同（同一份口径，两处取整必须一致）。"""
     return round(done * 100 / total) if total else 0
+
+
+# 真源台账的状态格允许两种**非裸符号**写法（既有事实）：`✅（…证据…）` 与挂起标记 `➖` / `—`。
+# 归一口径见 `status_symbol()`；归一函数在**本文件与 `check-board-parity.py` 里各写一份**，有意为之：
+# 判据若直接复用生成器的归一，「归一本身写错」就会自己判自己绿。
+SUSPEND_MARKERS = ("➖", "—")
+
+
+def status_symbol(raw: str) -> str:
+    """台账状态格 → 看板桶位（`✅` / `🟡` / `⬜`）；认不出就原样返回（`build_model` 当场判红）。
+
+    ① **带证据尾巴**（`✅（…怎么验的…）`）⇒ 按**首字符**取符号 —— 证据写在状态格里是本仓
+       既有写法，`check-status-gap.py` / `gen-studio-win-align.py` 早已同口径；
+    ② **挂起 / 不适用**（`➖` / `—`）⇒ 记 `⬜` —— 看板 §1 的口径是「⬜ 是未开工 / 未落地，不是
+       失败」，挂起**不等于**收口；被这样归一的编号由 §1 脚注**逐条点名**，不许静默吞掉。
+    """
+    text = raw.strip()
+    for symbol in STATUSES:
+        if text.startswith(symbol):
+            return symbol
+    if text[:1] in SUSPEND_MARKERS:
+        return "⬜"
+    return text
 
 
 # ── 三节正文 ────────────────────────────────────────────────────────────────
@@ -206,6 +241,26 @@ def render_overview(model: dict) -> str:
         "",
         "> 完成度 = ✅ ÷（✅ + 🟡 + ⬜），四舍五入到整数个百分点。",
     ])
+    # 非裸符号的状态格逐条点名（归一规则见 `status_symbol()`）：证据尾巴按首字符取符号、
+    # 挂起标记按 ⬜ 记 —— 不点名就等于把「挂起」静默算成「未开工」或「已收口」。
+    folded = [identifier for identifier in model["ids"]
+              if any(model["raw_status"][identifier][column].strip() != model["status"][identifier][column]
+                     for column in columns)]
+    if folded:
+        def excerpt(text: str) -> str:
+            # 摘录里去掉反引号 / 强调符：截断点落在反引号里会把后面整行的 Markdown 弄断。
+            return re.sub(r"[`*]", "", text.strip())[:16]
+
+        parts = []
+        for identifier in folded:
+            changed = [f"{column} `{excerpt(model['raw_status'][identifier][column])}…` → "
+                       f"`{model['status'][identifier][column]}`"
+                       for column in columns
+                       if model["raw_status"][identifier][column].strip() != model["status"][identifier][column]]
+            parts.append(f"`{identifier}`（" + "；".join(changed) + "）")
+        out.append("> **状态格是非裸符号的 " + str(len(folded)) + " 条（按首字符归一 · 逐条点名）**："
+                   + " · ".join(parts) + "。证据尾巴只取首字符；挂起（`➖` / `—`）按 `⬜` 记 —— "
+                   "**挂起不等于收口**，这几条仍在 §3 的 ⬜ 里。")
     for platform in model["platforms"]:
         out.append(f"> **{platform['label']}** 列口径：{platform['role']}")
     for platform in model["not_platforms"]:
