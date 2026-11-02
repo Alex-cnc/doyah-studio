@@ -144,3 +144,4 @@
 - **队列口径（本片后实测）**：`plan-batches --version 0.4.0 --check` rc=0；`plan.yaml` = **9 todo + 1 blocked**；`batches.yaml` = N2 4 / N3 4（N1 已空、自动消失）；台账 §4.2 v0.4.0 10 → **9**（8 / 1），未闭 82 → **81**（🟡 66 / ⬜ 15）。
 - **未验证（≠通过）**：真鼠标点「另存 / 以我这版为准」未点（机械证据在 Core 与 `AppState` 方法层，界面只到源锚点与构建）· 段落级并集 / CRDT 不在本条（能力书 5.1.9 边界）· `verify-all.sh` 收尾行仍未拿到（第 11 项打包 `.app`、第 18 项生成物一致性未执行）· 四条 HEAD 存量红（icon-only 15 / format-args 20 / design-tokens 17 / panel-root 扫描面 118↔119）已在 `/tmp` 的 HEAD 工作树复跑，读数逐字相同 = **本片未引入**。
 - **下一批 = N2（4 条）**：`FR-NTS-TODO-LIST-001/002/003` · `FR-NTS-TODO-LINK-001`（待办本体 / 清单 / 分组筛选 / 与笔记双向转化）。盘上已有 `Todo` 模型 + `todo` 表（schema v5/v9）+ `TodoListView`，起跳先核「已有实现 vs 需求四字段与五列」的差，别重写迁移。
+- **落提交号**：`f1d45153`（本片代码 + 界面 + 台账 + 派生队列 + 证据一次提交；已推送，`local = remote = f1d45153`）；pre-commit 三项全过（需求编号形状 / 越界 `--mine hugehippo` 受检 0 行 / AGENTS 索引）。
