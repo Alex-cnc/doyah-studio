@@ -451,6 +451,76 @@ public enum NoteSchemaV10 {
     ]
 }
 
+/// **schema v11**（`FR-NTS-NOTE-VERSION-001` · 历史版本）：新增 **`note_version`** 一张表。
+///
+/// 契约位置：`FR-NTS-NOTE-VERSION-001`「每次保存留版本，可查看与回滚，**回滚本身也生成新版本**」。
+/// 本侧只引用不复制：列名与 `NoteVersionEntry` 字段同义（`savedAt` → `saved_at`）。
+///
+/// 五条取舍：
+///   · **存全量、不存 diff**：需求原文「不是 Git」—— diff 要一套重放算法，而重放算法写错一次
+///     就是「回滚之后正文少一段」。笔记这一档的体量（几十 KB 一版、默认留 50 版）换的是
+///     「回滚永远取回原文」，这笔账划得来。
+///   · **`version` 是「这篇笔记内」的序号**（`UNIQUE (note_id, version)`）：跨笔记统一编号会让
+///     「这篇的上一版是哪一版」变成一次范围查询，而它是最常用的那一次读。
+///   · **`spans` 可空**：v1 存量笔记还没有富文本权威源（v8 才补列）—— 历史版本同理，
+///     补列只能可空；回滚时 `spans` 为空就只回正文投影（与 `setNoteSpans` 的输入口径一致）。
+///   · **`ON DELETE CASCADE`**：人工删除一条笔记时它的历史一起走（判据只要「还能取回原文」，
+///     不需要「删掉的笔记仍占着历史」—— 那会让「删干净」永远删不干净）。
+///   · **`reason` 存串**：`save` / `rollback` / `conflict` 三档「只增不改」（认不出的当 `save`，
+///     与 `priority` 同一条口径），加 `CHECK` 等于让别端多一档变成写入失败。
+public enum NoteSchemaV11 {
+
+    public static let version: Int32 = 11
+
+    /// 新增的表。
+    public static let tables: [String] = ["note_version"]
+
+    /// 新增的索引（唯一新查询面 = 「这篇笔记的历史，最新在前」）。
+    public static let indexes: [String] = ["note_version_note_index"]
+
+    public static let ddl: [String] = [
+        """
+        CREATE TABLE note_version (
+            id INTEGER PRIMARY KEY,
+            note_id INTEGER NOT NULL REFERENCES note (id) ON DELETE CASCADE,
+            version INTEGER NOT NULL,
+            title TEXT NOT NULL DEFAULT '',
+            body TEXT NOT NULL DEFAULT '',
+            tags TEXT NOT NULL DEFAULT '[]',
+            spans TEXT,
+            summary TEXT NOT NULL DEFAULT '',
+            reason TEXT NOT NULL DEFAULT 'save',
+            saved_at REAL NOT NULL,
+            UNIQUE (note_id, version)
+        );
+        """,
+        "CREATE INDEX note_version_note_index ON note_version (note_id, version DESC);"
+    ]
+}
+
+/// **schema v12**（`FR-NTS-NOTE-PRIVACY-001` · 私密挡位）：给 `note` 补一列 **`is_private`**。
+///
+/// 与 v3 `favorite` / v4 `pinned` 是同一形态、同一理由：它是笔记自己的一个挡位，不是另一件东西
+/// ⇒ **补列、不新表、不新索引**（检索那条路要按它过滤，而过滤发生在 SQL 的 `WHERE` 上，
+/// 不需要为它单独建索引 —— 私密条目在总量里是极少数）。
+///
+/// **默认 `0` + `NOT NULL`**：`ADD COLUMN` 要能在一张已有几百行的表上当场成立；存量笔记的语义
+/// 本来就是「不私密」⇒ 默认值是**如实**的，不是填充（同 v3 / v4）。
+/// **不加 `CHECK`** 的理由与 `version` 无关：这里加 `CHECK (is_private IN (0,1))` 是安全的，
+/// 所以加了 —— 这一列只有本侧写，不会出现「别端多一档」。
+public enum NoteSchemaV12 {
+
+    public static let version: Int32 = 12
+
+    /// 这一版**不新增表 / 不新增索引**（只补一列）。
+    public static let tables: [String] = []
+    public static let indexes: [String] = []
+
+    public static let ddl: [String] = [
+        "ALTER TABLE note ADD COLUMN is_private INTEGER NOT NULL DEFAULT 0 CHECK (is_private IN (0, 1));"
+    ]
+}
+
 /// 附件索引的一条（`FR-PLUG-08`：**附件二进制留在文件系统，库里只存路径**）。
 public struct NoteAttachment: Equatable, Sendable {
     public var id: UUID
@@ -542,8 +612,9 @@ public final class NoteDatabase {
 
     /// 这一版代码支持的 schema 版本（v1 → v2 补两层归属、v2 → v3 补收藏、v3 → v4 补置顶、
     /// v4 → v5 补待办任务清单、v5 → v6 补提醒、v6 → v7 补查询历史、v7 → v8 补正文 spans 列、
-    /// v8 → v9 补待办备注 `note` 列、**v9 → v10 补笔记墓碑 `deleted_at` 列**）。
-    public static let supportedVersion = NoteSchemaV10.version
+    /// v8 → v9 补待办备注 `note` 列、v9 → v10 补笔记墓碑 `deleted_at` 列、
+    /// **v10 → v11 补历史版本表 `note_version`、v11 → v12 补私密挡位 `is_private` 列**）。
+    public static let supportedVersion = NoteSchemaV12.version
 
     private let connection: SQLiteConnection
 
@@ -643,6 +714,14 @@ public final class NoteDatabase {
                 for statement in NoteSchemaV10.ddl { try connection.execute(statement) }
                 try connection.setPragma("user_version = \(NoteSchemaV10.version)")
             }
+            if current < NoteSchemaV11.version {
+                for statement in NoteSchemaV11.ddl { try connection.execute(statement) }
+                try connection.setPragma("user_version = \(NoteSchemaV11.version)")
+            }
+            if current < NoteSchemaV12.version {
+                for statement in NoteSchemaV12.ddl { try connection.execute(statement) }
+                try connection.setPragma("user_version = \(NoteSchemaV12.version)")
+            }
         }
     }
 
@@ -682,8 +761,8 @@ public final class NoteDatabase {
                 INSERT INTO note (
                     uuid, title, body, source_kind, source_connection_name, source_fingerprint,
                     source_captured_at, created_at, updated_at, contains_row_data, storage_version,
-                    favorite, pinned
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    favorite, pinned, is_private
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT (uuid) DO UPDATE SET
                     title = excluded.title,
                     body = excluded.body,
@@ -713,7 +792,10 @@ public final class NoteDatabase {
                     .integer(note.isFavorite ? 1 : 0),
                     // **`pinned` 同理**：只在 INSERT 分支出现，`ON CONFLICT` 段绝不含它 ——
                     // 「打开一条置顶过的笔记、改几个字、保存」不许把它静默取消置顶（改置顶只有 `setPinned`）。
-                    .integer(note.isPinned ? 1 : 0)
+                    .integer(note.isPinned ? 1 : 0),
+                    // **`is_private` 同理**：只在 INSERT 分支出现。私密档位一旦被「改几个字保存」抹掉，
+                    // 这条笔记会当场回到搜索结果 / 同步面 / 导出面 —— 那是静默泄漏，不是小瑕疵。
+                    .integer(note.isPrivate ? 1 : 0)
                 ]
             )
             // **按 uuid 反查 rowid**，而不是读 `last_insert_rowid()`：走的是 upsert 的 UPDATE 分支时，
@@ -917,6 +999,73 @@ public final class NoteDatabase {
             }
     }
 
+    // MARK: - 私密挡位（schema v12 · `FR-NTS-NOTE-PRIVACY-001`）
+
+    /// **标 / 撤私密**（返回真的改了几行；认不出的 id ⇒ `0`）。
+    ///
+    /// 与 `setFavorite` / `setPinned` 同纪律：**不刷新 `updatedAt`**、不产生新版本
+    /// （它是保护挡位，不是内容变更）。「撤私密要二次确认」不在这一层拦 ——
+    /// 这一层只管写，确认由 `NoteLibrary.setPrivate` 那一处按 `NotePrivacy.unprivateRequiresConfirmation` 判。
+    @discardableResult
+    public func setPrivate(_ isPrivate: Bool, id: UUID) throws -> Int {
+        try connection.execute(
+            "UPDATE note SET is_private = ? WHERE uuid = ? AND deleted_at IS NULL",
+            [.integer(isPrivate ? 1 : 0), .text(id.uuidString)]
+        )
+        return connection.changeCount
+    }
+
+    /// 一条笔记是不是私密（`nil` = 库里没有这条 **或** 它已是墓碑）。
+    public func isPrivate(id: UUID) throws -> Bool? {
+        guard let value = try connection.scalarInt(
+            "SELECT is_private FROM note WHERE uuid = ? AND deleted_at IS NULL",
+            [.text(id.uuidString)]
+        ) else { return nil }
+        return value == 1
+    }
+
+    /// **私密条目的门牌**（不带正文）：界面「私密」那一栏只显示这些，点开才要二次验证。
+    public struct PrivateNoteSummary: Identifiable, Equatable, Sendable {
+        public var id: UUID
+        public var title: String
+        public var updatedAt: Date
+        public var versionCount: Int
+
+        public init(id: UUID, title: String, updatedAt: Date, versionCount: Int = 0) {
+            self.id = id
+            self.title = title
+            self.updatedAt = updatedAt
+            self.versionCount = versionCount
+        }
+    }
+
+    /// 私密条目清单（**没有正文、没有标签** —— 泄漏面收在这里，不在调用点各自记得不要读）。
+    public func privateSummaries() throws -> [PrivateNoteSummary] {
+        let rows = try connection.query(
+            """
+            SELECT uuid, title, updated_at FROM note
+            WHERE is_private = 1 AND deleted_at IS NULL
+            ORDER BY updated_at DESC, title ASC;
+            """
+        )
+        var summaries: [PrivateNoteSummary] = []
+        for row in rows {
+            guard let text = row.text("uuid"), let id = UUID(uuidString: text) else { continue }
+            let versions = Int(try connection.scalarInt(
+                "SELECT count(*) FROM note_version WHERE note_id = (SELECT id FROM note WHERE uuid = ?)",
+                [.text(text)]
+            ) ?? 0)
+            summaries.append(PrivateNoteSummary(
+                id: id,
+                title: row.text("title") ?? "",
+                updatedAt: Date(timeIntervalSince1970: row["updated_at"].doubleValue ?? 0),
+                versionCount: versions
+            ))
+        }
+        return summaries
+    }
+
+
     // MARK: - 读
 
     public func noteCount() throws -> Int {
@@ -927,8 +1076,13 @@ public final class NoteDatabase {
     ///
     /// **墓碑行不在里面**（`deleted_at` 非空 = 这条已经不是"一条活着的笔记"）；要读它走
     /// `noteIncludingDeleted(id:)`（同步面专用）。
-    public func notes() throws -> [Note] {
-        try notes(from: "SELECT * FROM note ORDER BY updated_at DESC, title ASC")
+    public func notes(includingPrivate: Bool = false) throws -> [Note] {
+        if includingPrivate {
+            return try notes(from: "SELECT * FROM note ORDER BY updated_at DESC, title ASC")
+        }
+        // 私密条目**不进列表**（`FR-NTS-NOTE-PRIVACY-001`「需二次验证才可查看」）：
+        // 它们只在 `privateSummaries()` 里露门牌，要内容走 `NoteLibrary.revealPrivate`。
+        return try notes(from: "SELECT * FROM note WHERE is_private = 0 ORDER BY updated_at DESC, title ASC")
     }
 
     public func note(id: UUID) throws -> Note? {
@@ -993,6 +1147,173 @@ public final class NoteDatabase {
             }
     }
 
+    // MARK: - 历史版本（schema v11 · `FR-NTS-NOTE-VERSION-001`）
+
+    /// 把一条笔记**当前内容**记成一个版本，返回那一版；内容与最近一版**全等**时不记（返回 `nil`）。
+    ///
+    /// 三条口径：
+    ///   · **去重按内容**（标题 + 正文 + 标签 + spans）：自动保存每 1.5 秒可能落一次库，
+    ///     按「每次写都记一版」会把同一份内容记成几十版，真正想回去的那版被埋掉；
+    ///   · **版本号是「这篇笔记内」的序号**（`max(version) + 1`），回滚也占一个新号；
+    ///   · **裁剪与写入同一事务**（判据③「有上限」）：先插后裁，任何一刻都不留「超出上限的历史」。
+    @discardableResult
+    public func recordVersion(
+        noteID: UUID,
+        at moment: Date = Date(),
+        reason: NoteVersionReason = .save,
+        retention: NoteVersionRetention = .default
+    ) throws -> NoteVersionEntry? {
+        try connection.transaction {
+            let rowID = try requireRowID(of: noteID)
+            guard let row = try connection.query(
+                "SELECT title, body, spans FROM note WHERE id = ?",
+                [.integer(rowID)]
+            ).first else { return nil }
+            let title = row.text("title") ?? ""
+            let body = row.text("body") ?? ""
+            let spans = row.text("spans")
+            let tags = try noteTags(rowID: rowID)
+            let latest = try versionEntry(noteID: rowID, number: nil)
+            if let latest,
+               latest.title == title,
+               latest.body == body,
+               latest.tags == tags,
+               latest.spans == spans {
+                return nil
+            }
+            let version = (latest?.version ?? 0) + 1
+            let summary = NoteVersionSummary.of(title: title, body: body)
+            try connection.execute(
+                """
+                INSERT INTO note_version (note_id, version, title, body, tags, spans, summary, reason, saved_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
+                """,
+                [
+                    .integer(rowID),
+                    .integer(Int64(version)),
+                    .text(title),
+                    .text(body),
+                    .text(Self.encodeTags(tags)),
+                    spans.map { SQLiteValue.text($0) } ?? .null,
+                    .text(summary),
+                    .text(reason.rawValue),
+                    .real(moment.timeIntervalSince1970)
+                ]
+            )
+            if retention.maxCount > 0 {
+                try connection.execute(
+                    "DELETE FROM note_version WHERE note_id = ? AND version <= ?",
+                    [.integer(rowID), .integer(Int64(version - retention.maxCount))]
+                )
+            }
+            return NoteVersionEntry(
+                id: connection.lastInsertRowID,
+                noteID: noteID,
+                version: version,
+                title: title,
+                body: body,
+                tags: tags,
+                spans: spans,
+                summary: summary,
+                reason: reason,
+                savedAt: moment
+            )
+        }
+    }
+
+    /// 一条笔记的历史版本（**最新在前**）。
+    public func versions(of id: UUID, limit: Int = 200) throws -> [NoteVersionEntry] {
+        guard let rowID = try connection.scalarInt("SELECT id FROM note WHERE uuid = ?", [.text(id.uuidString)]) else {
+            return []
+        }
+        return try connection.query(
+            """
+            SELECT * FROM note_version WHERE note_id = ?
+            ORDER BY version DESC LIMIT ?;
+            """,
+            [.integer(rowID), .integer(Int64(limit))]
+        ).map { row in
+            NoteVersionEntry(
+                id: row.int("id") ?? 0,
+                noteID: id,
+                version: Int(row.int("version") ?? 0),
+                title: row.text("title") ?? "",
+                body: row.text("body") ?? "",
+                tags: Self.decodeTags(row.text("tags") ?? "[]"),
+                spans: row.text("spans"),
+                summary: row.text("summary") ?? "",
+                reason: NoteVersionReason(rawValue: row.text("reason") ?? "") ?? .save,
+                savedAt: Date(timeIntervalSince1970: row["saved_at"].doubleValue ?? 0)
+            )
+        }
+    }
+
+    /// 某一版（`number` = 这篇笔记内的版本号）；没有 ⇒ `nil`。
+    public func version(of id: UUID, number: Int) throws -> NoteVersionEntry? {
+        guard let rowID = try connection.scalarInt("SELECT id FROM note WHERE uuid = ?", [.text(id.uuidString)]) else {
+            return nil
+        }
+        return try versionEntry(noteID: rowID, number: number).map { entry in
+            var copy = entry
+            copy.noteID = id
+            return copy
+        }
+    }
+
+    /// 一篇笔记的版本数（界面说明「已留 N 版」与判据读数用）。
+    public func versionCount(of id: UUID) throws -> Int {
+        Int(try connection.scalarInt(
+            "SELECT count(*) FROM note_version WHERE note_id = (SELECT id FROM note WHERE uuid = ?)",
+            [.text(id.uuidString)]
+        ) ?? 0)
+    }
+
+    private func noteTags(rowID: Int64) throws -> [String] {
+        try connection.query(
+            "SELECT tag FROM note_tag WHERE note_id = ? ORDER BY tag ASC",
+            [.integer(rowID)]
+        ).compactMap { $0.text("tag") }
+    }
+
+    /// 最近一版（`number == nil`）或指定版本号那一版；`noteID` 是**表内 rowid**。
+    private func versionEntry(noteID rowID: Int64, number: Int?) throws -> NoteVersionEntry? {
+        let sql: String
+        let bindings: [SQLiteValue]
+        if let number {
+            sql = "SELECT * FROM note_version WHERE note_id = ? AND version = ? LIMIT 1;"
+            bindings = [.integer(rowID), .integer(Int64(number))]
+        } else {
+            sql = "SELECT * FROM note_version WHERE note_id = ? ORDER BY version DESC LIMIT 1;"
+            bindings = [.integer(rowID)]
+        }
+        guard let row = try connection.query(sql, bindings).first else { return nil }
+        return NoteVersionEntry(
+            id: row.int("id") ?? 0,
+            noteID: UUID(),
+            version: Int(row.int("version") ?? 0),
+            title: row.text("title") ?? "",
+            body: row.text("body") ?? "",
+            tags: Self.decodeTags(row.text("tags") ?? "[]"),
+            spans: row.text("spans"),
+            summary: row.text("summary") ?? "",
+            reason: NoteVersionReason(rawValue: row.text("reason") ?? "") ?? .save,
+            savedAt: Date(timeIntervalSince1970: row["saved_at"].doubleValue ?? 0)
+        )
+    }
+
+    /// 标签列存 JSON 数组（稳定键序）：逗号拼接在「标签里有逗号」时会静默多出一个标签。
+    static func encodeTags(_ tags: [String]) -> String {
+        guard let data = try? JSONEncoder().encode(tags),
+              let text = String(data: data, encoding: .utf8) else { return "[]" }
+        return text
+    }
+
+    static func decodeTags(_ text: String) -> [String] {
+        guard let data = text.data(using: .utf8),
+              let tags = try? JSONDecoder().decode([String].self, from: data) else { return [] }
+        return tags
+    }
+
     /// 检索结果 + **走的是哪条路**（trigram 全文检索还是 LIKE 兜底）。
     ///
     /// 为什么要把路径一起返回：trigram 要求查询串 ≥3 字，1~2 字的查询（中文里很常见）只能兜底；
@@ -1035,7 +1356,7 @@ public final class NoteDatabase {
                 """
                 SELECT note.* FROM note
                 JOIN note_fts ON note_fts.rowid = note.id
-                WHERE note_fts MATCH ?
+                WHERE note_fts MATCH ? AND note.is_private = 0
                 ORDER BY note.updated_at DESC, note.title ASC
                 LIMIT ?;
                 """,
@@ -1050,6 +1371,7 @@ public final class NoteDatabase {
                     """
                     SELECT * FROM note
                     WHERE id NOT IN (SELECT rowid FROM note_fts WHERE note_fts MATCH ?)
+                      AND is_private = 0
                       AND EXISTS (
                         SELECT 1 FROM note_tag
                         WHERE note_tag.note_id = note.id AND note_tag.tag LIKE ? ESCAPE '\\'
@@ -1066,11 +1388,12 @@ public final class NoteDatabase {
         let rows = try connection.query(
             """
             SELECT * FROM note
-            WHERE title LIKE ? ESCAPE '\\' OR body LIKE ? ESCAPE '\\'
-               OR EXISTS (
+            WHERE is_private = 0
+              AND (title LIKE ? ESCAPE '\\' OR body LIKE ? ESCAPE '\\'
+                   OR EXISTS (
                  SELECT 1 FROM note_tag
-                 WHERE note_tag.note_id = note.id AND note_tag.tag LIKE ? ESCAPE '\\'
-               )
+                       WHERE note_tag.note_id = note.id AND note_tag.tag LIKE ? ESCAPE '\\'
+                      ))
             ORDER BY updated_at DESC, title ASC
             LIMIT ?;
             """,
@@ -2043,7 +2366,8 @@ public final class NoteDatabase {
                 updatedAt: Date(timeIntervalSince1970: row["updated_at"].doubleValue ?? 0),
                 containsRowData: row["contains_row_data"].intValue == 1,
                 isFavorite: row["favorite"].intValue == 1,
-                isPinned: row["pinned"].intValue == 1
+                isPinned: row["pinned"].intValue == 1,
+                isPrivate: row["is_private"].intValue == 1
             )
         }
     }

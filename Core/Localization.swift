@@ -851,6 +851,23 @@ public enum LKey: String, CaseIterable, Sendable {
     case notesUnmarkPinned
     /// 置顶一个**库里已经没有的** id（写库返回 0 行）时那句如实交代 —— 同收藏，不静默。
     case notesPinnedMissing
+    // v0.4.0 · N1：历史版本（`FR-NTS-NOTE-VERSION-001`）与私密保护（`FR-NTS-NOTE-PRIVACY-001`）。
+    case notesVersionTitle
+    case notesVersionEmpty
+    case notesVersionRollback
+    case notesVersionRolledBack
+    case notesVersionRollbackMissing
+    case notesVersionLimit
+    case notesPrivateTitle
+    case notesPrivateOn
+    case notesPrivateOff
+    case notesPrivateUnlockReason
+    case notesPrivateDenied
+    case notesPrivateSection
+    case notesPrivateLocked
+    case notesPrivateConfirmTitle
+    case notesPrivateConfirmMessage
+    case notesNoteMissing
     case menuMaintenanceTasks
     case maintenancePlanLabel
     case maintenancePlanHint
@@ -4202,6 +4219,26 @@ public enum LocalizedStrings {
             .simplifiedChinese: "这条笔记已经不在了（列表已重读）",
             .english: "That note is gone (the list was reloaded)"
         ],
+        // v0.4.0 · N1：历史版本 / 私密保护。
+        .notesVersionTitle: [.simplifiedChinese: "历史版本", .english: "Version history"],
+        .notesVersionEmpty: [.simplifiedChinese: "还没有历史版本（每次保存留一版）", .english: "No versions yet (one per save)"],
+        .notesVersionRollback: [.simplifiedChinese: "回滚到这一版", .english: "Restore this version"],
+        .notesVersionRolledBack: [.simplifiedChinese: "已回滚到选中的那一版（回滚本身也记一版）", .english: "Restored that version (the restore is a version too)"],
+        .notesVersionRollbackMissing: [.simplifiedChinese: "那一版不在了（历史已重读）", .english: "That version is gone (history was reloaded)"],
+        .notesVersionLimit: [.simplifiedChinese: "每篇保留上限（最旧的先丢）：", .english: "Versions kept per note (oldest dropped first): "],
+        .notesPrivateTitle: [.simplifiedChinese: "私密", .english: "Private"],
+        .notesPrivateOn: [.simplifiedChinese: "已标为私密：不进搜索、不同步、不外发", .english: "Marked private: no search, no sync, no sharing"],
+        .notesPrivateOff: [.simplifiedChinese: "已取消私密", .english: "Private flag removed"],
+        .notesPrivateUnlockReason: [.simplifiedChinese: "验证以查看这条私密笔记", .english: "Authenticate to open this private note"],
+        .notesPrivateDenied: [.simplifiedChinese: "验证没通过，内容没有打开", .english: "Authentication failed; the note was not opened"],
+        .notesPrivateSection: [.simplifiedChinese: "私密（需验证）", .english: "Private (needs authentication)"],
+        .notesPrivateLocked: [.simplifiedChinese: "点一下验证后查看", .english: "Click to authenticate and open"],
+        .notesPrivateConfirmTitle: [.simplifiedChinese: "取消私密？", .english: "Remove the private flag?"],
+        .notesPrivateConfirmMessage: [
+            .simplifiedChinese: "取消之后这条笔记会回到搜索、同步与导出的面上，需要再按一次确认。",
+            .english: "After this the note returns to search, sync and export — this needs one more confirmation."
+        ],
+        .notesNoteMissing: [.simplifiedChinese: "这条笔记已经不在了（列表已重读）", .english: "That note is gone (the list was reloaded)"],
         .menuMaintenanceTasks: [.simplifiedChinese: "维护任务…", .english: "Maintenance tasks…"],
         .maintenancePlanLabel: [.simplifiedChinese: "计划（每行一条：task: 类别 ｜ 人话描述 ｜ sql: 语句）", .english: "Plan (one per line: task: kind | description | sql: statement)"],
         .maintenancePlanHint: [.simplifiedChinese: "写操作与 DDL 一律要逐条批准；高开销（REINDEX / 备份 / 恢复）默认一次只放一条。", .english: "Writes and DDL always need step-by-step approval; high-cost ones (REINDEX / backup / restore) are limited to one per run by default."],

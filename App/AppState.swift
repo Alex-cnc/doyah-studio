@@ -10167,6 +10167,113 @@ final class AppState: ObservableObject {
     /// 中栏排序条之后这条口径是 `NotesSortOrder.updatedDesc` 那一档（并且多了第三关键字 `uid`，
     /// 标题重名时次序仍然确定）。宿主层不再自己排一遍。
 
+    // MARK: - 笔记历史版本 / 私密（v0.4.0 · `FR-NTS-NOTE-VERSION-001` / `FR-NTS-NOTE-PRIVACY-001`）
+
+    /// 当前编辑面那一条的历史版本（**最新在前**；每版带时间与摘要）。
+    @Published var noteVersions: [NoteVersionEntry] = []
+    @Published var isNoteVersionsPresented = false
+    /// 「私密」那一栏的门牌（**无正文**）：列表里只显示标题，点开要二次验证。
+    @Published var notePrivateSummaries: [NoteDatabase.PrivateNoteSummary] = []
+    /// 撤私密的二次确认（判据③：**不是默认动作**，要人按一次）。
+    @Published var isUnprivateConfirmPresented = false
+    /// 编辑面上有没有一条真笔记（工具条那两枚入口的灰亮判据；`noteBeingEdited` 本身是私有的，
+    /// 视图不许伸手进去读它 —— 一处判断出了两层就迟早分家）。
+    var noteEditorHasNote: Bool { noteBeingEdited != nil }
+
+    /// 编辑面上这一条**现在是不是私密**（工具条那枚锁的形态读它；列表里看不到私密条目，
+    /// 所以不能拿 `notes` 数组反推）。
+    @Published private(set) var noteEditorIsPrivate = false
+
+    func refreshNotePrivateSummaries() async {
+        let summaries = (try? await NoteLibrary.defaultLibrary().privateSummaries()) ?? []
+        notePrivateSummaries = summaries
+    }
+
+    /// **标 / 撤私密**：标私密直接落；撤私密先弹二次确认（判据③）。
+    func toggleNotePrivacy() async {
+        guard let id = noteBeingEdited else { return }
+        let library = NoteLibrary.defaultLibrary()
+        let current = (try? await library.isPrivate(id: id)) ?? false
+        if current {
+            isUnprivateConfirmPresented = true
+            return
+        }
+        await applyPrivacy(id: id, true, confirmed: false)
+    }
+
+    /// 二次确认那一下「确认」按的入口（撤私密）。
+    func confirmUnprivateNote() async {
+        guard let id = noteBeingEdited else { return }
+        await applyPrivacy(id: id, false, confirmed: true)
+    }
+
+    private func applyPrivacy(id: UUID, _ isPrivate: Bool, confirmed: Bool) async {
+        do {
+            let outcome = try await NoteLibrary.defaultLibrary().setPrivate(id: id, isPrivate, confirmed: confirmed)
+            switch outcome {
+            case .confirmationRequired:
+                isUnprivateConfirmPresented = true
+            case .changed(let rows):
+                if rows == 0 { statusMessage = L(.notesNoteMissing) }
+                noteEditorIsPrivate = isPrivate
+                statusMessage = isPrivate ? L(.notesPrivateOn) : L(.notesPrivateOff)
+                // 重读列表 + 私密门牌：标私密之后它从中栏消失、在「私密」那一栏出现（同一份库）。
+                await reloadNotes()
+            }
+        } catch {
+            errorMessage = ErrorPresenter.message(for: error)
+        }
+    }
+
+    /// 打开历史版本面板（读库，界面只画）。
+    func loadNoteVersions() async {
+        guard let id = noteBeingEdited else { noteVersions = []; return }
+        noteVersions = (try? await NoteLibrary.defaultLibrary().versions(of: id)) ?? []
+    }
+
+    /// **回滚到某一版**（回滚本身也生成新版本 —— 由 `NoteLibrary.rollback` 的形状保证）。
+    func rollbackNote(to version: Int) async {
+        guard let id = noteBeingEdited else { return }
+        flushNoteAutosave()
+        do {
+            guard let restored = try await NoteLibrary.defaultLibrary().rollback(id: id, to: version) else {
+                statusMessage = L(.notesVersionRollbackMissing)
+                return
+            }
+            await reloadNotes()
+            loadEditorContent(restored)
+            await loadNoteVersions()
+            statusMessage = L(.notesVersionRolledBack)
+        } catch {
+            errorMessage = ErrorPresenter.message(for: error)
+        }
+    }
+
+    /// **打开一条私密笔记**（判据「需二次验证才可查看」）：验证不过就一个字都不装进编辑面。
+    func openPrivateNote(_ summary: NoteDatabase.PrivateNoteSummary) async {
+        do {
+            let outcome = try await NoteLibrary.defaultLibrary().revealPrivate(
+                id: summary.id,
+                authorizer: SystemNotePrivacyAuthorizer(),
+                reason: L(.notesPrivateUnlockReason)
+            )
+            switch outcome {
+            case .revealed(let payload):
+                flushNoteAutosave()
+                loadEditorContent(payload.note)
+                editorMode = .preview
+            case .denied:
+                statusMessage = L(.notesPrivateDenied)
+            case .notFound:
+                statusMessage = L(.notesNoteMissing)
+            case .notPrivate:
+                if let note = notes.first(where: { $0.id == summary.id }) { loadEditorContent(note) }
+            }
+        } catch {
+            errorMessage = ErrorPresenter.message(for: error)
+        }
+    }
+
     func openNotes() {
         // 笔记有了"活动栏那一栏"这个正式的家（以前只弹一个面板）：入口统一走切换视图，
         // 于是 Standard 下打开笔记 = 整个界面就是笔记，而不是浮一个窗口在上面。
@@ -10270,6 +10377,9 @@ final class AppState: ObservableObject {
         await searchNotes()
         // 列表 / 范围 / 库都变了 ⇒ 多选集合收一遍（看不见的条目不许留在集合里）。
         pruneNoteSelection()
+        // 私密那一栏与中栏列表同源（都是这份库）：标 / 撤私密之后两处必须一起变，
+        // 少刷一处就会出现「列表里没了、私密那一栏也没有」这种藏起来的效果。
+        await refreshNotePrivateSummaries()
     }
 
     /// 把一条笔记装进编辑器的**内容**（标题 / 正文 / 标签 + 正在编辑的 id）——**不动模式**。
@@ -10315,6 +10425,8 @@ final class AppState: ObservableObject {
         // 装进来 = 与库里一致 ⇒ 不脏，也不该再挂着上一条留下的保存状态。
         noteEditorDirty = false
         noteSaveState = .idle
+        // 私密挡位跟着这一条走（`nil` = 新建态 ⇒ 不是私密）。
+        noteEditorIsPrivate = id.flatMap { identifier in notes.first { $0.id == identifier }?.isPrivate } ?? false
     }
 
     /// 把库里那一条的**正文权威源**（`spans`）读回来重挂在编辑面上（片 `WY-2a`）。
@@ -10564,13 +10676,11 @@ final class AppState: ObservableObject {
                 let existing = notes.first { $0.id == id }
                 var merged = snapshot.draft(untitled: L(.notesUntitled))
                 merged.source = existing?.source ?? merged.source
-                _ = try await store.upsert(merged, id: id)
-                // **正文落库：单一写入口**（片 `WY-2a`）。`NoteDatabase.setNoteSpans` 是全仓**唯一**
-                // 一处写 `spans` 列的地方，它把 `spans` 与**由它投影出来的** `body` 同一条语句写下去
-                // —— 于是库里不会出现「权威源换了、文本列还是旧的」这种半新半旧。
-                _ = try await store.setNoteSpans(spansJSON, body: snapshot.body, id: id)
+                // **一次保存 = 本体 + 正文权威源 + 历史版本**（`NoteLibrary.save`）：
+                // 版本记在两次写都完成之后，回滚才有「保存当时那一份」可取（`FR-NTS-NOTE-VERSION-001`）。
+                _ = try await store.save(merged, spans: spansJSON, id: id)
             } else {
-                let saved = try await store.upsert(snapshot.draft(untitled: L(.notesUntitled)))
+                let saved = try await store.save(snapshot.draft(untitled: L(.notesUntitled)), spans: spansJSON)
                 // **新建这一条已经在库里了** ⇒ 编辑器改认它（`noteBeingEdited = saved.id`）：
                 // 否则每一次自动保存都会**再建一条**（敲一会儿就多出好几条几乎一样的笔记）。
                 written = NoteEditorSnapshot(
@@ -10585,8 +10695,7 @@ final class AppState: ObservableObject {
                 if destination != notesNavigation.directory.resolvedNotebookUid(nil) {
                     _ = try await store.move(noteIDs: [saved.id], toNotebook: destination)
                 }
-                // 新建这一支的正文权威源走同一条写入口（上面那一支的理由逐字适用）。
-                _ = try await store.setNoteSpans(spansJSON, body: snapshot.body, id: saved.id)
+                // 新建这一支的正文权威源已在 `store.save` 里同一个调用写完（上面那一支的理由逐字适用）。
             }
             if written.id == noteBeingEdited {
                 // 写入期间用户还在敲（`await` 那一瞬主 actor 是让出来的）⇒ **不能**一句「干净了」
@@ -10606,7 +10715,13 @@ final class AppState: ObservableObject {
             await reloadNotes()
             // 片 `云D`：写库成功之后入队 + 尝试上行（在线补传 / 断网留队，`IR-16` / `IR-21`）。
             // **同步失败不打扰保存**（笔记已在本地库 = 唯一事实源）。
-            if let uid = written.id?.uuidString {
+            // **私密笔记不同步**（`FR-NTS-NOTE-PRIVACY-001` 判据②）：进队之前就拦住 ——
+            // 进队再拦等于把内容留在队列文件里，那是同一处泄漏换了个位置。
+            var shouldSync = true
+            if let id = written.id {
+                shouldSync = ((try? await store.isPrivate(id: id)) ?? false) != true
+            }
+            if let uid = written.id?.uuidString, shouldSync {
                 await enqueueCloudSync(uid: uid, operation: .upsert)
             }
             return true

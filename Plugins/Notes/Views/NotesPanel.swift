@@ -151,6 +151,40 @@ struct NotesListView: View {
                     .accessibilityIdentifier("note-row-\(note.id.uuidString)")
                 }
             }
+            // **私密那一栏**（`FR-NTS-NOTE-PRIVACY-001`）：只露门牌（标题），点一下先验证再看。
+            // 不把它混进上面那张列表里：私密条目**没进 `visibleNotes`**（库就不给），
+            // 混进来就得在这里复制一份「哪些是私密」的判断 —— 两处判断必分家。
+            if !appState.notePrivateSummaries.isEmpty {
+                Divider()
+                Text(L(.notesPrivateSection))
+                    .font(Theme.font(.caption))
+                    .foregroundStyle(Theme.text(.secondary))
+                    .padding(.horizontal, Spacing.s)
+                    .accessibilityIdentifier("notes-private-header")
+                ForEach(appState.notePrivateSummaries) { summary in
+                    Button {
+                        Task { await appState.openPrivateNote(summary) }
+                    } label: {
+                        HStack(spacing: Spacing.xs) {
+                            Image(systemName: "lock.fill")
+                                .font(Theme.font(.caption))
+                                .foregroundStyle(Theme.status(.warning))
+                            Text(summary.title)
+                                .font(Theme.font(.body))
+                                .lineLimit(1)
+                            Spacer(minLength: Spacing.xs)
+                            Text("\(summary.versionCount)")
+                                .font(Theme.font(.caption))
+                                .foregroundStyle(Theme.text(.secondary))
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .help(L(.notesPrivateLocked))
+                    .padding(.horizontal, Spacing.s)
+                    .accessibilityIdentifier("note-private-row-\(summary.id.uuidString)")
+                }
+            }
         }
         .padding(.vertical, Spacing.s)
         .accessibilityIdentifier("notes-list")
@@ -931,6 +965,23 @@ struct NotesEditorView: View {
         // 于是「工作区是科技蓝、笔记是系统色」并存）。
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(Theme.surface(.content))
+        // **历史版本面板**：读的是库（`loadNoteVersions`），界面只画 + 转发回滚。
+        .sheet(isPresented: $appState.isNoteVersionsPresented) {
+            NotesVersionHistoryView()
+        }
+        // **撤私密的二次确认**（判据③）：点「确认」才真的撤。
+        .confirmationDialog(
+            L(.notesPrivateConfirmTitle),
+            isPresented: $appState.isUnprivateConfirmPresented,
+            titleVisibility: .visible
+        ) {
+            Button(L(.notesPrivateConfirmTitle), role: .destructive) {
+                Task { await appState.confirmUnprivateNote() }
+            }
+            Button(L(ContainerEditPrompt.cancelKey), role: .cancel) {}
+        } message: {
+            Text(L(.notesPrivateConfirmMessage))
+        }
     }
 
     // MARK: - title 区（正文区第一行 · 片 `R3-T` · 契约 `FR-NOTEUI-07` + `-09`）
@@ -967,6 +1018,30 @@ struct NotesEditorView: View {
                 .font(Theme.font(.title))
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .accessibilityIdentifier("notes-editor-title")
+            // **私密挡位**（`FR-NTS-NOTE-PRIVACY-001`）：一枚锁。「标私密」一下落下；
+            // 「撤私密」先弹二次确认（判据③）—— 两个方向不共用一个动作，撤的那一边多一步。
+            Button {
+                Task { await appState.toggleNotePrivacy() }
+            } label: {
+                Image(systemName: appState.noteEditorIsPrivate ? "lock.fill" : "lock.open")
+                    .foregroundStyle(appState.noteEditorIsPrivate ? Theme.status(.warning) : Theme.text(.secondary))
+            }
+            .help(L(.notesPrivateTitle))
+            .disabled(!appState.noteEditorHasNote)
+            .accessibilityIdentifier("notes-editor-privacy")
+            // **历史版本**（`FR-NTS-NOTE-VERSION-001`）：一枚时钟 —— 列表 / 回滚都在那张表里。
+            Button {
+                Task {
+                    await appState.loadNoteVersions()
+                    appState.isNoteVersionsPresented = true
+                }
+            } label: {
+                Image(systemName: "clock.arrow.circlepath")
+                    .foregroundStyle(Theme.text(.secondary))
+            }
+            .help(L(.notesVersionTitle))
+            .disabled(!appState.noteEditorHasNote)
+            .accessibilityIdentifier("notes-editor-versions")
         }
         .accessibilityIdentifier("notes-title-area")
     }
@@ -1025,6 +1100,72 @@ struct NotesEditorView: View {
 /// 文案键与 `accessibilityIdentifier` 只写在这一处：`Tests/NotePresentationTests` 数
 /// `L(.notesNew)` 与 `"notes-new"` 各**一处** —— 那是「同一个窗口里只许有一个『新建』入口」
 /// 这条纪律的机器判据（`L-50` 的老毛病：两处入口迟早有两套灰 / 亮判据）。
+/// **历史版本面板**（`FR-NTS-NOTE-VERSION-001`）· 判据①的界面落点：**列表含时间与摘要**，
+/// 每一行都能「回滚到这一版」（回滚本身也生成新版本 —— Core 的形状保证，界面不自己记）。
+struct NotesVersionHistoryView: View {
+
+    @EnvironmentObject private var appState: AppState
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.s) {
+            HStack {
+                Text(L(.notesVersionTitle))
+                    .font(Theme.font(.title))
+                Spacer()
+                Button(L(ContainerEditPrompt.cancelKey)) { dismiss() }
+                    .accessibilityIdentifier("notes-versions-close")
+            }
+            if appState.noteVersions.isEmpty {
+                Text(L(.notesVersionEmpty))
+                    .font(Theme.font(.caption))
+                    .foregroundStyle(Theme.text(.secondary))
+            } else {
+                List(appState.noteVersions) { version in
+                    HStack(alignment: .firstTextBaseline, spacing: Spacing.s) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            // **时间**是这一行的第一信息（判据①），摘要紧随其后。
+                            Text(Self.timeText(version.savedAt))
+                                .font(Theme.font(.caption))
+                                .foregroundStyle(Theme.text(.secondary))
+                            Text(version.summary)
+                                .font(Theme.font(.body))
+                                .lineLimit(1)
+                            Text("v\(version.version) · \(version.reason.rawValue) · \(version.tags.joined(separator: " "))")
+                                .font(Theme.font(.caption))
+                                .foregroundStyle(Theme.text(.secondary))
+                                .lineLimit(1)
+                        }
+                        Spacer(minLength: Spacing.s)
+                        Button(L(.notesVersionRollback)) {
+                            Task { await appState.rollbackNote(to: version.version) }
+                        }
+                        .disabled(version.version == appState.noteVersions.first?.version)
+                        .accessibilityIdentifier("notes-version-rollback-\(version.version)")
+                    }
+                }
+            }
+            // **上限说明**（判据③）：数字只在 Core 一处（`NoteVersionRetention.defaultLimit`）。
+            // 数字单独拼在句子后面而不是做成模板实参：语言表模板的实参形状要逐条进
+            // `format-argument-dispositions.json` 的棘轮，为一句说明去动那张台账不值当；
+            // 数字本身仍只有一个出处（`NoteVersionRetention.defaultLimit`）。
+            Text(L(.notesVersionLimit) + String(NoteVersionRetention.defaultLimit))
+                .font(Theme.font(.caption))
+                .foregroundStyle(Theme.text(.secondary))
+        }
+        .padding(Spacing.l)
+        .frame(minWidth: 420, minHeight: 320)
+        .accessibilityIdentifier("notes-versions-panel")
+    }
+
+    static func timeText(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .short
+        formatter.timeStyle = .medium
+        return formatter.string(from: date)
+    }
+}
+
 struct NotesNewEntry: View {
 
     @EnvironmentObject private var appState: AppState

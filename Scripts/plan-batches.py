@@ -107,15 +107,18 @@ BATCHES_V030: list[dict] = [
 BATCHES_V040: list[dict] = [
     dict(
         id="N1",
-        title="笔记面收尾：采集 / 附件 / 版本 / 笔记本归属 / 私密 / 同步冲突",
-        est_min=90,
-        match=["FR-NTS-NOTE-CAPTURE-001", "FR-NTS-NOTE-ATTACH-001", "FR-NTS-NOTE-VERSION-001",
-               "FR-NTS-NOTE-ORG-002", "FR-NTS-NOTE-PRIVACY-001", "FR-NTS-NOTE-SYNC-002"],
-        why="六条都在笔记这本身上（一个动作记下 / 附件引用 / 版本回滚 / 单层笔记本 / 私密不进搜索同步 / "
-            "记录级 LWW 留两版），共用 `NotesStore` + 同一份检索与同步口径 ⇒ 一次改到位比一条一跳省手续费。"
-            "原计划的 N1/N2 边界（采集·格式·附件 / 检索·组织·回收站）在台账上只剩这几条未闭："
-            "FORMAT / SEARCH / ORG-001 / TRASH / SYNC-001 早已 ✅",
-        exit="6 行两列全 ✅；每条的证据必须是探针或单测读数（`ledger-row.py <ID>` 出现 ✅ 只算抽查）",
+        title="笔记面收尾：采集 / 附件 / 笔记本归属 / 同步冲突",
+        est_min=70,
+        match=["FR-NTS-NOTE-CAPTURE-001", "FR-NTS-NOTE-ATTACH-001",
+               "FR-NTS-NOTE-ORG-002", "FR-NTS-NOTE-SYNC-002"],
+        why="剩下四条都在笔记这本身上（一个动作记下 / 附件引用 / 笔记本归属 / 记录级 LWW 留两版），"
+            "共用 `NotesLibrary` + 同一份检索与同步口径 ⇒ 一次改到位比一条一跳省手续费。"
+            "2026-11-02 第一片已收 `VERSION-001`（历史版本）与 `PRIVACY-001`（私密保护），"
+            "所以 N1 从 6 条降到 4 条；其中 `ORG-002` 是**判据互斥**（需求书 §3.5 要单层、"
+            "契约 §2.12 与已上盘的两层结构是架→笔记本）⇒ 标 blocked 等契约所有者裁决，"
+            "不许在本批里自己拆表。",
+        exit="4 行里能动的 3 条两列全 ✅（`ORG-002` 记 blocked + 理由 + next_try）；"
+             "每条的证据必须是探针或单测读数（`ledger-row.py <ID>` 出现 ✅ 只算抽查）",
     ),
     dict(
         id="N2",
@@ -164,6 +167,29 @@ def read_plan() -> list[tuple[str, str]]:
     if len(ids) != len(status):
         raise SystemExit(f"plan.yaml 形状异常：id {len(ids)} 个 / status {len(status)} 个")
     return list(zip(ids, status))
+
+
+def read_blocked() -> dict[str, str]:
+    """plan.yaml 里 `status: blocked` 的条目 **且带非空 next_try** ⇒ {id: next_try}。
+
+    为什么 blocked 要单独一条口子（而不是「非 todo 一律算对」）：`blocked` 是**声明一个卡点**，
+    没有 `next_try` 的 blocked 等于「我不想做」—— 那种必须判红，否则队列里少一条没人看得见
+    （2026-11-02 实测：`ORG-002` 是需求书 §3.5 与契约 §2.12 的判据互斥，next_try 写的是
+    「等契约所有者裁决」，这才是 blocked 该有的样子）。
+    """
+    text = PLAN.read_text(encoding="utf-8")
+    blocks = re.split(r"\n(?=  - id: )", text)
+    out: dict[str, str] = {}
+    for block in blocks:
+        ident = re.search(r"- id: (\S+)", block)
+        status = re.search(r"status: (\w+)", block)
+        if not ident or not status or status.group(1) != "blocked":
+            continue
+        nxt = re.search(r"next_try: \"?([^\"\n]*)\"?", block)
+        value = (nxt.group(1).strip() if nxt else "")
+        if value:
+            out[ident.group(1)] = value
+    return out
 
 
 def read_ledger() -> list[dict]:
@@ -269,6 +295,7 @@ def render_plan(rows: list[dict], spec_version: dict) -> str:
         f"{' / '.join(spec_version['ledger_scope'])} 未闭 {len(rows)} 条（{yellow} 🟡 / {white} ⬜）。",
         "tasks:",
     ]
+    blocked = read_blocked()
     for r in rows:
         lines += [
             f"  - id: {r['id']}",
@@ -276,9 +303,11 @@ def render_plan(rows: list[dict], spec_version: dict) -> str:
             f"    done_when: {yaml_str(EVIDENCE_CMD.format(id=r['id']))}",
             f"    layer: {yaml_str(r['layer'])}",
             f"    prio: {yaml_str(r['prio'])}",
-            "    status: todo",
+            f"    status: {'blocked' if r['id'] in blocked else 'todo'}",
             '    evidence: ""',
         ]
+        if r["id"] in blocked:
+            lines.append(f"    next_try: {yaml_str(blocked[r['id']])}")
     return "\n".join(lines) + "\n"
 
 
@@ -287,8 +316,12 @@ def check_against_ledger(rows: list[dict], spec_version: dict) -> list[str]:
     expected = {r["id"] for r in rows}
     actual = {i for i, s in read_plan() if s == "todo"}
     closed_in_plan = {i for i, s in read_plan() if s != "todo"}
+    # **blocked 且带 next_try** 是合法的非 todo（卡点已声明）；没有 next_try 的 blocked 不算，
+    # 于是它既落到 missing、又落到 both ⇒ 两条同时判红，点名到具体 id。
+    blocked_ok = set(read_blocked())
+    closed_in_plan -= blocked_ok
     problems: list[str] = []
-    missing = sorted(expected - actual)
+    missing = sorted(expected - actual - blocked_ok)
     extra = sorted(actual - expected)
     if missing:
         problems.append(f"台账未闭但队列里没有（{len(missing)} 条）：{', '.join(missing)}")

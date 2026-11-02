@@ -58,6 +58,12 @@ public struct Note: Identifiable, Codable, Equatable, Sendable {
     /// **置顶不刷新 `updatedAt`**（与收藏 / 跨笔记本移动同口径 —— 它是组织行为，不是一次内容更新；
     /// 否则置顶一下，列表里按时间排的那一段次序就整体错乱）。
     public var isPinned: Bool
+    /// **私密**（需求 `FR-NTS-NOTE-PRIVACY-001`）：**不进检索、不同步、不外发（Agent / IM / 导出）**，
+    /// 打开内容要二次验证。它是**保护挡位**而不是内容字段 ⇒ 改这一档不刷新 `updatedAt`
+    /// （与收藏 / 置顶 / 跨笔记本移动同口径），也不产生新版本。
+    /// **只在 `upsert` 的 INSERT 分支里出现**（与 `favorite` / `pinned` 同一条教训：改几个字保存
+    /// 不许把私密状态静默抹掉），改这一档只有 `setPrivate` 一条路。
+    public var isPrivate: Bool
 
     public init(
         id: UUID = UUID(),
@@ -69,7 +75,8 @@ public struct Note: Identifiable, Codable, Equatable, Sendable {
         updatedAt: Date = Date(),
         containsRowData: Bool = false,
         isFavorite: Bool = false,
-        isPinned: Bool = false
+        isPinned: Bool = false,
+        isPrivate: Bool = false
     ) {
         self.id = id
         self.title = title
@@ -81,6 +88,7 @@ public struct Note: Identifiable, Codable, Equatable, Sendable {
         self.containsRowData = containsRowData
         self.isFavorite = isFavorite
         self.isPinned = isPinned
+        self.isPrivate = isPrivate
     }
 
     /// **解码**：`favorite` / `pinned` 是**后加的字段**（旧库 / 旧 `notes.json` 里没有这两列）⇒ 缺字段按 `false`。
@@ -98,10 +106,11 @@ public struct Note: Identifiable, Codable, Equatable, Sendable {
         containsRowData = try container.decodeIfPresent(Bool.self, forKey: .containsRowData) ?? false
         isFavorite = try container.decodeIfPresent(Bool.self, forKey: .isFavorite) ?? false
         isPinned = try container.decodeIfPresent(Bool.self, forKey: .isPinned) ?? false
+        isPrivate = try container.decodeIfPresent(Bool.self, forKey: .isPrivate) ?? false
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, title, body, tags, source, createdAt, updatedAt, containsRowData, isFavorite, isPinned
+        case id, title, body, tags, source, createdAt, updatedAt, containsRowData, isFavorite, isPinned, isPrivate
     }
 }
 
@@ -111,13 +120,22 @@ public struct NoteDraft: Sendable {
     public var body: String
     public var tags: [String]
     public var source: NoteSource
+    /// 新建时就想标私密（捕获路径不强制；默认公开 —— 私密是**人按的**，不是默认）。
+    public var isPrivate: Bool
     private var rowDataConfirmed = false
 
-    public init(title: String, body: String = "", tags: [String] = [], source: NoteSource = NoteSource()) {
+    public init(
+        title: String,
+        body: String = "",
+        tags: [String] = [],
+        source: NoteSource = NoteSource(),
+        isPrivate: Bool = false
+    ) {
         self.title = title
         self.body = body
         self.tags = tags
         self.source = source
+        self.isPrivate = isPrivate
     }
 
     /// 显式确认"这条要带结果集行数据"——调用方必须是人点过勾选的地方。
@@ -135,7 +153,8 @@ public struct NoteDraft: Sendable {
             source: source,
             createdAt: now,
             updatedAt: now,
-            containsRowData: rowDataConfirmed
+            containsRowData: rowDataConfirmed,
+            isPrivate: isPrivate
         )
     }
 }

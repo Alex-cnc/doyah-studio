@@ -239,9 +239,137 @@ public actor NoteLibrary {
         if let id { note.id = id }
         note.isFavorite = existing?.isFavorite ?? false
         note.isPinned = existing?.isPinned ?? false
+        // 私密挡位同理：`upsert` 的 `ON CONFLICT` 段不碰 `is_private`（改几个字保存不许静默解除私密），
+        // 所以库里那份才是事实；返回的 `Note` 要如实反映它，否则调用方拿到的是「看起来不私密」的假象。
+        note.isPrivate = existing?.isPrivate ?? note.isPrivate
         note.updatedAt = now
         _ = try database.upsert(note)
         return note
+    }
+
+    /// **一次保存 = 本体 + 正文权威源 + 历史版本**（`FR-NTS-NOTE-VERSION-001`）。
+    ///
+    /// 为什么要有这一条（而不是让调用方连着调 `upsert` + `setNoteSpans`）：版本要记的是
+    /// **这次保存落下去的那一份完整内容**，而 `upsert`（标题 / 标签 / 正文投影）与
+    /// `setNoteSpans`（spans + 正文）是两次写 —— 中间那一瞬的库里状态是「新标题 + 旧 spans」。
+    /// 把三件事收进一个 actor 方法，版本一定在两次写**都完成之后**才记，读出来不会半新半旧。
+    ///
+    /// `spans` 为 `nil` 时**不写正文列**（只有标题 / 标签变了的保存）：与 `setNoteSpans`
+    /// 「只由有权威源的那条路写正文」同一条纪律，不拿投影覆盖别人的权威源。
+    @discardableResult
+    public func save(
+        _ draft: NoteDraft,
+        spans: String? = nil,
+        id: UUID? = nil,
+        now: Date = Date(),
+        reason: NoteVersionReason = .save,
+        retention: NoteVersionRetention = .default
+    ) throws -> Note {
+        let written = try upsert(draft, id: id, now: now)
+        if let spans {
+            _ = try open().setNoteSpans(spans, body: noteBody(fromSpans: spans, fallback: draft.body), id: written.id)
+        }
+        _ = try open().recordVersion(noteID: written.id, at: now, reason: reason, retention: retention)
+        // 返回**库里读回来的那一份**（正文 / spans / 版本号都以库为准，不用内存里那份猜）。
+        return try open().note(id: written.id) ?? written
+    }
+
+    /// 正文投影（`spans` 编不出来时退回调用方给的正文）：与 `NoteBody` 的编解码面同一份，
+    /// 不在这里另起一套解析。
+    private func noteBody(fromSpans spans: String, fallback: String) -> String {
+        guard let data = spans.data(using: .utf8),
+              let body = try? JSONDecoder().decode(NoteBody.self, from: data) else { return fallback }
+        return body.body
+    }
+
+    // MARK: - 历史版本（`FR-NTS-NOTE-VERSION-001`）
+
+    /// 一条笔记的历史版本（**最新在前**；每版带时间与摘要）。
+    public func versions(of id: UUID, limit: Int = 200) throws -> [NoteVersionEntry] {
+        try open().versions(of: id, limit: limit)
+    }
+
+    /// 某一版。
+    public func version(of id: UUID, number: Int) throws -> NoteVersionEntry? {
+        try open().version(of: id, number: number)
+    }
+
+    /// 一篇笔记留了几版（界面说「已留 N 版」、判据读数用）。
+    public func versionCount(of id: UUID) throws -> Int {
+        try open().versionCount(of: id)
+    }
+
+    /// **回滚到某一版**：把那一版的标题 / 正文 / 标签 / spans 重新落库。
+    ///
+    /// 「回滚本身也生成新版本」由**形状**保证 —— 回滚走的就是 `save`，于是它自己会记一版
+    /// （`reason == .rollback`），不需要在回滚路径上多写一句「别忘了记版本」。
+    /// 认不出的版本号 ⇒ `nil`（调用方按「没有这一版」如实处置）。
+    @discardableResult
+    public func rollback(
+        id: UUID,
+        to version: Int,
+        now: Date = Date(),
+        retention: NoteVersionRetention = .default
+    ) throws -> Note? {
+        guard let entry = try open().version(of: id, number: version) else { return nil }
+        let database = try open()
+        let existing = try database.note(id: id)
+        let draft = NoteDraft(
+            title: entry.title,
+            body: entry.body,
+            tags: entry.tags,
+            source: existing?.source ?? NoteSource(),
+            isPrivate: existing?.isPrivate ?? false
+        )
+        return try save(draft, spans: entry.spans, id: id, now: now, reason: .rollback, retention: retention)
+    }
+
+    // MARK: - 私密挡位（`FR-NTS-NOTE-PRIVACY-001`）
+
+    /// 私密条目门牌（**无正文 / 无标签**）：界面「私密」那一栏只显示这些。
+    public func privateSummaries() throws -> [NoteDatabase.PrivateNoteSummary] {
+        guard FileManager.default.fileExists(atPath: databaseURL.path) else { return [] }
+        return try open().privateSummaries()
+    }
+
+    /// **标 / 撤私密**。撤私密必须先带 `confirmed: true`（判据③「取消私密需二次确认」）——
+    /// 确认动作是界面上的那一次二次确认，这一层只负责「没确认就不给撤」。
+    @discardableResult
+    public func setPrivate(id: UUID, _ isPrivate: Bool, confirmed: Bool = false) throws -> NotePrivacyChangeOutcome {
+        if !isPrivate, NotePrivacy.unprivateRequiresConfirmation, !confirmed {
+            return .confirmationRequired
+        }
+        return .changed(try open().setPrivate(isPrivate, id: id))
+    }
+
+    public func isPrivate(id: UUID) throws -> Bool? {
+        try open().isPrivate(id: id)
+    }
+
+    /// 打开一条**私密**笔记的内容（判据「需二次验证才可查看」）。
+    ///
+    /// 三条出口分得开：`notPrivate`（走普通读）/ `denied`（验证没过，**内容一个字都不返回**）/
+    /// `revealed`（带内容与历史版本）。把「拒绝」与「没有这条」分开，是因为两者的用户处置完全不同。
+    public enum RevealOutcome: Equatable, Sendable {
+        case revealed(RevealedPrivateNote)
+        case denied
+        case notFound
+        case notPrivate
+    }
+
+    /// 判据**「语言是传进来的」**：`reason` 是**必填**、没有默认值 —— 它是系统验证框里显示的那句话，
+    /// 要由界面按当前语言给（`L(.notesPrivateUnlockReason)`）。本层若自带一个中文字面量默认值，
+    /// 英文界面会弹出中文框，同时本地化棘轮 A 会把这里记成一条新欠账（2026-11-02 实测：101 → 102 文件）。
+    public func revealPrivate(
+        id: UUID,
+        authorizer: NotePrivacyAuthorizing,
+        reason: String
+    ) async throws -> RevealOutcome {
+        let database = try open()
+        guard let note = try database.note(id: id) else { return .notFound }
+        guard note.isPrivate else { return .notPrivate }
+        guard await authorizer.authorize(reason: reason) else { return .denied }
+        return .revealed(RevealedPrivateNote(note: note, versions: try database.versions(of: id)))
     }
 
     /// **收藏 / 取消收藏一条笔记**（队列 `L-184` 第三片）：返回**真的改了几行**。
