@@ -151,6 +151,9 @@ final class PaletteWiringProbeTests: XCTestCase {
         case notesEntry
         /// 笔记面命令（`N-UI-4` 那 6 条）：**先判「人有没有被带到笔记面」，再看具体状态**。
         case notes(NotesLanding)
+        /// 快速捕获（`FR-NTS-NOTE-CAPTURE-001`）：**不切活动面** —— 捕获面的意义就是
+        /// 「在任何面都能记」，把人拽去笔记面反而是错的。
+        case quickCapture
         /// 按口径**直接返回**（理由必须写在断言里，免得「真的没反应」混进来）。
         case silentByDesign(String)
         /// 需要**对象树选中项**（`paletteTreeObject`）：备好表 ⇒ 内层落点；没备 ⇒ 必须给这句说法。
@@ -225,6 +228,7 @@ final class PaletteWiringProbeTests: XCTestCase {
             // 笔记面那 6 条（`N-UI-4`）：命令在**全局**面板里，落点 = ① 人真的被带到笔记面
             // ② 那一条命令自己的状态变化（编辑器新建态 / 新建笔记本请求 / 搜索范围 / 一级导航）。
             ("newNote", .notes(.newNoteDraft)),
+            ("quickCapture", .quickCapture),
             ("newNotebook", .notes(.notebookCreation)),
             ("noteSearchScopeCurrent", .notes(.searchScope(.current))),
             ("noteSearchScopeAll", .notes(.searchScope(.all))),
@@ -346,6 +350,28 @@ final class PaletteWiringProbeTests: XCTestCase {
             let landed = await settle { tab()?.syntaxCheckMessage == expected }
             XCTAssertTrue(
                 landed, "「\(id)」应当在页签上留下可读的检查结果 \(expected)，实际 \(tab()?.syntaxCheckMessage ?? "（空）")",
+                file: file, line: line
+            )
+
+        case .quickCapture:
+            XCTAssertFalse(
+                state.quickCapture.isPresenting,
+                "探针前提：起点不该已经开着捕获面", file: file, line: line
+            )
+            state.performPaletteCommand(id)
+            XCTAssertTrue(
+                state.quickCapture.isPresenting,
+                "「\(id)」必须把捕获面打开 —— 判据①是「一个动作就能输入」，打不开就等于这条命令没接线",
+                file: file, line: line
+            )
+            XCTAssertTrue(
+                state.quickCapture.focusRequested,
+                "「\(id)」打开捕获面时焦点必须直接进正文框（否则人还要再点一下）",
+                file: file, line: line
+            )
+            XCTAssertEqual(
+                state.selectedActivityItem, .database,
+                "「\(id)」不许把人从当前面拽走（捕获是在任何地方都能记）",
                 file: file, line: line
             )
 

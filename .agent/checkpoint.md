@@ -122,3 +122,13 @@
 - **反例两段**（判红后 `shasum` 逐字节还原）：`copyItem` → 文本重写 ⇒ **6 例红**（`f0f10473…`）；`deleteReturningAttachments` 顺手删文件 ⇒ **2 例红**（`a55fe156…`）。
 - **本片留下的口子（next_try）**：① 真鼠标点「插入附件」+ `NSOpenPanel` 真选文件**未点**（机械证据在库 / 文件系统层）· ② 缩略图 / 图片预览未画 · ③「缩放不改原文件」只保证不改文件，显示比例未量 · ④ 多选删除时附件清单按条累加后一次确认，混合场景文案未量。
 - **下一批 = N1 剩余 2 条**：`NOTE-CAPTURE-001`（一个动作记下：桌面全局快捷键 + 不填标题也能存、首行当标题）· `NOTE-SYNC-002`（记录级 LWW + 冲突留两版：落败那版可打开 / 两版标来源设备与时间 / 合并结果可回退 / 「以我这版为准」是人按的 / 墓碑 rev 严格递增）。
+
+## v0.4.0 · N1（第三片：快速捕获）（2026-11-02）
+
+- **收一条**：`FR-NTS-NOTE-CAPTURE-001` 两列全 ✅（桌面侧）。
+  - 落盘：`Plugins/Notes/Sources/NoteCapture.swift`（首行推标题 + 逐字正文 + `commit` 只写本地库 + `QuickCaptureSession` + `QuickCaptureShortcut` ⌥⌘N + `QuickCaptureHotKey` 只注册一次 / 失败可重试 / 可注销）；`NoteSource.Kind` 加 `quickCapture`；`Platform/macOS/CarbonQuickCaptureHotKey.swift`（Carbon 真后端，不要辅助功能授权）；界面 `App/Views/QuickCaptureSheet.swift` + `MainWindow` 的 sheet 与启动装热键；命令面板 `quickCapture`（快捷键被占时的去处，落点已登记进 `TestsUISnapshot/PaletteWiringProbeTests`）；语言表新增七键两语。
+- **读数**：`swift test --filter NoteCaptureTests` **13 例 / 0 失败** · `verify-core.sh` **5112 例 / 13 skipped / 1 失败**（5099 → +13；那 1 条 = `SSHTunnelRuntimeTests.testBusyPortFailsFastWithoutStartingAnything` 存量抖动，同一棵树两次跑一次过、一次不过）· `verify-ui-interactions.sh` **116 条全跑 / 无跳过 / 源锚点全在** rc=0 · `check-palette-wiring` **41 ↔ 41** · 文档门禁全 rc=0（numbers 三向 **5112**：`doc-numbers.json` + `AGENT-SPEC.md` 两处同批改数）· `check-button-icon-only` 21 红 → 15 红（上一跳引入的 3 条已清，余 15 条 = HEAD 存量 18 − 3）· `check-empty-action-buttons` 48/48 · 棘轮 A 101/954 == 基线 · `check-format-arguments` 223/20 == 基线。
+- **队列口径（本片后实测）**：`plan-batches --version 0.4.0 --check` rc=0；`plan.yaml` = **9 todo + 1 blocked**（CAPTURE 已出队）；`batches.yaml` N1 只剩 **1 条**（`FR-NTS-NOTE-SYNC-002`）⇒ 下一跳把它与 N2 并一批（按「3–6 条」规矩 N1 已偏小）。台账 §4.2 v0.4.0 11 → **10**（9 / 1），未闭 82 → **81**。
+- **未验证（≠通过）**：真按一次**系统级**热键未点（机械证据 = 注册参数与事件派发路径）· 手机锁屏那一半属移动端（不在本仓）· 「联网后自动同步」的上传那一半归 `SYNC-002` · `verify-all.sh` 第 11 项（打包 .app）与第 18 项（生成物一致性）本轮未跑（**不等于通过**）。
+- **下一批**：`N1` 余 1 条 + `N2` 四条一起（`FR-NTS-NOTE-SYNC-002` 记录级 LWW 冲突留两版 · `FR-NTS-TODO-LIST-001/002/003` · `FR-NTS-TODO-LINK-001`）。
+- 证据 `.agent/evidence/2026-11-02-N1-CAPTURE-001.md`

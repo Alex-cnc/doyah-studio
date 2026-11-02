@@ -279,6 +279,9 @@ struct MainWindow: View {
             // 就不要再摆出那一栏（与下面 `onChange` 是同一条口径的两处调用，不是两条）。
             syncSidebarVisibility(for: appState.selectedActivityItem)
             MainMenuLocalizer.syncAreaVisibility(appState.selectedActivityItem)
+            // **全局快捷键**（`FR-NTS-NOTE-CAPTURE-001` 判据①）：⌥⌘N 在任何应用前面都收得到。
+            // 幂等 —— 每次建窗都调一次也不会叠注册（`QuickCaptureHotKey.start` 只管一次）。
+            appState.startQuickCaptureHotKey()
         }
         .onChange(of: appState.selectedActivityItem) { _, item in
             syncSidebarVisibility(for: item)
@@ -321,6 +324,15 @@ struct MainWindow: View {
                 .frame(width: 0, height: 0)
                 .accessibilityHidden(true)
         )
+        // **快速捕获面**（`FR-NTS-NOTE-CAPTURE-001` 判据①）：快捷键 ⌥⌘N 或命令面板「快速记录」
+        // 直接开到这里 —— 面一出现焦点就在正文框里，中间没有选笔记本 / 选标签那几步。
+        .sheet(isPresented: Binding(
+            get: { appState.quickCapture.isPresenting },
+            set: { if !$0 { appState.cancelQuickCapture() } }
+        )) {
+            QuickCaptureSheet()
+                .environmentObject(appState)
+        }
         .sheet(isPresented: $appState.isCommandPalettePresented) {
             CommandPaletteView()
                 .environmentObject(appState)

@@ -616,6 +616,14 @@ public enum LKey: String, CaseIterable, Sendable {
     case notesNewNotebook
     case notesNewNotebookTitle
     case notesNewNotebookNoShelf
+    // 快速捕获（`FR-NTS-NOTE-CAPTURE-001`）：快捷键 / 命令面板一个动作记下一条。
+    case notesQuickCapture
+    case notesQuickCaptureTitle
+    case notesQuickCapturePlaceholder
+    case notesQuickCaptureUntitled
+    case notesQuickCaptureSave
+    case notesQuickCaptured
+    case notesQuickCaptureHotKeyTaken
     case notesRenameMenu
     case notesRenameTitle
     case notesEditNamePlaceholder
@@ -4000,6 +4008,13 @@ public enum LocalizedStrings {
         .notesMoveShelfCurrentMark: [.simplifiedChinese: "（当前架）", .english: " (current shelf)"],
         .notesNewNotebookTitle: [.simplifiedChinese: "新建笔记本", .english: "New notebook"],
         .notesNewNotebookNoShelf: [.simplifiedChinese: "还没有笔记本架，建不了笔记本。", .english: "There is no shelf yet — a notebook needs one."],
+        .notesQuickCapture: [.simplifiedChinese: "快速记录", .english: "Quick capture"],
+        .notesQuickCaptureTitle: [.simplifiedChinese: "快速记录", .english: "Quick capture"],
+        .notesQuickCapturePlaceholder: [.simplifiedChinese: "先写第一行 —— 它会成为标题，不用另起标题", .english: "Start with the first line — it becomes the title, no separate title needed"],
+        .notesQuickCaptureUntitled: [.simplifiedChinese: "未命名速记", .english: "Untitled capture"],
+        .notesQuickCaptureSave: [.simplifiedChinese: "存下", .english: "Save"],
+        .notesQuickCaptured: [.simplifiedChinese: "已记下「%@」", .english: "Captured \u{201C}%@\u{201D}"],
+        .notesQuickCaptureHotKeyTaken: [.simplifiedChinese: "⌥⌘N 被别的应用占用了 —— 仍可从命令面板「快速记录」进入", .english: "⌥⌘N is taken by another app — use Quick capture in the command palette instead"],
         .notesRenameMenu: [.simplifiedChinese: "重命名…", .english: "Rename…"],
         .notesRenameTitle: [.simplifiedChinese: "重命名", .english: "Rename"],
         .notesEditNamePlaceholder: [.simplifiedChinese: "名字", .english: "Name"],

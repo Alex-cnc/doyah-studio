@@ -7217,6 +7217,10 @@ final class AppState: ObservableObject {
         case "newNotebook":
             guard enterNotesAreaForNotesCommand() else { return }
             beginNewNotebook()
+        // 快速捕获：**不必先进笔记面**（捕获的意义就是「在任何地方都能记」），
+        // 所以这条不走 `enterNotesAreaForNotesCommand` —— 面自己浮出来。
+        case "quickCapture":
+            beginQuickCapture()
         // 「搜索范围」两档：改的就是笔记面那枚分段控件的状态（`notesSearchScope`）——
         // 菜单与控件是同一份状态的两个入口，不另存一份。
         case "noteSearchScopeCurrent":
@@ -10195,6 +10199,51 @@ final class AppState: ObservableObject {
     /// 编辑面上这一条**现在是不是私密**（工具条那枚锁的形态读它；列表里看不到私密条目，
     /// 所以不能拿 `notes` 数组反推）。
     @Published private(set) var noteEditorIsPrivate = false
+
+    // MARK: - 快速捕获（v0.4.0 · `FR-NTS-NOTE-CAPTURE-001`）
+
+    /// 捕获面的状态（判据①）：`begin()` 之后立刻可输入 —— 不选笔记本、不选标签、不选模板。
+    @Published var quickCapture = QuickCaptureSession()
+    /// 全局快捷键（⌥⌘N）。组合被别人占住时**不静默**：结果留在 `quickCaptureHotKeyOutcome` 里。
+    private var quickCaptureHotKey: QuickCaptureHotKey?
+    @Published private(set) var quickCaptureHotKeyOutcome: QuickCaptureHotKey.Outcome?
+
+    /// 装全局快捷键（**幂等**：每建一次窗都会调一次，重复注册会变成「一次按键弹两个面」）。
+    func startQuickCaptureHotKey() {
+        guard quickCaptureHotKey == nil else { return }
+        let hotKey = QuickCaptureHotKey(backend: CarbonQuickCaptureHotKeyBackend())
+        quickCaptureHotKey = hotKey
+        quickCaptureHotKeyOutcome = hotKey.start { [weak self] in
+            Task { @MainActor [weak self] in self?.beginQuickCapture() }
+        }
+    }
+
+    /// **一个动作**：快捷键 / 命令面板 → 捕获面出现，焦点直接进正文框。
+    func beginQuickCapture() {
+        quickCapture.begin()
+    }
+
+    /// 不记了（人按的取消）：一个字节都不落盘。
+    func cancelQuickCapture() {
+        quickCapture.end()
+    }
+
+    /// 存下这一条：**只写本地库**（判据② —— 捕获路径里没有网络调用），存完刷新列表。
+    func commitQuickCapture() async {
+        do {
+            let note = try await QuickCapture.commit(
+                body: quickCapture.body,
+                fallbackTitle: L(.notesQuickCaptureUntitled),
+                into: NoteLibrary.defaultLibrary()
+            )
+            quickCapture.end()
+            await reloadNotes()
+            selectedNoteIDs = [note.id]
+            statusMessage = L(.notesQuickCaptured, note.title)
+        } catch {
+            errorMessage = ErrorPresenter.message(for: error)
+        }
+    }
 
     func refreshNotePrivateSummaries() async {
         let summaries = (try? await NoteLibrary.defaultLibrary().privateSummaries()) ?? []

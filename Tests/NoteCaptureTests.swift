@@ -63,7 +63,7 @@ final class NoteCaptureTests: XCTestCase {
     // MARK: - ①② 一个动作 → 立刻可输入；落盘只走本地
 
     func testBeginMakesCaptureInputReadyInOneStep() {
-        let session = QuickCaptureSession()
+        var session = QuickCaptureSession()
         XCTAssertFalse(session.isPresenting)
         XCTAssertFalse(session.focusRequested)
 

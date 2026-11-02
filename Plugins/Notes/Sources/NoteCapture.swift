@@ -76,7 +76,7 @@ public enum QuickCapture {
 
 /// 捕获面的状态（判据①的机器证据）：`begin()` 之后**立刻可输入** ——
 /// 没有「选笔记本」这一步、没有「选标签」这一步，光标已经落在正文框里（`focusRequested`）。
-public final class QuickCaptureSession {
+public struct QuickCaptureSession {
 
     /// 捕获面是否呈现。
     public private(set) var isPresenting = false
@@ -88,18 +88,18 @@ public final class QuickCaptureSession {
     public init() {}
 
     /// **一个动作**：快捷键触发 → 捕获面出现 + 焦点进正文框 + 正文空。
-    public func begin() {
+    public mutating func begin() {
         isPresenting = true
         focusRequested = true
         body = ""
     }
 
     /// 焦点已落地（界面层 `onAppear` 里调一次），避免重复抢焦点。
-    public func focusDidLand() {
+    public mutating func focusDidLand() {
         focusRequested = false
     }
 
-    public func end() {
+    public mutating func end() {
         isPresenting = false
         focusRequested = false
         body = ""

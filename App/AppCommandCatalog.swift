@@ -59,6 +59,9 @@ enum AppCommandCatalog {
             // 与关键词在这里定义一次，动作在 `AppState.performPaletteCommand` 里定义一次。
             item("newNote", .notesNew, "new note 新建 笔记", "new note", .paletteCategoryNotes),
             item("newNotebook", .notesNewNotebook, "new notebook 新建 笔记本", "new notebook", .paletteCategoryNotes),
+            // 快速捕获（`FR-NTS-NOTE-CAPTURE-001`）：与 ⌥⌘N 同一个动作 —— 快捷键被别的应用占住时，
+            // 这条是仍然可用的入口（不让人因为热键失败就记不下来）。
+            item("quickCapture", .notesQuickCapture, "quick capture jot 快速 记录 速记 捕获", "quick capture", .paletteCategoryNotes),
             item("noteSearchScopeCurrent", .notesSearchScopeCurrent, "scope current 搜索范围 当前 笔记本", "search scope current", .paletteCategoryNotes),
             item("noteSearchScopeAll", .notesSearchScopeAll, "scope all notebooks 搜索范围 全部 笔记本", "search scope all notebooks", .paletteCategoryNotes),
             item("noteFavorites", .notesFavorites, "favorites 已收藏 收藏", "favorites", .paletteCategoryNotes),
