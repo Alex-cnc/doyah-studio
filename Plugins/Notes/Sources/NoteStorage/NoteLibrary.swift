@@ -570,6 +570,29 @@ public actor NoteLibrary {
         try open().setDone(done, id: id, at: moment)
     }
 
+    /// **一次「改重复任务」**（`FR-NTS-TODO-CALENDAR-001` 判据④）：要落的几笔在**同一个事务**里写完，
+    /// 返回读回事实（`upsert(_ todo:)` 一条条来一遍，完成态仍只认库里那一份）。
+    ///
+    /// 为什么必须是一个事务：`.thisOccurrence` 要改两行（那一串补一格「跳过」+ 新起一条独立记录）。
+    /// 分两次写，中间失败会留下「原日子不发生了、改动那条却没写进去」—— 用户那边就是**任务凭空少一次**，
+    /// 而两步各自都成功过，日志里看不出问题。
+    @discardableResult
+    public func saveOccurrenceEdit(_ edit: TodoOccurrenceEdit) throws -> [Todo] {
+        let database = try open()
+        // 完成态与完成时刻只认库里那一份（与 `upsert(_ todo:)` 同一条纪律）：先读回，再一个事务写完。
+        var rows: [Todo] = []
+        for value in edit.writes {
+            var row = value
+            if let existing = try database.todo(id: value.id) {
+                row.done = existing.done
+                row.completedAt = existing.completedAt
+            }
+            rows.append(row)
+        }
+        try database.upsert(rows)
+        return rows
+    }
+
     public func deleteTodo(id: UUID) throws {
         guard FileManager.default.fileExists(atPath: databaseURL.path) else { return }
         try open().deleteTodo(id: id)

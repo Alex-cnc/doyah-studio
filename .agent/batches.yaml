@@ -2,7 +2,7 @@
 #
 # 唯一事实源 = Docs/Doyah产品开发计划任务清单-macOS.md（活书台账）。
 # 本文件只决定「一跳做哪几条」，不许反向改台账。
-# 生成于 2026-11-02，源 = plan.yaml 里 4 条 status: todo（另有 1 条 blocked，不在批次里：FR-NTS-NOTE-ORG-002）
+# 生成于 2026-11-02，源 = plan.yaml 里 3 条 status: todo（另有 1 条 blocked，不在批次里：FR-NTS-NOTE-ORG-002）
 #
 # 生成命令：python3 Scripts/plan-batches.py --write   （--check 只比对不写盘）
 
@@ -12,9 +12,9 @@ batches:
     title: "待办日历与状态一致性：月/周视图 / 当天详情 / 完成与改期同一事务 / 单一事实源"
     status: todo
     est_min: 60
-    items: [FR-NTS-TODO-CALENDAR-001, FR-NTS-TODO-CALENDAR-002, FR-NTS-TODO-STATE-001, FR-NTS-TODO-STATE-002]
+    items: [FR-NTS-TODO-CALENDAR-002, FR-NTS-TODO-STATE-001, FR-NTS-TODO-STATE-002]
     why: "四条互相咬：日历只是同一份任务的第二种视图，所以「完成 / 改期同一事务」与「日历不另存」必须同批落地，否则先做日历就会做出第二套状态"
     exit: "4 行两列全 ✅；含一条「日历另存一份 ⇒ 必须判红」的反例"
 
-# 合计 4 条，覆盖 plan.yaml 全部 todo。
+# 合计 3 条，覆盖 plan.yaml 全部 todo。
 # 粗估 60 分钟 ≈ 1.0 小时（原一格一条的节奏按 20 分钟/条算）。

@@ -774,6 +774,10 @@ public enum LKey: String, CaseIterable, Sendable {
     case todoCalendarNewTodo
     case todoCalendarWriteNote
     case todoReschedule
+    // `FR-NTS-TODO-CALENDAR-001` 判据④：改一条**重复任务**前要先答「改这一条还是这一串」。
+    case todoScopePrompt
+    case todoScopeThisOccurrence
+    case todoScopeThisSeries
     case todoWeekdayMonday
     case todoWeekdayTuesday
     case todoWeekdayWednesday
@@ -4213,6 +4217,14 @@ public enum LocalizedStrings {
         .todoCalendarNewTodo: [.simplifiedChinese: "新建待办", .english: "New todo"],
         .todoCalendarWriteNote: [.simplifiedChinese: "写笔记", .english: "Write note"],
         .todoReschedule: [.simplifiedChinese: "改期", .english: "Reschedule"],
+        // `FR-NTS-TODO-CALENDAR-001` 判据④：「这一条 / 这一串」两句都是**后果**，不是两个动作名 ——
+        // 说清改完会发生什么（另一半由 `TodoOccurrenceEditor` 决定），别写成「确定 / 全部」那种看了也不懂的词。
+        .todoScopePrompt: [
+            .simplifiedChinese: "这是重复任务：只改这一天，还是整串都改？",
+            .english: "This task repeats — change just this day, or the whole series?"
+        ],
+        .todoScopeThisOccurrence: [.simplifiedChinese: "只改这一天", .english: "Only this day"],
+        .todoScopeThisSeries: [.simplifiedChinese: "整串都改", .english: "The whole series"],
         .todoWeekdayMonday: [.simplifiedChinese: "周一", .english: "Mon"],
         .todoWeekdayTuesday: [.simplifiedChinese: "周二", .english: "Tue"],
         .todoWeekdayWednesday: [.simplifiedChinese: "周三", .english: "Wed"],

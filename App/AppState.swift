@@ -231,6 +231,13 @@ struct TodoRescheduleDraft: Identifiable, Equatable {
     let id: UUID
     /// 改到哪一刻。
     var dueAt: Date
+    /// 从**哪一天那一回**进的改期框（日历上点的那个格子；从清单 / 行上进 ⇒ `nil`）。
+    ///
+    /// 只有它存在时「只改这一天」才成立 —— 没有具体哪一回，就没有「这一条」可改
+    /// （`TodoOccurrenceEditor.reschedule` 会如实退成整串，不猜一个日子）。
+    var day: Date?
+    /// 改的是「这一天」还是「整串」（`FR-NTS-TODO-CALENDAR-001` 判据④）。
+    var scope: TodoRepeatEditScope = .initial
 }
 
 @MainActor
@@ -12068,8 +12075,24 @@ final class AppState: ObservableObject {
 
     /// 打开「改期」框（`FR-NOTE-38` 的「日历上直接完成 / 改期」）。
     /// 没有截止时间的任务也能改期 —— 那就是给它**挂上**一个截止时间。
-    func beginReschedule(_ todo: Todo) {
-        todoRescheduleDraft = TodoRescheduleDraft(id: todo.id, dueAt: todo.dueAt ?? Date())
+    ///
+    /// `day` = 从日历的哪一格进的（那一回的发生日）；从清单 / 行上进 ⇒ `nil`
+    /// （没有具体哪一回，改期就只可能是「整串」）。
+    func beginReschedule(_ todo: Todo, on day: Date? = nil) {
+        let occurrence = day.flatMap { candidate in
+            TodoOccurrence.occurs(todo, on: candidate, calendar: .current) ? candidate : nil
+        }
+        // 预填：从某一天那一回进出 ⇒ 预填**那一天**（钟点沿用原截止的钟点），否则预填原截止。
+        var dueAt = todo.dueAt ?? Date()
+        if let occurrence {
+            dueAt = TodoOccurrence.momentMatching(occurrence, like: todo.dueAt, calendar: .current)
+        }
+        todoRescheduleDraft = TodoRescheduleDraft(
+            id: todo.id,
+            dueAt: dueAt,
+            day: occurrence,
+            scope: .initial
+        )
     }
 
     func cancelReschedule() {
@@ -12078,6 +12101,10 @@ final class AppState: ObservableObject {
 
     /// 落改期：写新的 `dueAt` + 刷 `updatedAt`（改期属**内容类编辑**，见 `Todo.updatedAt` 的说明）。
     /// 完成态**不在这里碰**（它只有 `setDone` 一条写路）—— 与编辑器保存同一条纪律。
+    ///
+    /// **重复任务**（`FR-NTS-TODO-CALENDAR-001` 判据④）：草稿带着「哪一天那一回」时，改的是**那一次** ——
+    /// 写什么由 `TodoOccurrenceEditor` 一处决定（那一串补一格跳过 + 新起一条独立记录），
+    /// 两笔由 `saveOccurrenceEdit` 在**同一个事务**里落（判据⑤的「同一次写入」）。
     func applyReschedule() async {
         guard notesEnabled else {
             statusMessage = L(.licenseNotesNotIncluded)
@@ -12085,17 +12112,34 @@ final class AppState: ObservableObject {
         }
         guard let draft = todoRescheduleDraft else { return }
         todoRescheduleDraft = nil
-        guard var value = todos.first(where: { $0.id == draft.id }) else {
+        guard let value = todos.first(where: { $0.id == draft.id }) else {
             statusMessage = L(.todoMissing)
             await reloadTodos()
             return
         }
-        value.dueAt = draft.dueAt
-        value.updatedAt = Date()
         do {
-            _ = try await NoteLibrary.defaultLibrary().upsert(value)
-            await reloadTodos()
-            await enqueueCloudSync(uid: value.id.uuidString, family: .todo)
+            if let day = draft.day, value.repeatRule != nil {
+                let edit = TodoOccurrenceEditor.reschedule(
+                    value,
+                    on: day,
+                    to: draft.dueAt,
+                    scope: draft.scope,
+                    now: Date(),
+                    calendar: .current
+                )
+                let written = try await NoteLibrary.defaultLibrary().saveOccurrenceEdit(edit)
+                await reloadTodos()
+                for row in written {
+                    await enqueueCloudSync(uid: row.id.uuidString, family: .todo)
+                }
+            } else {
+                var row = value
+                row.dueAt = draft.dueAt
+                row.updatedAt = Date()
+                _ = try await NoteLibrary.defaultLibrary().upsert(row)
+                await reloadTodos()
+                await enqueueCloudSync(uid: row.id.uuidString, family: .todo)
+            }
         } catch {
             errorMessage = ErrorPresenter.message(for: error)
         }

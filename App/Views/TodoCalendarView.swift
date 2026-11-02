@@ -280,7 +280,10 @@ struct TodoCalendarPane: View {
             if appState.todoCalendarSelectedDayHasTasks {
                 // **与清单那一屏同一个渲染件**（段头 / 分区 / 行都只有一处）——
                 // 于是「改期后清单同步」这件事在形状上就成立。
-                TodoSectionListView(sections: appState.todoCalendarSelectedDaySections)
+                TodoSectionListView(
+                    sections: appState.todoCalendarSelectedDaySections,
+                    occurrenceDay: appState.todoCalendarSelectedDay
+                )
             } else {
                 Text(L(.todoCalendarNoDay))
                     .font(Theme.font(.caption))
@@ -307,6 +310,12 @@ struct TodoSectionListView: View {
 
     let sections: [TodoSection]
 
+    /// 这些行是从**日历的某一天**画出来的（那一回的发生日）；清单那一屏 ⇒ `nil`。
+    ///
+    /// 为什么要传：重复任务的「改期」在日历上问的是「只改这一天还是整串」，而在清单里只有整串
+    /// 那一条路 —— 两处问的不是同一件事，靠这一格区分，不在行里再判一次「我现在在哪一屏」。
+    var occurrenceDay: Date? = nil
+
     @EnvironmentObject private var appState: AppState
 
     var body: some View {
@@ -316,7 +325,7 @@ struct TodoSectionListView: View {
                     // 已完成那一段折叠着时不画行（顺序与段头都还在 —— 段头就是那个开关）。
                     if section.kind != .completed || appState.todoCompletedExpanded {
                         ForEach(section.todos) { todo in
-                            TodoRowView(todo: todo)
+                            TodoRowView(todo: todo, occurrenceDay: occurrenceDay)
                         }
                     }
                 } header: {
@@ -383,6 +392,9 @@ struct TodoRowView: View {
 
     let todo: Todo
 
+    /// 这一行画在日历的**哪一天**（那一回的发生日）；清单那一屏 ⇒ `nil`。
+    var occurrenceDay: Date? = nil
+
     @EnvironmentObject private var appState: AppState
 
     var body: some View {
@@ -416,7 +428,7 @@ struct TodoRowView: View {
                     // ② 截止时间（分带词；空 = 「无截止」）：点它 ⇒ 改期那张既有弹框
                     // —— 改期是一条**既有写路**，这里不新开第三条。
                     Button {
-                        appState.beginReschedule(todo)
+                        appState.beginReschedule(todo, on: occurrenceDay)
                     } label: {
                         Text(columnText(.dueAt))
                             .font(Theme.font(.caption))
@@ -505,7 +517,7 @@ struct TodoRowView: View {
             Button(L(todo.done ? .todoMarkOpen : .todoMarkDone)) {
                 Task { await appState.toggleTodoDone(todo) }
             }
-            Button(L(.todoReschedule)) { appState.beginReschedule(todo) }
+            Button(L(.todoReschedule)) { appState.beginReschedule(todo, on: occurrenceDay) }
             Divider()
             // **先确认再删**（片 `A5-DEL` · 派单 `T-20261009-038`）：这里只挂请求（与编辑面 / 左区顶部
             // 那两枚走**同一个**确认框），确认框那一头（`confirmNoteRemoval`）才是 `deleteTodo`。
@@ -617,10 +629,35 @@ struct TodoRescheduleSheet: View {
 
     @EnvironmentObject private var appState: AppState
 
+    /// 这一条是**重复任务**、而且是从日历的某一天进的 ⇒ 必须先把「这一条 / 这一串」问清楚。
+    ///
+    /// 判据是「有没有那一回」（`draft.day`）而不是「有没有重复规则」：没有具体哪一天，
+    /// 「只改这一天」这个选项就无从成立（`TodoOccurrenceEditor` 那时会如实退成整串）。
+    private var showsScopeChoice: Bool {
+        guard let draft = appState.todoRescheduleDraft, draft.day != nil else { return false }
+        return appState.todos.first { $0.id == draft.id }?.repeatRule != nil
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.s) {
             Text(L(.todoReschedule))
                 .font(Theme.font(.title))
+            if showsScopeChoice {
+                Text(L(.todoScopePrompt))
+                    .font(Theme.font(.caption))
+                    .foregroundStyle(Theme.text(.secondary))
+                Picker("", selection: Binding(
+                    get: { appState.todoRescheduleDraft?.scope ?? .initial },
+                    set: { appState.todoRescheduleDraft?.scope = $0 }
+                )) {
+                    ForEach(TodoRepeatEditScope.allCases, id: \.self) { scope in
+                        Text(L(scope.key)).tag(scope)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .accessibilityIdentifier("todo-reschedule-scope")
+            }
             DatePicker(
                 L(.todoDueLabel),
                 selection: Binding(

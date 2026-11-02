@@ -682,12 +682,29 @@ public final class NoteDatabase {
 
     private let connection: SQLiteConnection
 
-    /// 打开（必要时新建）并**升到最新 schema**。幂等：已经是最新版的库再打开不会动任何数据。
+    /// 打开（必要时新建）并**升到最新 schema**。幂等：已经是最新的库再打开不会动任何数据。
     public init(path: String) throws {
         let connection = try SQLiteConnection(path: path)
         self.connection = connection
         try configure(connection)
         try applySchemaIfNeeded()
+    }
+
+    /// 跑一段写操作在**一个事务**里（`FR-NTS-TODO-CALENDAR-001` 判据④ / `STATE-001` 的「同一次写入、
+    /// 同一事务」要的就是这个形状）。嵌套调用退化成 `SAVEPOINT`（见 `SQLiteConnection.transaction`），
+    /// 因此内层一次失败不会把外层已经写好的那一半悄悄丢掉 —— 反过来外层会一起回滚，这正是我们要的。
+    @discardableResult
+    public func transaction<T>(_ body: () throws -> T) throws -> T {
+        try connection.transaction(body)
+    }
+
+    /// **几条任务一次写完**（一个事务）：重复任务的「只改这一条」要落两行（那一串 + 独立记录），
+    /// 两笔要么都成、要么都不成 —— 分两次写会留下「原日子不发生了、改动那条却没写进去」。
+    ///
+    /// 为什么不做成调用方连调两次 `upsert(_ todo:)`：那条路各开一个事务，中间没有「一起」这回事。
+    @discardableResult
+    public func upsert(_ todos: [Todo]) throws -> [Int64] {
+        try connection.transaction { try todos.map { try upsert($0) } }
     }
 
     /// 连接参数（每一条都有理由，别省）：

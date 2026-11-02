@@ -226,12 +226,18 @@ public enum TodoCalendar {
     /// 两档视图共用**同一个**铺法（各写一遍就会出现「同一个任务月视图有、周视图没有」，
     /// 而两侧各自的用例都会是绿的）。
     ///
-    /// 四条口径：
+    /// 五条口径：
     ///  ① **`dueAt` → 哪一天**只有 `calendarDay(of:calendar:)` 一处出处，这里不自己减一个日长；
     ///  ② **参照时刻由调用方传**（`now`），本层不读系统时钟；
     ///  ③ **两区与顺序仍走 `TodoPresentation.sections`**（分区各写一遍 = 第二套口径；排序本身属
     ///     **契约半** ⇒ 段内保持传入顺序，与清单那一屏同一条纪律）；
-    ///  ④ **无截止的任务不落在任何一天**（它们只在清单的「无截止」档里有位置）—— 日历不凭空给个日子。
+    ///  ④ **无截止的任务不落在任何一天**（它们只在清单的「无截止」档里有位置）—— 日历不凭空给个日子；
+    ///  ⑤ **带重复规则的任务按发生日铺开**（`FR-NTS-TODO-CALENDAR-001` 判据④）：哪一天算发生只有
+    ///     `TodoOccurrence` 一处出处；库里**仍然只有一条记录**（同一个 `Todo` 被摆进多格，不是预生成
+    ///     副本 —— 所以「在日历上完成它」与「在清单里完成它」改的是同一行）。
+    ///
+    /// 逾期的口径**按格子那一天判**（`TodoDue.isOverdue` 唯一出处，参照日就是这一格）：
+    /// 重复任务的上一次没做完，缺的是**那一次**，不是把后面每一天都刷成红色。
     ///
     /// 结果按**格子的先后**（日升序），**空的天不出现**（界面据此决定画不画点）。
     public static func tasksByDay(
@@ -242,17 +248,19 @@ public enum TodoCalendar {
     ) -> [TodoDayTasks] {
         guard !cells.isEmpty else { return [] }
         var buckets: [Date: [Todo]] = [:]
-        for todo in todos {
-            guard let dueAt = todo.dueAt else { continue }
-            buckets[calendarDay(of: dueAt, calendar: calendar), default: []].append(todo)
+        for todo in todos where todo.dueAt != nil {
+            for day in TodoOccurrence.days(todo, in: cells, calendar: calendar) {
+                buckets[day, default: []].append(todo)
+            }
         }
+        let todayStart = calendar.startOfDay(for: now)
         return cells.compactMap { cell -> TodoDayTasks? in
             guard let rows = buckets[cell.date], !rows.isEmpty else { return nil }
             let sections = TodoPresentation.sections(rows)
             let open = sections.first { $0.kind == .open }?.todos ?? []
             let done = sections.first { $0.kind == .completed }?.todos ?? []
             let overdue = open.filter {
-                TodoDue.isOverdue($0, todayStart: calendar.startOfDay(for: now))
+                TodoDue.isOverdue(cell.date, done: $0.done, todayStart: todayStart)
             }.count
             return TodoDayTasks(date: cell.date, open: open, done: done, overdue: overdue)
         }

@@ -166,3 +166,15 @@
 - **未验证（≠通过）**：真鼠标双击 / 真菜单点击 / 真按撤销未点 · **加密未覆盖**（本仓无 SQLCipher；判据只判同一个库文件与同一条导出链路）· 标签回读按字母序（`todo_tag` 的 `ORDER BY tag ASC`，存量口径）· `verify-all.sh` 收尾行仍未拿到（第 11 项打包 `.app`、第 18 项生成物一致性未执行）。
 - **提交**：`f27d7a77`（local = remote = f27d7a77，pre-commit 三项全过；本 checkpoint 落号见下一笔“证据补号”）。
 - **下一批 = N3（4 条）**：`TODO-CALENDAR-001/002` · `TODO-STATE-001/002`。起跳先看清：日历那一屏早在盘（`TodoCalendar` / `TodoCalendarPane`），缺口是「按发生日把重复规则铺开」与「完成 / 改期同一事务 + 日历不另存」两条判据的读数；**重复规则铺开要在 Core 一处算（`TodoRepeat`），日历不许自己推日子**。
+
+## v0.4.0 · N3（第一片：重复任务按发生日铺开）· 2026-11-02
+
+- **收一条**：`FR-NTS-TODO-CALENDAR-001`（月视图可切周视图、任务铺在日期上）两列全 ✅。
+  - 缺口只有判据④：日历早就按月 / 周画格子，`tasksByDay` 却只在 `dueAt` 那一天放任务 —— 带重复规则的条目**一格都铺不开**。
+  - 落点：`Core/TodoOccurrence.swift`（哪天算一次发生**只有这一处**；锚点 = `dueAt`；`interval` 每 `count × unit.days` 天；`weekly` 落在 `weekdays` 里的日子；不早于锚点；`skipped` 的日子不发生；日差走调用方传的 `Calendar`、星期走 `TodoCalendar.isoWeekday`）+ `TodoCalendar.tasksByDay` 改成逐格问它（月 / 周仍是同一个铺法）；逾期改按**格子那一天**判（`TodoDue.isOverdue` 唯一出处），修掉「锚点在过去 ⇒ 以后每天都被刷红」。
+  - 「改一次说清改哪一头」：`TodoRepeatEditScope`（两档、默认整串）+ `TodoOccurrenceEditor.reschedule`；「只改这一天」= 那一串补一格 `TodoRepeat.skipped`（后加可选键，**没有跳过时落库字节与旧载荷逐字节相同**）+ 另起一条独立记录；两笔走 `NoteLibrary.saveOccurrenceEdit` → `NoteDatabase.upsert([Todo])` 的**一个事务**。界面：日历行带 `occurrenceDay`，改期框在「重复 + 从某一天进」时先问（`todo-reschedule-scope`），从清单进只有整串一条路。
+- **读数**：`swift test --filter TodoOccurrenceTests` **18 例 / 0 失败** · `verify-core.sh` **5186 例 / 13 skipped / 0 失败**（5168 → +18）· `verify-ui-interactions.sh` **116 条全跑 / 无跳过 / 源锚点全在**（EXIT 0）· `check-doc-numbers` 三向 5186 ✅ · 文档门禁十道 rc=0 · 存量红三项（localization / format-args / icon-only）与 HEAD 逐条相同（静态扫描，HEAD 用 `git archive` 解到 /tmp 复跑比对）。
+- **反例三段**（判红后 sha256 逐字节还原）：撤「跳过」⇒ 3 红 · 「只改这一天」不另起记录 ⇒ 2 红 · 两笔拆成逐个 `upsert(row)` ⇒ 1 红。
+- **队列口径（本片后实测）**：`plan-batches --version 0.4.0 --check` rc=0；`plan.yaml` = **3 todo + 1 blocked**；`batches.yaml` = **N3 剩 3 条**（`CALENDAR-002` / `STATE-001` / `STATE-002`）；台账 §4.2 v0.4.0 5 → **4**（3 / 1），未闭 134 → **133**（🟡 36 / ⬜ 97）。
+- **未验证（≠通过）**：真鼠标点格子 / 点「这一条 · 这一串」/ 拖拽改期未点 · 目标那句「有提醒的日子同时打点」只到行上那枚铃铛（存量），**日历格子上没有独立提醒点 —— 记未覆盖** · 重复任务的完成态仍是一条记录共用一个 `done`（契约无「某一次完成」的列，本条不发明）· `verify-all.sh` 第 11 项打包与第 18 项生成物一致性未执行。
+- **下一批 = N3 剩 3 条**：`CALENDAR-002`（点某天看当天任务 / 点任务进详情 / 逾期显式标识）· `STATE-001`（完成与改期同一事务、日历上可直接完成改期 —— 拖拽或长按那一口未接）· `STATE-002`（清单唯一事实源：删一处即全无残留）。起跳先核：`CALENDAR-002` 的两条判据多半已由现有界面满足，缺的是**读数**（点击响应与逾期标识同源）；`STATE-001` 的「拖拽」入口盘上还没有，要么接一个真拖放、要么如实记成未接。

@@ -30,16 +30,29 @@ public struct TodoRepeat: Equatable, Sendable {
     /// 周内第几天（`weekly` 用；ISO 1~7，升序去重）。
     public var weekdays: [Int]
 
+    /// **被跳过的那几次发生日**（`YYYY-MM-DD`，升序去重；`FR-NTS-TODO-CALENDAR-001` 判据④的
+    /// 「只改这一条」）。空数组 = 一次都没跳过。
+    ///
+    /// 为什么不给「这一条」另建一条记录就完事：那会让**原日子上仍然有一条**（用户改完看到两条），
+    /// 于是「只改这一条」必须同时表达两件事 —— ① 那一串里这一天不再发生（这一格）；
+    /// ② 新起一条独立记录带着改动（`TodoOccurrenceEditor`）。跳过表就是 ①。
+    ///
+    /// 只存**日期**（不带钟点）：发生日是按日历日铺的（`TodoOccurrence`），钟点属那一次的
+    /// `dueAt`，两件事混进一格就会在「改了钟点但还是在同一天」时判错。
+    public var skipped: [String]
+
     public init(
         rule: ReminderRule,
         intervalCount: Int = 1,
         intervalUnit: ReminderUnit = .day,
-        weekdays: [Int] = []
+        weekdays: [Int] = [],
+        skipped: [String] = []
     ) {
         self.rule = rule
         self.intervalCount = intervalCount
         self.intervalUnit = intervalUnit
         self.weekdays = weekdays
+        self.skipped = skipped
     }
 
     // MARK: - 便捷构造（界面只从这三档进，不自己拼字段）
@@ -72,13 +85,40 @@ public struct TodoRepeat: Equatable, Sendable {
             return TodoRepeat(
                 rule: .interval,
                 intervalCount: max(1, intervalCount),
-                intervalUnit: intervalUnit
+                intervalUnit: intervalUnit,
+                skipped: TodoRepeat.normalizedSkips(skipped)
             )
         case .weekly:
             let days = ReminderSpec.weekdays(from: ReminderSpec.weekdaysText(weekdays))
             guard !days.isEmpty else { return nil }
-            return TodoRepeat(rule: .weekly, weekdays: days)
+            return TodoRepeat(
+                rule: .weekly,
+                weekdays: days,
+                skipped: TodoRepeat.normalizedSkips(skipped)
+            )
         }
+    }
+
+    /// 这一天是不是被跳过的那一次（`YYYY-MM-DD`；本层不解释日历，键由
+    /// `TodoOccurrence.dayKey(for:calendar:)` 那一处给 —— 两处各拼一次日期串就会有一天对不上）。
+    public func isSkipped(_ dayKey: String) -> Bool {
+        skipped.contains(dayKey)
+    }
+
+    /// 跳过表的归一：只留**真实存在的** `YYYY-MM-DD`，去重升序。
+    ///
+    /// 合法性复用 `ReminderSchedule.dayOf`（唯一一处日期字面量解析：它已经挡掉 `2026-02-30`）。
+    /// 认不出的一格**丢掉**（与类型头「脏值当没给」同一条口径：一格坏日子不该让整条任务读不进来）。
+    public static func normalizedSkips(_ values: [String]) -> [String] {
+        var seen = Set<String>()
+        var out: [String] = []
+        for value in values {
+            let text = value.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard ReminderSchedule.dayOf(text) >= 0, !seen.contains(text) else { continue }
+            seen.insert(text)
+            out.append(text)
+        }
+        return out.sorted()
     }
 
     /// 是不是「会重复」（归一后一定有 `rule != .once`；`nil` 归 `false`）。
@@ -114,12 +154,15 @@ public struct TodoRepeat: Equatable, Sendable {
         var intervalCount: Int
         var intervalUnit: String
         var weekdays: [Int]
+        /// **后加字段**：没有跳过时**不写这一格**（旧字节逐字节不变 ⇒ 跨端对拍不受影响）。
+        var skipped: [String]?
 
         init(repeat value: TodoRepeat) {
             rule = value.rule.rawValue
             intervalCount = value.intervalCount
             intervalUnit = value.intervalUnit.rawValue
             weekdays = value.weekdays
+            skipped = value.skipped.isEmpty ? nil : value.skipped
         }
 
         var `repeat`: TodoRepeat? {
@@ -129,7 +172,8 @@ public struct TodoRepeat: Equatable, Sendable {
                 rule: kind,
                 intervalCount: intervalCount,
                 intervalUnit: unit,
-                weekdays: weekdays
+                weekdays: weekdays,
+                skipped: skipped ?? []
             ).normalized()
         }
     }
@@ -144,7 +188,7 @@ public struct TodoRepeat: Equatable, Sendable {
 extension TodoRepeat: Codable {
 
     private enum CodingKeys: String, CodingKey {
-        case rule, intervalCount, intervalUnit, weekdays
+        case rule, intervalCount, intervalUnit, weekdays, skipped
     }
 
     public init(from decoder: Decoder) throws {
@@ -161,7 +205,8 @@ extension TodoRepeat: Codable {
             rule: kind,
             intervalCount: try container.decodeIfPresent(Int.self, forKey: .intervalCount) ?? 1,
             intervalUnit: ReminderUnit.normalized(try container.decodeIfPresent(String.self, forKey: .intervalUnit)) ?? .day,
-            weekdays: try container.decodeIfPresent([Int].self, forKey: .weekdays) ?? []
+            weekdays: try container.decodeIfPresent([Int].self, forKey: .weekdays) ?? [],
+            skipped: try container.decodeIfPresent([String].self, forKey: .skipped) ?? []
         )
     }
 
@@ -171,6 +216,10 @@ extension TodoRepeat: Codable {
         try container.encode(intervalCount, forKey: .intervalCount)
         try container.encode(intervalUnit.rawValue, forKey: .intervalUnit)
         try container.encode(weekdays, forKey: .weekdays)
+        // 空跳过表**不写这一格**（与落库文本同一条口径：旧载荷字节不变）。
+        if !skipped.isEmpty {
+            try container.encode(skipped, forKey: .skipped)
+        }
     }
 }
 
