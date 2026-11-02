@@ -343,6 +343,131 @@ public struct EgressRecordingTransport: HTTPTransport {
     }
 }
 
+/// **流式**出网的装饰器：与 `EgressRecordingTransport` 同一条纪律，盖住另一条唯一的缝。
+///
+/// 为什么必须另写一个（2026-11-02 `NFR-ALL-GATE-SEC-008` 实测的真缺口）：
+/// `URLSessionStreamingTransport` 是聊天循环与「测试连接」的唯一出口，它此前**只过封条、
+/// 不进日志** —— 于是产品里最频繁的那一类出网（模型流式调用）在「统一外发日志」里一条都没有；
+/// 而两个走整段请求的生成器（生成 SQL / 数据任务规格）反倒都有记录。
+/// 也就是说：日志看着有东西，恰恰漏掉了出网次数最多的那条路。
+///
+/// 记录点与整段那条一致：**发出前先记 `allowed`**（进程在途中被杀也留得下痕迹），
+/// **非 2xx 与抛错各记 `failed`**。流式特有的边界如实写在下面（断流不另记）。
+public struct EgressRecordingStreamingTransport: HTTPStreamingTransport {
+    private let origin: String
+    private let kind: EgressKind
+    private let wrapped: any HTTPStreamingTransport
+    private let log: EgressLog
+
+    public init(
+        origin: String,
+        kind: EgressKind = .agentModel,
+        wrapped: any HTTPStreamingTransport,
+        log: EgressLog = .shared
+    ) {
+        self.origin = origin
+        self.kind = kind
+        self.wrapped = wrapped
+        self.log = log
+    }
+
+    public func stream(_ request: URLRequest) async throws -> (HTTPURLResponse, AsyncThrowingStream<Data, Error>) {
+        let target = EgressTarget.sanitize(request.url?.absoluteString ?? "")
+
+        // 封条先于记录（`AC-ALL-GATE-AI-001`）：关着的时候这条请求没离开本机 ⇒ 只能记 `denied`。
+        guard AgentEgressSeal.shared.isOpen else {
+            await log.record(
+                kind: kind,
+                target: target,
+                origin: origin,
+                outcome: .denied,
+                detail: AgentEgressSeal.shared.refusal.localizedDescription
+            )
+            throw AgentEgressSeal.shared.refusal
+        }
+
+        await log.record(
+            kind: kind,
+            target: target,
+            origin: origin,
+            outcome: .allowed,
+            detail: (request.httpMethod ?? "GET") + " · 流式"
+        )
+
+        let (response, chunks): (HTTPURLResponse, AsyncThrowingStream<Data, Error>)
+        do {
+            (response, chunks) = try await wrapped.stream(request)
+        } catch {
+            await log.record(kind: kind, target: target, origin: origin,
+                             outcome: .failed, detail: error.localizedDescription)
+            throw error
+        }
+
+        // 非 2xx 由上层映射成 `LLMError`（传输层不抛，见 `HTTPStreamingTransport` 的契约），
+        // 但**日志必须在这里就记成失败** —— 否则「发了、被拒了」在日志里长得跟成功一样。
+        if !(200..<300).contains(response.statusCode) {
+            await log.record(kind: kind, target: target, origin: origin,
+                             outcome: .failed, detail: "HTTP \(response.statusCode)")
+        }
+
+        // 已知边界（如实记）：**建流之后**读块时的断流不另记一条 ——
+        // 一条记录对应「一次发起」，块流中途断了仍是同一次出网。
+        return (response, chunks)
+    }
+}
+
+/// **外部程序**出网的装饰器：`pg_dump` / `pg_restore` / `pg_dumpall` 这类程序本身就是出网。
+///
+/// 为什么包在执行层而不是每个调用点：备份 / 恢复 / 只读校验将来会各加调用点，
+/// 漏一个就是一次「数据去了远端、日志里没有」的运行。包在 `ExternalProcessRunner` 这唯一的缝上，
+/// 新调用方默认被记录。
+///
+/// **只记程序名与退出码，不记 argv**：`pg_dump` 的参数里常有 `PGPASSWORD` 之外的连接串
+/// （用户名、库名、主机），而口令走环境变量不进 argv —— 即便如此也不抄进日志，
+/// 「审计日志自身不能成为泄漏源」这条底线优先于「参数更详细」。
+public struct EgressRecordingProcessRunner: ExternalProcessRunner {
+    private let origin: String
+    private let wrapped: any ExternalProcessRunner
+    private let log: EgressLog
+
+    public init(origin: String, wrapped: any ExternalProcessRunner, log: EgressLog = .shared) {
+        self.origin = origin
+        self.wrapped = wrapped
+        self.log = log
+    }
+
+    public func run(
+        executable: String,
+        arguments: [String],
+        environment: [String: String],
+        onOutput: @escaping @Sendable (String) -> Void
+    ) async throws -> Int32 {
+        let target = EgressTarget.sanitize(executable)
+
+        // 起进程之前先记：程序若卡住或被杀，这条也在盘上（与 HTTP 那条同一口径）。
+        await log.record(kind: .externalProgram, target: target, origin: origin,
+                         outcome: .allowed, detail: "启动")
+
+        do {
+            let code = try await wrapped.run(executable: executable,
+                                             arguments: arguments,
+                                             environment: environment,
+                                             onOutput: onOutput)
+            // 成功只留「启动」那一条（一次出网一条记录）；**非零退出码补一条失败** ——
+            // 「进程跑完了但失败」与「跑得好好的」在审计里必须能分开。
+            if code != 0 {
+                await log.record(kind: .externalProgram, target: target, origin: origin,
+                                 outcome: .failed, detail: "退出码 \(code)")
+            }
+            return code
+        } catch {
+            await log.record(kind: .externalProgram, target: target, origin: origin,
+                             outcome: .failed, detail: error.localizedDescription)
+            throw error
+        }
+    }
+}
+
 /// 诊断出口。
 ///
 /// **刻意不叫 `Logger`**：Core 里 `Logger` 是 swift-log 的类型（`PostgresService` 在用），

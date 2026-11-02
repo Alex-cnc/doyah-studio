@@ -1,16 +1,9 @@
 # v0.6.0 横切面收口 · 执行队列（**派生件**）
 # 唯一事实源 = Docs/Doyah产品开发计划任务清单-macOS.md（活书台账）。
 # 本文件只做「下一跳」排序，不许反向改台账；台账一改就跑 --emit-plan 重出，别手改。
-# 生成于 2026-11-02，源 = 台账里 FR-STD-ALL-LIC-001 / FR-STD-ALL-LIC-002 / FR-STD-ALL-LIC-003 / FR-STD-ALL-LIC-004 / FR-STD-ALL-LIC-005 / FR-STD-WS-LIC-001 / FR-STD-ALL-PLUG-005 / FR-STD-ALL-PLUG-008 / NFR-ALL-GATE-PERF-001 / NFR-ALL-GATE-PERF-002 / NFR-ALL-GATE-PERF-003 / NFR-ALL-GATE-PERF-004 / NFR-ALL-GATE-COMP-001 / NFR-ALL-GATE-COMP-002 / NFR-ALL-GATE-COMP-003 / NFR-ALL-GATE-COMP-004 / NFR-ALL-GATE-COMP-005 / NFR-ALL-GATE-UI-001 / NFR-ALL-GATE-USE-005 / NFR-ALL-GATE-SEC-008 / NFR-ALL-GATE-LANG-001 未闭 9 条（5 🟡 / 4 ⬜）。
+# 生成于 2026-11-02，源 = 台账里 FR-STD-ALL-LIC-001 / FR-STD-ALL-LIC-002 / FR-STD-ALL-LIC-003 / FR-STD-ALL-LIC-004 / FR-STD-ALL-LIC-005 / FR-STD-WS-LIC-001 / FR-STD-ALL-PLUG-005 / FR-STD-ALL-PLUG-008 / NFR-ALL-GATE-PERF-001 / NFR-ALL-GATE-PERF-002 / NFR-ALL-GATE-PERF-003 / NFR-ALL-GATE-PERF-004 / NFR-ALL-GATE-COMP-001 / NFR-ALL-GATE-COMP-002 / NFR-ALL-GATE-COMP-003 / NFR-ALL-GATE-COMP-004 / NFR-ALL-GATE-COMP-005 / NFR-ALL-GATE-UI-001 / NFR-ALL-GATE-USE-005 / NFR-ALL-GATE-SEC-008 / NFR-ALL-GATE-LANG-001 未闭 8 条（4 🟡 / 4 ⬜）。
 tasks:
 # 另有 11 条上版遗留卡点（不在本版范围，仅列表可见）：FR-AGT-LINK-CHAN-003, FR-AGT-LINK-EXT-001, FR-AGT-LINK-EXT-002, FR-AGT-OPS-OBS-002, FR-AGT-PLAN-PLAN-001, FR-AGT-TOOL-MEDIA-001, FR-AGT-TOOL-SYS-002, FR-AGT-UX-CONV-001, FR-AGT-UX-SESS-001, FR-AGT-UX-SYNC-001, FR-NTS-NOTE-ORG-002
-  - id: NFR-ALL-GATE-SEC-008
-    goal: "统一外发日志：所有离开本机的网络请求（智能体模型调用、内嵌浏览器导航与子资源、外部程"
-    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py NFR-ALL-GATE-SEC-008 | grep -q '✅'"
-    layer: "基线必备"
-    prio: "—"
-    status: todo
-    evidence: ""
   - id: NFR-ALL-GATE-USE-005
     goal: "走不动的动作必须挑一种处置（灰着/给理由/不可达），禁第四种形状"
     done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py NFR-ALL-GATE-USE-005 | grep -q '✅'"

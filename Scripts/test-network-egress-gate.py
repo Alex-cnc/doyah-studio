@@ -57,6 +57,16 @@ TREE_FILES = [
     # 否则「干净副本应 exit 0」会按「面外登记磁盘上不存在」假红。
     "Tests/LLMStreamingAuthTests.swift",
     "Tests/NoteSyncE2ETests.swift",
+    # 2026-11-02：夹具与台账**逐条对齐**（此前已漂 6 份，干净副本那一例因此假红 ——
+    # 「面外登记磁盘上不存在」把一份本来正确的台账说成死登记）。判据自己也要有人管。
+    "Platform/macOS/URLSessionAgentIMSocket.swift",
+    "Platform/macOS/URLSessionAgentIMQQClient.swift",
+    "Tests/AgentEgressSealTests.swift",
+    "Core/AgentWebTools.swift",
+    "Tests/AgentQuotaPersistenceTests.swift",
+    "Tests/AgentWebToolsTests.swift",
+    # `NFR-ALL-GATE-SEC-008` 的判据族（2026-11-02 C4 第一片）造请求对象喂给流式装饰器。
+    "Tests/EgressUnifiedLogTests.swift",
     "Scripts/verify-all.sh",
     GATE,
     LEDGER,

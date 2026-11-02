@@ -86,7 +86,8 @@ final class SSHTunnelDiagnosisTests: XCTestCase {
             localPort: 55_901,
             knownHostsPath: NSTemporaryDirectory() + "doyah-diagnosis-known-hosts",
             executable: "/usr/bin/true",
-            isPortOpen: { _, _ in false }
+            isPortOpen: { _, _ in false },
+            egressLog: EgressTestSupport.temporaryLog("ssh-diagnosis")
         )
         XCTAssertEqual(tunnel.currentState, .idle)
         XCTAssertFalse(tunnel.markDeadIfExited(language: .simplifiedChinese))

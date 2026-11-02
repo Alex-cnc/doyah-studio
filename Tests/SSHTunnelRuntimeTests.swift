@@ -95,7 +95,8 @@ final class SSHTunnelRuntimeTests: XCTestCase {
             knownHostsPath: NSTemporaryDirectory() + "doyah-runtime-known-hosts-\(UUID().uuidString)",
             password: password,
             executable: executable,
-            isPortOpen: { [weak self] host, port in self?.probe(host: host, port: port) ?? false }
+            isPortOpen: { [weak self] host, port in self?.probe(host: host, port: port) ?? false },
+            egressLog: EgressTestSupport.temporaryLog("ssh-runtime")
         )
     }
 

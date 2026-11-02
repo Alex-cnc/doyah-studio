@@ -1,5 +1,17 @@
 # 检查点
 
+## v0.6.0 · C4 第一片（`NFR-ALL-GATE-SEC-008` 统一外发日志）· 2026-11-02
+
+- **收一条**：`NFR-ALL-GATE-SEC-008` 两列全 ✅。C4 剩 3 条（`USE-005` / `LANG-001` / `UI-001`）。
+- **洞是覆盖面，不是判定**：盘上早有 `EgressLog`（可查看 / 导出 / 清空、写入即脱敏、目标去 query）与 `EgressRecordingTransport`，但**装饰器只包住两个生成器**（生成 SQL / 数据任务规格）。产品里出网次数最多的那条路 —— 聊天循环与「测试连接」的**流式**传输 —— 只过封条、不进日志；联网检索（`AgentWebTools`）自带默认 `URLSessionTransport`；备份（`pg_dump` / `pg_restore`）与 `ssh` 隧道各起各的进程。三类里只有浏览器与两个生成器在账上 ⇒「所有离开本机的网络请求写进同一份日志」在真机上不成立，而界面上一片安静。
+- **落法 = 留痕下沉到三条唯一的缝**：① 新 `EgressRecordingStreamingTransport`（封条先于记录 / 发出前记 `allowed` / 非 2xx 与抛错记 `failed`）接进两处流式客户端（对话循环 · 测试连接）；② `AgentWebTools` 构造时包 `EgressRecordingTransport(origin: 智能体 · 联网检索)`；③ 新 `EgressRecordingProcessRunner` 包住 `backupRunner`（只记程序名与退出码，**不抄 argv**）；④ `SSHTunnelProcess` 起 `ssh` 成功 / 失败各记一条（`ssh://host:port`），日志做成可注入参数 ⇒ 单测不再往用户真审计日志写假 `ssh`（`Tests/EgressTestSupport` + 5 处隧道夹具注入临时目录）。
+- **读数（本跳实跑）**：`--filter EgressUnifiedLogTests` **11 例 / 0 失败** · `verify-core.sh` **5312 例 / 13 skipped / 0 失败**（5301 → +11；同批写进 `doc-numbers.json` 与 `AGENT-SPEC.md` 两处）· `verify-ui-interactions.sh` **116 条全跑 / 无跳过 / 源锚点全在** rc=0 · `check-network-egress` **9 处红 → 0**（`AgentWebTools.swift` + 三个测试夹具逐条登记进 `outOfFace`；装配缝补 `URLSessionStreamingTransport(` 注入模式）· `test-network-egress-gate.py` **30 项达到预期 / 0 不符**（顺手修掉夹具与台账漂移 6 份 —— 干净副本那一例此前一直假红）· 文档门禁 tables 74 / plan-coverage / status-consistency / version-scope / doc-invariants / doc-layout rc=0，`check-doc-numbers` 数字项三向 5312 ✅ · `plan-batches --version 0.6.0 --check` rc=0（3 条待办）。
+- **反例四段**（判红后 `sha256` 逐字节还原 `fc785c4f…` / `b1b47c47…`）：流式「发出前先记」挪到 `wrapped.stream` 之后 ⇒ **2 红**（先记后发那条盘上读 0 行）· 删进程装饰器启动前记录 ⇒ **10 红** · 删流式封条守卫 ⇒ **3 红**（`denied` 变 `allowed`，请求真的往下发）· 删隧道 `ssh://` 记录 ⇒ **3 红**。
+- **存量红（HEAD 已有，本片未动）**：`check-status-gap` **16 行**「实现 ✅ 判据 ⬜/🟡」；`check-doc-numbers` 的 `checkScriptParity` = `check-status-gap.py` 未接进 `verify-all.sh`。**下一跳先把这 16 行按「点名已有测试 + 跑一次读数」逐行补并接成闭环第 19 项**，再开 C4 余下三条。
+- **未验证（≠ 通过）**：浏览器仍只到**导航级**（`WKWebView` 不暴露单个子资源）· 流式「建流后断流」不另记（一次发起一条）· **更新检查**产品里无入口（`updateCheck` 0 条）· 真抓包未做（判的是装饰器与落盘记录）· IM socket 与笔记云同步各有自己的开关，不在本条 · `verify-all.sh` 第 11 / 18 项未执行。
+- **顺带**：`xcodegen generate` + `patch-xcodeproj.sh`（`project.pbxproj` 只增 332 行、无删除；此前几跳落的 `QuickCaptureSheet` / `SSHTunnelDiagnosis` / `LicenseScopeTests` 等文件此前根本没进工程文件）。
+- 证据 `.agent/evidence/2026-11-02-NFR-ALL-GATE-SEC-008.md`
+
 ## v0.6.0 · C3 收口（平台兼容与笔记存储统一三条）· 2026-11-02
 
 - **收三条**：`NFR-ALL-GATE-COMP-004`（macOS 14 / 15）· `NFR-ALL-GATE-COMP-005`（Apple Silicon + Intel）· `FR-STD-ALL-PLUG-008`（桌面各端一条本地 SQLite），两列全 ✅。C3 批次清空。

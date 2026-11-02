@@ -122,7 +122,8 @@ final class SSHTunnelTests: XCTestCase {
             localPort: 55_777,
             knownHostsPath: NSTemporaryDirectory() + "doyah-test-known-hosts",
             executable: "/usr/bin/true",
-            isPortOpen: { _, _ in true }        // 假装端口已被占用
+            isPortOpen: { _, _ in true },       // 假装端口已被占用
+            egressLog: EgressTestSupport.temporaryLog("ssh-tunnel")
         )
         do {
             _ = try await tunnel.start(timeout: 1, language: .simplifiedChinese)
@@ -149,7 +150,8 @@ final class SSHTunnelTests: XCTestCase {
                 localPort: 55_779,
                 knownHostsPath: NSTemporaryDirectory() + "doyah-test-known-hosts",
                 executable: "/usr/bin/true",
-                isPortOpen: { _, _ in true }        // 假装端口已被占用
+                isPortOpen: { _, _ in true },       // 假装端口已被占用
+                egressLog: EgressTestSupport.temporaryLog("ssh-tunnel")
             )
             _ = try? await tunnel.start(timeout: 1, language: language)
             return tunnel.currentState
@@ -190,7 +192,8 @@ final class SSHTunnelTests: XCTestCase {
                 localPort: 55_778,
                 knownHostsPath: NSTemporaryDirectory() + "doyah-test-known-hosts",
                 executable: "/nonexistent/ssh",
-                isPortOpen: { _, _ in false }
+                isPortOpen: { _, _ in false },
+                egressLog: EgressTestSupport.temporaryLog("ssh-tunnel")
             )
             _ = try? await tunnel.start(timeout: 1, language: language)
             if case .failed(let reason) = tunnel.currentState { return reason }

@@ -1084,7 +1084,13 @@ final class AppState: ObservableObject {
     /// 为什么要开这一处：`FR-STD-DB-IO-003` / `-004` 的台账备注长期是「界面点击待人工点验」，
     /// 而「点了执行到底跑了几条命令、argv 长什么样、失败后有没有说清从哪一段续跑」这些
     /// **都不是只有人眼能判** —— 卡住的是 `BackupExecutor()` 在方法体里直接 new，探针没处注入。
-    var backupRunner: any ExternalProcessRunner = FoundationProcessRunner()
+    /// 生产默认值外面再包一层**外发留痕**（`NFR-ALL-GATE-SEC-008`）：`pg_dump` / `pg_restore`
+    /// 本身就是一次出网（数据发往 / 取自远端库），日志里必须有这一条 —— 否则「所有离开本机的
+    /// 网络请求」这句承诺在备份这条路上直接不成立。只记程序名与退出码，**不记 argv**（口令与连接串不进日志）。
+    var backupRunner: any ExternalProcessRunner = EgressRecordingProcessRunner(
+        origin: "数据库 · 备份 / 恢复（外部程序）",
+        wrapped: FoundationProcessRunner()
+    )
 
     /// 前置诊断（工具与服务器主版本不兼容时给出「为什么 + 怎么办」）。
     func diagnoseBackupTool(_ plan: BackupPlan, password: String?) async -> String? {
@@ -4573,8 +4579,14 @@ final class AppState: ObservableObject {
                                                 mcp: mcpReady.bridge,
                                                 // **联网**（`FR-AGT-TOOL-INGEST-001/004`）：后端与 key 从设置里现读，
                                                 // 面板改完下一轮就是新的（与其余运行策略同一口径）。
+                                                // **联网检索同样要进统一外发日志**（`NFR-ALL-GATE-SEC-008`）：
+                                                // 这条路的出口与模型调用同一条缝（`HTTPTransport`），装饰器包在这里
+                                                // ⇒ 检索 / 抓网页的每一次出网都留痕，来源写「智能体 · 联网检索」。
                                                 web: AgentWebTools(config: agentWebSearchConfig,
-                                                                   transport: URLSessionTransport()),
+                                                                   transport: EgressRecordingTransport(
+                                                                       origin: "智能体 · 联网检索",
+                                                                       wrapped: URLSessionTransport()
+                                                                   )),
                                                 guardPolicy: agentGuardPolicy)
         // 插件目录**先建出来**：用户要往里放东西，得先看得见这个位置（不存在就建，失败也不拦本轮）。
         // 扫描归口到 `rescanAgentExtensions()`：面板与循环读的是同一份台账（各读各的会造出
@@ -4582,7 +4594,15 @@ final class AppState: ObservableObject {
         rescanAgentExtensions()
         let extensionLoad = AgentExtensionCatalogLoad(desk: agentExtensionDesk,
                                                      problems: agentExtensionProblems)
-        let loop = AgentLoop(client: OpenAICompatibleStreamingClient(),
+        // **流式这条路也要进统一外发日志**（`NFR-ALL-GATE-SEC-008`）：它是产品里出网次数最多的一条
+        // （每一跳对话一次），此前只过封条、不进日志 —— 日志里那几条记录全是两个「生成器」的，
+        // 等于「漏掉了最大的一类」。装饰器包在传输层，与整段那条同一口径。
+        let loop = AgentLoop(client: OpenAICompatibleStreamingClient(
+            transport: EgressRecordingStreamingTransport(
+                origin: "智能体 · 对话循环",
+                wrapped: URLSessionStreamingTransport()
+            )
+        ),
                              dispatcher: dispatcher,
                              registry: whitelisted.registry,
                              // `FR-AI-17` 会话持久化：每跳落一份 `.jsonl`（与其余本机数据同一处，不另开文件体系）。
@@ -6254,7 +6274,13 @@ final class AppState: ObservableObject {
                                  timeoutSeconds: configuration.timeoutSeconds,
                                  systemPrompt: "这是一次连接测试。", userPrompt: "回复两个字：收到。")
         // 用**与 Agent 循环同一个**流式客户端（`AppState` 里那条循环也是这么造的），不另起一套。
-        let client = OpenAICompatibleStreamingClient()
+        // 外发日志同理：这一条同样是真发一次往返，来源单独写清（「测试连接」不该混进对话记录）。
+        let client = OpenAICompatibleStreamingClient(
+            transport: EgressRecordingStreamingTransport(
+                origin: "智能体 · 测试连接",
+                wrapped: URLSessionStreamingTransport()
+            )
+        )
         let started = Date()
         do {
             let stream = try await client.stream(request)

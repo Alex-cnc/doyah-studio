@@ -33,6 +33,12 @@ public final class SSHTunnelProcess: @unchecked Sendable {
     private let knownHostsPath: String
     private let password: String?
     private let isPortOpen: PortProbe?
+    /// 外发留痕（`NFR-ALL-GATE-SEC-008`）：`ssh` 起起来就是一次出网。
+    ///
+    /// 为什么放在这个类里而不是四个调用点：隧道有 4 个生产调用点（`AppState` / 两张连接表单 / CLI），
+    /// 各记一次必然漏；包在**唯一真正起进程的地方**，新调用方默认被记录。
+    /// 单测要能换掉它（否则每跑一次测试就往用户的真审计日志里写几条假 `ssh`）。
+    private let egressLog: EgressLog
 
     private let lock = NSLock()
     private var state: State = .idle
@@ -47,7 +53,8 @@ public final class SSHTunnelProcess: @unchecked Sendable {
         knownHostsPath: String,
         password: String? = nil,
         executable: String = "/usr/bin/ssh",
-        isPortOpen: PortProbe? = nil
+        isPortOpen: PortProbe? = nil,
+        egressLog: EgressLog = .shared
     ) {
         self.config = config
         self.target = target
@@ -56,6 +63,7 @@ public final class SSHTunnelProcess: @unchecked Sendable {
         self.password = password
         self.executable = executable
         self.isPortOpen = isPortOpen
+        self.egressLog = egressLog
     }
 
     public var currentState: State {
@@ -168,12 +176,30 @@ public final class SSHTunnelProcess: @unchecked Sendable {
         do {
             try process.run()
         } catch {
+            // 起不来同样留痕：`failed` —— 「想发但没发出去」也要能被审计到（与 HTTP 那条同口径）。
+            await egressLog.record(
+                kind: .externalProgram,
+                target: "ssh://\(config.host):\(config.port)",
+                origin: "数据库 · SSH 隧道",
+                outcome: .failed,
+                detail: error.localizedDescription
+            )
             cleanUpTemporaryFiles()
             let reason = LocalizedStrings.format(.sshTunnelLaunchFailed, language: language, error.localizedDescription)
             setState(.failed(reason))
             throw SSHTunnelError.launchFailed(reason)
         }
         lock.lock(); self.process = process; lock.unlock()
+
+        // 起进程成功 = 一次真的出网（`ssh` 会自己连跳板机）。记录点放在「进程已经在跑」之后：
+        // 记录写失败不该把隧道弄成失败（`EgressLog.append` 本身不抛）。
+        await egressLog.record(
+            kind: .externalProgram,
+            target: "ssh://\(config.host):\(config.port)",
+            origin: "数据库 · SSH 隧道",
+            outcome: .allowed,
+            detail: "ssh 已启动"
+        )
 
         // 给 ssh 一点"沉降时间"：刚 fork 出来的进程 isRunning 还是 true，
         // 而它可能马上因为转发建不起来而退出 —— 这段时间里先不急着判就绪。
