@@ -1,65 +1,138 @@
-# v0.6.0 横切面收口 · 执行队列（**派生件**）
+# v0.7.0 余账收口 · 执行队列（**派生件**）
 # 唯一事实源 = Docs/Doyah产品开发计划任务清单-macOS.md（活书台账）。
 # 本文件只做「下一跳」排序，不许反向改台账；台账一改就跑 --emit-plan 重出，别手改。
-# 生成于 2026-11-02，源 = 台账里 FR-STD-ALL-LIC-001 / FR-STD-ALL-LIC-002 / FR-STD-ALL-LIC-003 / FR-STD-ALL-LIC-004 / FR-STD-ALL-LIC-005 / FR-STD-WS-LIC-001 / FR-STD-ALL-PLUG-005 / FR-STD-ALL-PLUG-008 / NFR-ALL-GATE-PERF-001 / NFR-ALL-GATE-PERF-002 / NFR-ALL-GATE-PERF-003 / NFR-ALL-GATE-PERF-004 / NFR-ALL-GATE-COMP-001 / NFR-ALL-GATE-COMP-002 / NFR-ALL-GATE-COMP-003 / NFR-ALL-GATE-COMP-004 / NFR-ALL-GATE-COMP-005 / NFR-ALL-GATE-UI-001 / NFR-ALL-GATE-USE-005 / NFR-ALL-GATE-SEC-008 / NFR-ALL-GATE-LANG-001 未闭 7 条（5 🟡 / 2 ⬜）。
+# 生成于 2026-11-02，源 = 台账里 FR-NTS-NOTE-FORMAT-001 / FR-NTS-NOTE-SEARCH-001 / FR-NTS-NOTE-ORG-001 / FR-NTS-NOTE-TRASH-001 / FR-NTS-NOTE-SYNC-001 / FR-NTS-NOTE-EXPORT-001 / FR-NTS-ALL-HOME-001 / FR-NTS-ALL-LIC-001 / FR-NTS-ALL-DIST-001 / FR-NTS-ALL-PARITY-001 / FR-STD-WS-FS-008 / FR-STD-WS-TOOL-001 / FR-STD-WS-AI-002 / AC-ALL-GATE-REL-004 / AC-ALL-GATE-REL-005 / AC-ALL-GATE-REL-006 / FR-STD-DB-META-002 未闭 17 条（10 🟡 / 6 ⬜ / 1 其他（挂起或带复核注））。
 tasks:
-# 另有 11 条上版遗留卡点（不在本版范围，仅列表可见）：FR-AGT-LINK-CHAN-003, FR-AGT-LINK-EXT-001, FR-AGT-LINK-EXT-002, FR-AGT-OPS-OBS-002, FR-AGT-PLAN-PLAN-001, FR-AGT-TOOL-MEDIA-001, FR-AGT-TOOL-SYS-002, FR-AGT-UX-CONV-001, FR-AGT-UX-SESS-001, FR-AGT-UX-SYNC-001, FR-NTS-NOTE-ORG-002
-  - id: NFR-ALL-GATE-LANG-001
-    goal: "v1.x 界面语言为简体中文"
-    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py NFR-ALL-GATE-LANG-001 | grep -q '✅'"
-    layer: "常用增强"
-    prio: "—"
-    status: blocked
-    evidence: ""
-    next_try: "① 与 `NFR-ALL-GATE-LANG-003` ② 互斥（前者要「首次启动默认简体中文」，后者要「默认跟随系统语言」，系统语言是英文的机器上两条不能同真）⇒ 要主人拍一句哪条算数；②③④ 已有机器读数（`LanguagePreferenceTests` 5 例、两档棘轮、菜单语言门禁），改口只需动 `Core/LanguagePreference.resolve` 一处"
-  - id: NFR-ALL-GATE-UI-001
-    goal: "界面设计语言统一：同一产品内各平台（macOS / Windows / iOS /"
-    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py NFR-ALL-GATE-UI-001 | grep -q '✅'"
+# 另有 18 条上版遗留卡点（不在本版范围，仅列表可见）：FR-AGT-LINK-CHAN-003, FR-AGT-LINK-EXT-001, FR-AGT-LINK-EXT-002, FR-AGT-OPS-OBS-002, FR-AGT-PLAN-PLAN-001, FR-AGT-TOOL-MEDIA-001, FR-AGT-TOOL-SYS-002, FR-AGT-UX-CONV-001, FR-AGT-UX-SESS-001, FR-AGT-UX-SYNC-001, FR-NTS-NOTE-ORG-002, FR-STD-ALL-PLUG-005, NFR-ALL-GATE-COMP-001, NFR-ALL-GATE-COMP-002, NFR-ALL-GATE-COMP-003, NFR-ALL-GATE-LANG-001, NFR-ALL-GATE-PERF-004, NFR-ALL-GATE-UI-001
+  - id: FR-NTS-NOTE-FORMAT-001
+    goal: "编辑与格式：标题、列表、待办、引用、代码块、表格等基础格式，**所见即所得与源码可切换**"
+    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-NTS-NOTE-FORMAT-001 | grep -q '✅'"
     layer: "基线必备"
-    prio: "—"
-    status: blocked
+    prio: "高"
+    status: todo
     evidence: ""
-    next_try: "①③ 已有读数（图标 + `.help` 89/89 · a 类文字按钮 11 → 0），缺的是 ② 与 ④ 的判据口径：②「同一呈现函数（禁止第二套）」要先把「什么算第二套」写成可扫的判据（现只有「同一动作 ⇒ 同一图标」间接承担）；④「平台间对照表（逐行含成对截图）」要各端都能出图（Windows / iOS / 安卓 / 鸿蒙 / Linux 不在本机）⇒ 本侧只出得了 macOS 一侧"
-  - id: FR-STD-ALL-PLUG-005
-    goal: "Linux 端装配笔记，且必须是本地离线实现：数据只落本机 SQLite（笔记自己的"
-    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-ALL-PLUG-005 | grep -q '✅'"
+  - id: FR-NTS-NOTE-ORG-001
+    goal: "整理：标签、收藏、归档、置顶与批量操作，**批量操作前显示影响条数**"
+    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-NTS-NOTE-ORG-001 | grep -q '✅'"
+    layer: "常用增强"
+    prio: "中"
+    status: todo
+    evidence: ""
+  - id: FR-NTS-NOTE-TRASH-001
+    goal: "删除与恢复：删除进回收站，**可恢复，到期才彻底清除**"
+    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-NTS-NOTE-TRASH-001 | grep -q '✅'"
+    layer: "基线必备"
+    prio: "高"
+    status: todo
+    evidence: ""
+  - id: FR-NTS-ALL-HOME-001
+    goal: "**首页可配置（默认落页）**：App 打开落在哪一页由用户**显式二选一**（待办 / 笔记）并记住；**未设置时落待办**（不改老用户体感）；取值是**用户偏好**，不是端内常量"
+    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-NTS-ALL-HOME-001 | grep -q '✅'"
+    layer: "常用增强"
+    prio: "中"
+    status: todo
+    evidence: ""
+  - id: FR-NTS-NOTE-EXPORT-001
+    goal: "导出与迁移：导出 Markdown / 纯文本 / 备份包，导入自己导出的包可完整还"
+    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-NTS-NOTE-EXPORT-001 | grep -q '✅'"
+    layer: "常用增强"
+    prio: "中"
+    status: todo
+    evidence: ""
+  - id: FR-NTS-ALL-LIC-001
+    goal: "**授权与定价：当前不设付费墙** —— 无内购、无订阅、无许可证校验；将来若引入收费，必须先由人类主人拍板**并先改本条**，不得先实现后补条文"
+    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-NTS-ALL-LIC-001 | grep -q '✅'"
+    layer: "[产品特有]"
+    prio: "中"
+    status: todo
+    evidence: ""
+  - id: FR-STD-WS-FS-008
+    goal: "在工作区里点文件直接打开，并按文件类别匹配呈现：文本 / 代码文件在编辑器区打开"
+    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-WS-FS-008 | grep -q '✅'"
+    layer: "常用增强"
+    prio: "中"
+    status: todo
+    evidence: ""
+  - id: FR-NTS-NOTE-SEARCH-001
+    goal: "列表与检索：按时间 / 标签 / 关键词 / 语义检索，**两种检索都在**，语义不可用时降级并说出来"
+    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-NTS-NOTE-SEARCH-001 | grep -q '✅'"
     layer: "基线必备"
     prio: "高"
     status: blocked
     evidence: ""
-    next_try: "Linux 端按平台口径归小河马（2026-10-22 令：Linux 归 babyhippo，WSL 能直接编）；本机是 macOS，装配与验收要点 ①③④ 不在这台机上做"
-  - id: NFR-ALL-GATE-COMP-001
-    goal: "支持 PostgreSQL 12–18 多版本回归"
-    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py NFR-ALL-GATE-COMP-001 | grep -q '✅'"
+    next_try: "① 语义检索要嵌入模型：本机无端点、无本地模型（2026-11-02 实测 `grep -rn 'embedding|语义检索|向量' Plugins/Notes App Core` = 0 命中；`agent.json` 有模型名 `deepseek-v4-flash` 但 apiKey 为空）⇒ 「两种检索并列」无从成立；③ 万条检索性能读数要等 ① 的路定了才有意义"
+  - id: FR-NTS-NOTE-SYNC-001
+    goal: "同步与账号：手机端与桌面端同步，**离线可用、联网合并**，冲突按 §3.5.9「记录级 LWW + 留两版」处理；**数据归用户所有、主存储在本地**，**联网时才同步到云端**（云端作多端交换与备份）"
+    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-NTS-NOTE-SYNC-001 | grep -q '✅'"
     layer: "基线必备"
+    prio: "高"
+    status: blocked
+    evidence: ""
+    next_try: "⑥ 云端全量还原要可连的云同步服务（本机无账号；`NoteSyncE2ETests` 11 例要真云端，历轮记「未执行」）；⑦「关掉同步后本机功能一个不少」可单出读数，但本条判据要求 ①–⑦ 全 ✅ ⇒ 只能停在 ⑥"
+  - id: AC-ALL-GATE-REL-004
+    goal: "对真实 PostgreSQL 完成：新建连接 → 测试连接 → 执行多语句 → 对象树展开 → 结果复制 → 语法检查"
+    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py AC-ALL-GATE-REL-004 | grep -q '✅'"
+    layer: "—"
     prio: "—"
     status: blocked
     evidence: ""
-    next_try: "等可连的 PostgreSQL 12–18 实例：本机无 postgres / pg_ctl / initdb / docker（2026-11-02 实测 `/opt/homebrew/bin` 无 pg 系、`command -v postgres` 空），217 复测 ping 全丢 ⇒ 多版本回归无从跑"
-  - id: NFR-ALL-GATE-COMP-002
-    goal: "支持 GBase 最新版本，并向下兼容至 GBase 8a（版本窗口见下）"
-    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py NFR-ALL-GATE-COMP-002 | grep -q '✅'"
-    layer: "进阶可选"
+    next_try: "要真实 PostgreSQL 端到端：本机无 pg 系（`command -v postgres` 空）、217 ping 100% 丢包（2026-11-02 复测 1 packet transmitted / 0 received）"
+  - id: AC-ALL-GATE-REL-005
+    goal: "错误路径可读：错误密码、错误端口、不存在表、不合法 SQL"
+    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py AC-ALL-GATE-REL-005 | grep -q '✅'"
+    layer: "—"
     prio: "—"
     status: blocked
     evidence: ""
-    next_try: "等 GBase 最新版 + GBase 8a 实例：与 `FR-STD-DB-META-002` 同一个卡点（217 无 GBase，2026-11-02 复测整机不通）"
-  - id: NFR-ALL-GATE-COMP-003
-    goal: "支持 MySQL 最新大版本，并向下兼容最近 5 个大版本（版本窗口见下）"
-    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py NFR-ALL-GATE-COMP-003 | grep -q '✅'"
+    next_try: "同上：错误密码 / 错误端口 / 不存在表 / 不合法 SQL 都要真服务器给回执，桩件回执不算"
+  - id: AC-ALL-GATE-REL-006
+    goal: "崩溃零容忍：上述全流程无崩溃日志"
+    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py AC-ALL-GATE-REL-006 | grep -q '✅'"
+    layer: "—"
+    prio: "—"
+    status: blocked
+    evidence: ""
+    next_try: "同上：崩溃零容忍要在真实全流程上跑，没真库就没有这条流程"
+  - id: FR-STD-WS-AI-002
+    goal: "许愿式编程：用一段话描述要做的事，Agent 在整个工作区范围内多次读写文件后交付可"
+    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-WS-AI-002 | grep -q '✅'"
     layer: "常用增强"
-    prio: "—"
+    prio: "高"
     status: blocked
     evidence: ""
-    next_try: "等可连的 MySQL 最新大版本 + 向下 5 个大版本实例：本机无 mysql / mysqld（`command -v mysqld` 空），只有线协议假服务器 `Scripts/mysql-stub` ⇒ 版本窗口无从验"
-  - id: NFR-ALL-GATE-PERF-004
-    goal: "元数据单层懒加载在局域网内 ≤ 1 s"
-    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py NFR-ALL-GATE-PERF-004 | grep -q '✅'"
-    layer: "基线必备"
-    prio: "—"
+    next_try: "许愿模式「先出改动后生效」要不要另设（不再逐条批）要主人拍板；`WishStaging` 暂存面未接线"
+  - id: FR-STD-WS-TOOL-001
+    goal: "底部终端面板：主窗口底部可拖拽 / 可折叠的面板，内嵌本机交互式 shell（真 P"
+    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-WS-TOOL-001 | grep -q '✅'"
+    layer: "常用增强"
+    prio: "中"
     status: blocked
     evidence: ""
-    next_try: "等可连的局域网数据库：本条量的是「元数据单层懒加载在局域网内 ≤ 1 s」，本机无局域网 DB（217 ping 全丢，2026-11-02 复测）⇒ 只能量回环，不报通过"
+    next_try: "剩两处且都不是代码：sixel / kitty 图形按口径未做、多会话页签的界面待人工点验（2026-11-02 复读台账状态原值）⇒ 机器面读不出「观感对」"
+  - id: FR-STD-DB-META-002
+    goal: "GBase 8a 树形结构：服务器 → Database → Table → Col"
+    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-DB-META-002 | grep -q '✅'"
+    layer: "常用增强"
+    prio: "中"
+    status: blocked
+    evidence: ""
+    next_try: "GBase 8a 按 2026-11-02 主人令挂起（台账记 ➖）：无法安装部署、暂不支持；解挂条件 = 主人给出可连的 GBase 实例"
+  - id: FR-NTS-ALL-DIST-001
+    goal: "**分发形态**：Notes 以**独立应用**分发，三端（安卓 / iOS / 鸿蒙），应用名随系统语言显示（中文「豆丫笔记」、英文「Doyah Notes」）；**PC 端的笔记功能不单独分发** —— 它作为 Doyah Studio 的一部分提供"
+    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-NTS-ALL-DIST-001 | grep -q '✅'"
+    layer: "[产品特有]"
+    prio: "中"
+    status: blocked
+    evidence: ""
+    next_try: "三端（安卓 / iOS / 鸿蒙）各要独立应用包与商店材料，本机只有 macOS ⇒ 分发与签名口径要主人定"
+  - id: FR-NTS-ALL-PARITY-001
+    goal: "**安卓为基准端的对外承诺**：新能力**先在安卓落地并出包**，iOS / 鸿蒙向它对齐；端间任何行为差异都必须**显式登记**（等价 / 偏离 / 未实现），未登记的差异视为缺陷"
+    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-NTS-ALL-PARITY-001 | grep -q '✅'"
+    layer: "[产品特有]"
+    prio: "中"
+    status: blocked
+    evidence: ""
+    next_try: "「安卓为基准端」是端间承诺：差异要逐条登记进《平台对齐-移动端-以安卓为基准》，另两端不在场 ⇒ 登记表核不了，标「等价」也没人对着看"
   - id: FR-AGT-LINK-CHAN-003
     goal: "IM 通道（QQ 优先）：从聊天里收发任务 —— 手机发一句话派活，长任务完成推回结论，权限与桌面端同一套"
     done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-AGT-LINK-CHAN-003 | grep -q '✅'"
@@ -148,3 +221,59 @@ tasks:
     status: blocked
     evidence: ""
     next_try: "等契约所有者裁决：需求书 §3.5 ORG-002 要单层笔记本（不做架→笔记本两层），契约 §2.12 与已上盘 shelf/notebook 两层冲突；裁决后要么改契约+拆两层，要么改需求书条文"
+  - id: FR-STD-ALL-PLUG-005
+    goal: "Linux 端装配笔记，且必须是本地离线实现：数据只落本机 SQLite（笔记自己的"
+    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-ALL-PLUG-005 | grep -q '✅'"
+    layer: "基线必备"
+    prio: "高"
+    status: blocked
+    evidence: ""
+    next_try: "Linux 端按平台口径归小河马（2026-10-22 令：Linux 归 babyhippo，WSL 能直接编）；本机是 macOS，装配与验收要点 ①③④ 不在这台机上做"
+  - id: NFR-ALL-GATE-COMP-001
+    goal: "支持 PostgreSQL 12–18 多版本回归"
+    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py NFR-ALL-GATE-COMP-001 | grep -q '✅'"
+    layer: "基线必备"
+    prio: "—"
+    status: blocked
+    evidence: ""
+    next_try: "等可连的 PostgreSQL 12–18 实例：本机无 postgres / pg_ctl / initdb / docker（2026-11-02 实测 `/opt/homebrew/bin` 无 pg 系、`command -v postgres` 空），217 复测 ping 全丢 ⇒ 多版本回归无从跑"
+  - id: NFR-ALL-GATE-COMP-002
+    goal: "支持 GBase 最新版本，并向下兼容至 GBase 8a（版本窗口见下）"
+    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py NFR-ALL-GATE-COMP-002 | grep -q '✅'"
+    layer: "进阶可选"
+    prio: "—"
+    status: blocked
+    evidence: ""
+    next_try: "等 GBase 最新版 + GBase 8a 实例：与 `FR-STD-DB-META-002` 同一个卡点（217 无 GBase，2026-11-02 复测整机不通）"
+  - id: NFR-ALL-GATE-COMP-003
+    goal: "支持 MySQL 最新大版本，并向下兼容最近 5 个大版本（版本窗口见下）"
+    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py NFR-ALL-GATE-COMP-003 | grep -q '✅'"
+    layer: "常用增强"
+    prio: "—"
+    status: blocked
+    evidence: ""
+    next_try: "等可连的 MySQL 最新大版本 + 向下 5 个大版本实例：本机无 mysql / mysqld（`command -v mysqld` 空），只有线协议假服务器 `Scripts/mysql-stub` ⇒ 版本窗口无从验"
+  - id: NFR-ALL-GATE-LANG-001
+    goal: "v1.x 界面语言为简体中文"
+    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py NFR-ALL-GATE-LANG-001 | grep -q '✅'"
+    layer: "常用增强"
+    prio: "—"
+    status: blocked
+    evidence: ""
+    next_try: "① 与 `NFR-ALL-GATE-LANG-003` ② 互斥（前者要「首次启动默认简体中文」，后者要「默认跟随系统语言」，系统语言是英文的机器上两条不能同真）⇒ 要主人拍一句哪条算数；②③④ 已有机器读数（`LanguagePreferenceTests` 5 例、两档棘轮、菜单语言门禁），改口只需动 `Core/LanguagePreference.resolve` 一处"
+  - id: NFR-ALL-GATE-PERF-004
+    goal: "元数据单层懒加载在局域网内 ≤ 1 s"
+    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py NFR-ALL-GATE-PERF-004 | grep -q '✅'"
+    layer: "基线必备"
+    prio: "—"
+    status: blocked
+    evidence: ""
+    next_try: "等可连的局域网数据库：本条量的是「元数据单层懒加载在局域网内 ≤ 1 s」，本机无局域网 DB（217 ping 全丢，2026-11-02 复测）⇒ 只能量回环，不报通过"
+  - id: NFR-ALL-GATE-UI-001
+    goal: "界面设计语言统一：同一产品内各平台（macOS / Windows / iOS /"
+    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py NFR-ALL-GATE-UI-001 | grep -q '✅'"
+    layer: "基线必备"
+    prio: "—"
+    status: blocked
+    evidence: ""
+    next_try: "①③ 已有读数（图标 + `.help` 89/89 · a 类文字按钮 11 → 0），缺的是 ② 与 ④ 的判据口径：②「同一呈现函数（禁止第二套）」要先把「什么算第二套」写成可扫的判据（现只有「同一动作 ⇒ 同一图标」间接承担）；④「平台间对照表（逐行含成对截图）」要各端都能出图（Windows / iOS / 安卓 / 鸿蒙 / Linux 不在本机）⇒ 本侧只出得了 macOS 一侧"

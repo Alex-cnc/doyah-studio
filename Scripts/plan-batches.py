@@ -5,13 +5,16 @@
 手改一定会漂，所以划分规则写在这里、文件由脚本产出。
 
 用法：
-    python3 Scripts/plan-batches.py --check                 # 只比对，不写盘；不一致 rc=1
+    python3 Scripts/plan-batches.py --check                 # 只比对，不写盘；不一致 rc=1（默认按 0.7.0 对账）
     python3 Scripts/plan-batches.py --write                 # 重出 batches.yaml
     python3 Scripts/plan-batches.py --emit-plan --write     # 先按台账重出 plan.yaml，再重出批次
     python3 Scripts/plan-batches.py --version 0.4.0 --check # 历史版（只比 batches.yaml ↔ plan.yaml）
 
 覆盖声明（**分版本，别混**）：
-- `--version 0.6.0`（默认，当前版）**读台账**。范围 = 台账 §4.2 v0.6.0 那一行点名的 21 条**全号**
+- `--version 0.7.0`（默认，当前版）**读台账**。范围 = 台账里「未闭但不在 §4.2 任何里程碑队列里」的 17 条
+  **全号**（笔记 10 / 工作区 3 / 发布门槛 3 / 数据库 1；派生依据见 `.agent/next-version.md` §v0.7.0），
+  且状态未 ✅。卡点由 `BLOCKED_V070` 写死（10 条：嵌入端点 / 真云 / 人工点验 / 主人拍板 / 无真 PG / GBase 挂起 / 另两端）。
+- `--version 0.6.0`（历史）**读台账**。范围 = 台账 §4.2 v0.6.0 那一行点名的 21 条**全号**
   （授权 6 / 插件 2 / 性能 4 / 兼容 5 / 界面·可用性·安全·国际化 4），且状态未 ✅；
   卡点由 `BLOCKED_V060` 写死（5 条卡实例：Linux 端归小河马、PG 12–18 / GBase / MySQL 版本窗 / 局域网 DB）。
 - `--version 0.5.0`（历史）**读台账**。范围 = 台账 §4.2 那一行点名的前缀与具名条目
@@ -223,6 +226,70 @@ BATCHES_V060: list[dict] = [
     ),
 ]
 
+# --------------------------------------------------------------------------- #
+# v0.7.0：余账收口，D1–D2
+#
+# 为什么会有这一版：§4.2 六个里程碑的**条数**是 2026-11-01 的读数，之后没跟版。
+# 2026-11-02 按台账逐行复算（脚本见 `Scripts/check-plan-coverage.py` 口径，本跳手算并留读数）：
+# 本仓未闭 35 条，而六个里程碑行加起来写 46 条 —— v0.3.0 写 22（实算 1，DB 域 136 行里 134 ✅ +
+# 1 `✅（` + 1 ➖）、v0.4.0 写 1（实算 7）、v0.2.0 写 0（实算 3）、`FR-NTS-ALL-HOME-001`（未排期）1 条
+# 没有任何里程碑收它。⇒ 这 17 条**已经在台账里、只是不在任何队列里**；本版只把它们归堆，
+# **不新增需求**（不许自己发明）。
+# --------------------------------------------------------------------------- #
+BATCHES_V070: list[dict] = [
+    dict(
+        id="D1",
+        title="笔记的撤与删：撤销粒度 / 批量删可撤 / 回收站与彻底清除",
+        est_min=80,
+        match=["FR-NTS-NOTE-FORMAT-001", "FR-NTS-NOTE-ORG-001", "FR-NTS-NOTE-TRASH-001"],
+        why="三条落在同一条线上：格式条缺的是**撤销粒度**（`NotesRichTextEditor` 只 `allowsUndo`，"
+            "没有 `breakUndoCoalescing` ⇒ 撤销按引擎默认而不是按段落）、整理条缺的是**批量删除的撤销栈**、"
+            "删除条缺的是**回收站 / 恢复 / 到期彻底清除**。三条共用同一个 undo 栈与同一套墓碑存储，"
+            "拆开做会写两份撤销记账（一份按段、一份按操作）。",
+        exit="3 行两列全 ✅；每条配负例（一次 ⌘Z 只回退一段 / 批量删 100 条后 ⌘Z 必须回到删前 / "
+             "恢复后正文逐字一致 / 到期清除必须真删且墓碑不外泄）",
+    ),
+    dict(
+        id="D2",
+        title="笔记的入口与出口 + 不设付费墙的判据 + 工作区文件按类别呈现",
+        est_min=80,
+        match=["FR-NTS-ALL-HOME-001", "FR-NTS-NOTE-EXPORT-001", "FR-NTS-ALL-LIC-001",
+               "FR-STD-WS-FS-008"],
+        why="四条都是「边界处的一条规矩」而不是新功能：默认落页（入口由用户显式二选一）、"
+            "备份包与导入还原（出口要能把自己带回来，且包里有格式版本号）、"
+            "不设付费墙（把「无内购 / 无订阅 / 无许可证校验」从口头事实变成脚本判据）、"
+            "按文件类别呈现（图片等走各自视图，不再一律 `openAsText` 当二进制拒绝）。"
+            "四条互不依赖，但都是「小口径 + 一条判据」的形状，合在一批省手续费。",
+        exit="4 行两列全 ✅；每条配负例（未设置时落待办不许落笔记 / 导入导出的包必须逐字还原、"
+             "少一条笔记就判红 / 塞一行 `StoreKit` 或 `BillingClient` 必须判红 / "
+             "图片再走 `openAsText` 必须判红）",
+    ),
+]
+
+# v0.7.0 的 10 条卡点：逐条都是本机读不出来的（实例 / 端点 / 另两端 / 主人拍板），
+# 与 v0.6.0 同一纪律 —— blocked 必须带 next_try，不许用「做不了」三个字交差。
+BLOCKED_V070: dict[str, str] = {
+    "FR-NTS-NOTE-SEARCH-001": "① 语义检索要嵌入模型：本机无端点、无本地模型"
+                             "（2026-11-02 实测 `grep -rn 'embedding|语义检索|向量' Plugins/Notes App Core` = 0 命中；"
+                             "`agent.json` 有模型名 `deepseek-v4-flash` 但 apiKey 为空）⇒ 「两种检索并列」无从成立；"
+                             "③ 万条检索性能读数要等 ① 的路定了才有意义",
+    "FR-NTS-NOTE-SYNC-001": "⑥ 云端全量还原要可连的云同步服务（本机无账号；`NoteSyncE2ETests` 11 例要真云端，"
+                           "历轮记「未执行」）；⑦「关掉同步后本机功能一个不少」可单出读数，"
+                           "但本条判据要求 ①–⑦ 全 ✅ ⇒ 只能停在 ⑥",
+    "FR-STD-WS-TOOL-001": "剩两处且都不是代码：sixel / kitty 图形按口径未做、多会话页签的界面待人工点验"
+                         "（2026-11-02 复读台账状态原值）⇒ 机器面读不出「观感对」",
+    "FR-STD-WS-AI-002": "许愿模式「先出改动后生效」要不要另设（不再逐条批）要主人拍板；`WishStaging` 暂存面未接线",
+    "AC-ALL-GATE-REL-004": "要真实 PostgreSQL 端到端：本机无 pg 系（`command -v postgres` 空）、"
+                          "217 ping 100% 丢包（2026-11-02 复测 1 packet transmitted / 0 received）",
+    "AC-ALL-GATE-REL-005": "同上：错误密码 / 错误端口 / 不存在表 / 不合法 SQL 都要真服务器给回执，桩件回执不算",
+    "AC-ALL-GATE-REL-006": "同上：崩溃零容忍要在真实全流程上跑，没真库就没有这条流程",
+    "FR-STD-DB-META-002": "GBase 8a 按 2026-11-02 主人令挂起（台账记 ➖）：无法安装部署、暂不支持；"
+                         "解挂条件 = 主人给出可连的 GBase 实例",
+    "FR-NTS-ALL-DIST-001": "三端（安卓 / iOS / 鸿蒙）各要独立应用包与商店材料，本机只有 macOS ⇒ 分发与签名口径要主人定",
+    "FR-NTS-ALL-PARITY-001": "「安卓为基准端」是端间承诺：差异要逐条登记进《平台对齐-移动端-以安卓为基准》，"
+                            "另两端不在场 ⇒ 登记表核不了，标「等价」也没人对着看",
+}
+
 # v0.6.0 的 7 条卡点：5 条卡的是**实例**（2026-11-02 起跳逐条实测过本机），
 # 另 2 条（LANG-001 / UI-001）卡的是**契约口径 / 判据口径**，见各自 next_try。
 BLOCKED_V060: dict[str, str] = {
@@ -264,6 +331,23 @@ BLOCKED_V050: dict[str, str] = {
 }
 
 VERSION_SPECS: dict[str, dict] = {
+    "0.7.0": dict(
+        title="v0.7.0 余账收口",
+        rest_id="D9",
+        # 派生依据 = 台账逐行复算出的「未闭但不在任何里程碑队列里」的 17 条**全号**（2026-11-02 手算，
+        # 见 .agent/next-version.md §v0.7.0 与 evidence）。这里逐条照抄，不自己扩：一旦某条收口，
+        # `--emit-plan` 会按台账状态自动把它剔出 todo，不需要改这张表。
+        ledger_scope=("FR-NTS-NOTE-FORMAT-001", "FR-NTS-NOTE-SEARCH-001",
+                      "FR-NTS-NOTE-ORG-001", "FR-NTS-NOTE-TRASH-001",
+                      "FR-NTS-NOTE-SYNC-001", "FR-NTS-NOTE-EXPORT-001",
+                      "FR-NTS-ALL-HOME-001", "FR-NTS-ALL-LIC-001",
+                      "FR-NTS-ALL-DIST-001", "FR-NTS-ALL-PARITY-001",
+                      "FR-STD-WS-FS-008", "FR-STD-WS-TOOL-001", "FR-STD-WS-AI-002",
+                      "AC-ALL-GATE-REL-004", "AC-ALL-GATE-REL-005", "AC-ALL-GATE-REL-006",
+                      "FR-STD-DB-META-002"),
+        batches=BATCHES_V070,
+        blocked=BLOCKED_V070,
+    ),
     "0.6.0": dict(
         title="v0.6.0 横切面收口",
         rest_id="C9",
@@ -306,7 +390,7 @@ VERSION_SPECS: dict[str, dict] = {
         batches=BATCHES_V030,
     ),
 }
-DEFAULT_VERSION = "0.6.0"
+DEFAULT_VERSION = "0.7.0"
 EVIDENCE_CMD = "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py {id} | grep -q '✅'"
 
 
@@ -456,14 +540,19 @@ def render_plan(rows: list[dict], spec_version: dict) -> str:
         for i, ident in enumerate(spec["match"]):
             order.setdefault(ident, len(order))
     rows = sorted(rows, key=lambda r: order.get(r["id"], 10_000))
-    yellow = sum(1 for r in rows if r["status"] == "🟡")
-    white = sum(1 for r in rows if r["status"] == "⬜")
+    yellow = sum(1 for r in rows if r["status"].startswith("🟡"))
+    white = sum(1 for r in rows if r["status"].startswith("⬜"))
+    # 台账状态格不一定只有符号一个字符：有的写成 `🟡 ｜ 2026-11-02 复核降级…`、有的写 `➖`（挂起）。
+    # 只数「整格 == 🟡 / ⬜」会让这类行**两个桶都不进** ⇒ 抬头写「17 条（9 🟡 / 6 ⬜）」（9+6≠17）。
+    # 所以按前缀数，剩下的单列「其他」，让抬头三个数必须加得起来。
+    other = len(rows) - yellow - white
+    counts = f"{yellow} 🟡 / {white} ⬜" + (f" / {other} 其他（挂起或带复核注）" if other else "")
     lines = [
         f"# {spec_version['title']} · 执行队列（**派生件**）",
         "# 唯一事实源 = Docs/Doyah产品开发计划任务清单-macOS.md（活书台账）。",
         "# 本文件只做「下一跳」排序，不许反向改台账；台账一改就跑 --emit-plan 重出，别手改。",
         f"# 生成于 {datetime.date.today().isoformat()}，源 = 台账里 "
-        f"{' / '.join(spec_version['ledger_scope'])} 未闭 {len(rows)} 条（{yellow} 🟡 / {white} ⬜）。",
+        f"{' / '.join(spec_version['ledger_scope'])} 未闭 {len(rows)} 条（{counts}）。",
         "tasks:",
     ]
     in_scope = {r["id"] for r in rows}
@@ -530,7 +619,7 @@ def main(argv: list[str]) -> int:
     if "--version" in argv:
         idx = argv.index("--version")
         if idx + 1 >= len(argv):
-            print("✗ --version 后面缺版本号（0.3.0 / 0.4.0 / 0.5.0 / 0.6.0）", file=sys.stderr)
+            print("✗ --version 后面缺版本号（0.3.0 / 0.4.0 / 0.5.0 / 0.6.0 / 0.7.0）", file=sys.stderr)
             return 2
         version = argv[idx + 1]
     if version not in VERSION_SPECS:
@@ -576,7 +665,7 @@ def main(argv: list[str]) -> int:
         OUT.write_text(text, encoding="utf-8")
         print(f"✅ 已重出 .agent/batches.yaml（{len(todos)} 条待办）")
         return 0
-    print("用法：--check | --write [--emit-plan] [--version 0.3.0|0.4.0|0.5.0|0.6.0]")
+    print("用法：--check | --write [--emit-plan] [--version 0.3.0|0.4.0|0.5.0|0.6.0|0.7.0]")
     return 2
 
 
