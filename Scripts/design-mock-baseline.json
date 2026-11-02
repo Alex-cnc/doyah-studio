@@ -1,5 +1,5 @@
 {
-  "_说明": "合册 T-20261013-027 / 原单 T-20261010-067（样本 69）立的面对账基线：dirs 与 suffixes **增减都报红**（改了面必须同步改本文件并写明理由）；scannedFiles 与 tokenValues 是棘轮（只许涨不许跌，跌 = 削面 = 红）。 ｜2026-10-24：后缀面新增 `.jpg`×2（`App/Resources/wallpaper-city-lake.jpg` / `wallpaper-cosmic-cliff.jpg` —— 随包附带的壁纸位图，二进制资源不承载源码色值；已在判据 `SKIP_SUFFIX_REASONS` 里写明理由，此处同步基线计数）",
+  "_说明": "合册 T-20261013-027 / 原单 T-20261010-067（样本 69）立的面对账基线：dirs 与 suffixes **增减都报红**（改了面必须同步改本文件并写明理由）；scannedFiles 与 tokenValues 是棘轮（只许涨不许跌，跌 = 削面 = 红）。 ｜2026-10-24：后缀面新增 `.jpg`×2（`App/Resources/wallpaper-city-lake.jpg` / `wallpaper-cosmic-cliff.jpg` —— 随包附带的壁纸位图，二进制资源不承载源码色值；已在判据 `SKIP_SUFFIX_REASONS` 里写明理由，此处同步基线计数） ｜2026-11-02：后缀面新增 `.docx`×1（`Tests/Fixtures/docx/minimal.docx`）并把 `.md` 1 → 2 —— 新增的是 DOCX 导入用例的二进制夹具与一份测试说明，都不承载源码色值；已在判据 `SKIP_SUFFIX_REASONS` 里写明 `.docx` 的理由，此处同步基线计数。",
   "dirs": [
     "App",
     "CLI",
@@ -17,10 +17,11 @@
     ".entitlements": 2,
     ".png": 10,
     ".icns": 1,
-    ".md": 1,
+    ".md": 2,
     ".json": 1,
     ".xlsx": 4,
-    ".jpg": 2
+    ".jpg": 2,
+    ".docx": 1
   },
   "scannedFiles": 632,
   "tokenValues": 119

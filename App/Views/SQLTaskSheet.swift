@@ -21,9 +21,9 @@ struct SQLTaskSaveSheet: View {
     @State private var failure: String?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: Spacing.m) {
             Text(L(.sqlTaskSheetTitle))
-                .font(.headline)
+                .font(Theme.font(.title))
 
             TextField(L(.sqlTaskNameField), text: $name)
                 .textFieldStyle(.roundedBorder)
@@ -31,14 +31,14 @@ struct SQLTaskSaveSheet: View {
 
             HStack(spacing: 8) {
                 Text(L(.sqlTaskTargetDatabase))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .font(Theme.font(.caption))
+                    .foregroundStyle(Theme.text(.secondary))
                 Text(currentDatabase)
                     .font(.system(.caption, design: .monospaced))
             }
             Text(L(.sqlTaskTargetDatabaseHint))
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                .font(Theme.font(.caption))
+                .foregroundStyle(Theme.text(.secondary))
 
             Picker(L(.sqlTaskAccessMode), selection: $accessMode) {
                 Text(L(.sqlTaskModeReadOnly)).tag(SQLTaskDefinition.AccessMode.readOnly)
@@ -52,15 +52,15 @@ struct SQLTaskSaveSheet: View {
                     .textFieldStyle(.roundedBorder)
                     .frame(width: 120)
                 Text(L(.sqlTaskRowLimitHint))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .font(Theme.font(.caption))
+                    .foregroundStyle(Theme.text(.secondary))
             }
 
             Toggle(L(.sqlTaskRequiresApproval), isOn: $requiresApproval)
 
             if let failure {
                 Label(failure, systemImage: "exclamationmark.triangle.fill")
-                    .font(.caption)
+                    .font(Theme.font(.caption))
                     .foregroundStyle(.orange)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -79,7 +79,7 @@ struct SQLTaskSaveSheet: View {
                 .disabled(trimmedName.isEmpty)
             }
         }
-        .padding(20)
+        .padding(Spacing.l)
         .frame(width: 470)
         .onAppear {
             if name.isEmpty {

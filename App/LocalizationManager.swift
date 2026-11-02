@@ -14,7 +14,6 @@ import DoyahCore
 final class LocalizationManager: ObservableObject {
     static let shared = LocalizationManager()
 
-    private static let storageKey = "app.language"
 
     @Published private(set) var language: AppLanguage
 
@@ -31,13 +30,12 @@ final class LocalizationManager: ObservableObject {
     @Published var isRelaunchPromptPresented = false
 
     private init() {
-        let resolved: AppLanguage
-        if let raw = UserDefaults.standard.string(forKey: Self.storageKey),
-           let stored = AppLanguage(rawValue: raw) {
-            resolved = stored
-        } else {
-            resolved = .systemDefault
-        }
+        // 「存的值 → 这次用哪档」收在 `LanguagePreference` 一处（键也在那里）：
+        // 面板写键、启动读键，两边各写一遍字符串就会出现「改了、重启又变回去」。
+        let resolved = LanguagePreference.resolve(
+            stored: UserDefaults.standard.string(forKey: LanguagePreference.storageKey),
+            systemDefault: .systemDefault
+        )
         language = resolved
         launchLanguage = resolved
         // 让 AppKit 自带的系统级菜单（文件 / 编辑 / 显示 / 窗口 / 帮助…）跟随同一语言。
@@ -57,7 +55,7 @@ final class LocalizationManager: ObservableObject {
     func setLanguage(_ newLanguage: AppLanguage) {
         guard newLanguage != language else { return }
         language = newLanguage
-        UserDefaults.standard.set(newLanguage.rawValue, forKey: Self.storageKey)
+        UserDefaults.standard.set(newLanguage.rawValue, forKey: LanguagePreference.storageKey)
         Self.syncAppleLanguages(newLanguage)
 
         // **不再提示重启**：系统菜单由 `MainMenuLocalizer` 运行时改写标题（按 action selector 认项），

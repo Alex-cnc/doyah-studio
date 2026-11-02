@@ -161,6 +161,8 @@ ENGLISH_KINDS = {
     "productName": "产品 / 品牌专名（按 R-045 同族口径不翻）",
     "sampleValue": "合成数据的样例值",
     "displayDebt": "**已登记的欠账**：确实直达界面、暂时写死英文 —— 不是放行，棘轮只挡变差",
+    "bilingualTable": "Core 里自带中英两档的文案表（按 `AppLanguage` 分支，如 `AgentSlashSuggestion.detail(for:language:)`）—— 不是单语硬编码：中文那一档就是界面要的中文",
+    "diffHeader": "git unified diff 的头部行（`diff --git` / `new file mode` / `rename from` …）：补丁文本原样显示、也是解析锚点，不是界面文案",
 }
 ENGLISH_ALLOWED_KINDS = set(ENGLISH_KINDS)
 ENGLISH_PENDING_KIND = "unclassified"

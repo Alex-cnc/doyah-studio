@@ -28,14 +28,14 @@ struct AgentApprovalSheet: View {
     private var record: AgentActionRecord { approval.record }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: Spacing.m) {
             Label(L(.agentApprovalTitle), systemImage: "hand.raised.fill")
-                .font(.headline)
+                .font(Theme.font(.title))
                 .foregroundStyle(record.risk.tint)
 
             Text(L(.agentApprovalMessage))
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                .font(Theme.font(.caption))
+                .foregroundStyle(Theme.text(.secondary))
                 .fixedSize(horizontal: false, vertical: true)
 
             contextSection
@@ -46,14 +46,14 @@ struct AgentApprovalSheet: View {
                 .textFieldStyle(.roundedBorder)
 
             Text(L(.agentApprovalDismissHint))
-                .font(.caption2)
-                .foregroundStyle(.secondary)
+                .font(Theme.font(.caption))
+                .foregroundStyle(Theme.text(.secondary))
 
             // 两枚动作是**真 `NSButton`**（`AgentApprovalDecisionRow`）：离屏宿主里 SwiftUI 按钮
             // 不落 `NSButton` ⇒ 「点拒绝之后是不是一条都没发」此前只能靠人手点。
             decisionRow
         }
-        .padding(20)
+        .padding(Spacing.l)
         .frame(width: 620)
         // 估算在**出现时**跑一次：只要这一格给出的是「这一条会改多少行」，
         // 人就能拿它和「我看到的那几条」对一眼再决定。估不出来时这里会如实写原因。
@@ -73,7 +73,7 @@ struct AgentApprovalSheet: View {
     // MARK: - 上下文
 
     private var contextSection: some View {
-        VStack(alignment: .leading, spacing: 3) {
+        VStack(alignment: .leading, spacing: Spacing.hair) {
             row(L(.agentAuditColumnConnection), AgentAuditPresentation.connectionText(record))
             row(L(.agentAuditColumnModel), AgentAuditPresentation.modelText(record))
             row(L(.agentAuditColumnStatement), "\(record.statementKind.text) · \(record.risk.text)")
@@ -83,7 +83,7 @@ struct AgentApprovalSheet: View {
                 row(L(.agentApprovalRowsTitle), planRowsText)
             }
         }
-        .font(.caption)
+        .font(Theme.font(.caption))
     }
 
     /// 「预计影响行数」那一格（§9.1.16 A4）。
@@ -115,7 +115,7 @@ struct AgentApprovalSheet: View {
     private func row(_ title: String, _ value: String) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
             Text(title)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Theme.text(.secondary))
                 .frame(width: 96, alignment: .leading)
             Text(value)
                 .textSelection(.enabled)
@@ -126,19 +126,19 @@ struct AgentApprovalSheet: View {
     // MARK: - 护栏结论（NFR-AI-12：为什么需要批准）
 
     private var findingsSection: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: Spacing.xs) {
             Text(L(.agentAuditColumnGuard))
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                .font(Theme.font(.caption))
+                .foregroundStyle(Theme.text(.secondary))
 
             if record.findings.isEmpty {
                 Label(L(.agentAuditGuardNone), systemImage: "checkmark.shield")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
+                    .font(Theme.font(.caption))
+                    .foregroundStyle(Theme.text(.secondary))
             } else {
                 ForEach(record.findings, id: \.self) { finding in
                     Label(finding.message, systemImage: "exclamationmark.shield.fill")
-                        .font(.caption2)
+                        .font(Theme.font(.caption))
                         .foregroundStyle(finding.risk.tint)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -151,22 +151,22 @@ struct AgentApprovalSheet: View {
     /// 逐条列出（`FR-STD-DB-TASK-002` 判据①）：一条语句一行 —— 序号 · 类别、目标库、这条的预计影响行数，
     /// 下面跟这条的原文。**拆不出来时才退回整段原文**（并且仍然是原文，不是截断版）。
     private var statementSection: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: Spacing.s) {
             if let plan = statementsPlan {
                 HStack {
                     Text(L(.agentApprovalStatementsTitle, plan.count))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .font(Theme.font(.caption))
+                        .foregroundStyle(Theme.text(.secondary))
                     Spacer()
                     if plan.pendingImpactCount > 0 {
                         Text(L(.agentApprovalRowsEstimating))
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
+                            .font(Theme.font(.caption))
+                            .foregroundStyle(Theme.text(.secondary))
                     }
                 }
 
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 10) {
+                    VStack(alignment: .leading, spacing: Spacing.m) {
                         ForEach(plan.statements) { statement in
                             statementRow(statement)
                         }
@@ -176,7 +176,7 @@ struct AgentApprovalSheet: View {
                 }
                 .frame(height: 170)
                 .background(Theme.surface(.content))
-                .clipShape(RoundedRectangle(cornerRadius: 6))
+                .clipShape(RoundedRectangle(cornerRadius: Radius.control))
             } else {
                 ScrollView {
                     Text(record.sql)
@@ -187,26 +187,26 @@ struct AgentApprovalSheet: View {
                 }
                 .frame(height: 150)
                 .background(Theme.surface(.content))
-                .clipShape(RoundedRectangle(cornerRadius: 6))
+                .clipShape(RoundedRectangle(cornerRadius: Radius.control))
             }
         }
     }
 
     /// 一条语句那一行：**目标库与影响面都必须逐条落在它自己身上**（不许共用整批那个数）。
     private func statementRow(_ statement: HighRiskTaskApproval.Statement) -> some View {
-        VStack(alignment: .leading, spacing: 3) {
+        VStack(alignment: .leading, spacing: Spacing.hair) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text("#\(statement.index) · \(statement.kind)")
                     .font(.system(.caption, design: .monospaced).weight(.semibold))
 
                 Text("\(L(.schemaDiffTarget)): \(statement.targetDatabase ?? L(.agentApprovalDatabaseNotSet))")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
+                    .font(Theme.font(.caption))
+                    .foregroundStyle(Theme.text(.secondary))
 
                 Spacer(minLength: 8)
 
                 Text(impactText(statement.impact))
-                    .font(.caption2)
+                    .font(Theme.font(.caption))
                     .foregroundStyle(impactTint(statement.impact))
             }
 

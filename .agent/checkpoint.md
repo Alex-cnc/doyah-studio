@@ -1,5 +1,17 @@
 # 检查点
 
+## v0.6.0 · C4 收口（接管跳：第二片落账 + 队列转 blocked）· 2026-11-02
+
+- **本跳是接管跳**：上一跳持锁超时，`C4` 第二片的整片改动**在盘上、未提交**（代码 / 界面 / 台账 / 派生队列 / 5 例新单测），无证据文件。按 N2a / C3 先例 —— **先复跑读数再落账，不重写盘上实现**。
+- **收一条**：`NFR-ALL-GATE-USE-005`（空动作三档处置）两列全 ✅ —— 门禁 `check-empty-action-buttons.py` 早就在闭环里，缺的是这一行的读数：守卫 **48 条 = 台账 48 条**（视图 120 个文件）、三档逐档可判、空跑防护在位、负例 **11/11**。
+- **另两条没有硬造 ✅**：`UI-001` 两列 🟡（①③ 有读数：图标 + `.help` **89/89**、a 类文字按钮 **11 → 0**；②「同一呈现函数」无机器判据、④ 跨端成对截图本机只出得了 macOS 一侧）· `LANG-001` 两列 🟡（②③④ 有读数：`LanguagePreferenceTests` **5 例**、两档棘轮、菜单语言门禁；① 与 `LANG-003` ② **契约互斥**）⇒ 两条**转 blocked 并写 next_try**（`BLOCKED_V060` 加两项，`plan-batches --emit-plan` 重出）。
+- **本跳修掉两处门禁红（都是本片引入的）**：`check-version-scope`（alpha 档行的备注列必须 `—`；契约冲突说明并进判据列）· `check-doc-numbers`（`AGENT-SPEC.md` 两处核心单测数跟到 5317；历史值改成「`SEC-008` 那片的 5312」脱掉单位词，否则反向扫描把它当现状读数）。
+- **读数（本跳实跑）**：`verify-core.sh` **Executed 5317 tests, 13 skipped, 0 failures** rc=0 · `verify-ui-interactions.sh` **Executed 116 tests, 0 failures** rc=0（26 个 suite 全过、无 skipped）· `--filter LanguagePreferenceTests` **5 例 / 0 失败** · 门禁十一项 rc=0（empty-action 48/48 · button-icon a 类 0 + `--self-test` 48 例 · design-tokens · palette-wiring 41↔41 · core-localization 103/962 · design-mock 31 例 · effective-language · literal-language · doc-invariants · doc-tables 74 · plan-coverage 471/空壳 0 · status-consistency 471 · version-scope 471 · doc-versions 17 · doc-layout 三书九轮全清 · agents-index 15 · req-index 488）· `plan-batches --version 0.6.0 --check` rc=0（**0 条 todo / 18 条 blocked**）。
+- **反例两段**（判红后逐字节还原）：`LanguagePreference.resolve` 恒返系统档 ⇒ **3/5 红**（`sha256 e2629987…` 还原复绿）· 清空 `plan.yaml` 里 `LANG-001` 的 `next_try` ⇒ `--check` **rc=1** 并点名该条（`sha256 9a497335…` 还原复绿）。
+- **队列口径**：`plan.yaml` / `batches.yaml` 现为 **0 条 todo**（7 条本版 blocked + 11 条跨版携带 blocked）；v0.6.0 §4.2 仍记 7 条未闭（5 / 2），不动。
+- **未验证（≠ 通过）**：真鼠标点每一枚按钮 / 侧栏开关**未点** · `check-menu-language`（真启动 App 那一步）**未执行**（上一片实测 8 分钟不返回）· `verify-all.sh` 第 11 / 18 项**未执行**。
+- **下一项（不是 todo，是债）**：`check-status-gap` **16 行**「实现 ✅ 判据 ⬜/🟡」（Notes 8 + `WS-AI-001` + 7 条 `WS-*`）与「该门禁未接进 `verify-all.sh`」是同一笔 —— `check-doc-numbers` 的 `checkScriptParity` 现在唯一剩的红就是它。**下一跳：逐行补判据（点名已有测试 + 跑一次读数）→ 接成闭环第 19 项 → 同步「十八项」四种形状。**
+
 ## v0.6.0 · C4 第一片（`NFR-ALL-GATE-SEC-008` 统一外发日志）· 2026-11-02
 
 - **收一条**：`NFR-ALL-GATE-SEC-008` 两列全 ✅。C4 剩 3 条（`USE-005` / `LANG-001` / `UI-001`）。

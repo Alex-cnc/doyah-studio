@@ -80,11 +80,14 @@ struct GitChangesPanel: View {
                 .font(Theme.font(.caption))
                 .foregroundStyle(Theme.text(.tertiary))
                 .lineLimit(1)
+            // 二级面（`*Panel`）的动作按钮 = **图标 + 文字**（人类主人 2026-10-18 令）：
+            // 纯图标在这个面上判红，读屏也读不出「刷新的是哪一份改动」。
             Button {
                 model.refresh(root: workspace.rootPath)
             } label: {
-                Image(systemName: "arrow.clockwise")
+                Label(L(.gitRefresh), systemImage: "arrow.clockwise")
                     .font(Theme.font(.caption))
+                    .labelStyle(.titleAndIcon)
             }
             .buttonStyle(.borderless)
             .disabled(model.isRefreshing)

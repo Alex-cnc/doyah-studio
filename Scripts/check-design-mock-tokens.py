@@ -138,6 +138,7 @@ SKIP_SUFFIX_REASONS = {
     ".md": "说明文档 —— 不参与产品构建（历史行里本来就写旧值）",
     ".json": "清单 / 台账 —— 同上",
     ".jpg": "壁纸位图（`App/Resources/wallpaper-*.jpg`，随包附带）—— 二进制资源，不可能承载源码色值",
+    ".docx": "Word 文档测试夹具（`Tests/Fixtures/docx/minimal.docx`，DOCX 导入用例的输入）—— 二进制，不可能承载源码色值",
 }
 
 # 判据 A 的文件面台账：`Scripts/**/*.swift` 每一份都要登记角色（新脚本出现即红）。

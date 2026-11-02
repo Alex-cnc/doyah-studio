@@ -2,6 +2,10 @@ import SwiftUI
 import AppKit
 import DoyahCore
 
+/// 折叠区「压没」用的字号。**不是排版字号**：0.1pt 在任何倍率下都渲染不出字形，
+/// 这里要的是「这一段的字不占可见面积」，所以它不进 `TypeScale`（进了反而会被当排版档用）。
+private let foldedLineInvisiblePointSize: CGFloat = 0.1
+
 /// 工作区的**代码编辑器**（FR-EDIT-36）：按语言着色 + 补全 + ⌘S 保存。
 ///
 /// 与 SQL 编辑器（`SQLEditorView`）的关系：**同一个套路、不同的语言层**。
@@ -630,7 +634,7 @@ final class CodeTextView: NSTextView, UndoScopedEditor {
             let invisible: [NSAttributedString.Key: Any] = [
                 .paragraphStyle: collapsed,
                 .foregroundColor: NSColor.clear,
-                .font: NSFont.monospacedSystemFont(ofSize: 0.1, weight: .regular)
+                .font: NSFont.monospacedSystemFont(ofSize: foldedLineInvisiblePointSize, weight: .regular)
             ]
             for range in ranges {
                 storage.addAttributes(invisible, range: range)

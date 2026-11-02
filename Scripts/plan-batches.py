@@ -174,7 +174,7 @@ BATCHES_V050: list[dict] = [
 ]
 
 # --------------------------------------------------------------------------- #
-# v0.6.0：横切面收口，C1–C4（21 条未闭里 16 条机器面能做，5 条卡外部实例，见 BLOCKED_V060）
+# v0.6.0：横切面收口，C1–C4（21 条未闭里 14 条机器面能做，7 条卡外部实例 / 契约口径，见 BLOCKED_V060）
 # --------------------------------------------------------------------------- #
 BATCHES_V060: list[dict] = [
     dict(
@@ -223,7 +223,8 @@ BATCHES_V060: list[dict] = [
     ),
 ]
 
-# v0.6.0 的 5 条卡点：卡的是**实例**，不是判断力。2026-11-02 起跳逐条实测过本机。
+# v0.6.0 的 7 条卡点：5 条卡的是**实例**（2026-11-02 起跳逐条实测过本机），
+# 另 2 条（LANG-001 / UI-001）卡的是**契约口径 / 判据口径**，见各自 next_try。
 BLOCKED_V060: dict[str, str] = {
     "FR-STD-ALL-PLUG-005": "Linux 端按平台口径归小河马（2026-10-22 令：Linux 归 babyhippo，WSL 能直接编）；"
                            "本机是 macOS，装配与验收要点 ①③④ 不在这台机上做",
@@ -236,6 +237,15 @@ BLOCKED_V060: dict[str, str] = {
                              "（`command -v mysqld` 空），只有线协议假服务器 `Scripts/mysql-stub` ⇒ 版本窗口无从验",
     "NFR-ALL-GATE-PERF-004": "等可连的局域网数据库：本条量的是「元数据单层懒加载在局域网内 ≤ 1 s」，"
                              "本机无局域网 DB（217 ping 全丢，2026-11-02 复测）⇒ 只能量回环，不报通过",
+    # 卡的是**契约口径**与**判据口径**，不是判断力：两条的机器面读数都已在盘（见台账判据列），
+    # 差的都不是「再写点代码」，分别要主人一句话 / 要一个跨端产物面。列 blocked 而不是留 todo，
+    # 免得每一跳都把同一句「做不了」重跑一遍。
+    "NFR-ALL-GATE-LANG-001": "① 与 `NFR-ALL-GATE-LANG-003` ② 互斥（前者要「首次启动默认简体中文」，后者要「默认跟随系统语言」，"
+                             "系统语言是英文的机器上两条不能同真）⇒ 要主人拍一句哪条算数；②③④ 已有机器读数（`LanguagePreferenceTests` 5 例、"
+                             "两档棘轮、菜单语言门禁），改口只需动 `Core/LanguagePreference.resolve` 一处",
+    "NFR-ALL-GATE-UI-001": "①③ 已有读数（图标 + `.help` 89/89 · a 类文字按钮 11 → 0），缺的是 ② 与 ④ 的判据口径："
+                           "②「同一呈现函数（禁止第二套）」要先把「什么算第二套」写成可扫的判据（现只有「同一动作 ⇒ 同一图标」间接承担）；"
+                           "④「平台间对照表（逐行含成对截图）」要各端都能出图（Windows / iOS / 安卓 / 鸿蒙 / Linux 不在本机）⇒ 本侧只出得了 macOS 一侧",
 }
 
 # 台账 §7.1（2026-10-27 逐条核验）+ 各行备注已把卡点写死：这 10 条机器面做不了，
@@ -531,7 +541,12 @@ def main(argv: list[str]) -> int:
     if spec_version["ledger_scope"] is not None and "--emit-plan" in argv and "--write" in argv:
         rows = ledger_open(spec_version["ledger_scope"])
         PLAN.write_text(render_plan(rows, spec_version), encoding="utf-8")
-        print(f"✅ 已按台账重出 .agent/plan.yaml（{len(rows)} 条 todo）")
+        # 台账未闭的条目不一定都是 todo：卡点会落 blocked（含跨版携带）。
+        # 这句话此前一律印「N 条 todo」—— 本版全是卡点时它会说「7 条 todo」而实际 0 条，属读数自述错。
+        written = read_plan()
+        n_todo = sum(1 for _, s in written if s == "todo")
+        n_blocked = sum(1 for _, s in written if s == "blocked")
+        print(f"✅ 已按台账重出 .agent/plan.yaml（{n_todo} 条 todo / {n_blocked} 条 blocked）")
 
     todos = [i for i, s in read_plan() if s == "todo"]
     batches = assign(todos, spec_version)

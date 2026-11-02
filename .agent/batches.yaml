@@ -2,19 +2,11 @@
 #
 # 唯一事实源 = Docs/Doyah产品开发计划任务清单-macOS.md（活书台账）。
 # 本文件只决定「一跳做哪几条」，不许反向改台账。
-# 生成于 2026-11-02，源 = plan.yaml 里 3 条 status: todo（另有 16 条 blocked，不在批次里：FR-STD-ALL-PLUG-005, NFR-ALL-GATE-COMP-001, NFR-ALL-GATE-COMP-002, NFR-ALL-GATE-COMP-003, NFR-ALL-GATE-PERF-004, FR-AGT-LINK-CHAN-003, FR-AGT-LINK-EXT-001, FR-AGT-LINK-EXT-002, FR-AGT-OPS-OBS-002, FR-AGT-PLAN-PLAN-001, FR-AGT-TOOL-MEDIA-001, FR-AGT-TOOL-SYS-002, FR-AGT-UX-CONV-001, FR-AGT-UX-SESS-001, FR-AGT-UX-SYNC-001, FR-NTS-NOTE-ORG-002）
+# 生成于 2026-11-02，源 = plan.yaml 里 0 条 status: todo（另有 18 条 blocked，不在批次里：NFR-ALL-GATE-LANG-001, NFR-ALL-GATE-UI-001, FR-STD-ALL-PLUG-005, NFR-ALL-GATE-COMP-001, NFR-ALL-GATE-COMP-002, NFR-ALL-GATE-COMP-003, NFR-ALL-GATE-PERF-004, FR-AGT-LINK-CHAN-003, FR-AGT-LINK-EXT-001, FR-AGT-LINK-EXT-002, FR-AGT-OPS-OBS-002, FR-AGT-PLAN-PLAN-001, FR-AGT-TOOL-MEDIA-001, FR-AGT-TOOL-SYS-002, FR-AGT-UX-CONV-001, FR-AGT-UX-SESS-001, FR-AGT-UX-SYNC-001, FR-NTS-NOTE-ORG-002）
 #
 # 生成命令：python3 Scripts/plan-batches.py --write   （--check 只比对不写盘）
 
 batches:
 
-  - id: C4
-    title: "横切口径：统一外发日志 / 走不动的动作三选一 / 简体中文界面 / 设计语言统一"
-    status: todo
-    est_min: 80
-    items: [NFR-ALL-GATE-USE-005, NFR-ALL-GATE-LANG-001, NFR-ALL-GATE-UI-001]
-    why: "四条都不是某一块功能，而是「所有面上都得守的同一条规矩」：出网必留痕、走不动必须挑一种处置、界面中文、设计语言同一套令牌。判据形状也同构 —— 静态对账 + 一份全量读数表（扫全仓，不是抽一处）。"
-    exit: "4 行两列全 ✅；每条配「故意违反必判红」的负例（出网不留痕 / 满亮可点且静默 / 英文漏到界面 / 硬编码颜色绕过令牌）；跨端那部分（Windows / iOS / 安卓）单列未知"
-
-# 合计 3 条，覆盖 plan.yaml 全部 todo。
-# 粗估 80 分钟 ≈ 1.3 小时（原一格一条的节奏按 20 分钟/条算）。
+# 合计 0 条，覆盖 plan.yaml 全部 todo。
+# 粗估 0 分钟 ≈ 0.0 小时（原一格一条的节奏按 20 分钟/条算）。

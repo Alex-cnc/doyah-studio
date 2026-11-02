@@ -268,7 +268,7 @@ struct ConnectionGroupHeader: View {
             if isHovered {
                 Button(action: onAdd) {
                     Image(systemName: "plus")
-                        .font(.system(size: 10, weight: .semibold))
+                        .font(.system(size: TypeScale.captionSize, weight: .semibold))
                         .foregroundStyle(Theme.text(.secondary))
                 }
                 .buttonStyle(.borderless)

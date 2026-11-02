@@ -259,6 +259,10 @@ struct MainWindow: View {
                         .foregroundStyle(Theme.text(.secondary))
                 }
                 .buttonStyle(.borderless)
+                // 纯图标按钮必须带提示与读屏标签（判据 F 的硬要求）：这枚是标题栏里
+                // **唯一**没有文字的控件，缺了它读屏只会念「按钮」。
+                .help(isSidebarVisible ? L(.sidebarToggleHide) : L(.sidebarToggleShow))
+                .accessibilityLabel(Text(isSidebarVisible ? L(.sidebarToggleHide) : L(.sidebarToggleShow)))
                 .accessibilityIdentifier("sidebar-toggle")
             }
         }

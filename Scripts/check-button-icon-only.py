@@ -65,6 +65,7 @@ MENU_FILES = {
     "App/Views/ObjectTreeContextMenu.swift": "对象树右键菜单项构造件 —— 本文件产出的都是菜单项（`.contextMenu` 挂在树上）",
     "App/Views/ObjectTreeAppKitMenu.swift": "AppKit 菜单构造件（NSMenu 那一侧）—— 同样是菜单项，不是水平按钮",
     "App/MainMenuLocalizer.swift": "菜单**标题**本地化器（按语言改写菜单项 title）—— 不产出任何 `Button`（登记在册即可）",
+    "App/Views/SQLTaskAppKitMenu.swift": "工具栏「任务」菜单的 AppKit 渲染路径（真 `NSButton` + 真 `NSMenu`，行来自 `Core/SQLTaskMenuPlan`）—— 产出的全是菜单项，不是水平按钮",
 }
 MIN_FILES = 120          # 实测 127 份 .swift（App + Plugins/Notes/Views + Platform/macOS）
 

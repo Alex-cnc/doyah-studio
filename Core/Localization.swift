@@ -26,6 +26,34 @@ public enum AppLanguage: String, CaseIterable, Codable, Hashable, Sendable {
     }
 }
 
+/// 「这次启动该用哪种语言」的解析（`NFR-ALL-GATE-LANG-001` ③④ / `NFR-ALL-GATE-LANG-003` ①②）。
+///
+/// **收在一处**是因为它此前有两条实现过的理由：设置面板写一个键、启动时读一个键，
+/// 两处各写一遍字符串就会出现「面板里改了、重启又变回去」。键也放在这里。
+///
+/// **契约口冲突（如实登记，等主人拍板）**：`LANG-001` ① 写「首次启动、未做选择时界面语言为
+/// 简体中文」，`LANG-003` ② 写「默认跟随系统语言」—— 在系统语言是英文的机器上这两条互斥。
+/// 本函数按**较新**的 `LANG-003`（v3.2 修订，且是「语言切换」这条需求自己那一行）取「跟随系统」，
+/// 并把结论只写在这一处；要改成「恒默认简体中文」只需改这一行，别处不用动。
+public enum LanguagePreference {
+    /// 用户选择的存储键（设置面板与启动读取共用）。
+    public static let storageKey = "app.language"
+
+    /// 解析「这次启动该用哪种语言」。
+    ///
+    /// - Parameters:
+    ///   - stored: `storageKey` 里的原值（从没选过 = `nil`）。
+    ///   - systemDefault: 跟随系统算出来的那一档（`AppLanguage.systemDefault`）。
+    /// - Returns: 用户选择优先；没选过、或存的是历史遗留的坏值 ⇒ 系统档。
+    ///   坏值不抛错也不锁英文：一个读不懂的字符串不该把界面语言焊死。
+    public static func resolve(stored: String?, systemDefault: AppLanguage) -> AppLanguage {
+        guard let stored, let language = AppLanguage(rawValue: stored) else {
+            return systemDefault
+        }
+        return language
+    }
+}
+
 /// 界面文案的键。新增文案时同时在此追加 case，并在 `LocalizedStrings.table` 补两种语言。
 public enum LKey: String, CaseIterable, Sendable {
     // 通用
@@ -38,6 +66,9 @@ public enum LKey: String, CaseIterable, Sendable {
     case commonPaste
     case commonSelectAll
     case commonOk
+    /// 标题栏的侧栏开关（纯图标按钮）：文案只出现在 `.help` 与读屏标签里。
+    case sidebarToggleHide
+    case sidebarToggleShow
 
     // 菜单 / 命令
     case menuNewQuery
@@ -3542,6 +3573,8 @@ public enum LocalizedStrings {
         .commonRetry: [.simplifiedChinese: "重试", .english: "Retry"],
         .commonCopy: [.simplifiedChinese: "复制", .english: "Copy"],
         .commonOk: [.simplifiedChinese: "好", .english: "OK"],
+        .sidebarToggleHide: [.simplifiedChinese: "收起侧栏", .english: "Hide Sidebar"],
+        .sidebarToggleShow: [.simplifiedChinese: "展开侧栏", .english: "Show Sidebar"],
 
         .pluginDiagnosticNone: [.simplifiedChinese: "插件：%@ / 降级：无", .english: "Plugins: %@ / degraded: none"],
         .pluginDiagnosticDegraded: [.simplifiedChinese: "插件：%@ / 降级：%@", .english: "Plugins: %@ / degraded: %@"],

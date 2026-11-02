@@ -31,7 +31,7 @@ struct QQQRLoginSheet: View {
                 .fixedSize(horizontal: false, vertical: true)
 
             ZStack {
-                RoundedRectangle(cornerRadius: 12)
+                RoundedRectangle(cornerRadius: Radius.panel)
                     .fill(Theme.text(.secondary).opacity(0.08))
                     .frame(width: 232, height: 232)
                 if let image = controller.qrImage {

@@ -17,39 +17,39 @@ struct QuickCaptureSheet: View {
     @State private var isSaving = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: Spacing.m) {
             Text(L(.notesQuickCaptureTitle))
-                .font(.headline)
+                .font(Theme.font(.title))
 
             ZStack(alignment: .topLeading) {
                 if appState.quickCapture.body.isEmpty {
                     Text(L(.notesQuickCapturePlaceholder))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Theme.text(.secondary))
                         .padding(.top, 8)
-                        .padding(.leading, 5)
+                        .padding(.leading, Spacing.xs)
                         .allowsHitTesting(false)
                 }
                 TextEditor(text: $appState.quickCapture.body)
-                    .font(.body)
+                    .font(Theme.font(.body))
                     .focused($isBodyFocused)
                     .frame(minHeight: 150)
                     .scrollContentBackground(.hidden)
             }
-            .padding(6)
+            .padding(Spacing.s)
             .background(RoundedRectangle(cornerRadius: 8).fill(Color(nsColor: .textBackgroundColor)))
             .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(.separator))
 
             if appState.quickCapture.body.isEmpty {
                 Text(L(.notesQuickCaptureUntitled) + " · " + QuickCaptureShortcut.standard.display)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .font(Theme.font(.caption))
+                    .foregroundStyle(Theme.text(.secondary))
             }
 
             // 快捷键被别的应用占住时**照实说**（并给出去处）：捕获不能因为热键失败就变成「记不了」。
             if case .failed = appState.quickCaptureHotKeyOutcome {
                 Text(L(.notesQuickCaptureHotKeyTaken))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .font(Theme.font(.caption))
+                    .foregroundStyle(Theme.text(.secondary))
             }
 
             HStack {
@@ -72,7 +72,7 @@ struct QuickCaptureSheet: View {
                 .disabled(isSaving)
             }
         }
-        .padding(20)
+        .padding(Spacing.l)
         .frame(width: 520)
         .onAppear {
             isBodyFocused = true
