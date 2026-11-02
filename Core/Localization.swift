@@ -2057,6 +2057,16 @@ public enum LKey: String, CaseIterable, Sendable {
     case agentEnabledHint
     case agentEndpoint
     case agentEndpointPlaceholder
+    // 端点判定三档 + 不可用的五种原因（`NFR-ALL-GATE-AI-006` ③）：
+    // 这三种处境原先被压成一句「否（需要 API Key）」，报错指不准方向。
+    case agentEndpointVerdictLocal
+    case agentEndpointVerdictRemote
+    case agentEndpointVerdictUnusable
+    case agentEndpointProblemEmpty
+    case agentEndpointProblemMissingScheme
+    case agentEndpointProblemUnsupportedScheme
+    case agentEndpointProblemMissingHost
+    case agentEndpointProblemMalformed
     case agentModel
     case agentModelPlaceholder
     case agentTimeout
@@ -5570,6 +5580,14 @@ public enum LocalizedStrings {
         .agentEnabledHint: [.simplifiedChinese: "关闭时不会向任何模型服务发送数据。", .english: "When off, nothing is sent to any model service."],
         .agentEndpoint: [.simplifiedChinese: "模型服务端点（OpenAI 兼容）", .english: "Model endpoint (OpenAI-compatible)"],
         .agentEndpointPlaceholder: [.simplifiedChinese: "http://127.0.0.1:11434/v1", .english: "https://api.example.com/v1"],
+        .agentEndpointVerdictLocal: [.simplifiedChinese: "本地端点（免 API Key）· %@", .english: "Local endpoint (no API key) · %@"],
+        .agentEndpointVerdictRemote: [.simplifiedChinese: "远端端点（需 API Key）· %@", .english: "Remote endpoint (API key required) · %@"],
+        .agentEndpointVerdictUnusable: [.simplifiedChinese: "端点不可用：%@", .english: "Endpoint unusable: %@"],
+        .agentEndpointProblemEmpty: [.simplifiedChinese: "还没填端点。", .english: "No endpoint yet."],
+        .agentEndpointProblemMissingScheme: [.simplifiedChinese: "缺少协议头：端点要以 http:// 或 https:// 开头。", .english: "Missing scheme: the endpoint must start with http:// or https://."],
+        .agentEndpointProblemUnsupportedScheme: [.simplifiedChinese: "只支持 http 与 https（当前是 %@）。", .english: "Only http and https are supported (got %@)."],
+        .agentEndpointProblemMissingHost: [.simplifiedChinese: "缺少主机名，例如 http://127.0.0.1:11434/v1。", .english: "Missing host name, e.g. http://127.0.0.1:11434/v1."],
+        .agentEndpointProblemMalformed: [.simplifiedChinese: "这个地址解析不了，请检查空格等非法字符。", .english: "This address cannot be parsed; check for spaces or other illegal characters."],
         .agentModel: [.simplifiedChinese: "模型名", .english: "Model"],
         .agentModelPlaceholder: [.simplifiedChinese: "qwen2.5:7b", .english: "gpt-4o-mini"],
         .agentTimeout: [.simplifiedChinese: "超时（秒）", .english: "Timeout (seconds)"],

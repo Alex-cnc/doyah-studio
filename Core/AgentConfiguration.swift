@@ -321,43 +321,18 @@ public extension AgentConfiguration {
     /// 实际生效的护栏 / 审批策略（白名单已归一化，`unknown` 不在其中）。
     var effectiveGuardPolicy: AgentGuardPolicy { guardPolicy.sanitized }
 
-    /// 端点是否指向本机 / 局域网（NFR-AI-06 本地模型优先）。
+    /// 端点是否指向本机 / 局域网（NFR-ALL-GATE-AI-06 本地模型优先）。
     ///
-    /// 覆盖：`localhost`、`*.local`、IPv4 环回 `127/8`、RFC1918 私有段
-    /// （`10/8`、`192.168/16`、`172.16/12`）、链路本地 `169.254/16`、
-    /// IPv6 环回 `::1` 与唯一本地地址 `fc00::/7` / 链路本地 `fe80::/10`。
-    /// 这些地址不会把数据带到公网。
-    var isLocalEndpoint: Bool {
-        guard let rawHost = endpointURL?.host?.lowercased() else { return false }
-        // IPv6 字面量在 URL 里带方括号（`[::1]`），先剥掉再判断。
-        let host = rawHost.hasPrefix("[") && rawHost.hasSuffix("]")
-            ? String(rawHost.dropFirst().dropLast())
-            : rawHost
+    /// **口径只有一处**：判定逻辑在 `AgentEndpointDiagnosis.isLocalHost` ——
+    /// 这里只把 `endpoint` 交过去，不在本文件再写一遍地址表（写两遍，改一处另一处就旧了）。
+    var isLocalEndpoint: Bool { AgentEndpointDiagnosis(endpoint: endpoint).isLocal }
 
-        if host == "localhost" || host.hasSuffix(".localhost") { return true }
-        if host.hasSuffix(".local") { return true }
-        if host == "0.0.0.0" { return true }
+    /// 是否需要 API Key：本地端点（Ollama / vLLM 等）不需要；**不可用的端点也不需要** ——
+    /// 它缺的是能用的地址，不是 Key（`NFR-ALL-GATE-AI-006` ③）。
+    var requiresAPIKey: Bool { AgentEndpointDiagnosis(endpoint: endpoint).requiresAPIKey }
 
-        // IPv6（含 `::1`、`fc00::/7`、`fe80::/10`）
-        if host.contains(":") {
-            if host == "::1" { return true }
-            if host.hasPrefix("fc") || host.hasPrefix("fd") || host.hasPrefix("fe80") { return true }
-        }
-
-        let octets = host.split(separator: ".").compactMap { Int($0) }
-        guard octets.count == 4, octets.allSatisfy({ (0...255).contains($0) }) else { return false }
-        switch (octets[0], octets[1]) {
-        case (127, _): return true                       // 环回
-        case (10, _): return true                        // RFC1918
-        case (192, 168): return true                     // RFC1918
-        case (172, 16...31): return true                 // RFC1918
-        case (169, 254): return true                     // 链路本地
-        default: return false
-        }
-    }
-
-    /// 是否需要 API Key：本地端点（Ollama / vLLM 等）不需要。
-    var requiresAPIKey: Bool { !isLocalEndpoint }
+    /// 端点判定（三档 + 可读原因），界面与命令行共用同一句结论。
+    var endpointDiagnosis: AgentEndpointDiagnosis { AgentEndpointDiagnosis(endpoint: endpoint) }
 }
 
 // MARK: - 外发判定

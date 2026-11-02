@@ -85,6 +85,10 @@ struct DoyahCLI {
         }
     }
 
+    /// 命令行输出用哪一种语言：**有意固定中文**（命令行没有界面语境，`Q43` 口径）。
+    /// 收成一处常量，`agent-sql` 与 `agent-endpoint` 共用 —— 免得每加一条命令就多一处字面中文。
+    private static let cliLanguage: AppLanguage = .simplifiedChinese
+
     static func main() async {
         let environment = ProcessInfo.processInfo.environment
         let arguments = Array(CommandLine.arguments.dropFirst())
@@ -107,6 +111,15 @@ struct DoyahCLI {
         // 这条判据才不是"我们相信它是这样"。用法见 CLI/PluginCommands.swift。
         if arguments.first == "plugins" {
             exit(runPluginsCommand(arguments: Array(arguments.dropFirst())))
+        }
+
+        // agent-endpoint：端点判定的**离线**出口（NFR-ALL-GATE-AI-006 ③）。
+        // 为什么单开一条：`agent-sql` 会把「判定」和「真发一次请求」绑在一起 ——
+        // 判一个不可用的地址要等重试跑完、判本地地址还要起一个真端点。
+        // 「什么算本地 / 什么算不可用 / 原因是哪一句」本身不发一个字节，就该有一条**不碰网**的出口，
+        // 否则这三档判据要么靠单测（脚本侧拿不到），要么靠人眼。
+        if arguments.first == "agent-endpoint" {
+            exit(runAgentEndpointCommand(arguments: Array(arguments.dropFirst())))
         }
 
         // agent-sql：无界面地跑一遍「自然语言 → SQL」通道（NFR-AI-06 的本地端点验证入口）。
@@ -4744,6 +4757,47 @@ private static func fetchToolVersion(plan: BackupPlan, password: String?) async 
     return BackupToolCheck.parseToolVersion(output)
 }
 
+/// `agent-endpoint [--language zh-Hans|en] <端点>…` —— 端点判定的离线出口（`NFR-ALL-GATE-AI-006`）。
+///
+/// 每条一行：`<端点> → 判定`；判定分三档（本地免 Key / 远端需 Key / 不可用 + 原因）。
+/// **一个字节都不发**：这一条量的是"判定说没说对"，不是"能不能连上"；
+/// 真发请求那半条在 `agent-sql`（本地）与 `Scripts/test-real-endpoint.sh`（真模型）里。
+///
+/// 退出码：0 = 全部可用（本地或远端）；3 = 至少有一条不可用；64 = 用法不对。
+private static func runAgentEndpointCommand(arguments: [String]) -> Int32 {
+    var language = Self.cliLanguage
+    var endpoints: [String] = []
+    var index = 0
+    while index < arguments.count {
+        let argument = arguments[index]
+        switch argument {
+        case "--language":
+            guard index + 1 < arguments.count,
+                  let parsed = AppLanguage(rawValue: arguments[index + 1]) else {
+                print("用法：agent-endpoint [--language zh-Hans|en] <端点>…")
+                return 64
+            }
+            language = parsed
+            index += 2
+        default:
+            endpoints.append(argument)
+            index += 1
+        }
+    }
+    guard !endpoints.isEmpty else {
+        print("用法：agent-endpoint [--language zh-Hans|en] <端点>…")
+        return 64
+    }
+
+    var unusable = 0
+    for endpoint in endpoints {
+        let diagnosis = AgentEndpointDiagnosis(endpoint: endpoint)
+        print("\(endpoint) → \(diagnosis.summary(language: language))")
+        if !diagnosis.isUsable { unusable += 1 }
+    }
+    return unusable == 0 ? 0 : 3
+}
+
 /// `agent-sql --endpoint http://127.0.0.1:11434 --model qwen2.5:7b "指令" [--schema t1,t2] [--api-key K] [--show-egress]`
 ///
 /// 输出：模型的 SQL、解释、护栏判定、配额账本，以及（可选）统一外发日志里刚记下的条目 ——
@@ -4823,8 +4877,18 @@ client: any LLMClient
                            affectedRows: lastRows)
         : nil
 
+    // 判定说三档，不再是一枚布尔：远端该填 Key、本地免 Key、**用不了**要指到是哪一步不对
+    // （`NFR-ALL-GATE-AI-006` ③）。`是（免 API Key）` 那一句原样保留 —— 脚本按它断言。
+    let diagnosis = configuration.endpointDiagnosis
     print("端点：\(endpoint)")
-    print("本地端点判定：\(configuration.requiresAPIKey ? "否（需要 API Key）" : "是（免 API Key）")")
+    if diagnosis.isLocal {
+        print("本地端点判定：是（免 API Key）")
+    } else if diagnosis.isRemote {
+        print("本地端点判定：否（远端，需要 API Key）")
+    } else {
+        print("本地端点判定：未知（端点不可用）")
+        print("原因：\(diagnosis.problemMessage(language: Self.cliLanguage) ?? "")")
+    }
     print("")
 
     do {

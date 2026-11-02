@@ -227,6 +227,12 @@ struct AgentSettingsSheet: View {
                 }
 
                 TextField(L(.agentEndpoint), text: $endpoint, prompt: Text(L(.agentEndpointPlaceholder)))
+                // 端点判定三档（`NFR-ALL-GATE-AI-006` ③）：这一句由 Core 出，界面只搬结论。
+                // 原先界面对「本地 / 远端 / 用不了」三件事一个字都不说 —— 地址写错的人
+                // 只会看到「需要 API Key」，然后去补一把用它不上的 Key。
+                Text(endpointVerdict)
+                    .font(Theme.font(.caption))
+                    .foregroundStyle(Theme.text(.secondary))
                 HStack(spacing: Spacing.s) {
                     TextField(L(.agentModel), text: $model, prompt: Text(L(.agentModelPlaceholder)))
                     Menu {
@@ -793,6 +799,15 @@ struct AgentSettingsSheet: View {
     }
 
     // MARK: - 提供商预设（L-146）
+
+    /// 端点判定那一行话（`NFR-ALL-GATE-AI-006` ③）。
+    ///
+    /// 只搬 Core 的结论：本地免 Key / 远端需 Key / 不可用 + 具体原因（少协议头、协议不对、缺主机名…）。
+    private var endpointVerdict: String {
+        AgentConfiguration(endpoint: endpoint)
+            .endpointDiagnosis
+            .summary(language: LocalizationManager.shared.effectiveLanguage)
+    }
 
     /// 当前选中的提供商：界面画标签与模型下拉都取自它（标识认不出就退回「自定义」）。
     private var selectedPreset: AgentProviderPreset {
