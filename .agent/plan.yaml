@@ -1,7 +1,7 @@
 # v0.4.0 笔记与任务闭环 · 执行队列（**派生件**）
 # 唯一事实源 = Docs/Doyah产品开发计划任务清单-macOS.md（活书台账）。
 # 本文件只做「下一跳」排序，不许反向改台账；台账一改就跑 --emit-plan 重出，别手改。
-# 生成于 2026-11-02，源 = 台账里 FR-NTS-NOTE- / FR-NTS-TODO- 未闭 10 条（9 🟡 / 1 ⬜）。
+# 生成于 2026-11-02，源 = 台账里 FR-NTS-NOTE- / FR-NTS-TODO- 未闭 9 条（8 🟡 / 1 ⬜）。
 tasks:
   - id: FR-NTS-NOTE-ORG-002
     goal: "笔记本归类：笔记可归入**一个笔记本**（单层，不做「架 → 笔记本」两层；未指定时落默认「收件箱」），**归属唯一**，跨笔记本移动只改归属"
@@ -11,13 +11,6 @@ tasks:
     status: blocked
     evidence: ""
     next_try: "等契约所有者裁决：需求书 §3.5 ORG-002 要单层笔记本（不做架→笔记本两层），契约 §2.12 与已上盘 shelf/notebook 两层冲突；裁决后要么改契约+拆两层，要么改需求书条文"
-  - id: FR-NTS-NOTE-SYNC-002
-    goal: "冲突合并：按**记录级 LWW（`rev` + `updatedAt`）+ 冲突留两版** —— 落败的那版原样留底、能打开并标来源设备与时间（**段落级并集 / CRDT 自动合并不在本条范围**，见能力书 5.1.9 的边界；这里只做记录级 LWW + 留两版）"
-    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-NTS-NOTE-SYNC-002 | grep -q '✅'"
-    layer: "常用增强"
-    prio: "高"
-    status: todo
-    evidence: ""
   - id: FR-NTS-TODO-LIST-001
     goal: "待办事项本体：**标题 / 截止时间 / 重复规则 / 完成态**，与笔记**同级**，共用同一套同步与加密"
     done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-NTS-TODO-LIST-001 | grep -q '✅'"

@@ -354,8 +354,37 @@ final class NoteSyncE2ETests: XCTestCase {
         print("CONFLICT_STATE_BODY=\(text)")
     }
 
-    // MARK: - 判据 ④-b 真跑（默认跳过；`DOYAH_SYNC_E2E_LIVE=1` 才跑）
+    /// **判据② 的端到端读数**（`FR-NTS-NOTE-SYNC-002`）：真冲突之后，被留下的副本里**两版都带来源与时间** ——
+    /// 判负那版有自己的 `deviceId`，胜者那版有 `winner` 整条（`rev` / `updatedAt` / `deviceId`）。
+    /// 与上面几条的区别：那几条只判「留没留副本」，这条判「副本里够不够人看清两版」。
+    func testConflictCopyCarriesDeviceAndTimeForBothVersions() throws {
+        let transport = FakePostgrest()
+        transport.rows["note-stamps"] = row(uid: "note-stamps", rev: 2, updatedAt: 500, content: "{\"v\":\"server\"}")
+        let service = try makeService(transport)
 
+        let local = row(uid: "note-stamps", rev: 2, updatedAt: 600, content: "{\"v\":\"local\"}")
+        XCTAssertEqual(try service.push(row: local, rev: 2).verdict, .conflict)
+
+        let copy = try XCTUnwrap(service.conflicts.first)
+        // 这一格的胜负：同 rev 2、本机那版时刻更晚（600 > 500）⇒ **判负的是服务端那版**。
+        XCTAssertEqual(copy.losing.deviceId, "mac-test", "判负那版带自己的出端")
+        XCTAssertEqual(copy.losing.updatedAt, Date(timeIntervalSince1970: 500), "判负的是服务端那版 ⇒ 时刻是它的")
+        let winner = try XCTUnwrap(copy.winner, "胜者那一版也要整条留下（旧代码只有 winnerRev）")
+        XCTAssertEqual(winner.rev, 2)
+        XCTAssertEqual(winner.updatedAt, Date(timeIntervalSince1970: 600), "胜者是本机那版 ⇒ 时刻是它的")
+        XCTAssertEqual(winner.deviceId, "mac-test")
+
+        // 人裁决之后销账（判据④：**只有人按了才走这里**）。
+        let resolved = SyncConflictResolver.keepLosingVersionAsHumanChoice(
+            copy, deviceId: "mac-human", at: Date(timeIntervalSince1970: 900)
+        )
+        XCTAssertEqual(resolved.rev, 3)
+        XCTAssertTrue(try service.resolveConflictCopy(copy, newRevision: resolved.rev), "人按过 ⇒ 副本销账")
+        XCTAssertTrue(service.conflicts.isEmpty)
+        XCTAssertEqual(service.revision(for: "note-stamps"), 3, "下一次上行从 4 起，不再撞同一个 rev")
+    }
+
+    // MARK: - 判据 ④-b 真跑（默认跳过；`DOYAH_SYNC_E2E_LIVE=1` 才跑）
     /// 对**真** CloudBase 环境跑一遍最小闭环：登录 → 单篇上行 → 增量下拉 → 断网重试读数。
     ///
     /// 口令从**仓外**读取（`~/.dsh/private/cloud-sync-test-account.json`），不落仓、不打印。

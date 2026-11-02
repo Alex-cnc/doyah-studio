@@ -22,6 +22,10 @@ public struct NoteSource: Codable, Equatable, Sendable {
         /// **快速捕获**（`FR-NTS-NOTE-CAPTURE-001`）：桌面快捷键 / 手机锁屏一个动作记下来的那条。
         /// 与 `.manual` 分开记，是因为「这条是怎么来的」要能回答 —— 捕获不选笔记本，正文往往是半句话。
         case quickCapture
+        /// **从同步冲突副本另存出来的**（`FR-NTS-NOTE-SYNC-002` 判据①「被覆盖的那版可另存」）。
+        /// 与 `.manual` 分开记：这一条不是人新写的，是另一台设备上被 LWW 判负的那一版；
+        /// 来源指纹记原笔记的 `uid`，于是「它是从哪条笔记的哪一版来的」查得到。
+        case conflictCopy
 
         public var displayName: String { rawValue }
     }

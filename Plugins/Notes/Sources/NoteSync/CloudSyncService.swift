@@ -248,13 +248,25 @@ public struct CloudConflictCopy: Codable, Equatable, Sendable {
     public var losing: SyncRecord
     /// 胜者（主版本）的 `rev`，便于读数时一眼看出胜负依据。
     public var winnerRev: Int
+    /// **胜者那一版的整条记录**（`FR-NTS-NOTE-SYNC-002` 判据②：两版都要标来源设备与时间）。
+    ///
+    /// 为什么后加且可空：旧状态文件里只有 `winnerRev`（`winner` 解不出来）⇒ 解码按缺省 `nil`，
+    /// 界面如实显示「这一版来源不明」，不编一个设备名。`rev` 那一路不受影响（`winnerRev` 照旧）。
+    public var winner: SyncRecord?
     /// 记下这一刻。
     public var at: Date
 
-    public init(uid: String, losing: SyncRecord, winnerRev: Int, at: Date = Date()) {
+    public init(
+        uid: String,
+        losing: SyncRecord,
+        winnerRev: Int,
+        winner: SyncRecord? = nil,
+        at: Date = Date()
+    ) {
         self.uid = uid
         self.losing = losing
         self.winnerRev = winnerRev
+        self.winner = winner
         self.at = at
     }
 }
@@ -449,6 +461,38 @@ public final class CloudSyncService: @unchecked Sendable {
     /// 下一次上行这一 `uid` 该用的 `rev`（单调 +1）。
     public func nextRevision(for uid: String) -> Int { revision(for: uid) + 1 }
 
+    // MARK: 冲突副本的销账（`FR-NTS-NOTE-SYNC-002` ③④）
+
+    /// 某条笔记留下的冲突副本（可能不止一条：每次冲突各留一份）。
+    public func conflictCopies(forUID uid: String) -> [CloudConflictCopy] {
+        state.conflicts.filter { $0.uid == uid }
+    }
+
+    /// **人裁决之后**把这一条冲突副本销账（从状态里摘掉 + 落盘）。
+    ///
+    /// 谁能调这里：只有「人在冲突面上按了一下」的那两条路（以我这版为准 / 另存为新笔记）。
+    /// 自动路径（`push` / `flush` / 增量下拉）**只写 `recordConflict`，从不销账** —— 删副本要有人按下，
+    /// 否则「冲突留两版」会在下一次同步里被自己的自动流程悄悄抹平（判据④）。
+    ///
+    /// - Parameters:
+    ///   - copy: 面板上那一条（按 `uid` + 判负记录整条匹配，不按数组下标 —— 并发同步可能在中间插进新的）。
+    ///   - newRevision: 裁决产出的新 `rev`（只有「以我这版为准」给；给了就把它记成这一条已上行到的版本，
+    ///     于是下一次上行从 `newRevision + 1` 起，不会拿旧 `rev` 再去撞一次同样的冲突）。
+    /// - Returns: 确实摘掉了一条（`false` = 这条副本已经不在状态里，幂等重放）。
+    @discardableResult
+    public func resolveConflictCopy(_ copy: CloudConflictCopy, newRevision: Int? = nil) throws -> Bool {
+        let before = state.conflicts.count
+        state.conflicts.removeAll { $0.uid == copy.uid && $0.losing == copy.losing }
+        if let newRevision {
+            state.revByUID[copy.uid] = max(state.revByUID[copy.uid] ?? 0, newRevision)
+        }
+        let removed = state.conflicts.count < before
+        if removed || newRevision != nil {
+            try stateStore.save(state)
+        }
+        return removed
+    }
+
     // MARK: `IR-21` 入队
 
     /// 记「这一 `uid` 欠云端一次操作」。同 `uid` 只一条（`SyncQueue` 的幂等落在队列上）。
@@ -490,7 +534,7 @@ public final class CloudSyncService: @unchecked Sendable {
         switch merge.verdict {
         case .expired:
             // 服务端那一版更新：本地这一版判负 —— **不丢**，落冲突副本；不上行。
-            recordConflict(merge.conflict ?? outgoing.record, winnerRev: merge.primary.rev)
+            recordConflict(merge.conflict ?? outgoing.record, winner: merge.primary)
         case .accepted:
             try upload(outgoing, token: token)
         case .conflict:
@@ -502,7 +546,7 @@ public final class CloudSyncService: @unchecked Sendable {
             if isOutgoingWinner(merge, outgoing: outgoing) {
                 try upload(outgoing, token: token)
             }
-            if let losing = merge.conflict { recordConflict(losing, winnerRev: merge.primary.rev) }
+            if let losing = merge.conflict { recordConflict(losing, winner: merge.primary) }
         }
 
         state.revByUID[row.uid] = merge.primary.rev
@@ -774,8 +818,10 @@ public final class CloudSyncService: @unchecked Sendable {
         return try tokenProvider()
     }
 
-    private func recordConflict(_ losing: SyncRecord, winnerRev: Int) {
-        let copy = CloudConflictCopy(uid: losing.uid, losing: losing, winnerRev: winnerRev, at: now())
+    private func recordConflict(_ losing: SyncRecord, winner: SyncRecord) {
+        let copy = CloudConflictCopy(
+            uid: losing.uid, losing: losing, winnerRev: winner.rev, winner: winner, at: now()
+        )
         // 同一版（幂等键 + 快照 + 时刻都同）重复到达时不重复堆叠。
         if state.conflicts.contains(where: { $0.uid == copy.uid && $0.losing == copy.losing }) { return }
         state.conflicts.append(copy)

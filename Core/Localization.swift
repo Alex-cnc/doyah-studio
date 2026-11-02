@@ -546,6 +546,25 @@ public enum LKey: String, CaseIterable, Sendable {
     case notesUntitled
     case notesContainsRowData
     case notesSourcePrefix
+    /// `FR-NTS-NOTE-SYNC-002`：冲突留两版 —— 笔记面那条门牌（带条数参数）。
+    case notesSyncConflictsStripTitle
+    case notesSyncConflictSheetTitle
+    case notesSyncConflictLosingVersion
+    case notesSyncConflictWinnerVersion
+    case notesSyncConflictKeepLosing
+    case notesSyncConflictKeepCurrent
+    case notesSyncConflictSaveAsNote
+    case notesSyncConflictDeviceUnknown
+    /// 一版的读数行：`rev %d · %@ · %@`（版本号 · 来源设备 · 时刻）。
+    case notesSyncConflictVersionLine
+    /// 旧状态文件没记胜者那一版整条时的读数行（只给得出 `rev`）。
+    case notesSyncConflictVersionLineUnknown
+    /// 另存成功（带新笔记标题参数）。
+    case notesSyncConflictSavedAsNote
+    /// 以我这版为准之后（带标题参数）。
+    case notesSyncConflictKeptMine
+    case notesSyncConflictKeptCurrent
+    case notesSyncConflictEmpty
     /// 笔记数据已从工程数据家迁到自己的数据家（FR-PLUG-04 的一次性迁移完成）。带条数参数。
     case notesDataMigrated
     /// `FR-PLUG-08` 第 3 批：笔记从旧格式（`notes.json`）搬进本机 SQLite 库。
@@ -3969,6 +3988,20 @@ public enum LocalizedStrings {
         .notesUntitled: [.simplifiedChinese: "无标题", .english: "Untitled"],
         .notesContainsRowData: [.simplifiedChinese: "含数据", .english: "contains data"],
         .notesSourcePrefix: [.simplifiedChinese: "来源：", .english: "Source: "],
+        .notesSyncConflictsStripTitle: [.simplifiedChinese: "%d 条笔记同步时两边都改了，两版都留着", .english: "%d notes changed on two devices at once — both versions were kept"],
+        .notesSyncConflictSheetTitle: [.simplifiedChinese: "同步冲突", .english: "Sync conflicts"],
+        .notesSyncConflictLosingVersion: [.simplifiedChinese: "被覆盖的那一版", .english: "Overwritten version"],
+        .notesSyncConflictWinnerVersion: [.simplifiedChinese: "现在这一版", .english: "Current version"],
+        .notesSyncConflictKeepLosing: [.simplifiedChinese: "以我这版为准", .english: "Keep this version"],
+        .notesSyncConflictKeepCurrent: [.simplifiedChinese: "就以现在这版为准", .english: "Keep the current version"],
+        .notesSyncConflictSaveAsNote: [.simplifiedChinese: "另存为新笔记", .english: "Save as new note"],
+        .notesSyncConflictDeviceUnknown: [.simplifiedChinese: "来源不明", .english: "Unknown source"],
+        .notesSyncConflictVersionLine: [.simplifiedChinese: "第 %d 版 · %@ · %@", .english: "rev %d · %@ · %@"],
+        .notesSyncConflictVersionLineUnknown: [.simplifiedChinese: "第 %d 版 · 来源不明（旧记录没留下这一版的设备与时间）", .english: "rev %d · unknown source (the older record did not keep this version's device and time)"],
+        .notesSyncConflictSavedAsNote: [.simplifiedChinese: "已另存为一条新笔记：%@", .english: "Saved as a new note: %@"],
+        .notesSyncConflictKeptMine: [.simplifiedChinese: "已采用被覆盖的那一版：%@（可在版本历史里回退）", .english: "Kept the overwritten version: %@ (you can roll back from version history)"],
+        .notesSyncConflictKeptCurrent: [.simplifiedChinese: "已保留现在这一版", .english: "Kept the current version"],
+        .notesSyncConflictEmpty: [.simplifiedChinese: "没有冲突：两版一致时不会留副本", .english: "No conflicts: nothing is kept when both versions match"],
         .notesDataMigrated: [.simplifiedChinese: "笔记数据已迁到独立目录（%d 条），旧文件也留了一份备份", .english: "Notes data moved to its own folder (%d items); the old file is kept as a backup"],
         .notesEngineMigrated: [.simplifiedChinese: "笔记已搬进本机数据库（%d 条），旧的 notes.json 留了一份备份", .english: "Notes moved into the local database (%d items); the old notes.json is kept as a backup"],
         .notesMigrationNeedsAttention: [.simplifiedChinese: "笔记数据迁移没做完：%@（原文件仍在原处，没有丢）", .english: "Notes data migration did not finish: %@ (the original file is still in place, nothing was lost)"],

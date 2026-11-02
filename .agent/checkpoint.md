@@ -133,3 +133,14 @@
 - **下一批**：`N1` 余 1 条 + `N2` 四条一起（`FR-NTS-NOTE-SYNC-002` 记录级 LWW 冲突留两版 · `FR-NTS-TODO-LIST-001/002/003` · `FR-NTS-TODO-LINK-001`）。
 - 证据 `.agent/evidence/2026-11-02-N1-CAPTURE-001.md`
 - **落提交号**：`1373b7ba`（本片代码 + 台账 + 派生队列 + 证据一次提交；已推送，`local = remote = 1373b7ba`）。同片另有一笔前置提交 `b055681a`（捕获内核 + 13 例单测）。
+
+## v0.4.0 · N1（第四片：同步冲突留两版）（2026-11-02）
+
+- **收一条**：`FR-NTS-NOTE-SYNC-002` 两列全 ✅（N1 批次到此清空）。
+  - 核心：`Plugins/Notes/Sources/NoteSync/SyncConflictResolution.swift`（可打开 / 可另存 / 两版来源与时间 / `rev = 两版最大 + 1` 的新版本 / `…AsHumanChoice` 唯一入口）+ `SyncCore` 的墓碑闸与 `SyncResolution.tombstone(of:at:)`（删除 rev 严格 +1）+ `CloudConflictCopy.winner`（后加可选 ⇒ 旧状态文件按 `nil` 如实「来源不明」）+ `CloudSyncService.resolveConflictCopy`（只有人按过才销账）。
+  - 界面：中栏一条门牌（`notes-sync-conflicts-strip`，有冲突才出现）+ `NotesSyncConflictsSheet`（两版读数行 · 落败版正文可选中复制 · 三枚图标出口：以我这版为准 / 另存为新笔记 / 就以现在这版为准）；`AppState` 六个入口（`refreshSyncConflicts` / 冲突演示 / 另存 / 以我这版为准 / 销账）；语言表新增 13 键两语。
+- **读数**：`swift test --filter "NoteSyncConflictResolutionTests|NoteSyncE2ETests|NoteSyncTests"` **38 例 / 0 失败** · `verify-core.sh` **5125 例 / 13 skipped / 0 失败**（5125 已同批写进 `doc-numbers.json` + `AGENT-SPEC.md`）· `verify-ui-interactions.sh` **116 条全跑 / 无跳过** rc=0 · 文档门禁十道 rc=0 · `check-palette-wiring` 41 ↔ 41 · `check-format-arguments` 223/20 == 基线 · `check-button-icon-only` **15 处未过 == HEAD 基线**。
+- **反例三段**：撤墓碑闸 ⇒ 2 红 · 撤 `+1` ⇒ 3 红 · 往 `push` 塞自动销账 ⇒ 源树判据点名（三处 sha256 逐字节还原）。第一版「自动路径零引用」判据按整文件子串判，注入不带 `self.` 的调用仍判绿 ⇒ 已改成「只数代码行出现次数」（本片当场修的假绿）。
+- **队列口径（本片后实测）**：`plan-batches --version 0.4.0 --check` rc=0；`plan.yaml` = **9 todo + 1 blocked**；`batches.yaml` = N2 4 / N3 4（N1 已空、自动消失）；台账 §4.2 v0.4.0 10 → **9**（8 / 1），未闭 82 → **81**（🟡 66 / ⬜ 15）。
+- **未验证（≠通过）**：真鼠标点「另存 / 以我这版为准」未点（机械证据在 Core 与 `AppState` 方法层，界面只到源锚点与构建）· 段落级并集 / CRDT 不在本条（能力书 5.1.9 边界）· `verify-all.sh` 收尾行仍未拿到（第 11 项打包 `.app`、第 18 项生成物一致性未执行）· 四条 HEAD 存量红（icon-only 15 / format-args 20 / design-tokens 17 / panel-root 扫描面 118↔119）已在 `/tmp` 的 HEAD 工作树复跑，读数逐字相同 = **本片未引入**。
+- **下一批 = N2（4 条）**：`FR-NTS-TODO-LIST-001/002/003` · `FR-NTS-TODO-LINK-001`（待办本体 / 清单 / 分组筛选 / 与笔记双向转化）。盘上已有 `Todo` 模型 + `todo` 表（schema v5/v9）+ `TodoListView`，起跳先核「已有实现 vs 需求四字段与五列」的差，别重写迁移。

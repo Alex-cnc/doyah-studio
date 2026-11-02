@@ -106,6 +106,17 @@ public enum SyncResolution {
         guard let local else {
             return SyncMerge(verdict: .accepted, primary: incoming)
         }
+        // **墓碑不许被高 `rev` 的活版本按 LWW 复活**（`FR-NTS-NOTE-SYNC-002` 判据⑤ · `IR-17`）。
+        //
+        // 为什么这条要在 `rev` 比较之前：`rev` 决胜只回答「谁后写」，回答不了「删除算不算一次写」。
+        // 另一端删了这一条（墓碑 rev = n），本机离线时拿到的旧副本恰好是 rev = n+2（它删之前
+        // 还改过两次）⇒ 纯按 `rev` 决胜就会把这一行「复活」，用户看到一条已经删掉的笔记回来，
+        // 而两端再也收敛不到「删了」。
+        // 处置：墓碑留作主版本（`.expired` —— 本机不动），**活版本落冲突副本**（不静默丢：
+        // 人可以在冲突面上看见它、另存出来）。这与「冲突留两版」是同一条纪律，不是新规则。
+        if local.isTombstone, !incoming.isTombstone, incoming.rev >= local.rev {
+            return SyncMerge(verdict: .expired, primary: local, conflict: incoming)
+        }
         if incoming.rev > local.rev {
             return SyncMerge(verdict: .accepted, primary: incoming)
         }
@@ -127,6 +138,27 @@ public enum SyncResolution {
     /// 只问「上行这一版该不该覆盖本地」——给不需要两版兜底的调用点用（判据与 `decide` 同源）。
     public static func isNewer(incoming: SyncRecord, than local: SyncRecord?) -> Bool {
         decide(incoming: incoming, local: local).verdict == .accepted
+    }
+
+    /// **墓碑的唯一造法**：删除也是一次内容变更 ⇒ `rev` **严格递增**（`+1`），`deletedAt` 落删除时刻。
+    ///
+    /// 为什么不让调用点自己拼一个 `SyncRecord`：删除最容易被写成「把 `deletedAt` 填上、`rev` 沿用旧值」——
+    /// 那样生成的墓碑与上一次写入同 `rev`，`decide` 会把它判成 `.conflict`（两版都留），
+    /// 于是「删了又回来变成一条冲突副本」；而第三方再拿一条更高 `rev` 的旧副本就能把删除顶掉。
+    /// 收成一个函数，「删除一定 +1」就不靠自觉（`FR-NTS-NOTE-SYNC-002` 判据⑤）。
+    public static func tombstone(
+        of record: SyncRecord,
+        at deletedAt: Date,
+        deviceId: String? = nil
+    ) -> SyncRecord {
+        SyncRecord(
+            uid: record.uid,
+            rev: record.rev + 1,
+            updatedAt: deletedAt,
+            deletedAt: deletedAt,
+            deviceId: deviceId ?? record.deviceId,
+            payload: record.payload
+        )
     }
 }
 

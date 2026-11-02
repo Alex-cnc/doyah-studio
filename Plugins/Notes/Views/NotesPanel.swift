@@ -36,6 +36,29 @@ struct NotesListView: View {
             // 两行的内容各自都短到 238pt 里放得下（实测：排序条 154pt / 开关 36.5pt），
             // 且标题与条数**不许断词、不许截断**。见 `listHeader`。
             listHeader
+            // **冲突留两版的门牌**（`FR-NTS-NOTE-SYNC-002`）：两边同时改了同一条时，
+            // 落败的那一版留在本机状态文件里 —— 这里如实说「有几条」，点进去看两版、按人裁决。
+            // 只在真有冲突时出现（没有冲突时这一行是噪音，与「多选实况」同一条口径）。
+            if !appState.syncConflicts.isEmpty {
+                // 一**行**「说事」+ 一枚**图标**入口（`N2-2` 口径：入口是纯图标 + 悬停名字，
+                // 这一行本身是状态说明、不是一枚带字的按钮 —— 判据 `check-button-icon-only` 判据 C）。
+                HStack(spacing: Spacing.xs) {
+                    Image(systemName: "arrow.triangle.branch")
+                        .font(Theme.font(.caption))
+                        .foregroundStyle(Theme.status(.warning))
+                    Text(L(.notesSyncConflictsStripTitle, appState.syncConflicts.count))
+                        .font(Theme.font(.caption))
+                        .foregroundStyle(Theme.status(.warning))
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
+                    Spacer(minLength: Spacing.xs)
+                    ToolbarIconButton(systemName: "chevron.right", help: L(.notesSyncConflictSheetTitle)) {
+                        appState.isSyncConflictsPresented = true
+                    }
+                    .accessibilityIdentifier("notes-sync-conflicts-strip")
+                }
+                .padding(.horizontal, Spacing.s)
+            }
             if let hint = appState.noteSearchHint {
                 // 这一行是**如实交代**：走的是子串兜底，还是检索压根没跑成 —— 两种都不是
                 // 「没找到」，所以不能只给一个空列表了事。
@@ -1527,6 +1550,12 @@ struct NotesAreaView: View {
         .task(id: appState.notesQuery) {
             await appState.searchNotes()
         }
+        // **冲突留两版的面**（`FR-NTS-NOTE-SYNC-002`）：中栏那条门牌点开它。
+        // 有没有冲突、有几条，只由 `AppState.syncConflicts` 一处决定（面自己不找状态文件）。
+        .sheet(isPresented: $appState.isSyncConflictsPresented) {
+            NotesSyncConflictsSheet()
+                .environmentObject(appState)
+        }
     }
 
     /// 顶栏 = **左区顶部操作行**（`T-20261007-004` 第三节第 1 / 2 条 · 人类主人 2026-10-07 07:0x 逐字）：
@@ -2378,5 +2407,146 @@ extension NotesModule {
         case .notes: return "notes-module-notes"
         case .todos: return "notes-module-todos"
         }
+    }
+}
+
+/// **同步冲突面**（`FR-NTS-NOTE-SYNC-002` ①②③④）—— 两版并排，三个出口都由人按。
+///
+/// 为什么这三个出口里没有「自动合并」：能力书 5.1.9 已把段落级并集 / CRDT 划在这条需求之外，
+/// 本条只做**记录级 LWW + 留两版**。于是冲突的处置权在人手里：
+///   · 「以我这版为准」= 把被覆盖的那一版写成这条笔记的**新版本**（`rev` 抬到两版之上，
+///     记一版历史 ⇒ 版本历史里可回退），并销掉这条副本；
+///   · 「另存为新笔记」= 判负版原样变成一条独立笔记（来源标 `conflictCopy`，不碰原笔记）；
+///   · 「就以现在这版为准」= 副本销账，库里这一版一个字不动。
+///
+/// 两条刻意的口径：
+///   · **两版都标来源设备与时间**（判据②）：`winner` 那一版在旧状态文件里没有记录 ⇒ 如实写「来源不明」，
+///     不拿本机名顶上去（那会让人以为是自己那台覆盖的）；
+///   · **判负版是墓碑时不给恢复入口**（`canRestoreLosingVersion`）：一条删除记录没有正文可看，
+///     给个亮着的按钮点了没反应比灰着更糟。
+struct NotesSyncConflictsSheet: View {
+
+    @EnvironmentObject private var appState: AppState
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.s) {
+            HStack {
+                Text(L(.notesSyncConflictSheetTitle))
+                    .font(Theme.font(.title))
+                Spacer()
+                ToolbarIconButton(systemName: "xmark", help: L(ContainerEditPrompt.cancelKey)) {
+                    appState.isSyncConflictsPresented = false
+                }
+                .accessibilityIdentifier("notes-sync-conflicts-close")
+            }
+            if appState.syncConflicts.isEmpty {
+                Text(L(.notesSyncConflictEmpty))
+                    .font(Theme.font(.caption))
+                    .foregroundStyle(Theme.text(.secondary))
+                Spacer()
+            } else {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: Spacing.l) {
+                        ForEach(Array(appState.syncConflicts.enumerated()), id: \.offset) { index, copy in
+                            conflictRow(copy, index: index)
+                            if index < appState.syncConflicts.count - 1 { Divider() }
+                        }
+                    }
+                }
+            }
+        }
+        .padding(Spacing.l)
+        .frame(minWidth: 640, minHeight: 420)
+        .accessibilityIdentifier("notes-sync-conflicts-panel")
+        // 面板自己再读一次状态文件：从笔记面点进来时可能刚同步完，`AppState` 那一份是旧的。
+        .onAppear { appState.refreshSyncConflicts() }
+    }
+
+    @ViewBuilder
+    private func conflictRow(_ copy: CloudConflictCopy, index: Int) -> some View {
+        let presentation = SyncConflictResolver.presentation(of: copy, untitledFallback: L(.notesUntitled))
+        VStack(alignment: .leading, spacing: Spacing.xs) {
+            Text(presentation.title)
+                .font(Theme.font(.body))
+                .lineLimit(1)
+                .accessibilityIdentifier("notes-sync-conflict-title-\(index)")
+            versionLine(
+                L(.notesSyncConflictWinnerVersion),
+                stamp: presentation.winner,
+                fallbackRev: presentation.winnerRev
+            )
+            versionLine(
+                L(.notesSyncConflictLosingVersion),
+                stamp: presentation.losing,
+                fallbackRev: nil
+            )
+            // 判据① 的「可打开」：落败版正文原样摆在下面（超高就在这一格里滚，不撑破面板）。
+            if presentation.canRestoreLosingVersion {
+                ScrollView {
+                    Text(presentation.losingText)
+                        .font(Theme.font(.body))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .textSelection(.enabled)
+                }
+                .frame(maxHeight: 120)
+                .padding(Spacing.xs)
+                .background(Theme.surface(.content))
+                .clipShape(RoundedRectangle(cornerRadius: 6))
+            }
+            HStack(spacing: Spacing.xs) {
+                ToolbarIconButton(systemName: "arrow.uturn.backward", help: L(.notesSyncConflictKeepLosing)) {
+                    Task { await appState.keepConflictLosingVersion(copy) }
+                }
+                .disabled(!presentation.canRestoreLosingVersion)
+                .accessibilityIdentifier("notes-sync-conflict-keep-\(index)")
+                ToolbarIconButton(systemName: "square.and.arrow.down.on.square", help: L(.notesSyncConflictSaveAsNote)) {
+                    Task { await appState.saveConflictCopyAsNote(copy) }
+                }
+                .disabled(!presentation.canRestoreLosingVersion)
+                .accessibilityIdentifier("notes-sync-conflict-save-as-\(index)")
+                Spacer(minLength: Spacing.s)
+                ToolbarIconButton(systemName: "checkmark", help: L(.notesSyncConflictKeepCurrent)) {
+                    appState.dismissConflictCopy(copy)
+                }
+                .accessibilityIdentifier("notes-sync-conflict-keep-current-\(index)")
+            }
+        }
+    }
+
+    /// 判据② 的读数行：**版本号 · 来源设备 · 时刻**三样都写出来。
+    /// 胜者那一版在旧状态文件里只有 `rev`（`winner` 解不出来）⇒ 用「来源不明」那一句如实交代。
+    @ViewBuilder
+    private func versionLine(_ label: String, stamp: SyncVersionStamp?, fallbackRev: Int?) -> some View {
+        HStack(spacing: Spacing.xs) {
+            Text(label)
+                .font(Theme.font(.caption))
+                .foregroundStyle(Theme.text(.secondary))
+            if let stamp {
+                Text(L(
+                    .notesSyncConflictVersionLine,
+                    stamp.rev,
+                    deviceLabel(stamp),
+                    NotesVersionHistoryView.timeText(stamp.updatedAt)
+                ))
+                .font(Theme.font(.caption))
+                .foregroundStyle(Theme.text(.secondary))
+            } else {
+                Text(L(.notesSyncConflictVersionLineUnknown, fallbackRev ?? 0))
+                    .font(Theme.font(.caption))
+                    .foregroundStyle(Theme.text(.secondary))
+            }
+        }
+    }
+
+    /// 判据② 的「来源设备」那一格：知道就写设备名，不知道就如实写「来源不明」（不拿本机名顶上去）。
+    ///
+    /// 为什么收成一个 `-> String` 的小函数：语言表的实参门禁
+    /// （`Scripts/check-format-arguments.py`）认得出「有显式返回标注的函数」，认不出行内三元；
+    /// 写成三元就得往形状台账里塞一条类型不明的例外，而这里本来是**确定的 String**。
+    private func deviceLabel(_ stamp: SyncVersionStamp) -> String {
+        guard let device = stamp.deviceId, !device.isEmpty else {
+            return L(.notesSyncConflictDeviceUnknown)
+        }
+        return device
     }
 }

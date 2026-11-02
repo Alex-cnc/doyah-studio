@@ -10345,6 +10345,120 @@ final class AppState: ObservableObject {
         }
         selectActivityItem(.notes)
         Task { await reloadNotes() }
+        refreshSyncConflicts()
+    }
+
+    // MARK: - 冲突留两版（`FR-NTS-NOTE-SYNC-002` ①–④ · 人这一侧）
+
+    /// 本机同步状态文件里留着的冲突副本（**判负的那一版**）。
+    ///
+    /// 为什么从状态文件现读、而不是从 `CloudSyncService`：留底是**本地事实**，没有账号也该看得见
+    /// （登录过期后「我那条被覆盖的版本在哪」不该跟着消失）。
+    @Published private(set) var syncConflicts: [CloudConflictCopy] = []
+    /// 冲突面（两版并排）是否浮出来。
+    @Published var isSyncConflictsPresented = false
+
+    /// 冲突面用的展示数据：两版都带来源设备与时间（判据②）。
+    var syncConflictPresentations: [SyncConflictPresentation] {
+        syncConflicts.map {
+            SyncConflictResolver.presentation(of: $0, untitledFallback: L(.notesUntitled))
+        }
+    }
+
+    /// 从状态文件现读一遍（**不碰网络、不需要登录**）。
+    func refreshSyncConflicts() {
+        syncConflicts = (try? FileCloudSyncStateStore().load().conflicts) ?? []
+    }
+
+    /// 判据① 的「可打开」：落败版正文（`NoteBody` 解得出来就投影，解不出来原样给）。
+    func conflictLosingText(_ copy: CloudConflictCopy) -> String {
+        SyncConflictResolver.text(ofPayload: copy.losing.payload)
+    }
+
+    /// 判据① 的「可另存」：把落败版**原样**写成一条**新笔记**（新 id、来源 = 冲突副本、逐字保留）。
+    func saveConflictCopyAsNote(_ copy: CloudConflictCopy) async {
+        let payload = SyncConflictResolver.newNotePayload(from: copy, untitledFallback: L(.notesUntitled))
+        do {
+            let saved = try await NoteLibrary.defaultLibrary().save(
+                NoteDraft(
+                    title: payload.title,
+                    body: payload.body,
+                    source: SyncConflictResolver.source(for: copy)
+                ),
+                spans: payload.spans
+            )
+            await reloadNotes()
+            noteBeingEdited = saved.id
+            statusMessage = L(.notesSyncConflictSavedAsNote, payload.title)
+            resolveConflictCopy(copy)
+            refreshSyncConflicts()
+        } catch {
+            errorMessage = ErrorPresenter.message(for: error)
+        }
+    }
+
+    /// 判据③④ 的「以我这版为准」——**人按的这一下**：写成这条笔记的新版本（`rev = 两版最大 + 1`），
+    /// 记一版历史（`reason == .conflict` ⇒ 可用版本历史回退），再把副本销账。
+    ///
+    /// 名字里带「HumanChoice」的那条 Core 入口只从这里调用（`Tests/NoteSyncConflictResolutionTests`
+    /// 的源树判据钉住「自动路径零引用」）。
+    func keepConflictLosingVersion(_ copy: CloudConflictCopy) async {
+        let payload = SyncConflictResolver.newNotePayload(from: copy, untitledFallback: L(.notesUntitled))
+        let service = try? cloudSync()
+        let record = SyncConflictResolver.keepLosingVersionAsHumanChoice(
+            copy,
+            currentRevision: service?.revision(for: copy.uid),
+            deviceId: service?.deviceId ?? CloudSyncState.defaultDeviceId(),
+            at: Date()
+        )
+        guard let noteID = UUID(uuidString: copy.uid) else {
+            // `uid` 不是本机 UUID 形状（别端造的 id）：不硬塞进一个错的 id，改成「另存一条新笔记」。
+            await saveConflictCopyAsNote(copy)
+            return
+        }
+        do {
+            _ = try await NoteLibrary.defaultLibrary().save(
+                NoteDraft(
+                    title: payload.title,
+                    body: payload.body,
+                    source: SyncConflictResolver.source(for: copy)
+                ),
+                spans: payload.spans,
+                id: noteID,
+                reason: .conflict
+            )
+            await reloadNotes()
+            noteBeingEdited = noteID
+            resolveConflictCopy(copy, newRevision: record.rev)
+            refreshSyncConflicts()
+            // 这一版也欠云端一次：入队 + 立刻试上行（断网只留队，不打扰）。
+            await enqueueCloudSync(uid: copy.uid)
+            statusMessage = L(.notesSyncConflictKeptMine, payload.title)
+        } catch {
+            errorMessage = ErrorPresenter.message(for: error)
+        }
+    }
+
+    /// 「就以现在这版为准」：副本销账，库里这一版一个字都不动。
+    func dismissConflictCopy(_ copy: CloudConflictCopy) {
+        resolveConflictCopy(copy)
+        refreshSyncConflicts()
+        statusMessage = L(.notesSyncConflictKeptCurrent)
+    }
+
+    /// 销账：有会话就走服务（状态一起落盘），没有会话就直接改状态文件（删副本不依赖账号）。
+    private func resolveConflictCopy(_ copy: CloudConflictCopy, newRevision: Int? = nil) {
+        if let service = try? cloudSync() {
+            try? service.resolveConflictCopy(copy, newRevision: newRevision)
+            return
+        }
+        let store = FileCloudSyncStateStore()
+        guard var state = try? store.load() else { return }
+        state.conflicts.removeAll { $0.uid == copy.uid && $0.losing == copy.losing }
+        if let newRevision {
+            state.revByUID[copy.uid] = max(state.revByUID[copy.uid] ?? 0, newRevision)
+        }
+        try? store.save(state)
     }
 
     /// 打开「账户与同步…」面板（片 `云F` · 契约 §6.4「账号与同步界面（最小集）」）。
