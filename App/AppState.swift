@@ -10562,7 +10562,7 @@ final class AppState: ObservableObject {
             return
         }
         let store = NoteLibrary.defaultLibrary()
-        var attached = 0
+        var attached: Int = 0
         var failure: Error?
         for url in urls {
             do {
@@ -10577,7 +10577,7 @@ final class AppState: ObservableObject {
         if let failure {
             statusMessage = L(.notesAttachFailed, String(describing: failure))
         } else if attached > 0 {
-            statusMessage = L(.notesAttached, attached)
+            statusMessage = L(.notesAttached, Int(attached))
         }
     }
 
@@ -10625,8 +10625,8 @@ final class AppState: ObservableObject {
         isAttachmentCleanupPresented = false
         guard !files.isEmpty else { return }
         do {
-            let removed = try await NoteLibrary.defaultLibrary().deleteAttachmentFiles(files)
-            statusMessage = L(.notesAttachmentFilesDeleted, removed)
+            let removed: Int = try await NoteLibrary.defaultLibrary().deleteAttachmentFiles(files)
+            statusMessage = L(.notesAttachmentFilesDeleted, Int(removed))
         } catch {
             errorMessage = ErrorPresenter.message(for: error)
         }
@@ -11235,9 +11235,9 @@ final class AppState: ObservableObject {
         if request.target.isMultipleNotes {
             lines.append(L(.notesRemoveSummaryNotes, request.target.count))
         }
-        let attachmentCount = pendingNoteRemovalAttachmentCount
+        let attachmentCount: Int = pendingNoteRemovalAttachmentCount
         if attachmentCount > 0 {
-            lines.append(L(.notesAttachmentCleanupMessage, attachmentCount))
+            lines.append(L(.notesAttachmentCleanupMessage, Int(attachmentCount)))
         }
         return lines.isEmpty ? nil : lines.joined(separator: "\n")
     }

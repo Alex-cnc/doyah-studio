@@ -259,6 +259,14 @@
     "photo.on.rectangle.angled": {
       "动作": "appearanceWallpaperSkinToggle",
       "依据": "壁纸皮肤 = 一张铺在表面之下的照片（相框图标）"
+    },
+    "paperclip": {
+      "动作": "notesAttachTip",
+      "依据": "回形针 = 附件 / 附带文件（笔记工具条「插入附件」）"
+    },
+    "macwindow.on.rectangle": {
+      "动作": "workspaceHTMLPreviewOpenInBrowser",
+      "依据": "窗口 + 向右上箭头 = 在浏览器里另开（HTML 预览）"
     }
   }
 }
