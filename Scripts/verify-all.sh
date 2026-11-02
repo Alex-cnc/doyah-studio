@@ -546,7 +546,7 @@ python3 Scripts/check-pending-agenda.py --self-test
 python3 Scripts/check-self-test-counts.py
 python3 Scripts/check-self-test-counts.py --self-test
 
-echo "==> 5/19 需求状态一致性（一单 §3 台账 ↔ 其它文档状态括注）+ 版本范围（版本 / 版本口径）"
+echo "==> 5/19 文档口径对账（状态括注 / 版本范围 / 台账↔需求索引覆盖 / §4.2 条数）"
 python3 Scripts/check-status-consistency.py
 # L-69 ③（2026-09-28 第 56 轮）：上面那条管的是「其它文档括注 ↔ 台账**状态一致**」（2026-10-20 改口径，
 # 原为「索引 ↔ 定义行」），管不了「这条 🟡 到底算不算本版范围」。
@@ -558,6 +558,17 @@ python3 Scripts/check-status-consistency.py
 # 负例 `--self-test` 8 例，全部在内存里写坏（不碰盘、无副作用）。
 python3 Scripts/check-version-scope.py
 python3 Scripts/check-version-scope.py --self-test
+
+# **台账 ↔ 需求索引的覆盖 + §4.2 条数**（2026-11-03 接进闭环）：本条原先在 `doc-numbers.json` 里
+# 登记为「豁免 · 待接进闭环」—— 判据在盘上却不在每轮跑的清单里，等于「有判据、没闭环」，
+# 出了洞没人知道（实测它的 §4.2 条数一漂就漂了 20 条）。现在回收尾：
+#   ① 台账 §3 编号集合 == 需求索引编号集合（不多不少）；② 状态合法；③ 需求书正文不写状态；
+#   ④ 不许空壳行（「一句话」是 `—` 的行不许存在，更不许翻 ✅）；
+#   ⑤ **§4.2 六个里程碑条数 / 头部未闭总数 / §2 §3 §4 三个标题的条数 == 台账逐行复算**，
+#      未闭行必须**恰好**落一个里程碑（无孤儿、无重复归属）。
+# 负例 `--self-test` 6 例（现状绿 + 改坏未闭行 / 已闭行 / 插孤儿行 / 改头部总数 / 改 §3 标题），全程在内存里改文本。
+python3 Scripts/check-plan-coverage.py
+python3 Scripts/check-plan-coverage.py --self-test
 
 echo "==> 6/19 设计令牌棘轮 + 外观样张与产品同源 + 主题集（三选一）"
 python3 Scripts/check-design-tokens.py
