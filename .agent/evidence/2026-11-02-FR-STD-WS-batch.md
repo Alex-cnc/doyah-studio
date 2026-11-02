@@ -54,7 +54,7 @@ CodeLanguageRegistryTests 19 · TextLanguageTests 6 · WorkspaceTabTests 5 · Wo
 | `followSystem` 改成恒深色 | 判红 1 例 | `8d64ac29…` 一致 |
 | 给回落语言塞一条关键字 | 判红 3 例 | `7d03c5ab…` 一致 |
 
-提交：见本文件同批提交（补号提交里回填）
+提交：`cae61520`（已推送，local = remote）
 
 未验证（≠ 通过）：
 - 真鼠标点验一条都没点（首页三栏、切主题 / 切深浅、⌥ 拖一列、浏览器页签点开与下载）
