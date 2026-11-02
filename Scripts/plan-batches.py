@@ -11,7 +11,10 @@
     python3 Scripts/plan-batches.py --version 0.4.0 --check # 历史版（只比 batches.yaml ↔ plan.yaml）
 
 覆盖声明（**分版本，别混**）：
-- `--version 0.5.0`（默认，当前版）**读台账**。范围 = 台账 §4.2 那一行点名的前缀与具名条目
+- `--version 0.6.0`（默认，当前版）**读台账**。范围 = 台账 §4.2 v0.6.0 那一行点名的 21 条**全号**
+  （授权 6 / 插件 2 / 性能 4 / 兼容 5 / 界面·可用性·安全·国际化 4），且状态未 ✅；
+  卡点由 `BLOCKED_V060` 写死（5 条卡实例：Linux 端归小河马、PG 12–18 / GBase / MySQL 版本窗 / 局域网 DB）。
+- `--version 0.5.0`（历史）**读台账**。范围 = 台账 §4.2 那一行点名的前缀与具名条目
   （`FR-AGT-TOOL-*` / `FR-AGT-UX-*` / `FR-AGT-LINK-EXT-*` + `OPS-OBS-002` / `PLAN-PLAN-001` /
   `LINK-CHAN-003` / `KNOW-MEM-003` / `NFR-ALL-GATE-AI-004·006·007` / `AC-ALL-GATE-AI-001·004`），
   且状态未 ✅。卡点由 `BLOCKED_V050` **写死在规则表里**（台账 §7.1 的十条外部卡点），
@@ -170,6 +173,71 @@ BATCHES_V050: list[dict] = [
     ),
 ]
 
+# --------------------------------------------------------------------------- #
+# v0.6.0：横切面收口，C1–C4（21 条未闭里 16 条机器面能做，5 条卡外部实例，见 BLOCKED_V060）
+# --------------------------------------------------------------------------- #
+BATCHES_V060: list[dict] = [
+    dict(
+        id="C1",
+        title="授权与版本呈现：解析 / 能力位 / 版本页 / 到期降级 / 范围口径 / 设备 / 工作区入口",
+        est_min=80,
+        match=["FR-STD-ALL-LIC-001", "FR-STD-ALL-LIC-002", "FR-STD-ALL-LIC-003",
+               "FR-STD-ALL-LIC-004", "FR-STD-ALL-LIC-005", "FR-STD-WS-LIC-001"],
+        why="六条读的是同一份 `License` 模型与同一张能力位表：解析（001）/ 按位呈现（002）/ 到期降级（003）/"
+            "范围口径（004）/ 设备配额（005）/ 工作区里的授权呈现（WS-LIC-001）。拆开做会把同一份能力位"
+            "写六遍，而且 001 与 004 的「哪些算一套」如果各写一份，`WS-LIC-001` 必然与它们对不上。",
+        exit="6 行两列全 ✅；每条配一条「故意违规必须判红」的负例"
+             "（坏签名被认 / 未授权入口仍出现 / 到期把数据锁住 / 移动端被纳入管辖 / 第 6 台仍激活 / 工作区越权入口可点）",
+    ),
+    dict(
+        id="C2",
+        title="性能读数表：冷启动 ≤ 2 s / 1 万行 × 20 列不卡 / 10 万行不 OOM",
+        est_min=70,
+        match=["NFR-ALL-GATE-PERF-001", "NFR-ALL-GATE-PERF-002", "NFR-ALL-GATE-PERF-003"],
+        why="三条都是「本机能量出来的量化门槛」，共用一套采样与阈值台账"
+            "（先例 = `Scripts/result-scroll-baseline.json` + `check-result-scroll-ledger.py`：阈值只有一处，"
+            "探针读它、不写魔数）。分开做会写三份魔数、三台仪器。",
+        exit="3 行两列全 ✅ + 一份性能读数表（阈值 / 实测值 / 基准环境）；"
+             "每条配负例（人为拖慢 ⇒ 必须判红），未达阈值的如实记实测值而不是改成通过",
+    ),
+    dict(
+        id="C3",
+        title="平台兼容与笔记存储统一：部署目标 14.0 / arm64 + x86_64 / 桌面各端一条 SQLite",
+        est_min=70,
+        match=["NFR-ALL-GATE-COMP-004", "NFR-ALL-GATE-COMP-005", "FR-STD-ALL-PLUG-008"],
+        why="三条问的是同一件事的两面：「同一份代码换台机器还得成立」。部署目标（14.0，`project.yml` 与 "
+            "`Package.swift` 已有）与双架构（arm64 + x86_64 同一条构建）是编译期可判的；"
+            "`PLUG-008` 是「桌面各端只落一条本地 SQLite」——判的是存储面唯一，不是界面。",
+        exit="3 行两列全 ✅；真 macOS 14 / 15、真 Intel 机、Windows / Linux 端**单列未知**（不许折算成通过）",
+    ),
+    dict(
+        id="C4",
+        title="横切口径：统一外发日志 / 走不动的动作三选一 / 简体中文界面 / 设计语言统一",
+        est_min=80,
+        match=["NFR-ALL-GATE-SEC-008", "NFR-ALL-GATE-USE-005",
+               "NFR-ALL-GATE-LANG-001", "NFR-ALL-GATE-UI-001"],
+        why="四条都不是某一块功能，而是「所有面上都得守的同一条规矩」：出网必留痕、走不动必须挑一种处置、"
+            "界面中文、设计语言同一套令牌。判据形状也同构 —— 静态对账 + 一份全量读数表（扫全仓，不是抽一处）。",
+        exit="4 行两列全 ✅；每条配「故意违反必判红」的负例（出网不留痕 / 满亮可点且静默 / 英文漏到界面 / "
+             "硬编码颜色绕过令牌）；跨端那部分（Windows / iOS / 安卓）单列未知",
+    ),
+]
+
+# v0.6.0 的 5 条卡点：卡的是**实例**，不是判断力。2026-11-02 起跳逐条实测过本机。
+BLOCKED_V060: dict[str, str] = {
+    "FR-STD-ALL-PLUG-005": "Linux 端按平台口径归小河马（2026-10-22 令：Linux 归 babyhippo，WSL 能直接编）；"
+                           "本机是 macOS，装配与验收要点 ①③④ 不在这台机上做",
+    "NFR-ALL-GATE-COMP-001": "等可连的 PostgreSQL 12–18 实例：本机无 postgres / pg_ctl / initdb / docker"
+                             "（2026-11-02 实测 `/opt/homebrew/bin` 无 pg 系、`command -v postgres` 空），"
+                             "217 复测 ping 全丢 ⇒ 多版本回归无从跑",
+    "NFR-ALL-GATE-COMP-002": "等 GBase 最新版 + GBase 8a 实例：与 `FR-STD-DB-META-002` 同一个卡点"
+                             "（217 无 GBase，2026-11-02 复测整机不通）",
+    "NFR-ALL-GATE-COMP-003": "等可连的 MySQL 最新大版本 + 向下 5 个大版本实例：本机无 mysql / mysqld"
+                             "（`command -v mysqld` 空），只有线协议假服务器 `Scripts/mysql-stub` ⇒ 版本窗口无从验",
+    "NFR-ALL-GATE-PERF-004": "等可连的局域网数据库：本条量的是「元数据单层懒加载在局域网内 ≤ 1 s」，"
+                             "本机无局域网 DB（217 ping 全丢，2026-11-02 复测）⇒ 只能量回环，不报通过",
+}
+
 # 台账 §7.1（2026-10-27 逐条核验）+ 各行备注已把卡点写死：这 10 条机器面做不了，
 # 卡在主人 / 外部实例。队列里必须**看得见**它们 ⇒ 落 blocked + next_try（不是删掉）。
 BLOCKED_V050: dict[str, str] = {
@@ -186,6 +254,24 @@ BLOCKED_V050: dict[str, str] = {
 }
 
 VERSION_SPECS: dict[str, dict] = {
+    "0.6.0": dict(
+        title="v0.6.0 横切面收口",
+        rest_id="C9",
+        # 台账 §4.2 那一行点名的 21 条，逐条照抄**全号**（不用前缀：`NFR-ALL-GATE-PERF-` 会连
+        # `PERF-005` / `006` 一起捞进来，而它们早已 ✅、不在本版范围）。
+        ledger_scope=("FR-STD-ALL-LIC-001", "FR-STD-ALL-LIC-002", "FR-STD-ALL-LIC-003",
+                      "FR-STD-ALL-LIC-004", "FR-STD-ALL-LIC-005", "FR-STD-WS-LIC-001",
+                      "FR-STD-ALL-PLUG-005", "FR-STD-ALL-PLUG-008",
+                      "NFR-ALL-GATE-PERF-001", "NFR-ALL-GATE-PERF-002",
+                      "NFR-ALL-GATE-PERF-003", "NFR-ALL-GATE-PERF-004",
+                      "NFR-ALL-GATE-COMP-001", "NFR-ALL-GATE-COMP-002",
+                      "NFR-ALL-GATE-COMP-003", "NFR-ALL-GATE-COMP-004",
+                      "NFR-ALL-GATE-COMP-005",
+                      "NFR-ALL-GATE-UI-001", "NFR-ALL-GATE-USE-005",
+                      "NFR-ALL-GATE-SEC-008", "NFR-ALL-GATE-LANG-001"),
+        batches=BATCHES_V060,
+        blocked=BLOCKED_V060,
+    ),
     "0.5.0": dict(
         title="v0.5.0 智能体进阶层",
         rest_id="A9",
@@ -210,7 +296,7 @@ VERSION_SPECS: dict[str, dict] = {
         batches=BATCHES_V030,
     ),
 }
-DEFAULT_VERSION = "0.5.0"
+DEFAULT_VERSION = "0.6.0"
 EVIDENCE_CMD = "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py {id} | grep -q '✅'"
 
 
@@ -434,7 +520,7 @@ def main(argv: list[str]) -> int:
     if "--version" in argv:
         idx = argv.index("--version")
         if idx + 1 >= len(argv):
-            print("✗ --version 后面缺版本号（0.3.0 / 0.4.0 / 0.5.0）", file=sys.stderr)
+            print("✗ --version 后面缺版本号（0.3.0 / 0.4.0 / 0.5.0 / 0.6.0）", file=sys.stderr)
             return 2
         version = argv[idx + 1]
     if version not in VERSION_SPECS:
@@ -475,7 +561,7 @@ def main(argv: list[str]) -> int:
         OUT.write_text(text, encoding="utf-8")
         print(f"✅ 已重出 .agent/batches.yaml（{len(todos)} 条待办）")
         return 0
-    print("用法：--check | --write [--emit-plan] [--version 0.3.0|0.4.0|0.5.0]")
+    print("用法：--check | --write [--emit-plan] [--version 0.3.0|0.4.0|0.5.0|0.6.0]")
     return 2
 
 

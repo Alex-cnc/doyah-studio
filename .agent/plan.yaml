@@ -1,57 +1,169 @@
-# v0.5.0 智能体进阶层 · 执行队列（**派生件**）
+# v0.6.0 横切面收口 · 执行队列（**派生件**）
 # 唯一事实源 = Docs/Doyah产品开发计划任务清单-macOS.md（活书台账）。
 # 本文件只做「下一跳」排序，不许反向改台账；台账一改就跑 --emit-plan 重出，别手改。
-# 生成于 2026-11-02，源 = 台账里 FR-AGT-TOOL- / FR-AGT-OPS-OBS-002 / FR-AGT-UX- / FR-AGT-PLAN-PLAN-001 / FR-AGT-LINK-EXT- / FR-AGT-LINK-CHAN-003 / FR-AGT-KNOW-MEM-003 / NFR-ALL-GATE-AI-004 / NFR-ALL-GATE-AI-006 / NFR-ALL-GATE-AI-007 / AC-ALL-GATE-AI-001 / AC-ALL-GATE-AI-004 未闭 10 条（10 🟡 / 0 ⬜）。
+# 生成于 2026-11-02，源 = 台账里 FR-STD-ALL-LIC-001 / FR-STD-ALL-LIC-002 / FR-STD-ALL-LIC-003 / FR-STD-ALL-LIC-004 / FR-STD-ALL-LIC-005 / FR-STD-WS-LIC-001 / FR-STD-ALL-PLUG-005 / FR-STD-ALL-PLUG-008 / NFR-ALL-GATE-PERF-001 / NFR-ALL-GATE-PERF-002 / NFR-ALL-GATE-PERF-003 / NFR-ALL-GATE-PERF-004 / NFR-ALL-GATE-COMP-001 / NFR-ALL-GATE-COMP-002 / NFR-ALL-GATE-COMP-003 / NFR-ALL-GATE-COMP-004 / NFR-ALL-GATE-COMP-005 / NFR-ALL-GATE-UI-001 / NFR-ALL-GATE-USE-005 / NFR-ALL-GATE-SEC-008 / NFR-ALL-GATE-LANG-001 未闭 21 条（16 🟡 / 5 ⬜）。
 tasks:
-# 另有 1 条上版遗留卡点（不在本版范围，仅列表可见）：FR-NTS-NOTE-ORG-002
-  - id: FR-AGT-TOOL-MEDIA-001
-    goal: "语音输入：把一段语音转成文字再进对话，转写错误可回看原文"
-    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-AGT-TOOL-MEDIA-001 | grep -q '✅'"
-    layer: "进阶可选"
+# 另有 11 条上版遗留卡点（不在本版范围，仅列表可见）：FR-AGT-LINK-CHAN-003, FR-AGT-LINK-EXT-001, FR-AGT-LINK-EXT-002, FR-AGT-OPS-OBS-002, FR-AGT-PLAN-PLAN-001, FR-AGT-TOOL-MEDIA-001, FR-AGT-TOOL-SYS-002, FR-AGT-UX-CONV-001, FR-AGT-UX-SESS-001, FR-AGT-UX-SYNC-001, FR-NTS-NOTE-ORG-002
+  - id: FR-STD-ALL-LIC-001
+    goal: "许可证解析与能力位（离线签名校验）"
+    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-ALL-LIC-001 | grep -q '✅'"
+    layer: "基线必备"
+    prio: "高"
+    status: todo
+    evidence: ""
+  - id: FR-STD-ALL-LIC-002
+    goal: "按授权呈现入口 + 「版本与许可证」页"
+    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-ALL-LIC-002 | grep -q '✅'"
+    layer: "基线必备"
+    prio: "高"
+    status: todo
+    evidence: ""
+  - id: FR-STD-ALL-LIC-003
+    goal: "到期降级与数据归属（不锁数据）"
+    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-ALL-LIC-003 | grep -q '✅'"
+    layer: "基线必备"
+    prio: "中"
+    status: todo
+    evidence: ""
+  - id: FR-STD-ALL-LIC-004
+    goal: "授权范围口径（桌面三块一套 / 移动端不在管辖）"
+    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-ALL-LIC-004 | grep -q '✅'"
+    layer: "基线必备"
+    prio: "中"
+    status: todo
+    evidence: ""
+  - id: FR-STD-ALL-LIC-005
+    goal: "设备配额与设备管理（默认 5 台 / 可释放）"
+    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-ALL-LIC-005 | grep -q '✅'"
+    layer: "常用增强"
     prio: "低"
+    status: todo
+    evidence: ""
+  - id: FR-STD-WS-LIC-001
+    goal: "**工作区里的授权呈现**（同一能力点 4.1.35 的界面侧，与上面五条同节、不另立节）：由授权决定**哪些入口出现**（不是灰掉诱导）；未授权时文件树与编辑器照常可用、既有文件可导出；授权状态与版本号在 Home 与帮助里能查到。"
+    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-WS-LIC-001 | grep -q '✅'"
+    layer: "基线必备"
+    prio: "中"
+    status: todo
+    evidence: ""
+  - id: NFR-ALL-GATE-PERF-001
+    goal: "App 冷启动到可交互 ≤ 2 s（本机 SSD）"
+    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py NFR-ALL-GATE-PERF-001 | grep -q '✅'"
+    layer: "基线必备"
+    prio: "—"
+    status: todo
+    evidence: ""
+  - id: NFR-ALL-GATE-PERF-002
+    goal: "1 万行 × 20 列结果集渲染与滚动无可感卡顿"
+    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py NFR-ALL-GATE-PERF-002 | grep -q '✅'"
+    layer: "基线必备"
+    prio: "—"
+    status: todo
+    evidence: ""
+  - id: NFR-ALL-GATE-PERF-003
+    goal: "10 万行结果集不得 OOM"
+    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py NFR-ALL-GATE-PERF-003 | grep -q '✅'"
+    layer: "基线必备"
+    prio: "—"
+    status: todo
+    evidence: ""
+  - id: NFR-ALL-GATE-COMP-004
+    goal: "支持 macOS 14 / 15 及后续版本"
+    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py NFR-ALL-GATE-COMP-004 | grep -q '✅'"
+    layer: "基线必备"
+    prio: "—"
+    status: todo
+    evidence: ""
+  - id: NFR-ALL-GATE-COMP-005
+    goal: "支持 Apple Silicon 与 Intel"
+    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py NFR-ALL-GATE-COMP-005 | grep -q '✅'"
+    layer: "基线必备"
+    prio: "—"
+    status: todo
+    evidence: ""
+  - id: FR-STD-ALL-PLUG-008
+    goal: "桌面各端笔记存储统一到本地 SQLite（2026-09-27 拍板 Q23）：主存"
+    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-ALL-PLUG-008 | grep -q '✅'"
+    layer: "基线必备"
+    prio: "高"
+    status: todo
+    evidence: ""
+  - id: NFR-ALL-GATE-SEC-008
+    goal: "统一外发日志：所有离开本机的网络请求（智能体模型调用、内嵌浏览器导航与子资源、外部程"
+    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py NFR-ALL-GATE-SEC-008 | grep -q '✅'"
+    layer: "基线必备"
+    prio: "—"
+    status: todo
+    evidence: ""
+  - id: NFR-ALL-GATE-USE-005
+    goal: "走不动的动作必须挑一种处置（灰着/给理由/不可达），禁第四种形状"
+    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py NFR-ALL-GATE-USE-005 | grep -q '✅'"
+    layer: "基线必备"
+    prio: "高"
+    status: todo
+    evidence: ""
+  - id: NFR-ALL-GATE-LANG-001
+    goal: "v1.x 界面语言为简体中文"
+    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py NFR-ALL-GATE-LANG-001 | grep -q '✅'"
+    layer: "常用增强"
+    prio: "—"
+    status: todo
+    evidence: ""
+  - id: NFR-ALL-GATE-UI-001
+    goal: "界面设计语言统一：同一产品内各平台（macOS / Windows / iOS /"
+    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py NFR-ALL-GATE-UI-001 | grep -q '✅'"
+    layer: "基线必备"
+    prio: "—"
+    status: todo
+    evidence: ""
+  - id: FR-STD-ALL-PLUG-005
+    goal: "Linux 端装配笔记，且必须是本地离线实现：数据只落本机 SQLite（笔记自己的"
+    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-ALL-PLUG-005 | grep -q '✅'"
+    layer: "基线必备"
+    prio: "高"
     status: blocked
     evidence: ""
-    next_try: "等主人改口径或给替代入口：麦克风按令不做（录音采集面 0 命中），可选的替代 = 「音频文件入口」"
-  - id: FR-AGT-TOOL-SYS-002
-    goal: "子任务委派：把独立子任务派给子代理并行做，结果汇总回主任务并标明来源"
-    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-AGT-TOOL-SYS-002 | grep -q '✅'"
+    next_try: "Linux 端按平台口径归小河马（2026-10-22 令：Linux 归 babyhippo，WSL 能直接编）；本机是 macOS，装配与验收要点 ①③④ 不在这台机上做"
+  - id: NFR-ALL-GATE-COMP-001
+    goal: "支持 PostgreSQL 12–18 多版本回归"
+    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py NFR-ALL-GATE-COMP-001 | grep -q '✅'"
+    layer: "基线必备"
+    prio: "—"
+    status: blocked
+    evidence: ""
+    next_try: "等可连的 PostgreSQL 12–18 实例：本机无 postgres / pg_ctl / initdb / docker（2026-11-02 实测 `/opt/homebrew/bin` 无 pg 系、`command -v postgres` 空），217 复测 ping 全丢 ⇒ 多版本回归无从跑"
+  - id: NFR-ALL-GATE-COMP-002
+    goal: "支持 GBase 最新版本，并向下兼容至 GBase 8a（版本窗口见下）"
+    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py NFR-ALL-GATE-COMP-002 | grep -q '✅'"
+    layer: "进阶可选"
+    prio: "—"
+    status: blocked
+    evidence: ""
+    next_try: "等 GBase 最新版 + GBase 8a 实例：与 `FR-STD-DB-META-002` 同一个卡点（217 无 GBase，2026-11-02 复测整机不通）"
+  - id: NFR-ALL-GATE-COMP-003
+    goal: "支持 MySQL 最新大版本，并向下兼容最近 5 个大版本（版本窗口见下）"
+    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py NFR-ALL-GATE-COMP-003 | grep -q '✅'"
+    layer: "常用增强"
+    prio: "—"
+    status: blocked
+    evidence: ""
+    next_try: "等可连的 MySQL 最新大版本 + 向下 5 个大版本实例：本机无 mysql / mysqld（`command -v mysqld` 空），只有线协议假服务器 `Scripts/mysql-stub` ⇒ 版本窗口无从验"
+  - id: NFR-ALL-GATE-PERF-004
+    goal: "元数据单层懒加载在局域网内 ≤ 1 s"
+    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py NFR-ALL-GATE-PERF-004 | grep -q '✅'"
+    layer: "基线必备"
+    prio: "—"
+    status: blocked
+    evidence: ""
+    next_try: "等可连的局域网数据库：本条量的是「元数据单层懒加载在局域网内 ≤ 1 s」，本机无局域网 DB（217 ping 全丢，2026-11-02 复测）⇒ 只能量回环，不报通过"
+  - id: FR-AGT-LINK-CHAN-003
+    goal: "IM 通道（QQ 优先）：从聊天里收发任务 —— 手机发一句话派活，长任务完成推回结论，权限与桌面端同一套"
+    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-AGT-LINK-CHAN-003 | grep -q '✅'"
     layer: "常用增强"
     prio: "中"
     status: blocked
     evidence: ""
-    next_try: "等人工点验：执行器与来源标注已在盘（13 例），余「对话侧当工具调起的观感」；异步入口按台账留到下一轮"
-  - id: FR-AGT-OPS-OBS-002
-    goal: "可配置：模型、工具白名单、审批策略、配额、通知规则都可配置，且改完立即生效并有据可查"
-    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-AGT-OPS-OBS-002 | grep -q '✅'"
-    layer: "常用增强"
-    prio: "中"
-    status: blocked
-    evidence: ""
-    next_try: "等人工点验：六项配置 + 四条生效面 10 例全绿（含并发上限真限流），余「改配置到下一次派活的观感」"
-  - id: FR-AGT-UX-SYNC-001
-    goal: "多端一致性：同一会话在桌面与手机上看到的消息、审批与结论一致（壳不同，内容同）"
-    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-AGT-UX-SYNC-001 | grep -q '✅'"
-    layer: "常用增强"
-    prio: "中"
-    status: blocked
-    evidence: ""
-    next_try: "等主人定端云同步传输面（§7 阻塞 2）：语义面 19 例已绿，App 侧 0 调用点，且无第二端可对"
-  - id: FR-AGT-UX-CONV-001
-    goal: "对话式诊断：解读执行计划、慢查询与锁阻塞，给出可执行建议"
-    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-AGT-UX-CONV-001 | grep -q '✅'"
-    layer: "常用增强"
-    prio: "中"
-    status: blocked
-    evidence: ""
-    next_try: "等主人给模型名 + 密钥（或指一个可用档）：`agent.json` 的 `profiles[0].model` 是空串，真模型端点未配 ⇒ 对话式诊断无输入"
-  - id: FR-AGT-PLAN-PLAN-001
-    goal: "DBA 维护任务编排：由自然语言描述生成并执行维护任务（备份 / 恢复、VACUUM"
-    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-AGT-PLAN-PLAN-001 | grep -q '✅'"
-    layer: "常用增强"
-    prio: "中"
-    status: blocked
-    evidence: ""
-    next_try: "同上：DBA 维护编排要真模型先生成计划，端点未配 ⇒ 无从验收"
+    next_try: "等真 QQ 凭据 + 官方网关：配置面 / 入站任务 / 官方 REST 外发三段已在盘，真 WS 握手与「手机派活→手机收结论」要真账号"
   - id: FR-AGT-LINK-EXT-001
     goal: "互操作接口（MCP 双向）：① 作为 host 接入外部 MCP 服务器"
     done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-AGT-LINK-EXT-001 | grep -q '✅'"
@@ -68,14 +180,46 @@ tasks:
     status: blocked
     evidence: ""
     next_try: "等主人装一个真 MCP server 并把配置面板点一遍：判据四族 8+20+15+23 例已全绿，余「真 server 端到端 + 面板观感」"
-  - id: FR-AGT-LINK-CHAN-003
-    goal: "IM 通道（QQ 优先）：从聊天里收发任务 —— 手机发一句话派活，长任务完成推回结论，权限与桌面端同一套"
-    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-AGT-LINK-CHAN-003 | grep -q '✅'"
+  - id: FR-AGT-OPS-OBS-002
+    goal: "可配置：模型、工具白名单、审批策略、配额、通知规则都可配置，且改完立即生效并有据可查"
+    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-AGT-OPS-OBS-002 | grep -q '✅'"
     layer: "常用增强"
     prio: "中"
     status: blocked
     evidence: ""
-    next_try: "等真 QQ 凭据 + 官方网关：配置面 / 入站任务 / 官方 REST 外发三段已在盘，真 WS 握手与「手机派活→手机收结论」要真账号"
+    next_try: "等人工点验：六项配置 + 四条生效面 10 例全绿（含并发上限真限流），余「改配置到下一次派活的观感」"
+  - id: FR-AGT-PLAN-PLAN-001
+    goal: "DBA 维护任务编排：由自然语言描述生成并执行维护任务（备份 / 恢复、VACUUM"
+    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-AGT-PLAN-PLAN-001 | grep -q '✅'"
+    layer: "常用增强"
+    prio: "中"
+    status: blocked
+    evidence: ""
+    next_try: "同上：DBA 维护编排要真模型先生成计划，端点未配 ⇒ 无从验收"
+  - id: FR-AGT-TOOL-MEDIA-001
+    goal: "语音输入：把一段语音转成文字再进对话，转写错误可回看原文"
+    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-AGT-TOOL-MEDIA-001 | grep -q '✅'"
+    layer: "进阶可选"
+    prio: "低"
+    status: blocked
+    evidence: ""
+    next_try: "等主人改口径或给替代入口：麦克风按令不做（录音采集面 0 命中），可选的替代 = 「音频文件入口」"
+  - id: FR-AGT-TOOL-SYS-002
+    goal: "子任务委派：把独立子任务派给子代理并行做，结果汇总回主任务并标明来源"
+    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-AGT-TOOL-SYS-002 | grep -q '✅'"
+    layer: "常用增强"
+    prio: "中"
+    status: blocked
+    evidence: ""
+    next_try: "等人工点验：执行器与来源标注已在盘（13 例），余「对话侧当工具调起的观感」；异步入口按台账留到下一轮"
+  - id: FR-AGT-UX-CONV-001
+    goal: "对话式诊断：解读执行计划、慢查询与锁阻塞，给出可执行建议"
+    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-AGT-UX-CONV-001 | grep -q '✅'"
+    layer: "常用增强"
+    prio: "中"
+    status: blocked
+    evidence: ""
+    next_try: "等主人给模型名 + 密钥（或指一个可用档）：`agent.json` 的 `profiles[0].model` 是空串，真模型端点未配 ⇒ 对话式诊断无输入"
   - id: FR-AGT-UX-SESS-001
     goal: "会话生命周期：**新建 / 归档 / 删除 / 导出** —— 删除即真删（不留副本），导出可带走"
     done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-AGT-UX-SESS-001 | grep -q '✅'"
@@ -84,6 +228,14 @@ tasks:
     status: blocked
     evidence: ""
     next_try: "等人工点验：8+10+6 例全绿（含删除真删的文件面），余「归档→恢复 / 导出再导入 / 删一条看盘」三下"
+  - id: FR-AGT-UX-SYNC-001
+    goal: "多端一致性：同一会话在桌面与手机上看到的消息、审批与结论一致（壳不同，内容同）"
+    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-AGT-UX-SYNC-001 | grep -q '✅'"
+    layer: "常用增强"
+    prio: "中"
+    status: blocked
+    evidence: ""
+    next_try: "等主人定端云同步传输面（§7 阻塞 2）：语义面 19 例已绿，App 侧 0 调用点，且无第二端可对"
   - id: FR-NTS-NOTE-ORG-002
     goal: "笔记本归类：笔记可归入**一个笔记本**（单层，不做「架 → 笔记本」两层；未指定时落默认「收件箱」），**归属唯一**，跨笔记本移动只改归属"
     done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-NTS-NOTE-ORG-002 | grep -q '✅'"

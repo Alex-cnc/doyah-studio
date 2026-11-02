@@ -1,5 +1,19 @@
 # 检查点
 
+## v0.6.0 队列派生（2026-11-02 · 无台账行 · 派生件换代）
+
+- **由来**：v0.5.0 队列 0 todo（10 条 §7.1 外部卡点 + 1 条跨版携带仍 blocked）⇒ 按 `.agent/next-version.md` §五 派生 **v0.6.0 横切面收口**。台账一行未改。
+- **实算**：§4.2 v0.6.0 那一行点名 21 条，逐行解析台账 = **21 条（16🟡 / 5⬜）**，与表里一致。（书头 v1.0.115 注里那句「v0.6.0 21 → 25」是历史叙述，现盘仍是 21；本跳不改历史注，留给报数跳。）
+- **21 条怎么分的**：**16 条机器面能开工** → C1 授权与版本呈现 6（`LIC-001~005` + `WS-LIC-001`）· C2 性能读数表 3（`PERF-001~003`）· C3 平台兼容与笔记存储统一 3（`COMP-004/005` + `PLUG-008`）· C4 横切口径 4（`SEC-008` / `USE-005` / `LANG-001` / `UI-001`）；**5 条卡实例**落 blocked + 逐条 next_try = `PLUG-005`（Linux 归小河马）· `COMP-001`（无 PG 12–18）· `COMP-002`（无 GBase）· `COMP-003`（无 MySQL 版本窗）· `PERF-004`（无局域网 DB）。
+- **卡点是实测的，不是猜的**：`command -v postgres pg_ctl initdb mysqld` 全空 · `ls /opt/homebrew/bin` 无 pg / mysql 系 · `ping 192.168.5.217` 全丢。
+- **范围口径**：`ledger_scope` 用**21 个全号白名单**，不用前缀 —— `NFR-ALL-GATE-PERF-` 会连早已 ✅ 的 `PERF-005` / `006` 一起捞进来。
+- **读数**：`plan-batches --version 0.6.0 --emit-plan --write` ⇒ plan.yaml **32 条**（16 todo + 5 本版 blocked + 11 跨版携带 blocked）/ batches.yaml **4 批 16 条**；`--check` **rc=0「16 条待办，台账复算一致」**。
+- **反例四段**（判红后还原，`sha256` 逐字节一致：plan `64fae9ea…` / batches `f02f7ba9…`）：todo 改 done ⇒ 点名 missing + both · 删 blocked 的 `next_try` ⇒ 点名 `COMP-001` · 塞一条台账已闭的 `PERF-005` ⇒ 点名越界 + 未归堆 · 撤 C4 归堆规则 ⇒ 点名「不许手塞」。
+- **文档门禁五道 rc=0**：plan-coverage · tables 74 文件 · numbers 三向 · status 471 · version-scope 471。
+- **未执行（≠ 通过）**：代码套件（`verify-core` / `verify-ui-interactions`）与 `verify-all.sh` 本跳未跑 —— 只动 `.agent/` + 派生脚本，没碰 App / Core / Tests；`plan-batches.py` **仍无自检族**（四段负例是手跑，未入 `check-self-test-counts` 台账，属存量缺口）。
+- **下一项 = `FR-STD-ALL-LIC-001`**（C1 起跳）。起跳先核三处：`Core/LicenseSignature.swift` 的验签是不是真验（公钥 `LicensePublicKey.swift` 是不是空串）· `LicenseLoader` 读不到许可证时是「按未授权降级」还是「当成有效」· 既有 23 + 18 + 14 + 3 例里有没有「坏签名必须拒」这一条；另外 `LIC-001` 与 `LIC-004` 的「哪些算一套」必须同处定义，否则 `WS-LIC-001` 会另写一份。
+- 证据 `.agent/evidence/2026-11-02-v060-queue.md`
+
 ## v0.5.0 · A2 末片（第三片：会话持久化 / 密钥 / 审计 / 配额同一口径）· 2026-11-02
 
 - **收一条**：`NFR-ALL-GATE-AI-007` 两列全 ✅。**v0.5.0 队列到此为 0 todo**（10 条 §7.1 外部卡点 + 1 条跨版携带 `FR-NTS-NOTE-ORG-002` 仍 blocked）。
