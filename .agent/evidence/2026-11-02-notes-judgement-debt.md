@@ -15,7 +15,7 @@ $ python3 Scripts/check-doc-tables.py        ✅ 表格校验通过（74 个文�
 $ python3 Scripts/check-doc-numbers.py       ❌ 1 项（仅 [checkScriptParity]：check-status-gap.py 未接进 verify-all.sh —— 本片前就有）
 $ python3 Scripts/check-status-consistency.py / check-plan-coverage.py / check-version-scope.py / check-doc-invariants.py / check-doc-layout.py / check-doc-versions.py  rc=0
 
-提交：26579a0a
+提交：021ae7f4
 
 未验证：
 - 6 条降为 🟡 的要点是**按要求书要点逐条核过的「不存在」**，不是没找：语义检索 / 笔记归档 / 回收站恢复 / 备份包与导入还原 均 `grep` 为 0；万行级性能与「撤销按段落」无探针。
