@@ -27,6 +27,46 @@ final class MenuLocalizationTests: XCTestCase {
         )
     }
 
+    /// 菜单项**来源清单**：`App/DoyahStudioCommands.swift` 里当标题用的每个键都必须在这三张表里。
+    ///
+    /// 为什么需要（2026-11-02 实测的缺口）：上面那条测试是**按 `menu` 前缀**筛的，于是
+    /// `.editAssistActionExplain` 一族与 `.slowQueryTitle` 这种「是菜单项、键名却没有 `menu` 前缀」
+    /// 的键从来没被筛到 —— 后果双向：切换语言后那五项停在启动语言（`MainMenuLocalizer` 认不出就不改），
+    /// `Scripts/check-menu-language.py` 也把它们判成「未覆盖项」判红（实测 40 条）。
+    /// 所以判据按**菜单项来源**判（谁在 `DoyahStudioCommands` 里被当标题用），不按命名习惯判：
+    /// 命名习惯是人写的，人会漏。
+    ///
+    /// 覆盖范围：`App/DoyahStudioCommands.swift` 里全部 `L(.key)`（实测 40 处 / 39 个键）。
+    /// 不覆盖：AppKit 在菜单展开那一刻才插进来的系统项（走 `systemMenuItems`，另有运行时判据）。
+    func testEveryCommandMenuItemKeyIsRegistered() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()   // Tests/
+            .deletingLastPathComponent()   // 仓根
+        let source = try String(
+            contentsOf: root.appendingPathComponent("App/DoyahStudioCommands.swift"),
+            encoding: .utf8
+        )
+        let pattern = try NSRegularExpression(pattern: #"L\(\.([A-Za-z0-9_]+)"#)
+        let range = NSRange(source.startIndex..<source.endIndex, in: source)
+        var referenced = Set<String>()
+        for match in pattern.matches(in: source, range: range) {
+            if let one = Range(match.range(at: 1), in: source) {
+                referenced.insert(String(source[one]))
+            }
+        }
+        // 空跑防护：扫不到东西（路径 / 写法变了）也算红，别让它静悄悄通过。
+        XCTAssertGreaterThanOrEqual(referenced.count, 30,
+                                   "扫不到菜单项键（路径或写法变了）：\(referenced.sorted())")
+        let registered = Set(MenuLocalization.menuKeys.map(\.rawValue))
+            .union(MenuLocalization.systemMenuTitles.map(\.rawValue))
+            .union(MenuLocalization.systemMenuItems.values.map(\.rawValue))
+        let missing = referenced.subtracting(registered)
+        XCTAssertTrue(
+            missing.isEmpty,
+            "这些键在菜单里当标题用、却没登记进任何一张菜单表（切语言后会停在启动语言）：\(missing.sorted())"
+        )
+    }
+
     func testMenuKeysAreUniqueAndNonEmpty() {
         XCTAssertFalse(MenuLocalization.menuKeys.isEmpty)
         XCTAssertEqual(

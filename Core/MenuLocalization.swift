@@ -70,11 +70,24 @@ public enum MenuLocalization {
         // 四项停在英文。测试已改成按**菜单项来源清单**核对，不再只看前缀。
         .archiveTitle,
         .databaseStatsTitle,
+        // 「慢查询排行」（`FR-DIAG-03`）：住在「显示」菜单里的自有叶子项。
+        // 为什么补登（2026-11-02）：键名没有 `menu` 前缀 ⇒ 上一条「按前缀筛」的测试从来没筛到它，
+        // 于是切语言后这一项停在启动语言、菜单语言判据判它「未覆盖项」。
+        .slowQueryTitle,
         .schemaDiffTitle,
         .lowerPaneToggle,
         .menuFormat,
         // 任务框勾选翻转（FR-EDIT-48 ⑤）：菜单叶子项同样要能运行时切语言。
         .menuToggleTaskCheckbox,
+        // **编辑区 AI 辅助四动作**（`FR-STD-WS-AI-001`）：住在「编辑」菜单里的自有叶子项。
+        // 为什么补登（2026-11-02）：键名没有 `menu` 前缀 ⇒ 那条「按前缀筛」的测试从来没筛到它们；
+        // 后果是双向的 —— 切换语言后这四项停在启动语言（`MainMenuLocalizer` 认不出就不改），
+        // `Scripts/check-menu-language.py` 也把它们判成「未覆盖项」判红（实测 40 条）。
+        // 现在由 `MenuLocalizationTests.testEveryCommandMenuItemKeyIsRegistered` 按**菜单项来源**判。
+        .editAssistActionExplain,
+        .editAssistActionRewrite,
+        .editAssistActionComplete,
+        .editAssistActionFixError,
         // 调试器两条（`FR-STD-WS-TOOL-003`）：同上，菜单叶子项要能运行时切语言。
         .menuToggleBreakpoint,
         .menuDebugPanel,
