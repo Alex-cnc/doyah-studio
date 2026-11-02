@@ -67,7 +67,7 @@
 - **blocked 1（新）**：`FR-NTS-NOTE-ORG-002` —— **判据互斥**（需求书 §3.5 要「单层、不做架→笔记本两层」，契约 §2.12 + 已上盘 `shelf` / `notebook` 是两层）。next_try = 等契约所有者裁决；裁决前不拆表、不改需求条文。
 - **判据器新口子**：`plan-batches.py` 的 `--check` 现在认 `status: blocked`，**但必须带非空 `next_try`**（没有 next_try 的 blocked 同时落 missing / both 两条红，点名到 id）；`--emit-plan` 重出时保住 blocked + next_try，不刷回 todo。
 - **收尾片（同日 · 落实提交）**：上一跳撞轮次上限停在「验证在跑、提交未做」，本片补完 —— 并且 `verify-all` 第 3 项跑出了真读数：棘轮 A **101 → 102 文件 / 954 → 955 行**，根因是 `NoteLibrary.revealPrivate` 的 `reason` 自带中文字面量默认值（英文界面会弹中文框）⇒ **删默认值改必填**（不调基线），并补 `testRevealPassesTheCallersReasonToTheAuthorizer` 钉住「这句话逐字由调用方给」。反例 = 把默认值加回去 ⇒ 棘轮 A 判红，删掉即复绿。
-- **全量 `verify-all.sh` 本片未收尾（不记通过）**：第 1 / 3 / 4 / 9 / 10 项与 `verify-ui-interactions` 已单项跑齐，**第 11 项（打包 `.app`）与第 18 项（生成物一致性）未执行**；next_try = 下一跳开工先跑一次全量拿收尾行。
+- **全量 `verify-all.sh` 本片未收尾（不记通过）**：第 1 / 3 / 4 / 9 / 10 项与 `verify-ui-interactions` 已单项跑齐，**第 11 项（打包 `.app`）与第 18 项（生成物一致性）未执行**；next_try = 下一跳开工先跑一次全量拿收尾行。本片提交 `1df3b2e9`（证据补号 `ae87f9df`），`local = remote = ae87f9df`。
 - **下一批 = N1 剩余 3 条**：`NOTE-CAPTURE-001`（一个动作记下：桌面全局快捷键 + 不填标题也能存，首行当标题）· `NOTE-ATTACH-001`（附件存文件系统、笔记存引用、原图不压缩、缺失提示、删笔记不静默删附件）· `NOTE-SYNC-002`（记录级 LWW + 冲突留两版：核心 `CloudConflictCopy` 已在盘，缺的是「打开落败那版 / 标来源设备与时间 / 以我这版为准是人按的」这一段界面与判据）。
 - next_try（本片留下的口子）：① 私密「不外发」只判到策略层，Agent 侧内容投喂路径未接 `NotePrivacy.canSendToAgent`；② 真机 Touch ID 未点（单测是桩件）；③ 版本历史无分支 / 提交信息（需求「不是 Git」，不需要）。
 
