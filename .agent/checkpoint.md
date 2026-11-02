@@ -10,6 +10,7 @@
 - **存量红（HEAD 已有，本片未动）**：`check-status-gap` **16 行**「实现 ✅ 判据 ⬜/🟡」；`check-doc-numbers` 的 `checkScriptParity` = `check-status-gap.py` 未接进 `verify-all.sh`。**下一跳先把这 16 行按「点名已有测试 + 跑一次读数」逐行补并接成闭环第 19 项**，再开 C4 余下三条。
 - **未验证（≠ 通过）**：浏览器仍只到**导航级**（`WKWebView` 不暴露单个子资源）· 流式「建流后断流」不另记（一次发起一条）· **更新检查**产品里无入口（`updateCheck` 0 条）· 真抓包未做（判的是装饰器与落盘记录）· IM socket 与笔记云同步各有自己的开关，不在本条 · `verify-all.sh` 第 11 / 18 项未执行。
 - **顺带**：`xcodegen generate` + `patch-xcodeproj.sh`（`project.pbxproj` 只增 332 行、无删除；此前几跳落的 `QuickCaptureSheet` / `SSHTunnelDiagnosis` / `LicenseScopeTests` 等文件此前根本没进工程文件）。
+- 提交：`7da94e61`（local = remote，已推送；pre-commit 三项全过）。
 - 证据 `.agent/evidence/2026-11-02-NFR-ALL-GATE-SEC-008.md`
 
 ## v0.6.0 · C3 收口（平台兼容与笔记存储统一三条）· 2026-11-02

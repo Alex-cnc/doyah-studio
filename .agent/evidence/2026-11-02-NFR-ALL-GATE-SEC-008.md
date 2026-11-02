@@ -36,4 +36,4 @@ $ python3 Scripts/plan-batches.py --version 0.6.0 --check
 
 浏览器子资源仍不逐条记（引擎不暴露）· 流式建流后断流不另记 · 更新检查产品里无入口（`updateCheck` 0 条）· 真抓包未做 · IM socket 与笔记云同步各有开关 · `verify-all.sh` 第 11 / 18 项未执行 · `check-status-gap` 16 行存量红未动。
 
-提交：<见 git log>
+提交：7da94e61（local = remote = 7da94e61，已推送）
