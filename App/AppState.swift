@@ -7196,15 +7196,30 @@ final class AppState: ObservableObject {
         case "notes": openNotes()
         // **「笔记」菜单那几条**（`N-UI-4`）：菜单项与 ⌘K 面板走的是这同一个分派器 ——
         // 动作全部落在**既有入口**上，这里不新造行为。
-        case "newNote": beginNewNote()
-        case "newNotebook": beginNewNotebook()
+        //
+        // 每条都先过 `enterNotesAreaForNotesCommand()`：面板是**全局**的（不看当前活动面），
+        // 人可能站在数据库面 / 工作区面点中它们 —— 那时只改笔记面的状态就等于「点了没反应」。
+        case "newNote":
+            guard enterNotesAreaForNotesCommand() else { return }
+            beginNewNote()
+        case "newNotebook":
+            guard enterNotesAreaForNotesCommand() else { return }
+            beginNewNotebook()
         // 「搜索范围」两档：改的就是笔记面那枚分段控件的状态（`notesSearchScope`）——
         // 菜单与控件是同一份状态的两个入口，不另存一份。
-        case "noteSearchScopeCurrent": notesSearchScope = .current
-        case "noteSearchScopeAll": notesSearchScope = .all
+        case "noteSearchScopeCurrent":
+            guard enterNotesAreaForNotesCommand() else { return }
+            notesSearchScope = .current
+        case "noteSearchScopeAll":
+            guard enterNotesAreaForNotesCommand() else { return }
+            notesSearchScope = .all
         // 「已收藏 / 全部笔记」：与左栏那两行**同一条入口**（`selectNotesScope`）。
-        case "noteFavorites": selectNotesScope(.favorites)
-        case "noteAllNotes": selectNotesScope(.all)
+        case "noteFavorites":
+            guard enterNotesAreaForNotesCommand() else { return }
+            selectNotesScope(.favorites)
+        case "noteAllNotes":
+            guard enterNotesAreaForNotesCommand() else { return }
+            selectNotesScope(.all)
         case "schemaDiff": isSchemaDiffPresented = true
         case "erDiagram": isERDiagramPresented = true
         case "serverObjects":
@@ -7215,6 +7230,25 @@ final class AppState: ObservableObject {
             // 未知 id 不静默：说一句，免得"点了没反应"变成悬案。
             statusMessage = L(.commandPaletteNoMatch)
         }
+    }
+
+    /// 「笔记」菜单那 6 条命令的**统一前置**：先把人带到笔记面，再执行动作。
+    ///
+    /// 为什么必须有这一步：这 6 条也挂在 `⌘K` 面板上，而**面板是全局的**（`CommandPaletteView`
+    /// 不按活动面过滤）。从前它们在数据库面 / 工作区面被点中时只改笔记面的状态
+    /// （`notesScope` / `notesSearchScope` / 编辑器草稿 / 新建笔记本的请求）——
+    /// 屏幕上**一个像素都不动**，正是这批命令当初那一族「点了没反应」，只是这次藏在
+    /// 「状态改了、但改在看不见的地方」里（静态判据第 3 项与探针的旧落点表都看不见它）。
+    ///
+    /// 档位口径与 `openNotes()` 同源：不含笔记的档位（Pro）**照实说一句**，不假装切过去。
+    /// 返回 `false` ⇒ 已经给过说法，调用方直接 `return`（别再执行动作）。
+    private func enterNotesAreaForNotesCommand() -> Bool {
+        guard visibleActivityItems.contains(.notes) else {
+            statusMessage = L(.licenseNotesNotIncluded)
+            return false
+        }
+        selectActivityItem(.notes)
+        return true
     }
 
     /// 命令面板里"需要对象上下文"的三条命令（浏览数据 / 查看 DDL / 合成数据）取目标的方式。

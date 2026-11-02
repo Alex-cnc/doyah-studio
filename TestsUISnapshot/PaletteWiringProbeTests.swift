@@ -35,7 +35,10 @@ import DoyahCore
 ///   （页签上的可读错误）——**真连库之后的落点**由 `Tests/` 里那些真库证据脚本守着，本文件不越界；
 /// · 「停止」在没有在跑的查询时**按口径直接返回**（`executionTasks[tabID] == nil`），
 ///   本文件把这条静默**登记在案**（理由写在断言里），不假装它也会改状态；
-/// · 落点表覆盖的是**命令清单**里的 id（33 条），不覆盖 ⌘K 之外的其他入口（菜单 / 工具栏）。
+/// · 落点表覆盖的是**命令清单**里的 id（40 条），不覆盖 ⌘K 之外的其他入口（菜单 / 工具栏）；
+/// · 笔记面那 6 条（`N-UI-4`）的落点 = **人被带到笔记面** + 那一条命令自己的状态；内容那一半
+///   （新建后正文为空）只判「空」，不预置内容 —— 预置会让 `beginNewNote()` 的「切走即存」
+///   真往用户库里写一条，探针不许碰用户数据。
 final class PaletteWiringProbeTests: XCTestCase {
 
     /// 命令里 `focusObjectTreeSidebar()` 会写活动栏偏好：先记下来，跑完放回去。
@@ -146,12 +149,30 @@ final class PaletteWiringProbeTests: XCTestCase {
         case tabSyntaxError(String)
         /// 笔记入口：**两档各判一面**（Pro 不含笔记 ⇒ 照实说；Standard ⇒ 真的切过去）。
         case notesEntry
+        /// 笔记面命令（`N-UI-4` 那 6 条）：**先判「人有没有被带到笔记面」，再看具体状态**。
+        case notes(NotesLanding)
         /// 按口径**直接返回**（理由必须写在断言里，免得「真的没反应」混进来）。
         case silentByDesign(String)
         /// 需要**对象树选中项**（`paletteTreeObject`）：备好表 ⇒ 内层落点；没备 ⇒ 必须给这句说法。
         case withTable(Landing, withoutObject: String)
         /// 需要**当前连接**（`prepareObjectTreePanel`）：备好 ⇒ 内层落点；没备 ⇒ 必须给这句说法。
         case withConnection(Landing, withoutConnection: String)
+    }
+
+    /// 笔记面那 6 条命令的**具体落点**（`N-UI-4`）。
+    ///
+    /// 为什么「切到笔记面」必须也是判据的一半：这 6 条挂在**全局**的 `⌘K` 面板上（面板不按
+    /// 活动面过滤），人可能站在数据库面点中它们。从前它们只改笔记面的状态 —— 状态改了、
+    /// 改在看不见的地方，屏幕上什么都不动，与这批命令当初那一族「点了没反应」同一种病，
+    /// 只是这次藏在「状态确实变了」后面。只登记「状态变了」会把那件事判成通过。
+    enum NotesLanding {
+        /// 编辑器回到**新建态**（并且可写）。内容那一半不在这里判：往预置编辑器里塞内容会让
+        /// `beginNewNote()` 的「切走即存」真的往用户库里写一条 —— 探针不许碰用户数据。
+        case newNoteDraft
+        /// 弹「新建笔记本」；库上一个架都没有时**不许弹一个落不了地的框**，只许如实说一句。
+        case notebookCreation
+        case searchScope(NotesSearchScope)
+        case scope(NotesScope)
     }
 
     // MARK: - 落点表（与命令清单双向对账见 testEveryCommandHasARegisteredLanding）
@@ -201,6 +222,14 @@ final class PaletteWiringProbeTests: XCTestCase {
             // `.sheet(isPresented:)` 打开 `SlowQueryPanel` —— 与「显示」菜单同一处面板。
             ("slowQuery", .panel(.slowQuery)),
             ("notes", .notesEntry),
+            // 笔记面那 6 条（`N-UI-4`）：命令在**全局**面板里，落点 = ① 人真的被带到笔记面
+            // ② 那一条命令自己的状态变化（编辑器新建态 / 新建笔记本请求 / 搜索范围 / 一级导航）。
+            ("newNote", .notes(.newNoteDraft)),
+            ("newNotebook", .notes(.notebookCreation)),
+            ("noteSearchScopeCurrent", .notes(.searchScope(.current))),
+            ("noteSearchScopeAll", .notes(.searchScope(.all))),
+            ("noteFavorites", .notes(.scope(.favorites))),
+            ("noteAllNotes", .notes(.scope(.all))),
         ]
     }
 
@@ -323,6 +352,9 @@ final class PaletteWiringProbeTests: XCTestCase {
         case .notesEntry:
             try await driveNotesEntry(state, file: file, line: line)
 
+        case .notes(let inner):
+            try await driveNotesCommand(id, inner, file: file, line: line)
+
         case .silentByDesign(let reason):
             let before = (state.statusMessage, state.errorMessage, state.tabs.count, tab()?.errorMessage)
             state.performPaletteCommand(id)
@@ -390,6 +422,101 @@ final class PaletteWiringProbeTests: XCTestCase {
         )
         state.performPaletteCommand("notes")
         XCTAssertEqual(state.selectedActivityItem, .notes, "Standard 档位下「笔记」应当真的切到笔记区", file: file, line: line)
+    }
+
+    /// 笔记面那 6 条命令（`N-UI-4`）：起点站在**数据库面**，先判「人有没有被带到笔记面」，
+    /// 再判那一条命令自己的状态落点。
+    ///
+    /// 为什么起点一定要是数据库面：面板是全局的（`CommandPaletteView` 不按活动面过滤），
+    /// 这 6 条从数据库面也点得到。只判「状态变了」会放过「状态改了、但改在看不见的地方」。
+    /// 档位用 Ultra（工作区 + 数据库 + 笔记三块都在）—— Standard 只有笔记，站在数据库面这件事
+    /// 在那一档根本构造不出来（`selectActivityItem(.database)` 会被落回可见项并给一句说明）。
+    @MainActor
+    private func driveNotesCommand(
+        _ id: String,
+        _ landing: NotesLanding,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) async throws {
+        let state = AppState()
+        try UISnapshot.applyLicense(.ultra, to: state)
+        state.selectActivityItem(.database)
+        XCTAssertEqual(
+            state.selectedActivityItem, .database,
+            "探针前提：Ultra 档下起点必须真的是数据库面（否则「会不会切过去」这半条断言是空的）",
+            file: file, line: line
+        )
+        state.statusMessage = ""
+        state.errorMessage = nil
+
+        // 起点先摆成「不是落点」的值，免得断言在默认值上空转。
+        switch landing {
+        case .newNoteDraft:
+            state.editorMode = .preview
+        case .notebookCreation:
+            state.pendingContainerEdit = nil
+            state.statusMessage = ""
+        case .searchScope(let target):
+            state.notesSearchScope = (target == .all) ? .current : .all
+        case .scope(let target):
+            state.notesScope = (target == .favorites) ? .all : .favorites
+        }
+
+        state.performPaletteCommand(id)
+
+        XCTAssertEqual(
+            state.selectedActivityItem, .notes,
+            "「\(id)」在数据库面点下去必须把人带到笔记面 —— 否则状态改在看不见的地方，屏幕上什么都没发生",
+            file: file, line: line
+        )
+
+        switch landing {
+        case .newNoteDraft:
+            XCTAssertEqual(
+                state.editorMode, .edit,
+                "「\(id)」新建之后编辑器必须是**可写**态（`.edit`），实际 \(state.editorMode)",
+                file: file, line: line
+            )
+            XCTAssertEqual(state.noteEditorTitle, "", "「\(id)」新建之后标题格必须是空的", file: file, line: line)
+            XCTAssertEqual(state.noteEditorBody, "", "「\(id)」新建之后正文必须是空的", file: file, line: line)
+            XCTAssertTrue(state.noteEditorSpans.isEmpty, "「\(id)」新建之后 span 树必须是空的", file: file, line: line)
+            XCTAssertEqual(state.noteEditorTags, "", "「\(id)」新建之后标签格必须是空的", file: file, line: line)
+
+        case .notebookCreation:
+            if state.notesNavigation.directory.shelves.isEmpty {
+                // 一个架都没有：**不弹框**，如实说一句（弹一个落不了地的框是把两件事混成一件）。
+                XCTAssertNil(
+                    state.pendingContainerEdit,
+                    "「\(id)」在没有架的时候不该弹「新建笔记本」框 —— 那个框落不了地",
+                    file: file, line: line
+                )
+                XCTAssertEqual(
+                    state.statusMessage, L(NotebookCreation.noShelfKey),
+                    "「\(id)」在没有架的时候必须说一句人话，实际「\(state.statusMessage)」",
+                    file: file, line: line
+                )
+            } else {
+                XCTAssertEqual(
+                    state.pendingContainerEdit?.mode, .createNotebook,
+                    "「\(id)」在有架的时候应当弹出「新建笔记本」请求，实际 \(String(describing: state.pendingContainerEdit?.mode))",
+                    file: file, line: line
+                )
+            }
+
+        case .searchScope(let target):
+            XCTAssertEqual(
+                state.notesSearchScope, target,
+                "「\(id)」必须把搜索范围切到 \(target)，实际 \(state.notesSearchScope)",
+                file: file, line: line
+            )
+
+        case .scope(let target):
+            XCTAssertEqual(
+                state.notesScope, target,
+                "「\(id)」必须把一级导航切到 \(target)，实际 \(state.notesScope)",
+                file: file, line: line
+            )
+        }
     }
 
     // MARK: - 用例

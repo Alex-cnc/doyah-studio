@@ -41,7 +41,7 @@
 用法：
     python3 Scripts/check-palette-wiring.py             # 校验（闸门）
     python3 Scripts/check-palette-wiring.py --explain   # 打印解析到的清单 / 赋值审计 / 落点对账
-    python3 Scripts/check-palette-wiring.py --self-test # 判据自己的证据：`--self-test` **13 例**
+    python3 Scripts/check-palette-wiring.py --self-test # 判据自己的证据：`--self-test` **14 例**
 """
 
 from __future__ import annotations
@@ -73,19 +73,20 @@ FLAG_FLOOR = 17         # `is` 前缀档（实测 17）
 STATE_FLOOR = 2         # 其它状态档（实测 2：notesSearchScope / statusMessage）
 ASSIGN_FLOOR = 21       # 赋值落点合计（实测 21 处 = 17 + 2 + 2）
 READ_FILES_FLOOR = 142  # 「读」扫描面文件数（实测：App 118 + Plugins 24；不含 AppState.swift）
-CATALOG_FLOOR = 39      # 命令清单条数（实测 39）
-PROBE_FLOOR = 34        # 落点表条数（实测 34；2026-11-02 补 `slowQuery` 后 33 → 34）
+CATALOG_FLOOR = 40      # 命令清单条数（实测 40；2026-11-02 按实测跟版，原 39 是上一版数字）
+PROBE_FLOOR = 40        # 落点表条数（实测 40；2026-11-02 补 `slowQuery` 33 → 34、补笔记面 6 条 34 → 40）
 
 # 已登记的落点缺口：命令清单里有、探针落点表里没有的 id（判据 5 的**已登记**那一半）。
-_GAP_IDS = ("newNote", "newNotebook", "noteSearchScopeCurrent", "noteSearchScopeAll", "noteFavorites", "noteAllNotes")
-_GAP_REASON = (
-    "笔记菜单批（`N-UI-4`）：`AppCommandCatalog.all()` 里有这条，而探针落点表"
-    "（`TestsUISnapshot/PaletteWiringProbeTests.swift`）**未登记** ⇒ 该探针 "
-    "`testEveryCommandHasARegisteredLanding` 已经是红的，而它要 `DOYAH_UI_SNAPSHOT=1`、按 `L-01` "
-    "不进每轮门禁 ⇒ **没有每轮判据看得见**（本判据补的就是这一格）。补落点要改 `TestsUISnapshot/**`"
-    "（测试面取舍）⇒ 归前门裁；补完必须同轮销掉本条登记（陈旧登记判红）。"
-)
-KNOWN_WIRING_GAPS = [{"id": gid, "reason": _GAP_REASON, "owner": "hugehippo（前门）"} for gid in _GAP_IDS]
+#
+# **现在是空的**（2026-11-02 销账）：`N-UI-4` 那 6 条（`newNote` / `newNotebook` /
+# `noteSearchScopeCurrent` / `noteSearchScopeAll` / `noteFavorites` / `noteAllNotes`）已经逐条补进
+# 探针落点表 —— 补的过程中查清了它们原来不是「没有落点」，而是落点**只在笔记面看得见**
+# （命令挂在全局面板上，人站在数据库面点下去屏幕不动）⇒ 产品侧加了统一前置
+# `enterNotesAreaForNotesCommand()`，探针侧把「人有没有被带到笔记面」也做成断言的一半。
+#
+# 登记表仍然保留：再出现「清单有、探针没有」的 id 时**必须**登记在这里（写理由与归属），
+# 否则判红；而**登记一旦陈旧**（该 id 已经不缺了）同样判红 —— 棘轮两头都收紧。
+KNOWN_WIRING_GAPS: list[dict] = []
 
 
 def strip_comments_and_strings(text: str) -> str:
@@ -305,8 +306,15 @@ def run_checks(
     state_text: str,
     face: list[tuple[str, str]],
     probe_text: str,
+    gaps: list[dict] | None = None,
 ) -> tuple[list[str], dict]:
-    """全部判据跑一遍（纯函数：只吃文本，不吃磁盘 ⇒ `--self-test` 的夹具全是内存里的深拷贝）。"""
+    """全部判据跑一遍（纯函数：只吃文本，不吃磁盘 ⇒ `--self-test` 的夹具全是内存里的深拷贝）。
+
+    `gaps` = 已登记缺口表（默认 = 模块级 `KNOWN_WIRING_GAPS`）。**可注入**是为了让 `--self-test`
+    能构造「登记了但真的缺」与「登记了却已经不缺（陈旧）」两种夹具 —— 真表是空的（2026-11-02 销账），
+    空表本身没法证明棘轮还活着。
+    """
+    gaps = KNOWN_WIRING_GAPS if gaps is None else gaps
     problems: list[str] = []
     readings: dict = {}
 
@@ -380,7 +388,7 @@ def run_checks(
     if probe_ids:
         missing = [ident for ident in catalog_ids if ident not in probe_ids]
         extra = [ident for ident in probe_ids if ident not in catalog_ids]
-        registered = [entry.get("id") for entry in KNOWN_WIRING_GAPS]
+        registered = [entry.get("id") for entry in gaps]
         unregistered = [ident for ident in missing if ident not in registered]
         stale = [ident for ident in registered if ident not in missing]
         readings["probe_count"] = len(probe_ids)
@@ -405,7 +413,7 @@ def run_checks(
                 f"落点表只读到 {len(probe_ids)} 条（下限 {PROBE_FLOOR}）—— 面被掏空不许当通过"
                 f"（清单里有而它没有的 id：{missing}）"
             )
-        for entry in KNOWN_WIRING_GAPS:
+        for entry in gaps:
             if not str(entry.get("reason", "")).strip() or not str(entry.get("owner", "")).strip():
                 problems.append(f"`KNOWN_WIRING_GAPS` 里 {entry.get('id')} 缺理由或归属 —— 登记必须有出处")
         for ident in stale:
@@ -459,11 +467,14 @@ def print_readings(readings: dict) -> None:
         f"{readings.get('face_files', 0)} 份，下限 {READ_FILES_FLOOR}；分派器自己那份 AppState.swift 不算）"
     )
     if "probe_count" in readings:
-        gaps = "、".join(entry["id"] for entry in KNOWN_WIRING_GAPS)
+        if KNOWN_WIRING_GAPS:
+            gaps = "、".join(entry["id"] for entry in KNOWN_WIRING_GAPS)
+            tail = f"已登记缺口 {len(KNOWN_WIRING_GAPS)} 条（{gaps} · 归属 {KNOWN_WIRING_GAPS[0]['owner']}，补完须同轮销账）"
+        else:
+            tail = "已登记缺口 0 条（登记表为空 = 清单里每一条都已有落点）"
         print(
             f"   落点表对账：探针 {readings['probe_count']} 条 ↔ 清单 {readings.get('catalog_count', 0)} 条 · "
-            f"未登记差集 {len(readings['unregistered'])} 条 · 已登记缺口 {len(KNOWN_WIRING_GAPS)} 条（{gaps} · "
-            f"归属 {KNOWN_WIRING_GAPS[0]['owner']}，补完须同轮销账）"
+            f"未登记差集 {len(readings['unregistered'])} 条 · {tail}"
         )
 
 
@@ -521,12 +532,13 @@ def self_test() -> int:
     face = read_face(ROOT)
     expectations: list[tuple[str, bool]] = []
 
-    def expect(name, should_be_red, catalog=None, state=None, faces=None, probe=None):
+    def expect(name, should_be_red, catalog=None, state=None, faces=None, probe=None, gaps=None):
         problems, _ = run_checks(
             catalog_text if catalog is None else catalog,
             state_text if state is None else state,
             face if faces is None else faces,
             probe_text if probe is None else probe,
+            gaps=gaps,
         )
         got_red = bool(problems)
         ok = got_red == should_be_red
@@ -615,10 +627,25 @@ def self_test() -> int:
         ),
         state=with_case('        case "plantedCommand": formatActiveQuery()\n'),
     )
+    # ⑧ 登记表两头都要收紧（**登记表本身是空的**，所以两条夹具都靠 `gaps` 注入 —— 空表证不了棘轮还活着）：
+    #    a. 一条**真缺**的 id 登记在案、理由与归属齐全 ⇒ 不报红（这是「先登记、后补」的合法路径）；
+    #    b. 一条**已经不缺**的 id 还留在登记表里 ⇒ 报红（陈旧登记必须同轮销账）。
+    _gap_entry = {"id": "plantedGap", "reason": "自检夹具：登记在案的真缺口", "owner": "自检夹具"}
     expect(
-        "把已登记缺口 `newNote` 补进落点表（登记陈旧，应当报红）",
+        "真缺的 id 有登记（`plantedGap` 未进落点表，理由与归属齐全，应当不报红）",
+        False,
+        catalog=_insert_before_line(
+            catalog_text,
+            'item("help", .commandHelp,',
+            '            item("plantedGap", .commandHelp, "planted", "planted", .paletteCategoryHelp),',
+        ),
+        state=with_case('        case "plantedGap": formatActiveQuery()\n'),
+        gaps=[_gap_entry],
+    )
+    expect(
+        "登记已陈旧（`help` 已落点却还登记在案，应当报红）",
         True,
-        probe=_insert_before_line(probe_text, '("notes", .notesEntry)', '            ("newNote", .notesEntry),'),
+        gaps=[{"id": "help", "reason": "自检夹具：陈旧登记", "owner": "自检夹具"}],
     )
 
     # ⑨ 负例④：赋值被掏空（cases 还在）⇒ 空跑防护 / 下限判红

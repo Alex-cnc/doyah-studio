@@ -55,3 +55,21 @@
 - **自检族存量未复跑**（本片没动门禁脚本）：沿用第十片读数 **8 族红**（`cli-failure-readability` · `core-localization` · `design-tokens` · `language-registry` · `network-egress` · `release-version` · `terminal-tabs` · `tri-repo-parity`），下一片开工先复跑一次再动。
 - 边界：真机点验 0 次 · 217 真库 0 次（本片只动一个探针文件，这两条不在覆盖面内）。
 - 证据 `.agent/evidence/2026-11-02-probe-retro-fixture-slice11.md`
+
+## 判据维护第十二片（2026-11-02 · 无台账行 · 脚本级）
+
+- **队列仍是 0 todo / 1 blocked**（`FR-STD-DB-META-002`）⇒ 本跳接着清上一跳的 next_try：`PaletteWiringProbeTests` 那 6 条笔记命令到底有没有落点。
+- **结论：有落点，但只在笔记面看得见** —— 四个状态（`notesScope` / `notesSearchScope` / `pendingContainerEdit` / `editorMode`）都有视图读（`NotesPanel.swift:805/1401/702/864`），不是当年那族「设了没人看的标志位」；问题是**命令挂在全局面板上**（`CommandPaletteView` 不按活动面过滤），Ultra 档站在数据库面点「新建笔记」⇒ 只改看不见的状态，屏幕不动。
+- **修法**：产品侧加 `enterNotesAreaForNotesCommand()`（Pro 照实说不含笔记，否则 `selectActivityItem(.notes)`），6 个 case 各加一句 guard，动作本体一行未改；探针侧新增 `NotesLanding`，6 条登记进落点表（34 → **40**），起点固定数据库面，**「有没有被带到笔记面」是断言的一半**。
+- **读数**：`--filter PaletteWiringProbeTests` ⇒ `Executed 2 tests, 0 failures`（修前对账红）· `check-palette-wiring.py` ⇒ ✅ **探针 40 ↔ 清单 40 · 未登记差集 0 · 已登记缺口 0**（登记表清零，`PROBE_FLOOR` 34 → 40、`CATALOG_FLOOR` 39 → 40）· `--self-test` **14/14**（13 → 14，新增「登记真缺 ⇒ 放行 / 登记陈旧 ⇒ 判红」两条注入夹具）· 负例两段（撤 `newNote` 前置 ⇒ 点名「必须把人带到笔记面」；落点改成 `.all` ⇒ 点名 `noteFavorites`），还原 sha256 `918c43ed…` / `ce86c6a0…` 逐字节一致 · 取证脚本全量 **418 例 / 4 skipped / 1 failure** · `verify-core` **5078 例 / 13 skipped / 1 failure** · `check-self-test-counts --no-run` 族 54 / 例 **1055** / 锚点 **86** · 文档门禁七道 rc=0 · `CommandPaletteTests` 13/13。
+- **剩下两条红都不是本片引入**：① `NotesEditorSaveProbeTests.testN24FailureIsVisibleAndNeverAPopup` —— 夹具把库连目录一起改只读，`PRAGMA journal_mode = WAL` 需要写权限 ⇒ 后台 `reloadNotes()` 读不出、`errorMessage` 被设成 `.notesFileUnreadable`；**自动保存那条路本身是对的**，要改的是夹具（只坏写）。② `SSHTunnelRuntimeTests.testBusyPortFailsFastWithoutStartingAnything` 抖动（单族连跑 3 次全绿、全量里偶发），next_try = 归因处把 ssh 的 `Address already in use` 也判成 `portInUse`。
+- 边界：真机点验 0 次 · 217 真库 0 次 · `newNote` 的「内容清空」那一半没判（预置内容会让「切走即存」真写用户库）· `newNotebook` 只走到「无架 ⇒ 如实说一句」那一支。
+- 下一项：**仍无 todo**。下一跳建议先复跑一次自检族全跑（本片读数沿用第十片的 **8 族红**：`cli-failure-readability` / `core-localization` / `design-tokens` / `language-registry` / `network-egress` / `release-version` / `terminal-tabs` / `tri-repo-parity`），再从 `release-version`（夹具锚点 `'<string>3</string>'` 已不在 `build-app.sh`）入手。
+- 证据 `.agent/evidence/2026-11-02-palette-notes-landings.md`
+
+### 判据维护出口（按 `d23f274d` · 本条之后不再开维护跳）
+
+- 净减红 **+1**（清 `testEveryCommandHasARegisteredLanding` 1 条 · 新冒 0 条）。
+- 三分：**确定性失败 1** `NotesEditorSaveProbeTests.testN24FailureIsVisibleAndNeverAPopup`（复现 = `./Scripts/run-manual-verification-probes.sh --filter NotesEditorSaveProbeTests`，本跳两次都红；根因 = 夹具只读 chmod 把 `PRAGMA journal_mode=WAL` 的写也弄坏）· **抖动 1** `SSHTunnelRuntimeTests.testBusyPortFailsFastWithoutStartingAnything`（单族连跑 3 次全绿）· **未复现 1** `QueryHistoryPaneProbeTests.testClearAndDeleteBothWaitForConfirmation`（给不出复现步骤）。
+- **未执行（≠通过）**：自检族全跑本跳未跑，8 族红读数沿用第十片。
+- **下一项改口径：v0.4.0**（`.agent/next-version.md`）—— 第一步是**补壳**：`FR-NTS-*` 那 12 条「一句话 / 判据」为 `—` 的行按 L0 需求书 §3.5 补齐，空壳行不许翻 ✅；之后按 N1–N4 派生队列（`--version 0.4.0` 或 `plan-notes.yaml`，须 `--check` 能复算）。**不再开判据维护跳。**
