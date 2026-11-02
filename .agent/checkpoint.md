@@ -9,7 +9,7 @@
 - **读数**：第 11 项 **40 条红 → 0**（旧包 `--app` 对照仍 40 条红 rc=1；新包 rc=0，A/C/B 三段 未覆盖 0 · 停启动语言 0 · 展开族一条不少）· `--self-test` **19 例** · `MenuLocalizationTests` 12 → **13 例** · `verify-core` **5326 / 13 skipped / 0 失败** · 全量 `verify-all.sh --keep-going`：**项块 19 · 失败 10 项（27 处）· 平台跳过 0 · 未执行项 = 无**；与上一跳 `.build/verify-all-20261102-item19.log` 逐项比对**只有第 11 项 ❌ → ✅（28 处 → 27 处）**，其余 10 项逐项相同 ⇒ 存量红不是本片引入（本轮**未**在 HEAD 工作树复跑，只做逐项比对）。
 - **净减红 +1**（清第 11 项 1 项 · 新冒 0）—— 按 `rules.md` 的维护跳硬出口，这是本版第 2 跳、净减仍为正，下一跳**不再开维护跳**。
 - **未验证（≠ 通过）**：真鼠标点那五条菜单项未点（判据走真启动 dump 的三段）· 切语言后人工观感未看 · 表里仍「认不出」的 4 条属豁免类（语言显示名 / 应用显示名 / 窗口标题）· 10 项存量红未修。
-- 证据 `.agent/evidence/2026-11-02-menu-recognition-table.md`；提交 `PLACEHOLDER_SHA`（已推送，local = remote）。
+- 证据 `.agent/evidence/2026-11-02-menu-recognition-table.md`；提交 `91982d4c`（已推送，local = remote）。
 
 ## 下一项：派下一版队列（v0.6.0 机器面已无 todo）
 

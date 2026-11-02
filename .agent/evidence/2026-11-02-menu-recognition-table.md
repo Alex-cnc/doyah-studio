@@ -26,6 +26,6 @@ $ ./Scripts/verify-all.sh --keep-going
 文档门禁：invariants / tables / numbers / plan-coverage / status-consistency / version-scope /
    doc-versions / doc-layout rc=0 · `check-status-gap` 0 行（不适用 4 行逐条点名）·
    `plan-batches --version 0.6.0 --check` rc=0（0 todo / 18 blocked）
-提交：PLACEHOLDER_SHA
+提交：91982d4c
 未验证：真鼠标点这五条菜单项未点（判据走真启动 dump 的 A/C/B 三段，不是人眼）· 切语言后的人工观感未看 ·
    表里仍「认不出」的 4 条属豁免类（语言显示名 / 应用显示名 / 窗口标题）· 10 项存量红未修
