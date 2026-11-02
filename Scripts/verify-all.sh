@@ -777,6 +777,17 @@ python3 Scripts/check-terminal-tabs.py --self-test
 python3 Scripts/check-result-scroll-ledger.py
 python3 Scripts/check-result-scroll-ledger.py --self-test
 
+# C2（`NFR-ALL-GATE-PERF-001/002/003`）：**性能读数表**的阈值台账。冷启动那条原来连仪表都没有
+# （「≤ 2 s」只是一句话）：阈值现只在 `Scripts/perf-baseline.json` 一处，App 在可交互那一刻写收据
+# （起点 = **内核**记录的进程创建时刻，含 dyld）、`Scripts/measure-cold-start.py` 量、本判据看着
+# 「阈值只有一个写者 / 接线在盘 / 读数不超阈值」。结果集那两条**不复制数字**，只登记去哪份台账取哪个字段。
+# 静态臂在这里跑；实测（要真启动 App）另由 `Scripts/measure-cold-start.py` 与 `Scripts/measure-result-set.py` 出。
+# 判据自己的证据：`--self-test` **13 例**（阈值被放宽 / 为负 / 理由掏空 / 只跑一遍 / 结果集改指自己 /
+# 字段解析不到 / Core 硬编码阈值 / `begin()` 挪到第二句 / 终点标记被摘 / 读数超阈值 / 外部墙钟小于自报 /
+# 缺读数，逐条判红后还原）。
+python3 Scripts/check-perf-ledger.py
+python3 Scripts/check-perf-ledger.py --self-test
+
 # L-146（内测清单丁3，2026-10-01 第 142 轮）：**模型服务预设只有一个出处，界面只许消费它**。
 # 需求原话「AI 助理配置时应该提供主流大模型配置 url 和可选择模型，毕竟很多人是不懂的」——
 # 这件事有两个不会报错的坏法：① 界面自己写死一个端点（「端点只改一处」当场不成立，而编译照过、

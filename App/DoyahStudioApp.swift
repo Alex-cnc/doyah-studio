@@ -21,6 +21,11 @@ struct DoyahStudioApp: App {
     @StateObject private var agentChat = AgentChatModel()
 
     init() {
+        // **冷启动计时的起点**（`NFR-ALL-GATE-PERF-001`）：必须是 `init` 的第一句 ——
+        // 往后挪一句，那一句的耗时就算作免费。起点取**内核**记录的进程创建时刻
+        // （`ProcessStartTime`），所以 dyld / 静态初始化也在这条线里。
+        // 没开 `DOYAH_LAUNCH_RECEIPT` 时它什么都不做。
+        LaunchReceiptProbe.begin()
         // PDF 文本抽取器注册一次（`FR-AGT-TOOL-INGEST-002` 的 macOS 落点；Core 不引平台库）。
         PDFTextExtractor.install()
         // **单实例保护**：同一个 bundle 通常只允许一个进程在跑。
@@ -36,7 +41,11 @@ struct DoyahStudioApp: App {
         let isMenuDumpProbe = ProcessInfo.processInfo.environment["DOYAH_MENU_DUMP"] != nil
         let isSearchBoxProbe =
             ProcessInfo.processInfo.environment[TitleBarSearchBoxProbe.environmentKey] != nil
-        if !isTakeover, !isMenuDumpProbe, !isSearchBoxProbe, let existing = Self.otherRunningInstance() {
+        // 冷启动收据探针（`DOYAH_LAUNCH_RECEIPT`）**也要建窗口、也要被量到首帧**，
+        // 用户正开着应用时它会被单实例保护静默赶走 ⇒ 同样放行（探针跑完由测量脚本杀掉）。
+        let isLaunchReceiptProbe = LaunchReceiptProbe.isEnabled
+        if !isTakeover, !isMenuDumpProbe, !isSearchBoxProbe, !isLaunchReceiptProbe,
+           let existing = Self.otherRunningInstance() {
             // **必须看 activate() 的返回值**：对方可能正在退出（我刚踩过 ——
             // "杀掉旧实例后立刻启动"会让新实例静默 exit(0)，表现就是"界面干脆不出来"：
             // 没有窗口、没有崩溃报告、进程也没了）。只有真的把它激活了，我才退出自己；
@@ -84,6 +93,10 @@ struct DoyahStudioApp: App {
     var body: some Scene {
         WindowGroup {
             MainWindow()
+                // **冷启动的终点标记**（`NFR-ALL-GATE-PERF-001`）：零尺寸、什么都不画，
+                // 只在根视图真的建好并首帧画了之后打一次点、写一份收据。
+                // 没开 `DOYAH_LAUNCH_RECEIPT` 时它是个恒空的视图。
+                .background(LaunchReceiptMarker())
                 // **壁纸皮肤**（第 5 套主题「深空苍穹」）：照片铺在整个窗口的**最底层**，
                 // 上面每一层表面按值表定值半透明（`Theme.surface` 一处收口）⇒ 照片从面板底下透出来。
                 // 没声明壁纸的主题 / 开关关掉时这一层什么都不画（判定在 Core 那一个函数里）。

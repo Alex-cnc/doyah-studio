@@ -1,0 +1,50 @@
+{
+  "note": "性能读数表（`NFR-ALL-GATE-PERF-001/002/003`）的**阈值唯一来源**。冷启动那一条的阈值只写在这里（`App/LaunchReceiptProbe.swift` 与 `Core/LaunchTimeline.swift` 只收参数、不存数字）；结果集那两条**不在这里重复数字**，只登记「去哪一份台账取哪个字段」—— 那两份阈值本来就在 `Scripts/result-scroll-baseline.json`（滚动探针的唯一来源），重复写一份就是两个写者。看着它的判据 = `Scripts/check-perf-ledger.py`（字段齐备 / 阈值不许悄悄放宽 / 规模对得上需求 / 接线在盘 / 读数不超过阈值）。",
+  "version": 1,
+  "environment": {
+    "measuredOn": "2026-11-02",
+    "measuredBy": "开发循环 · 本机 macOS 27.0.1 / Apple Silicon · SSD",
+    "build": "Debug 非沙箱 ad-hoc 包（`Scripts/build-app.sh`），`dist/DoyahStudio.app`",
+    "warmth": "冷启动每遍新起一个进程（不吃上一条的进程态）；文件缓存已热 —— 首次安装后的第一遍不在本口径内"
+  },
+  "coldStart": {
+    "rows": ["NFR-ALL-GATE-PERF-001"],
+    "limitMs": 2000,
+    "runs": 3,
+    "reducer": "median",
+    "measurement": "Scripts/measure-cold-start.py",
+    "receiptEnvironment": "DOYAH_LAUNCH_RECEIPT",
+    "startPoint": "内核记录的进程创建时刻（`p_starttime`）—— 含 dyld / 静态初始化",
+    "endPoint": "根视图出现后一圈运行循环（首帧画了）；不含 GPU 上屏合成",
+    "rationale": "需求原文是「App 冷启动到可交互 ≤ 2 s（本机 SSD）」，所以阈值就是 2 000 ms，不是「实测值 × N 倍」那种自己给自己定的余量 —— 这一条是**对外承诺**，不是容差。多遍取中位数：一遍受机器瞬时负载影响很常见，取中位数而不是最快或最慢那一遍；每一遍的读数都打在测量输出里（证据文件留尾部）。判据拒绝把「没收到收据」当成 0 ms（`LaunchBudget.Verdict.unmeasurable`）。"
+  },
+  "resultSet": {
+    "rows": {
+      "NFR-ALL-GATE-PERF-002": {
+        "ledger": "Scripts/result-scroll-baseline.json",
+        "rowsField": "smallRows",
+        "columnsField": "columns",
+        "frameLimitField": "frame.p50MsLimit",
+        "rasterLimitField": "frame.rasterMsLimit",
+        "ratioLimitField": "frame.scaleRatioLimit",
+        "probe": "TestsUISnapshot/LargeResultScrollProbeTests.swift",
+        "note": "1 万行 × 20 列：单帧（脏区重画）p50 与整幅重画 p50 各有上界，另有「1 万 → 10 万不放大」的比值判据与「相邻帧画面必须不同」。"
+      },
+      "NFR-ALL-GATE-PERF-003": {
+        "ledger": "Scripts/result-scroll-baseline.json",
+        "rowsField": "largeRows",
+        "columnsField": "columns",
+        "memoryLimitField": "memory.residentLimitMB",
+        "probe": "TestsUISnapshot/LargeResultScrollProbeTests.swift",
+        "note": "10 万行：同一轮操作（翻完一轮页 + 全表滚一遍）重复做，常驻内存增量不得超过上界；物化行视图数不随总行数增长（虚拟化 = 不 OOM 的机器形态）。"
+      }
+    },
+    "rationale": "这两条的阈值与理由已经在 `result-scroll-baseline.json` 里逐条写清（基线实测值 + 倍数 + 为什么留这么宽），本条只做**指路**，不复制数字。本版的补法是把两条从「探针写好了、没人拿去对台账」接成「一份读数表 + 一个判据看着阈值」，并如实登记它们**判不住**的那一半（观感可感知性、真机 GPU 合成、首次安装的冷缓存）。"
+  },
+  "notCovered": [
+    "观感那一半：「无可感卡顿」是人的判断，探针量的是帧成本有界 / 帧在变 / 内存不攒 —— 掉帧可不可感知仍归人工点验",
+    "10 万行的**真上屏合成**（GPU）未测：探针走离屏 `cacheDisplay`，同一套绘制代码但不上屏",
+    "首次安装后的**冷文件缓存**首启未测：本口径每遍都吃热缓存",
+    "真数据库返回 10 万行的那一段（网络 + 解码）不在本版三条里：探针用合成结果，量的是一次性物化后的渲染与内存"
+  ]
+}

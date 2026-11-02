@@ -1,5 +1,15 @@
 # 检查点
 
+## v0.6.0 · C2 收口（性能读数表三条）· 2026-11-02
+
+- **收三条**：`NFR-ALL-GATE-PERF-001`（冷启动 ≤ 2 s）· `-002`（1 万行 × 20 列不卡）· `-003`（10 万行不 OOM），两列全 ✅。C2 批次清空。
+- **本批的实质是「先有仪表，再谈阈值」**：结果集那两条早就有探针（`LargeResultScrollProbeTests`，上界全从 `result-scroll-baseline.json` 读），但从没有一份读数表把它们拿去对阈值；冷启动那条**连仪表都没有**。落法 = ① `App/LaunchReceiptProbe.swift` + `Platform/macOS/ProcessStartTime.swift` + `Core/LaunchTimeline.swift`（起点取内核 `p_starttime` 含 dyld；终点 = 根视图出现后一圈运行循环；收据用秒不用 ISO8601；只改结论不改时刻的收据拒收）；② 阈值唯一写者 `Scripts/perf-baseline.json`（冷启动 2 000 ms；结果集两条只指路不复制数字）；③ `Scripts/measure-cold-start.py`（3 遍中位数 + 外部墙钟）与 `Scripts/measure-result-set.py`（真跑探针、解析四条读数）；④ `Scripts/check-perf-ledger.py`（静态臂进闭环第 9 项 + `--readings` + `--self-test` 13 例）。
+- **读数**：冷启动中位数 **293.4 ms**（各遍 1217 / 292 / 293；外部墙钟 330.7 ms）· 帧 p50 **0.02 ms** / 整幅重画 **25.3 ms** / 比值 **1.00×** / 常驻增量 **0.2 MB** / 物化行视图 10 000 与 100 000 行都是 **16 个** · `verify-core.sh` **5298 例 / 13 skipped / 1 失败**（= `SSHTunnelRuntimeTests` 存量抖动，单族 3 次 1 红 2 绿）· `verify-ui-interactions.sh` rc=0 · 文档门禁十一 rc=0（numbers 三向 5298）· `plan-batches --check` rc=0（7 条待办）。
+- **负例**：人为拖慢 2.5 s ⇒ 2946.8 ms 判红 rc=1 · 读数改 2 610 ms ⇒ 判红并点名「外部墙钟小于自报」· 帧 6.5 ms / 内存 +96 MB ⇒ 各判红 · `--self-test` 13 例（阈值放宽 / 为负 / 理由掏空 / 只跑一遍 / 结果集改指自己 / 字段解析不到 / Core 硬编码阈值 / `begin()` 挪第二句 / 终点标记被摘 / 读数超阈值 / 墙钟矛盾 / 缺读数）。
+- **两条判据纪律**：`plan-batches.py` 只认**整格** `✅`（写了 `✅（…）` 就算未闭 —— 本批第一版栽在这，台账已改成「实现列 = ✅ / 证据全在判据列」）；`check-version-scope` 要求 alpha 档行的**备注列必须是 `—`**（说明写进判据列）。
+- **未验证（≠ 通过）**：观感那一半归人工 · 10 万行上屏 GPU 合成未测 · 首次安装冷缓存首启未测 · 峰值内存不做断言 · 真库 10 万行（网络 + 解码）不在本条 · `verify-all.sh` 第 11 / 18 项未执行。
+- **下一批 = `C3`**（`NFR-ALL-GATE-COMP-004` 部署目标 14.0 · `NFR-ALL-GATE-COMP-005` arm64 + x86_64 · `FR-STD-ALL-PLUG-008` 桌面各端一条 SQLite）。起跳先核：`project.yml` / `Package.swift` 的部署目标是不是 14.0 同一处；`DOYAH_ARCH=universal` 构建后 `lipo -info` 是否真双架构（**Intel 真机仍记未知**，Rosetta 不等于 Intel）；`PLUG-008` 判的是「桌面各端只落一条本地 SQLite」——笔记库路径与 `Package.swift` 的三端 target 面。
+- 证据 `.agent/evidence/2026-11-02-C2.md`
 ## v0.6.0 队列派生（2026-11-02 · 无台账行 · 派生件换代）
 
 - **由来**：v0.5.0 队列 0 todo（10 条 §7.1 外部卡点 + 1 条跨版携带仍 blocked）⇒ 按 `.agent/next-version.md` §五 派生 **v0.6.0 横切面收口**。台账一行未改。
