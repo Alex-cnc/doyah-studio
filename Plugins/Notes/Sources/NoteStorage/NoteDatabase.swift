@@ -1585,6 +1585,190 @@ public final class NoteDatabase {
             }
     }
 
+    // MARK: - 导出与迁移（`FR-NTS-NOTE-EXPORT-001` · 概要设计 §15.3）
+
+    /// **导出取数**：库里所有活着的、非私密条目，带正文权威源 / 标签 / 附件引用 / 归属 / 整理位。
+    ///
+    /// 三条口径：
+    ///   · **只读**：这一段里没有任何一句写语句 —— 「导出是副本」判据比的是导出前后库文件逐字节相同；
+    ///   · **私密条目一条都不出**：`is_private = 0` 放在 SQL 里而不是调用方过滤 ——
+    ///     「私密不外发（含导出、含备份包）」是数据边界，不能靠三种产物各自记得滤一遍；
+    ///   · **顺序稳定**（创建时间正序、同时间按 uuid）：同一份库两次导出得到同一顺序，
+    ///     三种形态的条数对账才有意义。
+    public func archiveEntries() throws -> [NoteArchiveEntry] {
+        let rows = try connection.query(
+            """
+            SELECT id, uuid, title, body, spans, source_kind, source_connection_name, source_fingerprint,
+                   source_captured_at, created_at, updated_at, contains_row_data, favorite, pinned,
+                   is_archived, notebook_uid
+            FROM note
+            WHERE deleted_at IS NULL AND is_private = 0
+            ORDER BY created_at ASC, uuid ASC;
+            """
+        )
+        return try rows.map { row in
+            guard let uuidText = row.text("uuid"), let id = UUID(uuidString: uuidText) else {
+                throw SQLiteFailure(
+                    code: SQLiteResultCode.mismatch,
+                    message: "note row has no usable uuid",
+                    operation: .step
+                )
+            }
+            let rowID = row.int("id") ?? 0
+            let attachments = try connection.query(
+                "SELECT uuid, path, byte_count, added_at FROM note_attachment WHERE note_id = ? ORDER BY added_at ASC, uuid ASC",
+                [.integer(rowID)]
+            ).compactMap { attachmentRow -> NoteArchiveAttachment? in
+                guard let text = attachmentRow.text("uuid"), let identifier = UUID(uuidString: text) else { return nil }
+                return NoteArchiveAttachment(
+                    id: identifier,
+                    path: attachmentRow.text("path") ?? "",
+                    byteCount: attachmentRow["byte_count"].intValue,
+                    addedAt: Date(timeIntervalSince1970: attachmentRow["added_at"].doubleValue ?? 0)
+                )
+            }
+            return NoteArchiveEntry(
+                id: id,
+                title: row.text("title") ?? "",
+                body: row.text("body") ?? "",
+                spans: row.text("spans"),
+                tags: try noteTags(rowID: rowID),
+                createdAt: Date(timeIntervalSince1970: row["created_at"].doubleValue ?? 0),
+                updatedAt: Date(timeIntervalSince1970: row["updated_at"].doubleValue ?? 0),
+                notebookUID: row.text("notebook_uid"),
+                isFavorite: row["favorite"].intValue == 1,
+                isPinned: row["pinned"].intValue == 1,
+                isArchived: row["is_archived"].intValue == 1,
+                containsRowData: row["contains_row_data"].intValue == 1,
+                sourceKind: row.text("source_kind") ?? "",
+                sourceConnectionName: row.text("source_connection_name"),
+                sourceFingerprint: row.text("source_fingerprint"),
+                sourceCapturedAt: Date(timeIntervalSince1970: row["source_captured_at"].doubleValue ?? 0),
+                attachments: attachments
+            )
+        }
+    }
+
+    /// **导入还原**：把包里每一条**逐字段**写回（含创建 / 更新时间、归属、整理位、正文权威源、附件引用）。
+    ///
+    /// 为什么不能复用 `upsert(_ note:)`：那条路是「一次保存」的语义 —— `updated_at` 取现在、
+    /// `favorite` / `pinned` / `is_private` / `notebook_uid` 刻意不动。拿它来还原，
+    /// 时间会全变成导入时刻、归属会掉回默认笔记本 —— 契约 §15.3「条数、标题、正文、标签集合、
+    /// 创建与更新时间、附件引用逐条相等」当场不成立。这里是**另一个动作**，所以有**另一条写路**。
+    ///
+    /// 三条边界：
+    ///   · **目标库里同 uuid 的那条是私密的 ⇒ 跳过、不碰**（回执里报条数）。覆盖它会让一条
+    ///     私密笔记的内容被换掉却仍隐身 —— 静默泄漏的反面同样必须说出来；
+    ///   · **原归属的笔记本不在目标库 ⇒ 落默认笔记本并计数**（不凭空造笔记本，也不留无归属条目）；
+    ///   · **整批一个事务**：导入到一半被杀，不留「一半条目换了内容、标签还是旧的」。
+    @discardableResult
+    public func restoreArchive(_ entries: [NoteArchiveEntry]) throws -> NoteArchiveImportReport {
+        try connection.transaction {
+            let notebookUIDs = Set(
+                try connection.query("SELECT uid FROM notebook").compactMap { $0.text("uid") }
+            )
+            let defaultNotebook = try connection.scalarText(
+                "SELECT uid FROM notebook WHERE is_default = 1 LIMIT 1"
+            ) ?? ""
+            var restored = 0
+            var skippedPrivate = 0
+            var fallbacks = 0
+            for entry in entries {
+                guard NoteSource.Kind(rawValue: entry.sourceKind) != nil else {
+                    throw NoteStorageFailure.unknownSourceKind(entry.sourceKind)
+                }
+                if let existing = try connection.scalarInt(
+                    "SELECT is_private FROM note WHERE uuid = ?",
+                    [.text(entry.id.uuidString)]
+                ), existing == 1 {
+                    skippedPrivate += 1
+                    continue
+                }
+                let notebookUID: String
+                if let requested = entry.notebookUID, notebookUIDs.contains(requested) {
+                    notebookUID = requested
+                } else {
+                    notebookUID = defaultNotebook
+                    if entry.notebookUID != nil { fallbacks += 1 }
+                }
+                try connection.execute(
+                    """
+                    INSERT INTO note (
+                        uuid, title, body, spans, source_kind, source_connection_name, source_fingerprint,
+                        source_captured_at, created_at, updated_at, contains_row_data, storage_version,
+                        favorite, pinned, is_private, is_archived, notebook_uid, deleted_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, NULL)
+                    ON CONFLICT (uuid) DO UPDATE SET
+                        title = excluded.title,
+                        body = excluded.body,
+                        spans = excluded.spans,
+                        source_kind = excluded.source_kind,
+                        source_connection_name = excluded.source_connection_name,
+                        source_fingerprint = excluded.source_fingerprint,
+                        source_captured_at = excluded.source_captured_at,
+                        created_at = excluded.created_at,
+                        updated_at = excluded.updated_at,
+                        contains_row_data = excluded.contains_row_data,
+                        storage_version = excluded.storage_version,
+                        favorite = excluded.favorite,
+                        pinned = excluded.pinned,
+                        is_private = excluded.is_private,
+                        is_archived = excluded.is_archived,
+                        notebook_uid = excluded.notebook_uid,
+                        deleted_at = NULL;
+                    """,
+                    [
+                        .text(entry.id.uuidString),
+                        .text(entry.title),
+                        .text(entry.body),
+                        entry.spans.map { SQLiteValue.text($0) } ?? .null,
+                        .text(entry.sourceKind),
+                        entry.sourceConnectionName.map { SQLiteValue.text($0) } ?? .null,
+                        entry.sourceFingerprint.map { SQLiteValue.text($0) } ?? .null,
+                        .real(entry.sourceCapturedAt.timeIntervalSince1970),
+                        .real(entry.createdAt.timeIntervalSince1970),
+                        .real(entry.updatedAt.timeIntervalSince1970),
+                        .integer(entry.containsRowData ? 1 : 0),
+                        .integer(Int64(NoteSchemaV1.version)),
+                        .integer(entry.isFavorite ? 1 : 0),
+                        .integer(entry.isPinned ? 1 : 0),
+                        .integer(entry.isArchived ? 1 : 0),
+                        .text(notebookUID)
+                    ]
+                )
+                let rowID = try requireRowID(of: entry.id)
+                // 标签 / 附件引用都是**全量替换**（包里那一份就是这条笔记的完整集合）：
+                // 先清后插，与 `upsert` 同一条纪律 —— 省掉「差集算法写错」这类缺陷。
+                try connection.execute("DELETE FROM note_tag WHERE note_id = ?", [.integer(rowID)])
+                for tag in Set(entry.tags).sorted() {
+                    try connection.execute(
+                        "INSERT INTO note_tag (note_id, tag) VALUES (?, ?)",
+                        [.integer(rowID), .text(tag)]
+                    )
+                }
+                try connection.execute("DELETE FROM note_attachment WHERE note_id = ?", [.integer(rowID)])
+                for attachment in entry.attachments {
+                    try connection.execute(
+                        "INSERT OR REPLACE INTO note_attachment (uuid, note_id, path, byte_count, added_at) VALUES (?, ?, ?, ?, ?)",
+                        [
+                            .text(attachment.id.uuidString),
+                            .integer(rowID),
+                            .text(attachment.path),
+                            attachment.byteCount.map { SQLiteValue.integer($0) } ?? .null,
+                            .real(attachment.addedAt.timeIntervalSince1970)
+                        ]
+                    )
+                }
+                restored += 1
+            }
+            return NoteArchiveImportReport(
+                restored: restored,
+                skippedPrivateExisting: skippedPrivate,
+                notebookFallbacks: fallbacks
+            )
+        }
+    }
+
     // MARK: - 历史版本（schema v11 · `FR-NTS-NOTE-VERSION-001`）
 
     /// 把一条笔记**当前内容**记成一个版本，返回那一版；内容与最近一版**全等**时不记（返回 `nil`）。

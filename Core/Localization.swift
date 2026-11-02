@@ -534,6 +534,9 @@ public enum LKey: String, CaseIterable, Sendable {
     case licenseNotesNotIncluded
     case noteLostSize
     case noteExportDegraded
+    /// 导出产物里的两枚小标题（`FR-NTS-NOTE-EXPORT-001` · 三形态同源）
+    case noteArchiveTags
+    case noteArchiveAttachments
     case noteHTMLLostStyle
     case noteHTMLLostUnknownField
     case menuNotes
@@ -983,6 +986,17 @@ public enum LKey: String, CaseIterable, Sendable {
     case notesUndo
     case notesUndoRestored
     case notesUndoUnavailable
+    /// 导出与迁移（`FR-NTS-NOTE-EXPORT-001`）：「笔记」菜单三条导出 + 一条导入 + 五句回执。
+    case notesExportMarkdown
+    case notesExportPlainText
+    case notesExportBackup
+    case notesImportBackup
+    case notesExportEmpty
+    case notesExported
+    case notesExportFailed
+    case notesImported
+    case notesImportFailed
+    case notesImportVersionRefused
     case notesFavoriteOnly
     case notesMarkFavorite
     case notesUnmarkFavorite
@@ -4139,6 +4153,8 @@ public enum LocalizedStrings {
         .licenseNotesNotIncluded: [.simplifiedChinese: "当前版本不含笔记（Standard / Ultra 才有）", .english: "This edition does not include notes (only Standard and Ultra do)"],
         .noteLostSize: [.simplifiedChinese: "字号 %@", .english: "size %@"],
         .noteExportDegraded: [.simplifiedChinese: "Markdown 表达不了，导出后丢失：「%@」%@", .english: "Markdown cannot express this; lost on export: %@ %@"],
+        .noteArchiveTags: [.simplifiedChinese: "标签", .english: "Tags"],
+        .noteArchiveAttachments: [.simplifiedChinese: "附件", .english: "Attachments"],
         .noteHTMLLostStyle: [.simplifiedChinese: "样式值 %@ 渲不出来（%@），导出 HTML 时按无样式处理", .english: "Style value %@ cannot be rendered (%@); exported as unstyled"],
         .noteHTMLLostUnknownField: [.simplifiedChinese: "文字「%@」上有一个不认得的字段 %@，没有渲出来", .english: "Note text %@ carries unknown field %@, which was not rendered"],
         .menuNotes: [.simplifiedChinese: "笔记…", .english: "Notes…"],
@@ -4551,6 +4567,16 @@ public enum LocalizedStrings {
             .english: "%d notes were purged (retention limit)"
         ],
         .notesUndo: [.simplifiedChinese: "撤销", .english: "Undo"],
+        .notesExportMarkdown: [.simplifiedChinese: "导出 Markdown…", .english: "Export Markdown…"],
+        .notesExportPlainText: [.simplifiedChinese: "导出纯文本…", .english: "Export Plain Text…"],
+        .notesExportBackup: [.simplifiedChinese: "导出备份包…", .english: "Export Backup…"],
+        .notesImportBackup: [.simplifiedChinese: "导入备份包…", .english: "Import Backup…"],
+        .notesExportEmpty: [.simplifiedChinese: "没有可导出的笔记", .english: "No notes to export"],
+        .notesExported: [.simplifiedChinese: "已导出 %d 条笔记：%@", .english: "Exported %d notes to %@"],
+        .notesExportFailed: [.simplifiedChinese: "导出失败：%@", .english: "Export failed: %@"],
+        .notesImported: [.simplifiedChinese: "已导入 %d 条笔记（跳过私密 %d 条）", .english: "Imported %d notes (skipped %d private)"],
+        .notesImportFailed: [.simplifiedChinese: "导入失败：%@", .english: "Import failed: %@"],
+        .notesImportVersionRefused: [.simplifiedChinese: "备份包版本 %d 高于本端支持的 %d，已拒绝导入", .english: "Backup version %d is newer than supported %d; import refused"],
         .notesUndoRestored: [.simplifiedChinese: "已恢复 %d 条", .english: "Restored %d notes"],
         .notesUndoUnavailable: [
             .simplifiedChinese: "这一档还没有整批撤销",

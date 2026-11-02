@@ -320,6 +320,42 @@ public actor NoteLibrary {
         return body.body
     }
 
+    // MARK: - 导出与迁移（`FR-NTS-NOTE-EXPORT-001`）
+    //
+    // 三种产物都从**同一次** `archiveEntries()` 取数（契约 §15.3「三形态同源」）——
+    // 这里不各写一遍「把哪些笔记拿出来」：那会立刻出现「Markdown 导了 12 条、备份包 11 条」。
+
+    /// 备份包（结构化那一份；`spans` 在里面，所以**无损**）。
+    ///
+    /// 库还不在盘上 ⇒ 空包（**不建库**：「导出是副本」不许因为导出这个动作在盘上多出一个文件）。
+    public func archivePackage(at moment: Date = Date()) throws -> NoteArchivePackage {
+        guard FileManager.default.fileExists(atPath: databaseURL.path) else {
+            return NoteArchivePackage(exportedAt: moment, notes: [])
+        }
+        return NoteArchivePackage(exportedAt: moment, notes: try open().archiveEntries())
+    }
+
+    /// 备份包的落盘字节（键排序 ⇒ 同一份库两次导出逐字节相同）。
+    public func archiveData(at moment: Date = Date()) throws -> Data {
+        try NoteArchive.encode(try archivePackage(at: moment))
+    }
+
+    /// Markdown / 纯文本产物（有损的那两种）。条数与备份包恒等。
+    public func archiveText(_ kind: NoteArchiveFormat.Kind, language: AppLanguage) throws -> String {
+        let entries = try archivePackage().notes
+        switch kind {
+        case .markdown: return NoteArchive.markdown(entries, language: language)
+        case .plainText: return NoteArchive.plainText(entries, language: language)
+        case .package: return String(decoding: try NoteArchive.encode(NoteArchivePackage(exportedAt: Date(), notes: entries)), as: UTF8.self)
+        }
+    }
+
+    /// 导入自己导出的包：先解包（格式 / 版本这两道在前），再整批写回。
+    public func importArchive(_ data: Data) throws -> NoteArchiveImportReport {
+        let package = try NoteArchive.decode(data)
+        return try open().restoreArchive(package.notes)
+    }
+
     // MARK: - 历史版本（`FR-NTS-NOTE-VERSION-001`）
 
     /// 一条笔记的历史版本（**最新在前**；每版带时间与摘要）。

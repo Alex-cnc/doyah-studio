@@ -1702,6 +1702,18 @@ struct NotesAreaView: View {
         .task(id: appState.notesQuery) {
             await appState.searchNotes()
         }
+        // **导出 / 导入请求**（`FR-NTS-NOTE-EXPORT-001`）：命令只写请求，面板在这里弹 ——
+        // 这一层有真窗口（`NSSavePanel` / `NSOpenPanel` 是模态的，命令那一层可能没有窗口）。
+        .onChange(of: appState.notesArchiveRequest) { _, request in
+            guard let request else { return }
+            appState.notesArchiveRequest = nil
+            switch request {
+            case .export(let kind):
+                appState.exportNotesPanel(kind)
+            case .importPackage:
+                appState.importNotesPanel()
+            }
+        }
         // **冲突留两版的面**（`FR-NTS-NOTE-SYNC-002`）：中栏那条门牌点开它。
         // 有没有冲突、有几条，只由 `AppState.syncConflicts` 一处决定（面自己不找状态文件）。
         .sheet(isPresented: $appState.isSyncConflictsPresented) {

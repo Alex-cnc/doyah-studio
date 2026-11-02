@@ -540,3 +540,19 @@
 - **队列口径（本片后实测）**：`plan.yaml` = **2 todo / 28 blocked**；`batches.yaml` 只剩 **D2（2 条）**。
 - **下一批 = D2 余两条**：`FR-NTS-NOTE-EXPORT-001`（备份包格式版本号 + 导入还原；Markdown 导出半边已在 `NoteBodyProjection.exportMarkdown`）→ `FR-STD-WS-FS-008`（① 的另一半：图片等按各自视图，别再一律 `openAsText` 当二进制拒绝）。
 - 证据 `.agent/evidence/2026-11-02-FR-NTS-ALL-HOME-001.md`
+
+## v0.7.0 · D2 第三条：`FR-NTS-NOTE-EXPORT-001` 导出与迁移 · 2026-11-02
+
+- **一条两列全 ✅**：`FR-NTS-NOTE-EXPORT-001`。原判据格写着「②③ 不成立：全树没有备份包与导入还原、导出也没有格式版本号」，本跳补齐。
+- **落法**：
+  - 新 `Plugins/Notes/Sources/NoteArchive.swift`：包格式（`format=doyah.notes.backup` + `formatVersion=1`）· 条目带标题 / 正文投影 / 正文权威源 `spans` / 标签 / 创建与更新时间 / 归属 / 收藏·置顶·归档位 / 附件引用；**先判格式、再判版本、最后解条目**（版本高了就停下，不半懂不懂地读）；Markdown / 纯文本两种产物由**同一份条目**派生（三形态同源），Markdown 走 `NoteBodyProjection.exportMarkdown` 逐条报降级。
+  - `NoteDatabase.archiveEntries()`：一条 SQL 取数（`deleted_at IS NULL AND is_private = 0`）—— 私密条目在取数那一步就出局，不靠三种产物各自记得滤；**只读**。
+  - `NoteDatabase.restoreArchive(_:)`：**独立写路**（不复用 `upsert`），逐字段写回含 `created_at` / `updated_at` / `favorite` / `pinned` / `notebook_uid` / `spans` / 附件引用；整批一个事务；目标库同 uuid 是私密 ⇒ **跳过不碰并计数**；原归属笔记本不存在 ⇒ 落默认并计数。
+  - 入口：`NoteLibrary.archivePackage/archiveData/archiveText/importArchive` + `AppState.exportNotes/importNotes`（落盘唯一出口）+「笔记」菜单四条（`notesExportMarkdown` / `notesExportPlainText` / `notesExportBackup` / `notesImportBackup`）；命令只写请求位 `notesArchiveRequest`，面板由 `NotesAreaView` 弹（模态面板不在无窗口宿主里弹）。
+- **读数**：`--filter NoteArchiveTests` **6 例 / 0 失败** · `verify-core` **5354 / 13 skipped / 0 失败**（5348 → +6；`doc-numbers.json` 与 `AGENT-SPEC.md` 两处同批改数）· `verify-ui-interactions` **133 条全跑、无跳过** rc=0 · 文档门禁 invariants / tables / numbers / plan-coverage / status-consistency / version-scope / doc-layout / agents-index / status-gap / palette-wiring 全 rc=0 · `plan-batches --version 0.7.0 --check` rc=0（1 条待办）。
+- **反例三段**（各判红后 `sha256` 逐字节还原 `8498b2f5…` / `70c76e23…`）：版本判据放宽 ⇒ 版本拒绝例红 · 标签不还原 ⇒ 往返例红 · 私密过滤拿掉 ⇒ 三形态例 4 断言红。
+- **未验证（≠通过）**：附件**字节**不随包走（只有引用）· 历史版本 / 时间线 / 回收站不进包 · 原归属笔记本不存在时落默认并计数（不假装一模一样）· 真鼠标点「笔记」菜单四项未点 · 移动三端未动。
+- **存量红（本跳未新增，逐条核过不在改动面上）**：`check-format-arguments` 预算 229 > 190 与 `<line>` / `<loadedRowCount>` 处数超限（本跳新增的两处 `<found>` / `<supported>` 已登记并把预算 188 → 190）· `check-book-subset`。
+- **队列口径（本片后实测）**：`plan.yaml` = **1 todo / 28 blocked**；`batches.yaml` 只剩 **D2（1 条）**。
+- **下一批 = D2 余一条**：`FR-STD-WS-FS-008`（工作区按文件类别呈现 —— ① 的另一半：图片等走各自视图，不许再一律 `openAsText` 当二进制拒绝）。
+- 证据 `.agent/evidence/2026-11-02-FR-NTS-NOTE-EXPORT-001.md`

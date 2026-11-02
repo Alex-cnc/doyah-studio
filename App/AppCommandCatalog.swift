@@ -62,6 +62,13 @@ enum AppCommandCatalog {
             // 快速捕获（`FR-NTS-NOTE-CAPTURE-001`）：与 ⌥⌘N 同一个动作 —— 快捷键被别的应用占住时，
             // 这条是仍然可用的入口（不让人因为热键失败就记不下来）。
             item("quickCapture", .notesQuickCapture, "quick capture jot 快速 记录 速记 捕获", "quick capture", .paletteCategoryNotes),
+            // 导出与迁移（`FR-NTS-NOTE-EXPORT-001`）：三种产物各一条 + 导入一条。
+            // 三形态同源在 `NoteLibrary` 那一层保证；这里是**三个入口**而不是一个「选格式」对话框 ——
+            // 菜单项点开就落到保存面板，少一次选择，也少一处「格式状态」要在两处同步。
+            item("notesExportMarkdown", .notesExportMarkdown, "export markdown 导出 markdown", "export notes markdown", .paletteCategoryNotes),
+            item("notesExportPlainText", .notesExportPlainText, "export plain text txt 导出 纯文本", "export notes plain text", .paletteCategoryNotes),
+            item("notesExportBackup", .notesExportBackup, "export backup package 导出 备份包 迁移", "export notes backup", .paletteCategoryNotes),
+            item("notesImportBackup", .notesImportBackup, "import backup restore 导入 备份包 还原", "import notes backup", .paletteCategoryNotes),
             item("noteSearchScopeCurrent", .notesSearchScopeCurrent, "scope current 搜索范围 当前 笔记本", "search scope current", .paletteCategoryNotes),
             item("noteSearchScopeAll", .notesSearchScopeAll, "scope all notebooks 搜索范围 全部 笔记本", "search scope all notebooks", .paletteCategoryNotes),
             item("noteFavorites", .notesFavorites, "favorites 已收藏 收藏", "favorites", .paletteCategoryNotes),
@@ -106,6 +113,11 @@ enum AppCommandCatalog {
         "noteSearchScopeAll",
         "noteFavorites",
         "noteAllNotes",
+        // 导出与迁移（`FR-NTS-NOTE-EXPORT-001`）：菜单与 ⌘K 面板同一条命令的两处呈现。
+        "notesExportMarkdown",
+        "notesExportPlainText",
+        "notesExportBackup",
+        "notesImportBackup",
     ]
 
     /// 按上面的顺序取出「笔记」菜单的成员（`N-UI-4`：进笔记面时菜单栏多出这个菜单）。

@@ -176,6 +176,10 @@ final class PaletteWiringProbeTests: XCTestCase {
         case notebookCreation
         case searchScope(NotesSearchScope)
         case scope(NotesScope)
+        /// 导出 / 导入（`FR-NTS-NOTE-EXPORT-001`）：命令只发请求，面板由笔记面视图弹 ——
+        /// 探针宿主里没有视图，所以判的是「请求已发出」，不是「面板已弹」。
+        case archiveExport(NoteArchiveFormat.Kind)
+        case archiveImport
     }
 
     // MARK: - 落点表（与命令清单双向对账见 testEveryCommandHasARegisteredLanding）
@@ -234,6 +238,10 @@ final class PaletteWiringProbeTests: XCTestCase {
             ("noteSearchScopeAll", .notes(.searchScope(.all))),
             ("noteFavorites", .notes(.scope(.favorites))),
             ("noteAllNotes", .notes(.scope(.all))),
+            ("notesExportMarkdown", .notes(.archiveExport(.markdown))),
+            ("notesExportPlainText", .notes(.archiveExport(.plainText))),
+            ("notesExportBackup", .notes(.archiveExport(.package))),
+            ("notesImportBackup", .notes(.archiveImport)),
         ]
     }
 
@@ -486,6 +494,8 @@ final class PaletteWiringProbeTests: XCTestCase {
             state.notesSearchScope = (target == .all) ? .current : .all
         case .scope(let target):
             state.notesScope = (target == .favorites) ? .all : .favorites
+        case .archiveExport, .archiveImport:
+            state.notesArchiveRequest = nil
         }
 
         state.performPaletteCommand(id)
@@ -536,6 +546,16 @@ final class PaletteWiringProbeTests: XCTestCase {
                 file: file, line: line
             )
 
+        case .archiveExport(let kind):
+            XCTAssertEqual(
+                state.notesArchiveRequest, .export(kind),
+                "「\(id)」点下去必须发出导出请求 —— 否则「点了没反应」", file: file, line: line
+            )
+        case .archiveImport:
+            XCTAssertEqual(
+                state.notesArchiveRequest, .importPackage,
+                "「\(id)」点下去必须发出导入请求 —— 否则「点了没反应」", file: file, line: line
+            )
         case .scope(let target):
             XCTAssertEqual(
                 state.notesScope, target,

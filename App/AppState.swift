@@ -715,6 +715,12 @@ final class AppState: ObservableObject {
     /// （未设置 ⇒ 待办，见 `NoteLandingPage.defaultPage`）。页内切换（`setNotesModule`）
     /// **不回写**偏好 —— 需求 §3.5.18「不做」那一条：不是「记住上次所在页」。
     @Published private(set) var notesModule: NotesModule
+    /// 「笔记」菜单那四条导出 / 导入命令的**请求位**（`FR-NTS-NOTE-EXPORT-001`）。
+    ///
+    /// 命令只写请求，不自己弹模态面板（`performPaletteCommand` 可能在没有窗口的宿主里被调用）；
+    /// 笔记面视图读到请求就清位并调 `exportNotesPanel` / `importNotesPanel`。探针宿主里没有视图，
+    /// 于是判据看到的是「请求已发出」这一档（`PaletteWiringProbeTests`）。
+    @Published var notesArchiveRequest: NoteArchiveRequest?
     /// 从库里读回来的任务（**创建时间正序**，与 `NoteLibrary.todos()` 同源）。
     /// 分区只经 Core 的 `TodoPresentation.sections`（本文件不自己 `filter` 两遍 —— 那正是分家现场）。
     @Published var todos: [Todo] = []
@@ -7542,6 +7548,20 @@ final class AppState: ObservableObject {
         case "noteAllNotes":
             guard enterNotesAreaForNotesCommand() else { return }
             selectNotesScope(.all)
+        // 导出与迁移（`FR-NTS-NOTE-EXPORT-001`）：单条笔记的导出 = 整库按同一套规则导出，
+        // 不另造一条「只导当前选中」的路（契约 §15.3 判的是整份包能还原，不是选中集）。
+        case "notesExportMarkdown":
+            guard enterNotesAreaForNotesCommand() else { return }
+            notesArchiveRequest = .export(.markdown)
+        case "notesExportPlainText":
+            guard enterNotesAreaForNotesCommand() else { return }
+            notesArchiveRequest = .export(.plainText)
+        case "notesExportBackup":
+            guard enterNotesAreaForNotesCommand() else { return }
+            notesArchiveRequest = .export(.package)
+        case "notesImportBackup":
+            guard enterNotesAreaForNotesCommand() else { return }
+            notesArchiveRequest = .importPackage
         case "schemaDiff": isSchemaDiffPresented = true
         case "erDiagram": isERDiagramPresented = true
         case "serverObjects":
@@ -11203,6 +11223,108 @@ final class AppState: ObservableObject {
         guard noteEditorHasContent else { return }
         let saved = await writeNoteEditor(snapshot: noteEditorSnapshot(), automatic: false)
         if saved { beginNewNote() }
+    }
+
+    // MARK: - 导出与迁移（`FR-NTS-NOTE-EXPORT-001`）
+
+    /// 「笔记」菜单那三条导出：**这一半只管问路径**（`NSSavePanel`），落盘那一半是 `exportNotes(_:to:)`。
+    ///
+    /// 为什么拆开（与 `exportReceipts` 同一条口径）：面板是模态的，无人值守的机器上不该弹；
+    /// 而「导出的那份到底对不对」要能拿**同一个写盘函数**、只把路径换成临时文件来判 ——
+    /// 判据 `Tests/NoteArchiveTests` 走的正是 `NoteLibrary` 那条同一的取数 / 编码路。
+    func exportNotesPanel(_ kind: NoteArchiveFormat.Kind) {
+        guard notesEnabled else {
+            statusMessage = L(.licenseNotesNotIncluded)
+            return
+        }
+        let panel = NSSavePanel()
+        panel.canCreateDirectories = true
+        panel.nameFieldStringValue = kind.fileName(at: Date())
+        switch kind {
+        case .markdown:
+            if let type = UTType(filenameExtension: "md") { panel.allowedContentTypes = [type] }
+        case .plainText:
+            if let type = UTType(filenameExtension: "txt") { panel.allowedContentTypes = [type] }
+        case .package:
+            // 自定义扩展名：不登记 UTI，面板就按名字写盘（`allowedContentTypes` 留空）。
+            break
+        }
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        Task { await exportNotes(kind, to: url) }
+    }
+
+    /// 落盘（**唯一**写盘出口）：三种产物都从同一次 `archiveEntries()` 取数（三形态同源）。
+    @discardableResult
+    func exportNotes(_ kind: NoteArchiveFormat.Kind, to url: URL) async -> Bool {
+        do {
+            let library = NoteLibrary.defaultLibrary()
+            let package = try await library.archivePackage()
+            guard !package.notes.isEmpty else {
+                statusMessage = L(.notesExportEmpty)
+                return false
+            }
+            let language = LocalizationManager.shared.language
+            let data: Data
+            switch kind {
+            case .package:
+                data = try await library.archiveData()
+            case .markdown:
+                data = Data(NoteArchive.markdown(package.notes, language: language).utf8)
+            case .plainText:
+                data = Data(NoteArchive.plainText(package.notes, language: language).utf8)
+            }
+            try data.write(to: url, options: [.atomic])
+            statusMessage = L(.notesExported, package.notes.count, url.lastPathComponent)
+            return true
+        } catch {
+            errorMessage = L(.notesExportFailed, ErrorPresenter.message(for: error))
+            return false
+        }
+    }
+
+    /// 「笔记」菜单的「导入备份包…」：问路径，然后把解码 + 写回交给 `importNotes(from:)`。
+    func importNotesPanel() {
+        guard notesEnabled else {
+            statusMessage = L(.licenseNotesNotIncluded)
+            return
+        }
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = false
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        Task { await importNotes(from: url) }
+    }
+
+    /// 导入自己导出的包：版本高了**拒绝并说明**（不半懂不懂地读），成功则重读列表。
+    @discardableResult
+    func importNotes(from url: URL) async -> Bool {
+        do {
+            let data = try Data(contentsOf: url)
+            let report = try await NoteLibrary.defaultLibrary().importArchive(data)
+            await reloadNotes()
+            statusMessage = L(.notesImported, report.restored, report.skippedPrivateExisting)
+            return true
+        } catch let failure as NoteArchiveFailure {
+            if case .unsupportedFormatVersion(let found, let supported) = failure {
+                errorMessage = importVersionRefusedMessage(found: found, supported: supported)
+            } else {
+                errorMessage = L(.notesImportFailed, failure.description)
+            }
+            return false
+        } catch {
+            errorMessage = L(.notesImportFailed, ErrorPresenter.message(for: error))
+            return false
+        }
+    }
+
+    /// 「备份包版本过高」那句话。
+    ///
+    /// 为什么收成一个带**显式类型标注**的小函数：`check-format-arguments.py` 只对能机械引用到类型的实参
+    /// 做槽位交叉检查 —— 模式绑定出来的名字（`case .unsupportedFormatVersion(let found, …)`）在它眼里
+    /// 是「类型不明」，会新占判据 D 的预算。参数上写明 `Int` 之后，两个 `%d` 槽才真的被核对。
+    private func importVersionRefusedMessage(found: Int, supported: Int) -> String {
+        L(.notesImportVersionRefused, found, supported)
     }
 
     // MARK: - 自动保存（片 `N2-4` · 停顿即存 + 切走即存）
