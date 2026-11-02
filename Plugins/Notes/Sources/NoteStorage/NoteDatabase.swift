@@ -580,6 +580,70 @@ public enum NoteSchemaV14 {
     ]
 }
 
+/// **schema v15**（`FR-NTS-NOTE-TRASH-001` ①②③ 回收站 · `FR-NTS-NOTE-ORG-001` ③ 归档）。
+///
+/// 两件事同一版，因为它们动的是同一片「删除 / 归档」的状态面，分开升版会让两个版本各自
+/// 只改一半（「删了能恢复」与「归档能取回」在界面上是相邻两行，版本号错开就是两套读数）。
+///
+/// 五条取舍：
+///   · **`note.is_archived` 只加列**（默认 0）：旧库升上来全是「未归档」，与「归档」这一档
+///     上线前的行为逐字节一致；它与 `favorite` / `pinned` 同一条教训 —— `upsert` 的
+///     `ON CONFLICT` 段**不含这一列**，改归档只有 `setArchived` 一条路。
+///   · **`note_trash` 是回收站的**恢复载荷**，不是第二份笔记**：墓碑本来就保留 `note` 行
+///     （`deleted_at` 非空），但删除那一刻 `note_tag` / `note_attachment` / 归属列会被清掉 ——
+///     没有这份快照，「恢复」就只能恢复成一条没有标签、没有附件、丢了笔记本的裸笔记
+///     （契约 §15.9「恢复回原位」直接不成立）。所以快照存的是**删除时被清掉的那几样**。
+///   · **`note_id` 是文本主键（笔记的 `uuid`）**，不加外键：彻底清除之后墓碑行仍在（跨端传播要它），
+///     而这份快照要能留下来当**清除收据**（契约 §15.9「清除后能说出清了哪些」）⇒ 它不能跟着行走。
+///   · **`purged_at` 非空 = 内容已清空**：此时 `note` 行的标题 / 正文 / 富文本都已被清掉，
+///     但 `uuid` + `deleted_at` + `rev` 留着 —— 「删掉了」这件事仍能传播，内容却回不来了。
+///   · **`tags` / `attachments` 存 JSON 文本**：它们是**快照**（写一次、读一次、形状随时可扩），
+///     另开两张关系表只会让「恢复」变成三段事务；JSON 的代价是这里不做按标签查询 —— 而回收站
+///     不按标签筛（它按删除时间排）。
+public enum NoteSchemaV15 {
+
+    public static let version: Int32 = 15
+
+    /// 新增的表。
+    public static let tables: [String] = ["note_trash"]
+
+    /// 新增的索引（唯一查询面 = 「回收站，最近删的在前」）。
+    public static let indexes: [String] = ["note_trash_deleted_index"]
+
+    public static let ddl: [String] = [
+        "ALTER TABLE note ADD COLUMN is_archived INTEGER NOT NULL DEFAULT 0;",
+        """
+        CREATE TABLE note_trash (
+            note_id TEXT PRIMARY KEY,
+            title TEXT NOT NULL DEFAULT '',
+            notebook_uid TEXT,
+            tags TEXT NOT NULL DEFAULT '[]',
+            attachments TEXT NOT NULL DEFAULT '[]',
+            deleted_at REAL NOT NULL,
+            purged_at REAL
+        );
+        """,
+        "CREATE INDEX note_trash_deleted_index ON note_trash (deleted_at DESC);",
+        // **修掉一处存量坏账**（本片做回收站时撞出来的）：v1 那条 `AFTER UPDATE` 触发器**无条件**维护
+        // FTS —— 删除（`deleted_at` 从 NULL 变非空）与恢复（非空变 NULL）都会把它当一次普通内容更新：
+        // 删除时触发器先插回一行，`tombstone` 再手工删一次 ⇒ **同一 rowid 删两遍**；恢复时反过来
+        // （FTS 里本来没有它，触发器却先删一次）⇒ FTS5 直接报 `SQLITE_CORRUPT`（实测：恢复/清除
+        // 一句 `UPDATE note …` 就红）。现在只在「活笔记 → 活笔记」这一档维护索引：
+        //   · 删除 / 恢复 / 清除 三档各由 `tombstone` / `restoreFromTrash` 自己那一句负责；
+        //   · 归档（`is_archived` 变）仍是「活 → 活」，索引照旧维护（标题正文没变，一次 delete+insert）。
+        "DROP TRIGGER IF EXISTS note_fts_after_update;",
+        """
+        CREATE TRIGGER note_fts_after_update AFTER UPDATE ON note
+        WHEN new.deleted_at IS NULL AND old.deleted_at IS NULL
+        BEGIN
+            INSERT INTO note_fts (note_fts, rowid, title, body) VALUES ('delete', old.id, old.title, old.body);
+            INSERT INTO note_fts (rowid, title, body) VALUES (new.id, new.title, new.body);
+        END;
+        """
+    ]
+}
+
+
 /// 附件索引的一条（`FR-PLUG-08`：**附件二进制留在文件系统，库里只存路径**）。
 public struct NoteAttachment: Equatable, Sendable {
     public var id: UUID
@@ -677,8 +741,9 @@ public final class NoteDatabase {
     /// v4 → v5 补待办任务清单、v5 → v6 补提醒、v6 → v7 补查询历史、v7 → v8 补正文 spans 列、
     /// v8 → v9 补待办备注 `note` 列、v9 → v10 补笔记墓碑 `deleted_at` 列、
     /// **v10 → v11 补历史版本表 `note_version`、v11 → v12 补私密挡位 `is_private` 列、
-    /// v12 → v13 补转化链接表 `todo_note_link`、v13 → v14 补待办重复规则 `repeat_rule` 列**）。
-    public static let supportedVersion = NoteSchemaV14.version
+    /// v12 → v13 补转化链接表 `todo_note_link`、v13 → v14 补待办重复规则 `repeat_rule` 列、
+    /// **v14 → v15 补归档位 `is_archived` 列与回收站快照表 `note_trash`**）。
+    public static let supportedVersion = NoteSchemaV15.version
 
     private let connection: SQLiteConnection
 
@@ -810,6 +875,10 @@ public final class NoteDatabase {
             if current < NoteSchemaV14.version {
                 for statement in NoteSchemaV14.ddl { try connection.execute(statement) }
                 try connection.setPragma("user_version = \(NoteSchemaV14.version)")
+            }
+            if current < NoteSchemaV15.version {
+                for statement in NoteSchemaV15.ddl { try connection.execute(statement) }
+                try connection.setPragma("user_version = \(NoteSchemaV15.version)")
             }
         }
     }
@@ -1014,6 +1083,10 @@ public final class NoteDatabase {
     @discardableResult
     public func tombstone(id: UUID, at: Date) throws -> Int {
         try connection.transaction {
+            // **先拍快照再清孩子**（`FR-NTS-NOTE-TRASH-001` ①「删除后可恢复」）：
+            // 下面那句会物理删掉 `note_tag` / `note_attachment`，恢复时要靠这份快照把标签、
+            // 附件引用、原归属一起放回去 —— 没有它，「恢复」只能恢复成一条裸笔记（契约 §15.9 不成立）。
+            let snapshot = try trashSnapshot(id: id, at: at)
             try connection.execute(
                 "UPDATE note SET deleted_at = ?, updated_at = ? WHERE uuid = ? AND deleted_at IS NULL",
                 [.real(at.timeIntervalSince1970), .real(at.timeIntervalSince1970), .text(id.uuidString)]
@@ -1031,8 +1104,241 @@ public final class NoteDatabase {
             for table in ["note_tag", "note_timeline", "note_attachment", "reminder"] {
                 try connection.execute("DELETE FROM \(table) WHERE note_id = ?", [.integer(rowID)])
             }
+            if let snapshot {
+                try writeTrashSnapshot(snapshot)
+            }
             return changed
         }
+    }
+
+    // MARK: - 回收站（`FR-NTS-NOTE-TRASH-001`）
+
+    /// 删除那一刻的恢复载荷（标题 / 原归属 / 标签 / 附件引用）。
+    /// 读不到这一行（uuid 不存在）⇒ `nil`（上面的 `UPDATE` 也必然 0 行，调用方会如实报错）。
+    private func trashSnapshot(id: UUID, at: Date) throws -> NoteTrashEntry? {
+        guard let row = try connection.query(
+            "SELECT title, notebook_uid FROM note WHERE uuid = ?",
+            [.text(id.uuidString)]
+        ).first else { return nil }
+        let rowID = try requireRowID(of: id)
+        let tags = try connection
+            .query("SELECT tag FROM note_tag WHERE note_id = ? ORDER BY tag ASC", [.integer(rowID)])
+            .compactMap { $0.text("tag") }
+        let attachments = try connection
+            .query(
+                "SELECT uuid, path, byte_count, added_at FROM note_attachment WHERE note_id = ? ORDER BY added_at ASC",
+                [.integer(rowID)]
+            )
+            .compactMap { row -> NoteTrashAttachment? in
+                guard let uuidText = row.text("uuid"), let uuid = UUID(uuidString: uuidText) else { return nil }
+                return NoteTrashAttachment(
+                    id: uuid,
+                    path: row.text("path") ?? "",
+                    byteCount: row["byte_count"].isNull ? nil : row["byte_count"].intValue,
+                    addedAt: Date(timeIntervalSince1970: row["added_at"].doubleValue ?? 0)
+                )
+            }
+        return NoteTrashEntry(
+            noteID: id,
+            title: row.text("title") ?? "",
+            notebookUid: row.text("notebook_uid"),
+            tags: tags,
+            attachments: attachments,
+            deletedAt: at
+        )
+    }
+
+    private func writeTrashSnapshot(_ entry: NoteTrashEntry) throws {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .secondsSince1970
+        let tags = String(data: try encoder.encode(entry.tags), encoding: .utf8) ?? "[]"
+        let attachments = String(data: try encoder.encode(entry.attachments), encoding: .utf8) ?? "[]"
+        try connection.execute(
+            """
+            INSERT INTO note_trash (note_id, title, notebook_uid, tags, attachments, deleted_at, purged_at)
+            VALUES (?, ?, ?, ?, ?, ?, NULL)
+            ON CONFLICT (note_id) DO UPDATE SET
+                title = excluded.title,
+                notebook_uid = excluded.notebook_uid,
+                tags = excluded.tags,
+                attachments = excluded.attachments,
+                deleted_at = excluded.deleted_at,
+                purged_at = NULL;
+            """,
+            [
+                .text(entry.noteID.uuidString),
+                .text(entry.title),
+                entry.notebookUid.map { SQLiteValue.text($0) } ?? .null,
+                .text(tags),
+                .text(attachments),
+                .real(entry.deletedAt.timeIntervalSince1970)
+            ]
+        )
+    }
+
+    /// 回收站的全部条目（含已清除的收据），最近删的在前。
+    ///
+    /// 标题**从 `note` 行读当前值**（删除后没人改它，改不了的也就没有分歧）；已清除的那几条
+    /// 行里的标题已空，改用快照里记的那一个 —— 收据上不能只剩一个 uuid。
+    public func trashedEntries() throws -> [NoteTrashEntry] {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .secondsSince1970
+        let rows = try connection.query(
+            """
+            SELECT t.note_id, t.title AS snapshot_title, t.notebook_uid, t.tags, t.attachments,
+                   t.deleted_at, t.purged_at, n.title AS note_title
+            FROM note_trash t
+            LEFT JOIN note n ON n.uuid = t.note_id
+            ORDER BY t.deleted_at DESC
+            """
+        )
+        return rows.compactMap { row -> NoteTrashEntry? in
+            guard let uuidText = row.text("note_id"), let noteID = UUID(uuidString: uuidText) else { return nil }
+            let tags = (row.text("tags") ?? "[]").data(using: .utf8)
+                .flatMap { try? decoder.decode([String].self, from: $0) } ?? []
+            let attachments = (row.text("attachments") ?? "[]").data(using: .utf8)
+                .flatMap { try? decoder.decode([NoteTrashAttachment].self, from: $0) } ?? []
+            let purgedAt = row["purged_at"].isNull ? nil : Date(timeIntervalSince1970: row["purged_at"].doubleValue ?? 0)
+            // 未清除的读 `note` 行当前标题；已清除的读快照，快照也空才退回行（存量行兜底）。
+            let snapshotTitle = row.text("snapshot_title") ?? ""
+            let entryTitle = purgedAt == nil
+                ? (row.text("note_title") ?? snapshotTitle)
+                : (snapshotTitle.isEmpty ? (row.text("note_title") ?? "") : snapshotTitle)
+            return NoteTrashEntry(
+                noteID: noteID,
+                title: entryTitle,
+                notebookUid: row.text("notebook_uid"),
+                tags: tags,
+                attachments: attachments,
+                deletedAt: Date(timeIntervalSince1970: row["deleted_at"].doubleValue ?? 0),
+                purgedAt: purgedAt
+            )
+        }
+    }
+
+    /// **从回收站恢复一条**（契约 §15.9「恢复回原位」）。
+    ///
+    /// 一个事务里做四件事：
+    ///   ① `note` 行**撤墓碑**（`deleted_at = NULL` + 刷 `updated_at`）；
+    ///   ② 归属：原笔记本还在 ⇒ 原样；没了 ⇒ 落默认笔记本（**返回的落点要如实说**，不许静默换家）；
+    ///   ③ 标签 / 附件索引按快照放回（附件**文件**一个字节都没被动过 —— 删除时也不动它）；
+    ///   ④ FTS 重新入索引（删除时把它摘了，恢复不摘回来等于「恢复了但搜不到」）。
+    ///
+    /// 已彻底清除的条目 ⇒ `nil`（内容没了，恢复只能造出一条空笔记 —— 那不是恢复）。
+    @discardableResult
+    public func restoreFromTrash(id: UUID, at: Date) throws -> NoteRestoreOutcome? {
+        try connection.transaction {
+            guard let entry = try trashedEntries().first(where: { $0.noteID == id }), entry.isRecoverable else {
+                return nil
+            }
+            let placement = try resolvedRestorePlacement(entry.notebookUid)
+            let rowID = try requireRowID(of: id)
+            try connection.execute(
+                "UPDATE note SET deleted_at = NULL, updated_at = ?, notebook_uid = ? WHERE uuid = ?",
+                [.real(at.timeIntervalSince1970), .text(placement.notebookUID), .text(id.uuidString)]
+            )
+            guard connection.changeCount > 0 else { return nil }
+            // 标签回填（`INSERT OR IGNORE`：同一条同一标签只有一份 —— 契约 §15.5「标签是集合」）。
+            for tag in entry.tags {
+                try connection.execute(
+                    "INSERT OR IGNORE INTO note_tag (note_id, tag) VALUES (?, ?)",
+                    [.integer(rowID), .text(tag)]
+                )
+            }
+            for attachment in entry.attachments {
+                try connection.execute(
+                    """
+                    INSERT OR REPLACE INTO note_attachment (uuid, note_id, path, byte_count, added_at)
+                    VALUES (?, ?, ?, ?, ?);
+                    """,
+                    [
+                        .text(attachment.id.uuidString),
+                        .integer(rowID),
+                        .text(attachment.path),
+                        attachment.byteCount.map { SQLiteValue.integer($0) } ?? .null,
+                        .real(attachment.addedAt.timeIntervalSince1970)
+                    ]
+                )
+            }
+            try connection.execute(
+                "INSERT INTO note_fts (rowid, title, body) SELECT id, title, body FROM note WHERE id = ?",
+                [.integer(rowID)]
+            )
+            // 恢复之后它不再在回收站里；**已清除的收据另说**（这一支走不到 —— 上面 `isRecoverable` 挡了）。
+            try connection.execute("DELETE FROM note_trash WHERE note_id = ?", [.text(id.uuidString)])
+            return NoteRestoreOutcome(noteID: id, placement: placement.placement)
+        }
+    }
+
+    private struct ResolvedPlacement {
+        var notebookUID: String
+        var placement: NoteRestorePlacement
+    }
+
+    private func resolvedRestorePlacement(_ original: String?) throws -> ResolvedPlacement {
+        let uids = try connection
+            .query("SELECT uid FROM notebook")
+            .compactMap { $0.text("uid") }
+        let existing = Set(uids)
+        if let original, existing.contains(original) {
+            return ResolvedPlacement(notebookUID: original, placement: .original(uid: original))
+        }
+        let defaultUID = try connection.scalarText("SELECT uid FROM notebook WHERE is_default = 1 LIMIT 1") ?? ""
+        return ResolvedPlacement(
+            notebookUID: defaultUID.isEmpty ? (original ?? "") : defaultUID,
+            placement: .fallbackToDefault(original: original)
+        )
+    }
+
+    /// **彻底清除一条**（契约 §15.9「清除只有两种触发」里的人按那一条 —— 自动那一条走
+    /// `NoteTrashSummary.purgeQueueIDs`，两者最终都落到这里）。
+    ///
+    /// 清的是**内容**，留的是**墓碑**：`note` 行保留 `uuid` / `deleted_at` / `rev`（删除这件事
+    /// 仍要跨端传播 —— 顺手把行删了，另一端的副本就会按 LWW 把它拉回来，等于「清除了又复活」），
+    /// 而标题 / 正文 / 富文本 / 历史版本全清掉；`note_trash` 那一行留 `purged_at` 当**收据**。
+    @discardableResult
+    public func purgeFromTrash(id: UUID, at: Date) throws -> Int {
+        try connection.transaction {
+            guard let rowID = try connection.scalarInt("SELECT id FROM note WHERE uuid = ?", [.text(id.uuidString)])
+            else { return 0 }
+            try connection.execute(
+                "DELETE FROM note_version WHERE note_id = ?",
+                [.integer(rowID)]
+            )
+            try connection.execute(
+                "UPDATE note SET title = '', body = '', spans = NULL, updated_at = ? WHERE uuid = ?",
+                [.real(at.timeIntervalSince1970), .text(id.uuidString)]
+            )
+            let changed = connection.changeCount
+            guard changed > 0 else { return changed }
+            try connection.execute(
+                """
+                UPDATE note_trash SET purged_at = ?, tags = '[]', attachments = '[]'
+                WHERE note_id = ? AND purged_at IS NULL;
+                """,
+                [.real(at.timeIntervalSince1970), .text(id.uuidString)]
+            )
+            return changed
+        }
+    }
+
+    // MARK: - 归档（`FR-NTS-NOTE-ORG-001` ③）
+
+    /// 归档 / 取消归档。**只动这一列**，不碰 `updated_at`（契约 §15.5 第 1 条：整理不刷新内容时间）。
+    @discardableResult
+    public func setArchived(_ archived: Bool, id: UUID) throws -> Int {
+        try connection.execute(
+            "UPDATE note SET is_archived = ? WHERE uuid = ? AND deleted_at IS NULL",
+            [.integer(archived ? 1 : 0), .text(id.uuidString)]
+        )
+        return connection.changeCount
+    }
+
+    /// 归档里有多少条（左栏那一行的数字 —— 与列表同一条判断：`deleted_at IS NULL AND is_archived = 1`）。
+    public func archivedCount() throws -> Int {
+        Int(try connection.scalarInt(
+            "SELECT count(*) FROM note WHERE deleted_at IS NULL AND is_archived = 1"
+        ) ?? 0)
     }
 
     /// 删一条笔记（**墓碑入口**；`at` 由调用方给 —— Core 里不读时钟）。
@@ -2100,12 +2406,14 @@ public final class NoteDatabase {
     /// （`note.notebook_uid` 刻意没加外键，理由见 `NoteSchemaV2` 那段注释），
     /// 却正好是契约 §2.12 要挡掉的「无归属笔记」。所以要么两件都成、要么都不动。
     @discardableResult
-    public func applyRemovalPlan(_ plan: ContainerRemovalPlan) throws -> ContainerRemovalPlan {
+    public func applyRemovalPlan(_ plan: ContainerRemovalPlan, at: Date) throws -> ContainerRemovalPlan {
         try connection.transaction {
             switch plan.policy {
             case .deleteTogether:
-                // ① 先删该删的笔记（标签 / 时间线 / 附件索引靠外键级联一起走）。
-                try deleteNotes(uuids: plan.deletedNoteIDs)
+                // ① 先删该删的笔记 —— **落墓碑进回收站**，不是物理删（契约 §15.5「删本必须显式二选一：
+                //    连同笔记一并删（**笔记进回收站，可恢复**）」）。改前这里是 `DELETE FROM note`：
+                //    删一个笔记本，里面几十条笔记就地蒸发、连同步都不知道（另一端还留着旧副本）。
+                try deleteNotes(uuids: plan.deletedNoteIDs, at: at)
                 // ② 再给「不可删的笔记本」换架 —— **必须排在删架之前**：删架会级联带走架里的笔记本，
                 //    而默认笔记本是不可删的（契约 §2.12 第 3 条）。
                 try rehome(notebookUids: plan.movedNotebookUids, toShelf: plan.targetContainerUid)
@@ -2141,13 +2449,13 @@ public final class NoteDatabase {
         }
     }
 
-    private func deleteNotes(uuids: [String]) throws {
-        for chunk in Self.chunks(uuids) {
-            let placeholders = Array(repeating: "?", count: chunk.count).joined(separator: ", ")
-            try connection.execute(
-                "DELETE FROM note WHERE uuid IN (\(placeholders))",
-                chunk.map { SQLiteValue.text($0) }
-            )
+    /// 「连同笔记一并删」= 逐条**落墓碑**（进回收站、可恢复、可跨端传播）。
+    /// 认不出的 uuid 静默跳过：计划是几步之前算的，中间那条可能已被别处删掉 —— 那一档由
+    /// `tombstone` 自己返回 0 表达，这里不把它变成整个删除失败。
+    private func deleteNotes(uuids: [String], at: Date) throws {
+        for uuidText in uuids {
+            guard let uuid = UUID(uuidString: uuidText) else { continue }
+            try tombstone(id: uuid, at: at)
         }
     }
 
@@ -2631,7 +2939,8 @@ public final class NoteDatabase {
                 containsRowData: row["contains_row_data"].intValue == 1,
                 isFavorite: row["favorite"].intValue == 1,
                 isPinned: row["pinned"].intValue == 1,
-                isPrivate: row["is_private"].intValue == 1
+                isPrivate: row["is_private"].intValue == 1,
+                isArchived: row["is_archived"].intValue == 1
             )
         }
     }

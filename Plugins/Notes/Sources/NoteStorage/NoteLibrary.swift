@@ -139,20 +139,28 @@ public actor NoteLibrary {
     /// 计划在**同一次调用里重算**再落库：界面确认框上的数字与真正动手之间隔着一次点击，
     /// 中间库可能已经变了 —— 按过期的影响面删除，删掉的东西就不是用户确认过的那个了。
     @discardableResult
-    public func removeNotebook(uid: String, policy: ContainerRemovalPolicy = .default) throws -> ContainerRemovalPlan? {
+    public func removeNotebook(
+        uid: String,
+        policy: ContainerRemovalPolicy = .default,
+        at: Date = Date()
+    ) throws -> ContainerRemovalPlan? {
         guard FileManager.default.fileExists(atPath: databaseURL.path) else { return nil }
         let database = try open()
         guard let plan = try database.removalPlan(forNotebook: uid, policy: policy) else { return nil }
-        return try database.applyRemovalPlan(plan)
+        return try database.applyRemovalPlan(plan, at: at)
     }
 
     /// **删一个笔记本架**（默认档 = 架里的笔记本整架移到默认架）。
     @discardableResult
-    public func removeShelf(uid: String, policy: ContainerRemovalPolicy = .default) throws -> ContainerRemovalPlan? {
+    public func removeShelf(
+        uid: String,
+        policy: ContainerRemovalPolicy = .default,
+        at: Date = Date()
+    ) throws -> ContainerRemovalPlan? {
         guard FileManager.default.fileExists(atPath: databaseURL.path) else { return nil }
         let database = try open()
         guard let plan = try database.removalPlan(forShelf: uid, policy: policy) else { return nil }
-        return try database.applyRemovalPlan(plan)
+        return try database.applyRemovalPlan(plan, at: at)
     }
 
     // MARK: - 容器编辑（队列 L-97 界面半第四片：新建 / 重命名 / 排序）
@@ -162,7 +170,14 @@ public actor NoteLibrary {
     /// 认不出的架 ⇒ `nil`（库一个字节不动）：**不兜底到默认架** ——「新建到一个已经不存在的架里」
     /// 与「新建到默认架里」是两件事，前者该让调用方知道目标没了（那一侧会重新读库把树刷新）。
     @discardableResult
-    public func createNotebook(inShelf shelfUid: String, name: String, now: Date = Date()) throws -> Notebook? {
+    /// `uid` 可指定：**撤销「删了一个笔记本」**要把它按原 uid 建回来（否则恢复出来的笔记
+    /// 会落默认笔记本，而契约 §15.9 要的是「回原位」）。常规新建走默认（现造一个）。
+    public func createNotebook(
+        inShelf shelfUid: String,
+        name: String,
+        uid: String = UUID().uuidString,
+        now: Date = Date()
+    ) throws -> Notebook? {
         guard FileManager.default.fileExists(atPath: databaseURL.path) else { return nil }
         let database = try open()
         let directory = try database.notebookDirectory()
@@ -171,6 +186,7 @@ public actor NoteLibrary {
             shelfUid: shelfUid,
             name: name,
             sortOrder: directory.nextSortOrder(inShelf: shelfUid),
+            uid: uid,
             now: now
         )
     }
@@ -708,6 +724,43 @@ public actor NoteLibrary {
     public func loadIncludingDeleted() throws -> [Note] {
         guard FileManager.default.fileExists(atPath: databaseURL.path) else { return [] }
         return try open().notesIncludingDeleted()
+    }
+
+    // MARK: - 回收站（`FR-NTS-NOTE-TRASH-001`）
+
+    /// 回收站的全部条目（含已清除的收据）。**库不存在 ⇒ 空表**（不顺手建库 —— 与 `todos()` 同口径）。
+    public func trashedEntries() throws -> [NoteTrashEntry] {
+        guard FileManager.default.fileExists(atPath: databaseURL.path) else { return [] }
+        return try open().trashedEntries()
+    }
+
+    /// 从回收站恢复一条。`nil` = 这条不在回收站里 / 已彻底清除（内容没了，恢复只能造出空笔记）。
+    @discardableResult
+    public func restoreFromTrash(id: UUID, at: Date) throws -> NoteRestoreOutcome? {
+        guard FileManager.default.fileExists(atPath: databaseURL.path) else { return nil }
+        return try open().restoreFromTrash(id: id, at: at)
+    }
+
+    /// 彻底清除一条（内容清空、墓碑留着传播、回收站那一行留收据）。
+    @discardableResult
+    public func purgeFromTrash(id: UUID, at: Date) throws -> Int {
+        guard FileManager.default.fileExists(atPath: databaseURL.path) else { return 0 }
+        return try open().purgeFromTrash(id: id, at: at)
+    }
+
+    // MARK: - 归档（`FR-NTS-NOTE-ORG-001` ③）
+
+    /// 归档 / 取消归档（**只动归档位**：不刷新 `updatedAt`、不产生版本）。
+    @discardableResult
+    public func setArchived(id: UUID, _ archived: Bool) throws -> Int {
+        guard FileManager.default.fileExists(atPath: databaseURL.path) else { return 0 }
+        return try open().setArchived(archived, id: id)
+    }
+
+    /// 归档里有几条（左栏那一行的数字）。
+    public func archivedCount() throws -> Int {
+        guard FileManager.default.fileExists(atPath: databaseURL.path) else { return 0 }
+        return try open().archivedCount()
     }
 
     // MARK: - 快照 / 维护

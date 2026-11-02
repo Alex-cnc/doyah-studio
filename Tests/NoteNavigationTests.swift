@@ -94,6 +94,8 @@ final class NoteNavigationTests: XCTestCase {
             case .recent: counted = notes.count
             // 「已收藏」（队列 `L-184` 第三片）：数的是同一批 —— 这一份夹具里一条都没收藏 ⇒ 0 行 0 数
             case .favorites: counted = sut.navigation.favoriteCount(in: notes)
+            // 「归档」（`FR-NTS-NOTE-ORG-001` ③）：这一份夹具里一条都没归档 ⇒ 0 行 0 数
+            case .archived: counted = notes.filter { $0.isArchived }.count
             }
             XCTAssertEqual(counted, rows, "范围 \(scope) 的树计数必须等于列表行数")
         }

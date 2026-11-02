@@ -955,6 +955,30 @@ public enum LKey: String, CaseIterable, Sendable {
     // 队列 `L-184` **第三片**：左栏「已收藏」那一行、中栏那枚「只看收藏」筛选开关，
     // 以及笔记行右键里的收藏 / 取消收藏。
     case notesFavorites
+    /// **归档**（`FR-NTS-NOTE-ORG-001` ③）：左栏那一行 / 右键那一项 / 两语各一份。
+    case notesArchived
+    case notesArchivedNotice
+    case notesUnarchived
+    case notesArchiveAction
+    case notesUnarchiveAction
+    /// 归档后那一句交代（写库 0 行时说「这条已经不在了」，不静默）。
+    case notesArchiveUnavailable
+    /// **回收站**（`FR-NTS-NOTE-TRASH-001`）：入口、上限那一行、恢复 / 彻底清除、两句落点交代。
+    case notesTrash
+    case notesTrashEmpty
+    case notesTrashLimits
+    case notesTrashRestore
+    case notesTrashPurge
+    case notesTrashPurgeConfirmTitle
+    case notesTrashPurgeMessage
+    case notesTrashRestored
+    case notesTrashRestoredToDefault
+    case notesTrashRestoreUnavailable
+    case notesTrashPurgedNotice
+    /// **一步可撤销**（契约 §15.5）：列表栏头那枚「撤销」与两句结果。
+    case notesUndo
+    case notesUndoRestored
+    case notesUndoUnavailable
     case notesFavoriteOnly
     case notesMarkFavorite
     case notesUnmarkFavorite
@@ -4474,6 +4498,53 @@ public enum LocalizedStrings {
         .notesSortTitle: [.simplifiedChinese: "标题", .english: "Title"],
         // 队列 `L-184` 第三片（左栏「已收藏」+ 中栏筛选开关 + 右键收藏）。同样**都没有数字槽**。
         .notesFavorites: [.simplifiedChinese: "已收藏", .english: "Favorites"],
+        // **归档与回收站**（`FR-NTS-NOTE-ORG-001` ③ / `FR-NTS-NOTE-TRASH-001`）。
+        // 两条口径写在这里：① 归档**不是删除**（所以它的那一行与「回收站」分开、互不占用）；
+        // ② 回收站那一行把**上限**说出来（「保留 N 天 / 最多 M 条」—— 契约 §15.9「上限可见」）。
+        .notesArchived: [.simplifiedChinese: "归档", .english: "Archive"],
+        .notesArchivedNotice: [.simplifiedChinese: "已归档", .english: "Archived"],
+        .notesUnarchived: [.simplifiedChinese: "已取消归档", .english: "Unarchived"],
+        .notesArchiveAction: [.simplifiedChinese: "归档", .english: "Archive"],
+        .notesUnarchiveAction: [.simplifiedChinese: "取消归档", .english: "Unarchive"],
+        .notesArchiveUnavailable: [
+            .simplifiedChinese: "这条笔记已经不在了（列表已重读）",
+            .english: "That note is gone (the list was reloaded)"
+        ],
+        .notesTrash: [.simplifiedChinese: "回收站", .english: "Trash"],
+        .notesTrashEmpty: [.simplifiedChinese: "回收站是空的", .english: "Trash is empty"],
+        .notesTrashLimits: [
+            .simplifiedChinese: "回收站：%d / %d 条，保留 %d 天",
+            .english: "Trash: %d of %d notes, kept %d days"
+        ],
+        .notesTrashRestore: [.simplifiedChinese: "恢复", .english: "Restore"],
+        .notesTrashPurge: [.simplifiedChinese: "彻底清除", .english: "Delete permanently"],
+        .notesTrashPurgeConfirmTitle: [
+            .simplifiedChinese: "要彻底清除「%@」吗？",
+            .english: "Permanently delete “%@”?"
+        ],
+        .notesTrashPurgeMessage: [
+            .simplifiedChinese: "%d 条笔记的内容会从本机清掉，不可恢复；其中挂着 %d 个附件（附件文件本身不动）。",
+            .english: "The content of %d notes will be erased from this Mac and cannot be recovered; %d attachments are referenced (the files themselves stay)."
+        ],
+        .notesTrashRestored: [.simplifiedChinese: "已恢复", .english: "Restored"],
+        .notesTrashRestoredToDefault: [
+            .simplifiedChinese: "已恢复；它原来的笔记本不在了，所以落在默认笔记本里",
+            .english: "Restored; its original notebook is gone, so it landed in the default notebook"
+        ],
+        .notesTrashRestoreUnavailable: [
+            .simplifiedChinese: "这条已经彻底清除，恢复不了",
+            .english: "This one was permanently deleted and cannot be restored"
+        ],
+        .notesTrashPurgedNotice: [
+            .simplifiedChinese: "已按上限清除 %d 条",
+            .english: "%d notes were purged (retention limit)"
+        ],
+        .notesUndo: [.simplifiedChinese: "撤销", .english: "Undo"],
+        .notesUndoRestored: [.simplifiedChinese: "已恢复 %d 条", .english: "Restored %d notes"],
+        .notesUndoUnavailable: [
+            .simplifiedChinese: "这一档还没有整批撤销",
+            .english: "This kind of change has no batch undo yet"
+        ],
         .notesFavoriteOnly: [.simplifiedChinese: "只看收藏", .english: "Favorites only"],
         .notesMarkFavorite: [.simplifiedChinese: "收藏", .english: "Add to favorites"],
         .notesUnmarkFavorite: [.simplifiedChinese: "取消收藏", .english: "Remove from favorites"],

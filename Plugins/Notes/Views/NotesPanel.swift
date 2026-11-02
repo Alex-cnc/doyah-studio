@@ -75,6 +75,25 @@ struct NotesListView: View {
                     .foregroundStyle(Theme.text(.secondary))
                     .padding(.horizontal, Spacing.s)
             }
+            // **一步可撤销**（契约 §15.5「整理类操作可整体撤销」· `FR-NTS-NOTE-ORG-001` ②）：
+            // 批量删除 / 删笔记本之后这一条才出现；**默认不占位**（没有可撤销的 ⇒ 这一块不存在，
+            // 栏头几何与改前逐点相同）。撤销本体在 `AppState.undoLastNoteOrganize`（一处），
+            // 视图只画两个东西：条文与那一枚按钮。
+            if let undo = appState.lastNoteOrganizeUndo, !undo.isEmpty {
+                HStack(spacing: Spacing.xs) {
+                    Text("\(L(.notesUndo)) · \(undo.noteIDs.count)")
+                        .font(Theme.font(.caption))
+                        .foregroundStyle(Theme.text(.secondary))
+                        .lineLimit(1)
+                    Button(L(.notesUndo)) {
+                        Task { await appState.undoLastNoteOrganize() }
+                    }
+                    .buttonStyle(.link)
+                    .accessibilityIdentifier("notes-undo-organize")
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, Spacing.s)
+            }
             if appState.visibleNotes.isEmpty {
                 // 分两种"空"：一条笔记都没有，和"搜不到"—— 后者要提示改搜索词，
                 // 否则用户会以为笔记丢了。
@@ -165,6 +184,7 @@ struct NotesListView: View {
                     .contextMenu {
                         pinnedToggle(for: note)
                         favoriteToggle(for: note)
+                        archiveToggle(for: note)
                         Divider()
                         moveMenu(for: note)
                     }
@@ -399,6 +419,26 @@ struct NotesListView: View {
         .accessibilityIdentifier("notes-pinned-toggle-\(note.id.uuidString)")
     }
 
+    /// 行右键里的**归档 / 取消归档**（`FR-NTS-NOTE-ORG-001` ③）。
+    ///
+    /// 与收藏 / 置顶同一形态（`N-UI-3`：`Label` + 悬停提示）。它**不是删除**：归档只把这条移出
+    /// 默认视图，它仍在库、仍可被检索、可从左栏「归档」那一行原样取回（契约 §15.5 第 4 条）。
+    /// 写库与重读都在 `AppState.toggleNoteArchive` 一处 —— 视图不自己 set 布尔。
+    @ViewBuilder
+    private func archiveToggle(for note: Note) -> some View {
+        Button {
+            Task { await appState.toggleNoteArchive(id: note.id) }
+        } label: {
+            Label {
+                Text(L(note.isArchived ? .notesUnarchiveAction : .notesArchiveAction))
+            } icon: {
+                Image(systemName: note.isArchived ? "archivebox" : "archivebox.fill")
+            }
+        }
+        .help(L(note.isArchived ? .notesUnarchiveAction : .notesArchiveAction))
+        .accessibilityIdentifier("notes-archive-toggle-\(note.id.uuidString)")
+    }
+
     /// 笔记行右键的「移动到…」（队列 `L-97` ④）：清单 / 顺序 / 当前格都由 Core 给
     /// （`NotebookMovePrompt`），这里只按架分组画出来 —— 分组与左边那棵树的层级一致。
     /// 「一个可去的地方都没有」时那一项**灰着并写明理由**，不是一个空菜单（`L-50` 的口径：
@@ -558,6 +598,41 @@ struct NotesContainerTreeView: View {
                 indent: 0,
                 identifier: "notes-scope-favorites"
             )
+            // **归档**（`FR-NTS-NOTE-ORG-001` ③ · 契约 §15.5 第 4 条）：常驻一行，与「已收藏」同形。
+            // 归档条目不占回收站、不受到期清除影响 —— 所以它是左栏这一行，不是回收站里的一个分区。
+            row(
+                scope: .archived,
+                systemImage: "archivebox",
+                title: L(.notesArchived),
+                count: appState.archivedNoteCount,
+                indent: 0,
+                identifier: "notes-scope-archived"
+            )
+            // **回收站**（`FR-NTS-NOTE-TRASH-001`）：它不是「看哪一屏笔记」而是一条**独立入口**
+            // （那一屏列的是已删条目的快照，不是活笔记）⇒ 打开一张面板，与左栏别的行不共用 `notesScope`。
+            Button {
+                Task { await appState.openNoteTrash() }
+            } label: {
+                HStack(spacing: Spacing.xs) {
+                    Image(systemName: "trash")
+                        .font(Theme.font(.caption))
+                        .frame(width: 14)
+                        .help(L(.notesTrash))
+                    Text(L(.notesTrash))
+                        .font(Theme.font(.body))
+                        .lineLimit(1)
+                    Spacer(minLength: Spacing.xs)
+                    Text("\(appState.noteTrashSummary.count)")
+                        .font(Theme.font(.caption))
+                        .foregroundStyle(Theme.text(.secondary))
+                }
+                .padding(.vertical, Spacing.hair)
+                .padding(.horizontal, Spacing.s)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help(L(.notesTrash))
+            .accessibilityIdentifier("notes-open-trash")
             // **最近**（队列 `L-184` 第二片）：跨全部笔记本、**有界**的一屏（条数在 Core 定死 ——
             // 无界的「最近」就等于「全部笔记」，那是一个点了像没点的入口，`L-50` 同族）。
             row(
@@ -1631,6 +1706,12 @@ struct NotesAreaView: View {
         // 有没有冲突、有几条，只由 `AppState.syncConflicts` 一处决定（面自己不找状态文件）。
         .sheet(isPresented: $appState.isSyncConflictsPresented) {
             NotesSyncConflictsSheet()
+                .environmentObject(appState)
+        }
+        // **回收站那一屏**（`FR-NTS-NOTE-TRASH-001`）：左栏那一条打开它。它是**独立一张面**，
+        // 不是第四个 `NotesScope` —— 那一屏列的是已删条目的快照（含已清除的收据），不是活笔记。
+        .sheet(isPresented: $appState.isNoteTrashPresented) {
+            NotesTrashSheet()
                 .environmentObject(appState)
         }
     }
@@ -2815,5 +2896,119 @@ struct NotesSyncConflictsSheet: View {
             return L(.notesSyncConflictDeviceUnknown)
         }
         return device
+    }
+}
+
+/// **回收站那一屏**（`FR-NTS-NOTE-TRASH-001` ①②③ · 契约 §15.9）。
+///
+/// 三条口径（都写在面上，不靠文档补充）：
+///   ① **上限可见** = 顶部那一行「用了几格 / 一共几格 / 保留几天」（读数来自 `NoteTrashSummary.limits`，
+///      界面不自己算）；到期与超容量的**自动清除**在打开这一屏时已经跑过一次（`AppState.openNoteTrash`），
+///      清了几条会在状态行报出来；
+///   ② **恢复** = 每条一枚按钮；已彻底清除的只剩收据，按钮不出现（不画一个按不动的出口）；
+///   ③ **彻底清除** = 先挂确认（`pendingNotePurgeID`），确认框写清「不可恢复 + 挂着几个附件」，
+///      人按了才落库 —— 这一屏自己不写任何东西，全部经 `AppState`。
+struct NotesTrashSheet: View {
+
+    @EnvironmentObject private var appState: AppState
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.s) {
+            HStack {
+                Text(L(.notesTrash))
+                    .font(Theme.font(.title))
+                Spacer()
+                ToolbarIconButton(systemName: "xmark", help: L(ContainerEditPrompt.cancelKey)) {
+                    appState.closeNoteTrash()
+                }
+                .accessibilityIdentifier("notes-trash-close")
+            }
+            let summary = appState.noteTrashSummary
+            Text(
+                L(
+                    .notesTrashLimits,
+                    summary.limits.used,
+                    summary.limits.capacity,
+                    summary.limits.retentionDays
+                )
+            )
+            .font(Theme.font(.caption))
+            .foregroundStyle(Theme.text(.secondary))
+            .accessibilityIdentifier("notes-trash-limits")
+
+            if summary.items.isEmpty {
+                Text(L(.notesTrashEmpty))
+                    .font(Theme.font(.caption))
+                    .foregroundStyle(Theme.text(.secondary))
+                    .accessibilityIdentifier("notes-trash-empty")
+                Spacer()
+            } else {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: Spacing.m) {
+                        ForEach(summary.items, id: \.noteID) { entry in
+                            row(entry, summary: summary)
+                            if entry.noteID != summary.items.last?.noteID { Divider() }
+                        }
+                    }
+                }
+            }
+
+            // **彻底清除的确认**（契约 §15.9「清除前有明确提示」）：标题 + 正文 + 两个出口。
+            // 正文里的条数与附件数都由 `NoteTrash.purgePrompt` 算（界面不自己数）。
+            if let title = appState.pendingNotePurgeTitle, let message = appState.pendingNotePurgeMessage {
+                VStack(alignment: .leading, spacing: Spacing.xs) {
+                    Text(title)
+                        .font(Theme.font(.body))
+                    Text(message)
+                        .font(Theme.font(.caption))
+                        .foregroundStyle(Theme.text(.secondary))
+                        .fixedSize(horizontal: false, vertical: true)
+                    HStack(spacing: Spacing.s) {
+                        Button(L(ContainerEditPrompt.cancelKey), role: .cancel) {
+                            appState.cancelNotePurge()
+                        }
+                        .accessibilityIdentifier("notes-trash-purge-cancel")
+                        Button(L(.notesTrashPurge), role: .destructive) {
+                            Task { await appState.confirmNotePurge() }
+                        }
+                        .accessibilityIdentifier("notes-trash-purge-confirm")
+                    }
+                }
+                .padding(Spacing.s)
+                .background(Theme.surface(.panel))
+                .accessibilityIdentifier("notes-trash-purge-prompt")
+            }
+        }
+        .padding(Spacing.l)
+        .frame(minWidth: 560, minHeight: 380)
+        .accessibilityIdentifier("notes-trash-panel")
+    }
+
+    @ViewBuilder
+    private func row(_ entry: NoteTrashEntry, summary: NoteTrashSummary) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: Spacing.s) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(entry.title.isEmpty ? L(.notesUntitled) : entry.title)
+                    .font(Theme.font(.body))
+                    .lineLimit(1)
+                // 还剩几天：读数来自 Core（`daysLeft`），界面只说。到期那一条写「0 天」而不是藏起来。
+                if let days = entry.daysLeft(policy: summary.policy, now: Date()) {
+                    Text("\(days)")
+                        .font(Theme.font(.caption))
+                        .foregroundStyle(Theme.text(.secondary))
+                }
+            }
+            Spacer(minLength: Spacing.s)
+            if entry.isRecoverable {
+                Button(L(.notesTrashRestore)) {
+                    Task { await appState.restoreTrashedNote(id: entry.noteID) }
+                }
+                .accessibilityIdentifier("notes-trash-restore-\(entry.noteID.uuidString)")
+                Button(L(.notesTrashPurge)) {
+                    appState.requestNotePurge(id: entry.noteID)
+                }
+                .accessibilityIdentifier("notes-trash-purge-\(entry.noteID.uuidString)")
+            }
+        }
     }
 }

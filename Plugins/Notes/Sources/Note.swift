@@ -71,6 +71,17 @@ public struct Note: Identifiable, Codable, Equatable, Sendable {
     /// **只在 `upsert` 的 INSERT 分支里出现**（与 `favorite` / `pinned` 同一条教训：改几个字保存
     /// 不许把私密状态静默抹掉），改这一档只有 `setPrivate` 一条路。
     public var isPrivate: Bool
+    /// **归档**（需求 `FR-NTS-NOTE-ORG-001` ③「归档不等于删除」· 契约 §15.5 第 4 条）。
+    ///
+    /// 三条口径：
+    ///   · 归档**只移出默认视图**（`.all` / 架 / 笔记本 / 标签 / 最近 / 已收藏 都不再列它），
+    ///     它仍在库里、仍能被**检索**到（FTS 不动）、可从「归档」那一栏原样取回；
+    ///   · 归档**不占回收站**、不受回收站到期清除影响（两件事各有一条路，见 `NoteTrash`）；
+    ///   · 归档是**整理行为**，不刷新 `updatedAt`、不产生内容版本（与收藏 / 置顶 / 跨归属移动同口径）。
+    ///
+    /// **不进同步载荷**：`CloudNoteRow` 的列是契约 §6.4.1 定死的，归档位不在其中 ⇒ 它是**本机整理位**
+    /// （换台设备看到的是「未归档」，而不是「这条从列表里消失了」）。这一条写在类型上，不是遗漏。
+    public var isArchived: Bool
 
     public init(
         id: UUID = UUID(),
@@ -83,7 +94,8 @@ public struct Note: Identifiable, Codable, Equatable, Sendable {
         containsRowData: Bool = false,
         isFavorite: Bool = false,
         isPinned: Bool = false,
-        isPrivate: Bool = false
+        isPrivate: Bool = false,
+        isArchived: Bool = false
     ) {
         self.id = id
         self.title = title
@@ -96,6 +108,7 @@ public struct Note: Identifiable, Codable, Equatable, Sendable {
         self.isFavorite = isFavorite
         self.isPinned = isPinned
         self.isPrivate = isPrivate
+        self.isArchived = isArchived
     }
 
     /// **解码**：`favorite` / `pinned` 是**后加的字段**（旧库 / 旧 `notes.json` 里没有这两列）⇒ 缺字段按 `false`。
@@ -114,10 +127,13 @@ public struct Note: Identifiable, Codable, Equatable, Sendable {
         isFavorite = try container.decodeIfPresent(Bool.self, forKey: .isFavorite) ?? false
         isPinned = try container.decodeIfPresent(Bool.self, forKey: .isPinned) ?? false
         isPrivate = try container.decodeIfPresent(Bool.self, forKey: .isPrivate) ?? false
+        // 归档位同样是后加字段（旧 `notes.json` 里没有）⇒ 缺字段按「未归档」。
+        isArchived = try container.decodeIfPresent(Bool.self, forKey: .isArchived) ?? false
     }
 
     private enum CodingKeys: String, CodingKey {
         case id, title, body, tags, source, createdAt, updatedAt, containsRowData, isFavorite, isPinned, isPrivate
+        case isArchived
     }
 }
 

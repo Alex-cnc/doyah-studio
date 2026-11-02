@@ -264,7 +264,7 @@ SWIFT="${DEVELOPER_DIR}/Toolchains/XcodeDefault.xctoolchain/usr/bin/swift"
 SCRATCH="${ROOT}/.build"
 CACHE="${ROOT}/.build-cache"
 OUT="${SCRATCH}/ui-interactions"
-FILTER="TerminalInteractionProbeTests|MultiCursorProbeTests|FormatMenuWiringProbeTests|EditAssistProbeTests|ObjectTreeContextMenuProbeTests|TitleBarSearchClickProbeTests|ResultCopyProbeTests|ResultSortProbeTests|ResultFilterProbeTests|ResultPagingProbeTests|ResultStreamExportProbeTests|ResultXLSXExportProbeTests|ExecutionReceiptPaneProbeTests|SQLTaskMenuProbeTests|TableExportStreamProbeTests|AgentApprovalDecisionProbeTests|ObjectTreeRetryProbeTests|BackupRestoreImportProbeTests|SessionDiagnosticsProbeTests|ObjectDiagnosisProbeTests|TableEditDDLProbeTests|UISnapshotSidebarStateTests"
+FILTER="NotesUndoAndLongDocumentProbeTests|TerminalInteractionProbeTests|MultiCursorProbeTests|FormatMenuWiringProbeTests|EditAssistProbeTests|ObjectTreeContextMenuProbeTests|TitleBarSearchClickProbeTests|ResultCopyProbeTests|ResultSortProbeTests|ResultFilterProbeTests|ResultPagingProbeTests|ResultStreamExportProbeTests|ResultXLSXExportProbeTests|ExecutionReceiptPaneProbeTests|SQLTaskMenuProbeTests|TableExportStreamProbeTests|AgentApprovalDecisionProbeTests|ObjectTreeRetryProbeTests|BackupRestoreImportProbeTests|SessionDiagnosticsProbeTests|ObjectDiagnosisProbeTests|TableEditDDLProbeTests|UISnapshotSidebarStateTests"
 while [ $# -gt 0 ]; do
     case "${1}" in
         --filter) FILTER="${2:-}"; shift 2 ;;
@@ -328,9 +328,9 @@ else:
     total, failed, unexpected = max(executed, key=lambda row: int(row[0]))
     if int(failed) or int(unexpected):
         failures.append(f"汇总非零失败：{failed} 失败 / {unexpected} 意外")
-    if int(total) < 130:
+    if int(total) < 133:
         failures.append(
-            f"只跑了 {total} 条 —— 十九批一百三十条（鼠标上报 / DECCKM / 右键归属 / ⌥⌘D 多光标 /"
+            f"只跑了 {total} 条 —— 十九批一百三十三条（鼠标上报 / DECCKM / 右键归属 / ⌥⌘D 多光标 /"
             " ⌥⌘↑↓ 加光标 / ⌥ 拖拽列选 / 逐行菜单内容 / 菜单作用行 / 菜单确定性与跟随行 /"
             " 点击地图 / 留白点给键盘 / 清空按钮三态 + 回车接线 / 打字后回车交词 / 修前对照 / 整框源锚点 /"
             " 复制四档格式与默认 TSV / 排序三档与 NULL / Shift 次要键 / 筛选条默认在场 /"
@@ -361,10 +361,15 @@ else:
             " 认不出语言时明说且正文一字未动 /"
             " 编辑区 AI 辅助的闸门在发请求之前 / 模型名没配与连不上分得开 / 面板两行读真配置 /"
             " 应用走可撤销那条路且只应用一次 / 「不发送」档一次请求都不发 / 连不上如实说 /"
-            " 应用之后一次 ⌘Z 逐字回到原文 / 解释态没有可应用的东西）应当都跑到"
+            " 应用之后一次 ⌘Z 逐字回到原文 / 解释态没有可应用的东西 /"
+            " 笔记正文一次撤销只退一段 / 格式化撤销不退文字 / 一万行装得进来且编辑不重排整篇）应当都跑到"
         )
 
 expected = [
+    # 笔记正文档（`FR-NTS-NOTE-FORMAT-001` ②③）：撤销粒度与万行文档。
+    "testOneUndoRemovesExactlyTheLastParagraph",
+    "testUndoAfterAFormatCommandKeepsTheText",
+    "testATenThousandLineDocumentOpensAndStaysEditable",
     "testMouseReportingForwardsToTheProgramAndOptionKeepsItLocal",
     "testCursorKeyBytesFollowDECCKMOnARealProgram",
     "testRightClickMenuStaysLocalAndOnlyOptionForwardsIt",

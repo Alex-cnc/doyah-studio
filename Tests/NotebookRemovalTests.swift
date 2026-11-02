@@ -95,7 +95,7 @@ final class NotebookRemovalTests: XCTestCase {
         XCTAssertEqual(plan.deletedNoteIDs, [], "默认档不删笔记")
         XCTAssertEqual(plan.affectedNoteCount, 1)
 
-        try database.applyRemovalPlan(plan)
+        try database.applyRemovalPlan(plan, at: t1)
 
         XCTAssertFalse(try database.notebooks().contains { $0.uid == temporary.uid }, "笔记本行必须真没了")
         XCTAssertEqual(try database.notebookUid(of: carried.id), bootstrap.defaultNotebook!.uid)
@@ -122,9 +122,13 @@ final class NotebookRemovalTests: XCTestCase {
         XCTAssertEqual(plan.movedNoteIDs, [])
         XCTAssertEqual(plan.targetContainerUid, nil, "一并删时没有落点")
 
-        try database.applyRemovalPlan(plan)
+        try database.applyRemovalPlan(plan, at: t1)
 
         XCTAssertNil(try database.note(id: doomed.id))
+        // **「一并删」= 进回收站**（契约 §15.5「连同笔记一并删（笔记进回收站，可恢复）」）。
+        // 改前这里是物理 `DELETE`：删一个笔记本，里面几十条笔记就地蒸发 —— 这一条断言把旧形状钉死。
+        XCTAssertNotNil(try database.deletedAt(id: doomed.id), "一并删必须落墓碑（进回收站），不是物理删")
+        XCTAssertNotNil(try database.trashedEntries().first { $0.noteID == doomed.id }, "回收站里要能看见它")
         XCTAssertNotNil(try database.note(id: keeper.id), "另一个笔记本里的笔记一个字都不许动")
         let raw = try SQLiteConnection(path: url().path)
         XCTAssertEqual(try raw.scalarInt("SELECT count(*) FROM note_tag"), 1, "只剩 keeper 的那一个标签")
@@ -164,7 +168,7 @@ final class NotebookRemovalTests: XCTestCase {
         XCTAssertEqual(plan.movedNoteIDs, [], "笔记跟着自己的笔记本，一条都不改挂")
         XCTAssertEqual(plan.deletedNoteIDs, [])
 
-        try database.applyRemovalPlan(plan)
+        try database.applyRemovalPlan(plan, at: t1)
 
         let rehomed = Dictionary(uniqueKeysWithValues: try database.notebooks().map { ($0.uid, $0) })
         XCTAssertNil(rehomed[oldShelf.uid], "被删的架不该还留着")
@@ -205,9 +209,10 @@ final class NotebookRemovalTests: XCTestCase {
         XCTAssertEqual(plan.movedNotebookUids, [defaultNotebook.uid], "默认笔记本不可删 ⇒ 改挂默认架")
         XCTAssertEqual(plan.deletedNoteIDs, [doomedNote.id.uuidString], "默认笔记本里的笔记不跟着删")
 
-        try database.applyRemovalPlan(plan)
+        try database.applyRemovalPlan(plan, at: t1)
 
         XCTAssertNil(try database.note(id: doomedNote.id))
+        XCTAssertNotNil(try database.deletedAt(id: doomedNote.id), "删架带走的笔记同样进回收站，可恢复")
         XCTAssertNotNil(try database.note(id: survivingNote.id), "不可删的那一边，笔记也一件不少")
         let keptNotebook = try XCTUnwrap(try database.notebooks().first { $0.uid == defaultNotebook.uid })
         XCTAssertEqual(keptNotebook.shelfUid, defaultShelfUid, "改挂必须排在删架之前，否则被外键级联一起带走")

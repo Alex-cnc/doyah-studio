@@ -411,10 +411,55 @@ struct NotesRichTextEditor: NSViewRepresentable {
 /// 经 `NotesRichTextController` 转到这里，机器判据也从这里驱动（同一入口，见 `NotesRichTextController`）。
 final class NotesTextView: NSTextView {
 
+    // MARK: - 撤销以段落为粒度（`FR-NTS-NOTE-FORMAT-001` ②）
+
+    /// 关掉当前这一段、让小键盘之后的输入另起一个撤销步。
+    ///
+    /// 为什么需要它：`allowsUndo = true` 只是把 AppKit 的撤销栈接上，而 AppKit 会按「打字会话」
+    /// 把连续输入**合并成一步** —— 敲一整篇再按 ⌘Z，整篇一起消失（契约 §15.4 明确不要这一档：
+    /// 「一次撤销回退一个编辑事务（一段输入或一次格式操作），不逐字符、也不整篇回退」）。
+    /// `breakUndoCoalescing()` 就是 AppKit 给的「到此为止」那个开关；**只有这一处**调它，
+    /// 于是「什么算一段」在全仓只有一个答案。
+    func breakParagraphUndoGroup() {
+        // `NSTextView.breakUndoCoalescing()` 才是 AppKit 那个开关（`UndoManager` 上没有它）。
+        breakUndoCoalescing()
+    }
+
+    /// 回车 = 换段 ⇒ 前一段收口、后一段另起一步（两次 break 都必要：第一次关掉「输入这一段」，
+    /// 第二次关掉「回车本身」，否则下一段的第一个字会与回车合并）。
+    override func insertNewline(_ sender: Any?) {
+        breakParagraphUndoGroup()
+        super.insertNewline(sender)
+        breakParagraphUndoGroup()
+    }
+
+    /// 粘贴 / 输入法一次送入多段文本：落盘之后同样收口（否则粘贴那一大块与后续输入是一步）。
+    override func insertText(_ insertString: Any, replacementRange: NSRange) {
+        super.insertText(insertString, replacementRange: replacementRange)
+        let inserted: String
+        if let string = insertString as? String {
+            inserted = string
+        } else if let attributed = insertString as? NSAttributedString {
+            inserted = attributed.string
+        } else {
+            inserted = ""
+        }
+        if inserted.contains("\n") { breakParagraphUndoGroup() }
+    }
+
     /// 施加一条行内命令：作用在**选区**；选区为空时作用在**光标所在词**上。
+    ///
+    /// 格式操作**自成一步**（契约 §15.4「一次格式操作」也算一个编辑事务）：先收口再改 ——
+    /// 不收口的话「打了三个字 + 加粗」会被合并成一步，撤销一次就把三个字也带走了。
     func apply(_ command: NoteInlineCommand) {
+        breakParagraphUndoGroup()
         let range = targetRange()
         guard range.length > 0 else { return }
+        // **属性改动也要进撤销栈**（契约 §15.4「一次格式操作」算一个编辑事务）：
+        // `shouldChangeText` 是 `NSTextView` 登记撤销的那一步 —— 只 `didChangeText()` 不登记，
+        // ⌘Z 会跨过这次加粗去撤销上一次输入（实测：加粗之后一次撤销把整段字都退了，
+        // 因为加粗根本没进栈）。这两句与下面的 `didChangeText()` 是一对，缺一不可。
+        guard shouldChangeText(in: range, replacementString: nil) else { return }
         switch command {
         case .bold:
             toggleFontTrait(.boldFontMask, key: .doyahBold, in: range)
@@ -444,9 +489,12 @@ final class NotesTextView: NSTextView {
     /// **不往正文里写** `1.` / `- ` 标记（契约 v1.30 不变量⑤：编号 / 层级由渲染层生成、不落库）。
     /// 同一档再点一次 = 取消（段落回到普通文本）；换一档 = 直接改档。
     func applyBlock(_ command: NoteBlockCommand) {
+        // 块级格式同样自成一步（与 `apply` 同一条口径）。
+        breakParagraphUndoGroup()
         guard let storage = textStorage else { return }
         let range = blockRange()
         guard range.length > 0 else { return }
+        guard shouldChangeText(in: range, replacementString: nil) else { return }
         let key = NSAttributedString.Key.doyahBlock
         let current = storage.attribute(key, at: range.location, effectiveRange: nil) as? String
         storage.beginEditing()
@@ -473,6 +521,7 @@ final class NotesTextView: NSTextView {
         guard let storage = textStorage else { return }
         let range = blockRange()
         guard range.length > 0 else { return }
+        guard shouldChangeText(in: range, replacementString: nil) else { return }
         guard let raw = storage.attribute(.doyahBlock, at: range.location, effectiveRange: nil) as? String,
               let block = NoteSpan.Block.from(exchangeType: raw, checked: checked),
               case .task = block else { return }
@@ -619,6 +668,7 @@ final class NotesTextView: NSTextView {
         guard let storage = textStorage else { return }
         let range = targetRange()
         guard range.length > 0, NSMaxRange(range) <= storage.length else { return }
+        guard shouldChangeText(in: range, replacementString: nil) else { return }
         let trimmed = url?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         storage.beginEditing()
         if trimmed.isEmpty {

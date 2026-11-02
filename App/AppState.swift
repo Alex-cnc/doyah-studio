@@ -556,6 +556,17 @@ final class AppState: ObservableObject {
     @Published var notesSortOrder: NotesSortOrder = .updatedDesc
     /// 搜索范围那枚开关（当前范围 / 全部笔记本）—— 只影响搜索结果的筛选。
     @Published var notesSearchScope: NotesSearchScope = .current
+    /// **回收站**（`FR-NTS-NOTE-TRASH-001`）：条目（含已清除的收据）+ 是否正开着那一屏。
+    /// 判定与上限读数在 Core（`NoteTrashSummary`），这里只搬运行李、不自己算日子。
+    @Published var noteTrashEntries: [NoteTrashEntry] = []
+    @Published var isNoteTrashPresented = false
+    /// 回收站的两条上限（保留天数 / 容量）。默认 30 天 / 100 条，界面那一行如实说它。
+    @Published var noteTrashPolicy: NoteTrashPolicy = .default
+    /// 正在等确认「彻底清除」的那一条（`nil` = 没有待确认的清除）。
+    @Published var pendingNotePurgeID: UUID?
+    /// **上一次整理动作的撤销快照**（契约 §15.5「一步可撤销」）：批量删除 / 删笔记本之后挂在这里，
+    /// 列表栏头那一条「撤销」按它退回去。`nil` = 没有可撤销的（界面上不出现那一条）。
+    @Published var lastNoteOrganizeUndo: NoteOrganizeUndo?
     /// **浮动式书架的两态**（`FR-NOTEUI-02`/`-03` · 派单 `T-20261010-166` §三.2 · 人类主人
     /// 2026-10-10 原话②：「**笔记本管理栏可以节约空间改成浮动式的，把笔记管理左栏放到目前的
     /// 笔记本管理导航栏去。**」）。
@@ -10231,8 +10242,14 @@ final class AppState: ObservableObject {
             return notesNavigation.listing(notes, scope: notesScope, sort: notesSortOrder)
         case .library(_, let results):
             // 检索结果同样过范围：搜索范围那枚开关（当前范围 / 全部笔记本）在这里起作用。
+            // **归档条目要能被搜到**（契约 §15.5「归档仍可被检索到」）：搜索面单独放行，
+            // 列表面（上面 `.idle` 那一支）仍然把它们挡在默认视图外。
             return notesNavigation.listing(
-                results, scope: notesScope, searchScope: notesSearchScope, sort: notesSortOrder
+                results,
+                scope: notesScope,
+                searchScope: notesSearchScope,
+                sort: notesSortOrder,
+                includingArchived: true
             )
         }
     }
@@ -10375,12 +10392,29 @@ final class AppState: ObservableObject {
         Task {
             do {
                 let library = NoteLibrary.defaultLibrary()
+                // **撤销快照先拍**（`FR-NTS-NOTE-ORG-001` ②）：笔记本删掉之后 uid 就查不回来了，
+                // 撤销要按「原来那三样」把它建回去，所以名字 / 所属架 / 排序位必须在删之前读。
+                let notebookSnapshot: NotebookUndoSnapshot? = request.kind == .notebook
+                    ? notesNavigation.directory.notebook(uid: request.id).map {
+                        NotebookUndoSnapshot(
+                            uid: $0.uid, name: $0.name, shelfUid: $0.shelfUid, sortOrder: $0.sortOrder
+                        )
+                    }
+                    : nil
+                var removedNoteIDs: [String] = []
                 if request.kind == .notebook {
-                    _ = try await library.removeNotebook(uid: request.id, policy: policy)
+                    let plan = try await library.removeNotebook(uid: request.id, policy: policy, at: Date())
+                    removedNoteIDs = plan?.deletedNoteIDs ?? []
                 } else {
-                    _ = try await library.removeShelf(uid: request.id, policy: policy)
+                    let plan = try await library.removeShelf(uid: request.id, policy: policy, at: Date())
+                    removedNoteIDs = plan?.deletedNoteIDs ?? []
                 }
                 pendingContainerRemoval = nil
+                // 撤销快照：连带删掉的笔记（进回收站的）+ 被删的那个笔记本（若有）。
+                let removed = removedNoteIDs.compactMap { UUID(uuidString: $0) }
+                lastNoteOrganizeUndo = (removed.isEmpty && notebookSnapshot == nil)
+                    ? nil
+                    : NoteOrganizeUndo(kind: .delete, noteIDs: removed, removedNotebook: notebookSnapshot)
                 // 删完重读：树、条数、列表、当前范围的归一（被删的范围回落「全部」）都在这一条路上。
                 await reloadNotes()
             } catch {
@@ -11437,6 +11471,198 @@ final class AppState: ObservableObject {
         }
     }
 
+    // MARK: - 回收站（`FR-NTS-NOTE-TRASH-001`）
+
+    /// 回收站的一整屏读数（**唯一合成处** = `NoteTrashSummary.make`；界面不许自己算「还剩几天」）。
+    var noteTrashSummary: NoteTrashSummary {
+        NoteTrashSummary.make(entries: noteTrashEntries, policy: noteTrashPolicy, now: Date())
+    }
+
+    /// 打开回收站：**先读库**（界面上能看见的东西必须来自库），再按上限做一次自动清除。
+    ///
+    /// 自动清除是契约 §15.9 允许的两种触发之一（「超过保留期 / 容量上限」），所以它不弹框；
+    /// 但**不能说悄悄话**：清了几条要在同一个出口报出来，而且回收站那一屏的「上限」一行本来就写着
+    /// 「保留 N 天 / 最多 M 条」，人打开就能看见自己处在哪一档。
+    func openNoteTrash() async {
+        await reloadNoteTrash()
+        isNoteTrashPresented = true
+        await purgeTrashBeyondLimits()
+    }
+
+    func closeNoteTrash() {
+        isNoteTrashPresented = false
+        pendingNotePurgeID = nil
+    }
+
+    func reloadNoteTrash() async {
+        do {
+            noteTrashEntries = try await NoteLibrary.defaultLibrary().trashedEntries()
+        } catch {
+            errorMessage = ErrorPresenter.message(for: error)
+        }
+    }
+
+    /// 到期 / 超容量的**自动**清除（契约 §15.9 的第二种触发）。逐条走同一个 `purgeFromTrash` 出口 ——
+    /// 自动与人工的差别只在「谁按的」，清法一个字都不许有两套。
+    func purgeTrashBeyondLimits() async {
+        let candidates = NoteTrash.purgeCandidates(noteTrashSummary)
+        guard !candidates.isEmpty else { return }
+        do {
+            let library = NoteLibrary.defaultLibrary()
+            var purged = 0
+            for id in candidates where try await library.purgeFromTrash(id: id, at: Date()) > 0 {
+                purged += 1
+            }
+            await reloadNoteTrash()
+            if purged > 0 {
+                statusMessage = L(.notesTrashPurgedNotice, purged)
+            }
+        } catch {
+            errorMessage = ErrorPresenter.message(for: error)
+        }
+    }
+
+    /// 从回收站恢复一条（契约 §15.9「恢复回原位」）。落点不是原位时要**如实说**（多一句说明）。
+    func restoreTrashedNote(id: UUID) async {
+        do {
+            guard let outcome = try await NoteLibrary.defaultLibrary().restoreFromTrash(id: id, at: Date()) else {
+                // 已彻底清除 / 不在这张表里 ⇒ 恢复不成立。不许静默、也不许造一条空笔记出来充数。
+                errorMessage = L(.notesTrashRestoreUnavailable)
+                return
+            }
+            await reloadNotes()
+            await reloadNoteTrash()
+            switch outcome.placement {
+            case .original:
+                statusMessage = L(.notesTrashRestored)
+            case .fallbackToDefault:
+                statusMessage = L(.notesTrashRestoredToDefault)
+            }
+            // 恢复 = `deleted_at` 撤掉 + 内容回到可同步状态 ⇒ 走 upsert（墓碑那条已在删除时入过队）。
+            await enqueueCloudSync(uid: id.uuidString, operation: .upsert)
+        } catch {
+            errorMessage = ErrorPresenter.message(for: error)
+        }
+    }
+
+    /// 人按「彻底清除」⇒ 先挂确认请求（契约 §15.9「清除前有明确提示」）。
+    func requestNotePurge(id: UUID) {
+        pendingNotePurgeID = id
+    }
+
+    func cancelNotePurge() {
+        pendingNotePurgeID = nil
+    }
+
+    /// 确认框正文：条数 + 附件数 + 「不可恢复」（三样都由 `NoteTrash.purgePrompt` 算）。
+    var pendingNotePurgeMessage: String? {
+        guard let id = pendingNotePurgeID,
+              let entry = noteTrashEntries.first(where: { $0.noteID == id }) else { return nil }
+        let prompt = NoteTrash.purgePrompt(entries: [entry])
+        return L(.notesTrashPurgeMessage, prompt.noteCount, prompt.attachmentCount)
+    }
+
+    var pendingNotePurgeTitle: String? {
+        guard let id = pendingNotePurgeID,
+              let entry = noteTrashEntries.first(where: { $0.noteID == id }) else { return nil }
+        return L(.notesTrashPurgeConfirmTitle, entry.title)
+    }
+
+    /// 确认之后才真清（且只清这一条）。
+    func confirmNotePurge() async {
+        guard let id = pendingNotePurgeID else { return }
+        pendingNotePurgeID = nil
+        do {
+            let changed = try await NoteLibrary.defaultLibrary().purgeFromTrash(id: id, at: Date())
+            await reloadNoteTrash()
+            if changed > 0 {
+                statusMessage = L(.notesTrashPurgedNotice, 1)
+            }
+        } catch {
+            errorMessage = ErrorPresenter.message(for: error)
+        }
+    }
+
+    // MARK: - 归档（`FR-NTS-NOTE-ORG-001` ③）
+
+    /// 左栏「归档」那一行的数字（与列表同一个判断：`Note.isArchived`）。
+    var archivedNoteCount: Int { notes.filter { $0.isArchived }.count }
+
+    /// 归档 / 取消归档一条。归档**不是删除**：不进回收站、不占回收站容量、仍可被检索到。
+    func setNoteArchived(id: UUID, _ archived: Bool) async {
+        do {
+            let changed = try await NoteLibrary.defaultLibrary().setArchived(id: id, archived)
+            guard changed > 0 else {
+                errorMessage = L(.notesArchiveUnavailable)
+                return
+            }
+            await reloadNotes()
+            lastNoteOrganizeUndo = NoteOrganizeUndo(
+                kind: archived ? .archive : .unarchive,
+                noteIDs: [id]
+            )
+            statusMessage = archived ? L(.notesArchivedNotice) : L(.notesUnarchived)
+        } catch {
+            errorMessage = ErrorPresenter.message(for: error)
+        }
+    }
+
+    func toggleNoteArchive(id: UUID) async {
+        guard let note = notes.first(where: { $0.id == id }) else { return }
+        await setNoteArchived(id: id, !note.isArchived)
+    }
+
+    // MARK: - 一步可撤销（契约 §15.5「整理类操作可整体撤销」）
+
+    /// 撤销上一次整理动作（批量删除 / 删笔记本 / 归档）。
+    ///
+    /// 删除档**走回收站恢复**（标签 / 附件引用 / 原归属一起回来），不是「再删一次的反向操作」——
+    /// 后者在别的端改过之后会写出第三种状态（契约要的是「撤销到操作前」）。
+    /// 删笔记本那一档还要先把笔记本按原 uid / 名字 / 架 / 排序位建回来，否则恢复的笔记会落默认笔记本。
+    func undoLastNoteOrganize() async {
+        guard let undo = lastNoteOrganizeUndo else { return }
+        lastNoteOrganizeUndo = nil
+        do {
+            let library = NoteLibrary.defaultLibrary()
+            switch undo.kind {
+            case .delete:
+                if let notebook = undo.removedNotebook {
+                    _ = try await library.createNotebook(
+                        inShelf: notebook.shelfUid,
+                        name: notebook.name,
+                        uid: notebook.uid,
+                        now: Date()
+                    )
+                }
+                var restored = 0
+                for id in undo.noteIDs
+                where try await library.restoreFromTrash(id: id, at: Date()) != nil {
+                    restored += 1
+                }
+                await reloadNotes()
+                await reloadNoteTrash()
+                statusMessage = L(.notesUndoRestored, restored)
+            case .archive, .unarchive:
+                let target = undo.kind == .archive
+                for id in undo.noteIDs {
+                    _ = try await library.setArchived(id: id, !target)
+                }
+                await reloadNotes()
+            case .move:
+                if let from = undo.fromNotebookUid {
+                    _ = try await library.move(noteIDs: undo.noteIDs, toNotebook: from)
+                }
+                await reloadNotes()
+            case .favorite, .pinned:
+                // 这两档目前没有批量入口（收藏 / 置顶只有逐条右键）⇒ 撤销快照不会以它们出现。
+                // 真出现时**如实说**「这一档还没有整批撤销」，不假装成功。
+                errorMessage = L(.notesUndoUnavailable)
+            }
+        } catch {
+            errorMessage = ErrorPresenter.message(for: error)
+        }
+    }
+
     // MARK: - 待办（队列 `L-100` 界面半第一片 · 清单屏）
 
     /// 切「看哪一屏」（笔记 / 待办）。切到待办时**读一次库** —— 与 `openNotes()` 同一条：
@@ -12026,6 +12252,10 @@ final class AppState: ObservableObject {
         case .notes(let ids):
             pendingAttachmentCleanup = []
             for id in ids { await deleteNote(id: id) }
+            // **一步可撤销**（`FR-NTS-NOTE-ORG-001` ② / 契约 §15.5「整理类操作可整体撤销」）：
+            // 删掉的这几条现在都在回收站里 ⇒ 撤销 = 按快照恢复（标签 / 附件引用 / 原归属一起回来），
+            // 不是「再执行一次反向操作」（那会在别的端改过之后写出第三种状态）。
+            lastNoteOrganizeUndo = ids.isEmpty ? nil : NoteOrganizeUndo(kind: .delete, noteIDs: ids)
             noteAttachmentsForDeletion = [:]
             // **附件文件另行确认**（判据③）：上面那些 `deleteNote` 只把清单攒起来，一个文件都没删。
             // 这里只负责把框挂出来 —— 「保留」与「一起删」两个出口都是人按的。

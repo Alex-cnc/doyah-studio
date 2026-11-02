@@ -101,7 +101,7 @@ public enum NotebookCreation {
             if let shelf = directory.shelf(uid: uid) { return shelf.uid }
         case .notebook(let uid):
             if let notebook = directory.notebook(uid: uid) { return notebook.shelfUid }
-        case .all, .tag, .recent, .favorites:
+        case .all, .tag, .recent, .favorites, .archived:
             break
         }
         return directory.defaultShelf?.uid ?? directory.sortedShelves.first?.uid

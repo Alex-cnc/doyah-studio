@@ -43,12 +43,19 @@ public enum NotesScope: Hashable, Sendable {
     /// **它是一个常驻入口**（左栏永远有这一行）⇒ 一条收藏都没有时它显示「空」，不回落到「全部」
     /// —— 与「标签」不同：标签没了是**那个标签不存在了**，而「已收藏」这一栏一直在。
     case favorites
+    /// **「归档」**（`FR-NTS-NOTE-ORG-001` ③「归档不等于删除」· 契约 §15.5 第 4 条）。
+    ///
+    /// 与 `.favorites` 同形：一个**常驻**入口（左栏永远有这一行，一条都没有时显示「空」）；
+    /// 与其他范围**互斥**：归档过的笔记从全部 / 架 / 笔记本 / 标签 / 最近 / 已收藏里**移出**，
+    /// 只在这一栏里出现 —— 但它仍在库里、仍能被**检索**到（FTS 不摘，搜索面按 `includingArchived` 放行），
+    /// 也**不占回收站**（两件事各有一条路：`NoteTrash` 管删除，这一档只管是否出现在默认视图里）。
+    case archived
 
     /// 越界检查用：范围指向的那个 uid（`.all` / `.recent` / `.tag` / `.favorites` 都是 `nil`
     /// —— 前者没有目标，后三者指向的是**内容条件**而不是一个容器 uid）。
     public var targetUid: String? {
         switch self {
-        case .all, .recent, .tag, .favorites: return nil
+        case .all, .recent, .tag, .favorites, .archived: return nil
         case .shelf(let uid): return uid
         case .notebook(let uid): return uid
         }
@@ -59,7 +66,7 @@ public enum NotesScope: Hashable, Sendable {
     /// 视图不自己 `switch`（两处各写一遍必分家，这一族的老毛病）。
     public var isCrossNotebook: Bool {
         switch self {
-        case .all, .recent, .tag, .favorites: return true
+        case .all, .recent, .tag, .favorites, .archived: return true
         case .shelf, .notebook: return false
         }
     }
@@ -249,7 +256,7 @@ public struct NotesNavigation: Equatable, Sendable {
     /// （没有「标签表」这回事 —— 标签是笔记自己的字段）。传 `notes` 进来，两件事在同一处判。
     public func normalized(_ scope: NotesScope, notes: [Note]) -> NotesScope {
         switch scope {
-        case .all, .recent, .favorites:
+        case .all, .recent, .favorites, .archived:
             return scope
         case .shelf(let uid):
             return directory.shelf(uid: uid) == nil ? .all : scope
@@ -268,7 +275,15 @@ public struct NotesNavigation: Equatable, Sendable {
     /// `.recent` 的成员条件不在这一层：它要「先按更新时间排一遍、再取前 N 条」，
     /// 单看一条笔记判不出来 ⇒ 那一步在 `filter` / `listing` 里。这里 `.recent` 一律算「在」。
     public func contains(_ scope: NotesScope, note: Note) -> Bool {
+        // **归档是「在不在默认视图里」的一档**：它在任何非归档范围里都不算成员，只在 `.archived` 里算。
+        // 这一条放在 `switch` 之前，是为了让下面每个 case 都不必各自记得排除归档（漏一处就是
+        // 「归档了但还在全部笔记里」，而那一处漏掉最难被发现）。
+        if case .archived = scope { return note.isArchived }
+        guard !note.isArchived else { return false }
         switch scope {
+        case .archived:
+            // 上面那一句已经拦下了：走到这里说明不是归档成员。
+            return false
         case .all, .recent:
             return true
         case .favorites:
@@ -289,16 +304,30 @@ public struct NotesNavigation: Equatable, Sendable {
     /// `searchScope` = 搜索时的那枚开关：`.all` ⇒ 不看范围（跨笔记本搜）；`.current` ⇒ 限定在当前范围。
     ///
     /// `.recent` 是唯一会**裁掉**成员的（按更新时间取前 `recentLimit` 条）；其余范围只做留 / 不留。
+    /// `includingArchived` = **搜索面**才置真：归档条目不进默认视图，但**要能被搜到**
+    /// （契约 §15.5「归档仍可被检索到」）。为什么不做成「搜索时自动判」：范围与搜索范围是两根
+    /// 各管一件事的轴，把「这次是不是搜索」藏进 `searchScope` 里会让同一次调用有两种读法。
     public func filter(
         _ notes: [Note],
         scope: NotesScope,
-        searchScope: NotesSearchScope = .current
+        searchScope: NotesSearchScope = .current,
+        includingArchived: Bool = false
     ) -> [Note] {
         let effective: NotesScope = searchScope == .all ? .all : normalized(scope, notes: notes)
-        if case .recent = effective {
-            return Array(notes.sorted(by: NotesSortOrder.updatedDesc.comparator).prefix(Self.recentLimit))
+        if case .archived = effective {
+            return notes.filter { contains(.archived, note: $0) }
         }
-        guard effective != .all else { return notes }
+        if case .recent = effective {
+            let visible = includingArchived ? notes : notes.filter { !$0.isArchived }
+            return Array(visible.sorted(by: NotesSortOrder.updatedDesc.comparator).prefix(Self.recentLimit))
+        }
+        if includingArchived {
+            return notes.filter { note in
+                if case .all = effective { return true }
+                return contains(effective, note: note) || note.isArchived
+            }
+        }
+        guard effective != .all else { return notes.filter { !$0.isArchived } }
         return notes.filter { contains(effective, note: $0) }
     }
 
@@ -311,9 +340,15 @@ public struct NotesNavigation: Equatable, Sendable {
         _ notes: [Note],
         scope: NotesScope,
         searchScope: NotesSearchScope = .current,
-        sort: NotesSortOrder = .updatedDesc
+        sort: NotesSortOrder = .updatedDesc,
+        includingArchived: Bool = false
     ) -> [Note] {
-        filter(notes, scope: scope, searchScope: searchScope).sorted(by: sort.comparator)
+        filter(
+            notes,
+            scope: scope,
+            searchScope: searchScope,
+            includingArchived: includingArchived
+        ).sorted(by: sort.comparator)
     }
 
     /// 新建笔记该落在哪个笔记本：在某个笔记本里 ⇒ 那个；其余（全部 / 某个架 / 标签 / 最近）⇒ 默认笔记本。
@@ -323,7 +358,7 @@ public struct NotesNavigation: Equatable, Sendable {
         switch normalized(scope, notes: []) {
         case .notebook(let uid):
             return uid
-        case .all, .shelf, .tag, .recent, .favorites:
+        case .all, .shelf, .tag, .recent, .favorites, .archived:
             return directory.resolvedNotebookUid(nil)
         }
     }
