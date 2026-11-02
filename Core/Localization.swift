@@ -5150,8 +5150,8 @@ public enum LocalizedStrings {
             .english: "Cannot tell what language this file is, so there is no formatter for it"
         ],
         .workspaceFormatRefusedNoFormatter: [
-            .simplifiedChinese: "%@ 没有可用的格式化方式：外部工具没装，也没有内置兜底",
-            .english: "%@ has no formatter: no external tool installed and no built-in fallback"
+            .simplifiedChinese: "%@ 还没有内置格式化档（本版只用内置、不联网），所以一个字都没改",
+            .english: "%@ has no built-in formatter (this build formats locally, offline only), so nothing was changed"
         ],
         .workspaceFormatLabel: [.simplifiedChinese: "格式化", .english: "Format"],
         .workspaceFormatFailed: [

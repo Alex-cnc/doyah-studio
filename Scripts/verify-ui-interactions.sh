@@ -264,7 +264,7 @@ SWIFT="${DEVELOPER_DIR}/Toolchains/XcodeDefault.xctoolchain/usr/bin/swift"
 SCRATCH="${ROOT}/.build"
 CACHE="${ROOT}/.build-cache"
 OUT="${SCRATCH}/ui-interactions"
-FILTER="TerminalInteractionProbeTests|MultiCursorProbeTests|ObjectTreeContextMenuProbeTests|TitleBarSearchClickProbeTests|ResultCopyProbeTests|ResultSortProbeTests|ResultFilterProbeTests|ResultPagingProbeTests|ResultStreamExportProbeTests|ResultXLSXExportProbeTests|ExecutionReceiptPaneProbeTests|SQLTaskMenuProbeTests|TableExportStreamProbeTests|AgentApprovalDecisionProbeTests|ObjectTreeRetryProbeTests|BackupRestoreImportProbeTests|SessionDiagnosticsProbeTests|ObjectDiagnosisProbeTests|TableEditDDLProbeTests|UISnapshotSidebarStateTests"
+FILTER="TerminalInteractionProbeTests|MultiCursorProbeTests|FormatMenuWiringProbeTests|ObjectTreeContextMenuProbeTests|TitleBarSearchClickProbeTests|ResultCopyProbeTests|ResultSortProbeTests|ResultFilterProbeTests|ResultPagingProbeTests|ResultStreamExportProbeTests|ResultXLSXExportProbeTests|ExecutionReceiptPaneProbeTests|SQLTaskMenuProbeTests|TableExportStreamProbeTests|AgentApprovalDecisionProbeTests|ObjectTreeRetryProbeTests|BackupRestoreImportProbeTests|SessionDiagnosticsProbeTests|ObjectDiagnosisProbeTests|TableEditDDLProbeTests|UISnapshotSidebarStateTests"
 while [ $# -gt 0 ]; do
     case "${1}" in
         --filter) FILTER="${2:-}"; shift 2 ;;
@@ -328,9 +328,9 @@ else:
     total, failed, unexpected = max(executed, key=lambda row: int(row[0]))
     if int(failed) or int(unexpected):
         failures.append(f"汇总非零失败：{failed} 失败 / {unexpected} 意外")
-    if int(total) < 116:
+    if int(total) < 121:
         failures.append(
-            f"只跑了 {total} 条 —— 十七批一百一十六条（鼠标上报 / DECCKM / 右键归属 / ⌥⌘D 多光标 /"
+            f"只跑了 {total} 条 —— 十八批一百二十一条（鼠标上报 / DECCKM / 右键归属 / ⌥⌘D 多光标 /"
             " ⌥⌘↑↓ 加光标 / ⌥ 拖拽列选 / 逐行菜单内容 / 菜单作用行 / 菜单确定性与跟随行 /"
             " 点击地图 / 留白点给键盘 / 清空按钮三态 + 回车接线 / 打字后回车交词 / 修前对照 / 整框源锚点 /"
             " 复制四档格式与默认 TSV / 排序三档与 NULL / Shift 次要键 / 筛选条默认在场 /"
@@ -356,7 +356,9 @@ else:
             " 外键入口要等元数据且只给有外键的列 / 跳转带值且无外键不生成语句 /"
             " 新列不带默认类型且空类型整批拒绝 / 结构变更先预览再按固定顺序执行 /"
             " 结构对比默认不动目标多出的表且被跳过的如实列出 /"
-            " 折叠状态活过一次活动栏切换（连接分组：折叠到像素上、视图树重建后逐字节相同））应当都跑到"
+            " 折叠状态活过一次活动栏切换（连接分组：折叠到像素上、视图树重建后逐字节相同） /"
+            " 格式化菜单与 ⇧⌘F 打到同一入口 / 格式化投递落到真编辑器 / 一次撤销逐字回到原文 /"
+            " 认不出语言时明说且正文一字未动）应当都跑到"
         )
 
 expected = [
@@ -477,6 +479,12 @@ expected = [
     "testSchemaDiffScriptsOnlyTickedChangesAndNeverDropsByDefault",
     # 第十七批（B7 批次 · FR-STD-DB-CONN-012）：连接分组的折叠状态要活过活动栏切换
     "testGroupCollapseSurvivesActivityBarSwitch",
+    # 第十八批（v0.6.0 判据债 · FR-STD-WS-NAV-014）：格式化这条链的五条
+    "testScrambledJSONThroughTheModelPath",
+    "testEditMenuFormatItemIsWiredToTheSameEntry",
+    "testFormatIsUndoableBackToTheExactOriginal",
+    "testLanguageWithoutABuiltinSaysSoAndLeavesTheTextAlone",
+    "testDeliveryActuallyLandsInTheRealEditor",
 ]
 for name in expected:
     if name not in log:
@@ -491,7 +499,7 @@ if failures:
     for item in failures:
         print(f"✗ {item}")
     sys.exit(1)
-print(f"✓ {total} 条都真跑过（十七批）、都以 passed 收尾、没有跳过")
+print(f"✓ {total} 条都真跑过（十八批）、都以 passed 收尾、没有跳过")
 PY
 
 echo

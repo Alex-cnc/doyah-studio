@@ -99,3 +99,4 @@
 - 2026-11-02 · 判据债（工作区 / 主题 6 条）：`WEB-001` ③「每页签独立存储」不是补判据能解决的 —— 盘上全应用共用 `WKWebsiteDataStore.default()`，所以本跳先改成按页签 id 取 `WKWebsiteDataStore(forIdentifier:)` 再翻判据；选持久化而非 `nonPersistent()`，因为 `FR-STD-WS-WEB-004` ② 要「登录态跨重启」，非持久化会当场破那条。关页签不删该存储（登录态按页签留着），清理归 `WEB-004` 后续，写在这里免得下次当成漏做。
 - 2026-11-02 · 判据债（工作区 / 主题 6 条）：`FS-008` **实现列也降 🟡** —— ① 的「图片等按各自视图」盘上无图片视图（图片会被当二进制拒绝）。只翻判据列会让这一行从 status-gap 里消失，等于用「判据 ✅」盖住「实现缺一半」。另四点半已补 5 例拒绝路径判据。
 - 2026-11-02 · 判据债（工作区 / 主题 6 条）：新探针族 `WorkspaceHomeProbeTests` / `WorkspaceFileOpenGuardProbeTests` **不挂 `DOYAH_UI_SNAPSHOT`**（模型层 + 源树扫描，不开窗不渲染）⇒ 随每轮门禁第 1 项天天跑，不做「取证才跑」的账。
+- 2026-11-02 · `FR-STD-WS-NAV-014`：把 `FormatMenuWiringProbeTests` 从「取证才跑」收进 `verify-ui-interactions` 闭环（116 → 121）—— 理由：那一例「真菜单树需真 App 进程」改成源锚点+真树两段之后已经 0 跳过，留着不进闭环就等于判据只在人想起来时存在；同批把 `workspaceFormatRefusedNoFormatter` 的「外部工具没装」改掉（定案「只用内置」之后是假话），属文案纠正、不改任何判定逻辑。

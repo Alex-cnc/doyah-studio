@@ -1,5 +1,20 @@
 # 检查点
 
+## v0.6.0 · 判据债第三片：`FR-STD-WS-NAV-014` 代码格式化 · 2026-11-02
+
+- **收一条（双 ✅）**：`FR-STD-WS-NAV-014`。上一片把它留在 `check-status-gap`（实现 ✅ / 判据 🟡），取证写着「3 例（2 绿、1 例真菜单树需真 App 进程而跳过）」—— **跳过不算通过**，等于零证据。
+- **本跳落的五条读数**：① 菜单与 ⇧⌘F 同一入口（源锚点 + 真 App 进程 `DOYAH_MENU_DUMP` 三段都出 `menuAction · Format Code · menuFormat · ok`）· ② 撤销后视图与模型正文**都逐字等于原文**（真 `CodeTextView` + 真 `undoManager`）· ③④ 新 `Tests/CodeFormatOfflineTests` 3 例（App/ 169 份 0 处外部档符号 · 链六份文件 0 个联网/起进程 API · 两个函数体不碰外部名，按花括号配平切体判）· ⑤ `.txt` 格式化不投递、正文不动、`errorText` 是「认不出语言」那句。
+- **同批改的门禁**：`verify-ui-interactions.sh` 把 `FormatMenuWiringProbeTests` 收进闭环 `FILTER`（116 → **121** 条、期望名单补 5 条）—— 这族原来是「取证才跑」，所以上一跳的「跳过」从来没让门禁红过。
+- **同批修的一句假话**：`workspaceFormatRefusedNoFormatter` 原文「外部工具没装，也没有内置兜底」在定案「只用内置」之后不成立 ⇒ 改「还没有内置格式化档（本版只用内置、不联网），所以一个字都没改」，两语同改并钉住。
+- 读数：`verify-core` **5322 / 13 skipped / 0 失败**（+3）· `verify-ui-interactions` **121 条全跑无跳过** · `check-status-gap` **2 → 1 行** · 文档门禁十四道 rc=0 · `check-doc-numbers` 只剩「status-gap 未接闭环」一笔（存量）· 反例六段各判红后 `sha256` 逐字节还原。
+- **未验证（≠ 通过）**：真鼠标点菜单 / ⇧⌘F 一条没点 · 观感未看 · 真拔网线未做 · `verify-all.sh` 第 11 / 18 项未执行。
+- 证据 `.agent/evidence/2026-11-02-FR-STD-WS-NAV-014.md`；提交号见本行之后补号。
+
+## 下一项：`FR-STD-WS-AI-001`（编辑区 AI 辅助，判据 ⬜，实现 ✅）
+
+- 起跳先按需求书四条契约逐条对：差异先出 / 模型与端点可见 / 数据边界默认保守 / 不重复造本机能力；盘上已有 `EditAssistTests` 23 例 + `EditAssistProbeTests` 6 例的备注，**要先复跑读数**，不许照抄旧数。
+- 它清零之后同批把 `check-status-gap.py` 接成 `verify-all.sh` 一环（`check-doc-numbers` 的 `checkScriptParity` 那一笔债），接的时候要同批重编「十八项」四种形状。
+
 ## v0.6.0 · 判据债第一片（Notes 8 条）· 2026-11-02
 
 - **本跳清的债**：`check-status-gap` **16 → 8 行**（Notes 侧清零，剩下 8 条全是 `FR-STD-WS-*`）。
