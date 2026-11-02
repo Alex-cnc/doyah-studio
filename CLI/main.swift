@@ -102,7 +102,7 @@ struct DoyahCLI {
         // 「我的笔记文件到底在哪」与「一次性迁移有没有搬成功」必须是能脚本核对的事 ——
         // 界面里看不见路径，而迁移是那种**做错了会丢数据**的操作。
         if arguments.first == "notes" {
-            exit(runNotesCommand(arguments: Array(arguments.dropFirst())))
+            exit(await runNotesCommand(arguments: Array(arguments.dropFirst())))
         }
 
         // plugins：插件装配的可脚本化出口（概设 §8 判据 ①）。
@@ -1580,7 +1580,7 @@ struct DoyahCLI {
         ///   DoyahCLI notes engine-migrate [--source <文件>] [--target-file <库文件>] [--json]   # FR-PLUG-08：换引擎（`notes.json` → SQLite，幂等）
         ///
         /// 退出码：`0` = 没出岔子（含"不用搬""已有目标"），`1` = 需要人看一眼（旧文件读不出来 / 写不进去）。
-        static func runNotesCommand(arguments: [String]) -> Int32 {
+        static func runNotesCommand(arguments: [String]) async -> Int32 {
             func value(of flag: String) -> String? {
                 guard let index = arguments.firstIndex(of: flag), index + 1 < arguments.count else { return nil }
                 return arguments[index + 1]
@@ -1650,9 +1650,52 @@ struct DoyahCLI {
                     if let failure = report.failure { print("  原因：\(failure)") }
                 }
                 return report.needsAttention ? 1 : 0
+                case "write-probe":
+                // **判据专用**：把一批形状固定的笔记连续写进指定的库，好让判据在中途 `SIGKILL` 它
+                // （`FR-STD-ALL-PLUG-008` ④「写入原子，崩溃后库不自坏」）。
+                //
+                // 为什么必须在产品里开这一口：崩溃只能由**真进程被杀**证明 —— 测试进程里 fork、
+                // 或自己杀自己都不算（那证的是测试框架，不是库）；而库里没有第二条能连续写笔记的
+                // 入口（`upsert` / `save` 只被界面与测试调）。这一口**没有默认目标**：不给
+                // `--database` 直接拒，绝不碰用户真库；已有子命令的行为一个字节都不改。
+                //
+                // 形状约定（`Tests/NoteCrashSafetyTests` 按同一套断言读回；改这里必须同批改那边，
+                // 否则判据会**判红**而不是变绿 —— 漂移能被看见）：
+                //   标题 `probe-<i>` · 正文 `x` × 4096 + `:END` · 标签两枚 `probe` / `lane-<i%4>`。
+                // 正文故意写大：写一半就崩时，落盘那一条会缺尾巴，判据才看得见。
+                guard let databasePath = value(of: "--database") else {
+                    FileHandle.standardError.write(Data(
+                        "写探针必须给 --database <库文件>：没有默认目标（不许拿用户真库当靶子）\n".utf8
+                    ))
+                    return 2
+                }
+                let total = Int(value(of: "--count") ?? "2000") ?? 2000
+                let pauseMs = UInt32(value(of: "--pause-ms") ?? "0") ?? 0
+                let library = NoteLibrary(databaseURL: URL(fileURLWithPath: databasePath))
+                for index in 0..<total {
+                    let draft = NoteDraft(
+                        title: "probe-\(index)",
+                        body: String(repeating: "x", count: 4096) + ":END",
+                        tags: ["probe", "lane-\(index % 4)"]
+                    )
+                    do {
+                        _ = try await library.save(draft)
+                    } catch {
+                        FileHandle.standardError.write(Data("第 \(index) 条写失败：\(error)\n".utf8))
+                        return 1
+                    }
+                    // 第一块写完后喊一声：判据据此知道「库已经在了、正在写」，不必靠猜时间。
+                    if index == 0 {
+                        print("ready")
+                        fflush(stdout)
+                    }
+                    if pauseMs > 0 { usleep(pauseMs * 1000) }
+                }
+                print("wrote \(total)")
+                return 0
                 default:
                 FileHandle.standardError.write(Data(
-                "用法：notes <path|json-path|legacy-path|migrate|engine-migrate> [--legacy <文件>] [--target <目录>] [--source <文件>] [--target-file <库文件>] [--json]\n".utf8
+                "用法：notes <path|json-path|legacy-path|migrate|engine-migrate|write-probe> [--legacy <文件>] [--target <目录>] [--source <文件>] [--target-file <库文件>] [--database <库文件> --count N --pause-ms N] [--json]\n".utf8
                 ))
                 return 2
             }

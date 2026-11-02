@@ -73,6 +73,7 @@ set -euo pipefail
 #        契约层构造 / 预览真的调用同一个行内函数 / 不引第三方 Markdown 库，
 #        见 `check-markdown-single-source.py`）
 #  11. 打包 .app（沙箱构建）+ **菜单栏那一层在换语言后不许停在启动语言**（L-145，内测丙2）
+#      + **平台矩阵**（NFR-ALL-GATE-COMP-004/005：部署目标四处一致 / 产物带最低版本键 / 三档架构）
 #  12. 脚本 shell 多字节安全（bash 3.2 的变量名坑，见 `check-shell-locale-safety.py`）
 #  13. 脚本连接信息参数化（连真库的脚本不许写死端口 / 地址 / 账号，见 `check-script-env-parameterization.py`）
 #  14. 连接失败的文案覆盖面（驱动错误码 ↔ 文案台账，见 `check-connection-failure-coverage.py`）
@@ -82,6 +83,8 @@ set -euo pipefail
 #      `[独占:macos]` / `[独占:windows]` 标记的节各归其主，见 `check-exclusive-sections.py`）
 #  17. vendored SQLite（FR-STD-ALL-PLUG-008 / Q23）：台账对账 + 负例自检 + 现编现跑自证
 #      （`check-vendored-sqlite.py`｜`--self-test`｜`smoke-vendored-sqlite.py`）
+#      + **笔记存储统一**（同一需求的 ①②③：一份 DDL / 附件只存路径 / 版本单一写者，
+#        `check-note-storage-unity.py`｜其 `--self-test` 7 例）
 #  18. 生成物一致性（两族）：**生成物不许手改、也不许过期**
 #      · 族 ①（L-43，2026-09-27 第 30 轮）：`gen-sqlite-constants.py --check`
 #        （`Core/NoteStorage/SQLiteConstants.swift` 与 vendored 头文件逐字节一致）
@@ -909,6 +912,15 @@ if [ "${PLATFORM}" = "macos" ]; then
   # 放在打包之后：它要跑刚构建出来的那个包（`dist/DoyahStudio.app`）。
   python3 Scripts/check-menu-language.py
   python3 Scripts/check-menu-language.py --self-test
+  # 平台矩阵（NFR-ALL-GATE-COMP-004 / -005）：**部署目标只有一个值**（包定义 / 工程文件 /
+  # 生成物 pbxproj / Info.plist 模板四处）+ 产物信息带 `LSMinimumSystemVersion`（老机器上
+  # 系统那句「需要 macOS 14.0 或更高版本」的唯一依据）+ 构建脚本认 arm64 / x86_64 / universal
+  # 三档且 universal 真走 `lipo -create`。放在打包之后：产物面就在这里。
+  # 真读数（两个切片的 minos / 双架构各起一遍拿到启动收据 / Rosetta 真在翻译态）由
+  # `Scripts/measure-platform-matrix.py` 出、`check-platform-compat.py --readings` 判 ——
+  # **不进闭环**（要双架构构建 + 4 次真启动），读数与判读结论贴证据文件。
+  python3 Scripts/check-platform-compat.py
+  python3 Scripts/check-platform-compat.py --self-test
 else
   skip_step 11 "打包 .app（Scripts/build-app.sh 走 xcodebuild，且产物是 .app 包）"
 fi
@@ -1016,6 +1028,13 @@ echo "==> 17/18 vendored SQLite（FR-STD-ALL-PLUG-008 / Q23）：台账对账 + 
 python3 Scripts/check-vendored-sqlite.py
 python3 Scripts/check-vendored-sqlite.py --self-test
 python3 Scripts/smoke-vendored-sqlite.py
+# 同一条需求（`FR-STD-ALL-PLUG-008`）的**结构与版本口径**：四张表在源面各只有一份 DDL /
+# 附件只存路径不进 BLOB / `user_version` 只来自升级链且链尾 == `supportedVersion` /
+# `journal_mode = WAL` 在位 / 存储层没有平台分支（`--self-test` **7 例**）。
+# 行为面（元数据正文标签时间线真落库、附件字节在文件系统、**SIGKILL 中途崩掉库不自坏**）
+# 由 `Tests/NoteCrashSafetyTests` 取证，不在这里跑。
+python3 Scripts/check-note-storage-unity.py
+python3 Scripts/check-note-storage-unity.py --self-test
 
 echo "==> 18/18 生成物一致性（L-43）：生成物 ↔ vendored 头文件逐字节"
 # 为什么这一项必须有（第 30 轮 L-43）：`Core/NoteStorage/SQLiteConstants.swift` 是**生成物**，

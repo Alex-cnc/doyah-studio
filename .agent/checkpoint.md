@@ -1,5 +1,18 @@
 # 检查点
 
+## v0.6.0 · C3 收口（平台兼容与笔记存储统一三条）· 2026-11-02
+
+- **收三条**：`NFR-ALL-GATE-COMP-004`（macOS 14 / 15）· `NFR-ALL-GATE-COMP-005`（Apple Silicon + Intel）· `FR-STD-ALL-PLUG-008`（桌面各端一条本地 SQLite），两列全 ✅。C3 批次清空。
+- **本跳是接管跳**：上一跳持锁 47 分钟被判陈旧，代码 / 两份门禁 / 测量脚本 / 测试 / 台账 / §4.2 全在盘、未提交；本跳按 N2a 先例**先复跑验证再落账**，未重写盘上实现。顺手把两份 JSON 台账的缩进从 2 空格还原成仓里惯用的 1 空格（内容一字未改，diff 从 794 / 2212 行降到 2 / 25 行）。
+- **真缺陷（本批修掉的）**：`NoteLibrary.save` 原是 `upsert()` + `open().setNoteSpans()` + `open().recordVersion()` —— **三次提交、三条连接**，进程在中间被杀就留下「笔记在、版本没有」。改成 `NoteDatabase.save` 一个连接、`BEGIN IMMEDIATE` 一个事务包住三块，另加 `DOYAH_NOTE_SAVE_GAP_MS` 负例窗口（正常路径一次都不睡）+ `CLI notes write-probe`（无默认目标，不给 `--database` 直接拒）。
+- **读数（本跳实跑）**：`check-platform-compat.py` rc=0（6 面）· `--readings` rc=0（10 面，`proc_translated=1`）· `--self-test` **12 例** · `lipo -info` = `x86_64 arm64` · `LSMinimumSystemVersion` = **14.0** · `check-note-storage-unity.py` rc=0（9 面）· 其 `--self-test` **7 例** · `--filter NoteCrashSafetyTests` **3 例 / 0 失败**（崩写读数 `[(400,2,0),(700,2,0),(1000,3,0)]`）· `verify-core.sh` **5301 例 / 13 skipped / 0 失败** · `verify-ui-interactions.sh` **116 条全跑 / 无跳过** rc=0 · `plan-batches --version 0.6.0 --check` rc=0（4 条待办）。台账 §4.2 v0.6.0 12 → **9**（4 / 5），未闭 124 → **118**（🟡 22 / ⬜ 96）。
+- **负例（本跳重跑）**：`NoteDatabase.save` 拆成三个事务（各带 40 ms 窗口）⇒ **2 红**（第 2 / 3 条「落了盘却没有版本记录」），还原 `sha256 ef61d039…` 一致 → 3/3 绿 · `--readings` 喂瘦包 ⇒ rc=1 点名「没有 x86_64 / 该切片没有读数」· 存储层塞 `#if os(Windows)` ⇒ rc=1 点名 `SQLiteKit.swift:583`，还原 `52719f50…` 复绿 · `check-status-gap --self-test` 4 例过。
+- **新发现的判据边界（记 next_try）**：把 `save` 拆成三次提交但**顺带丢掉 40 ms 负例窗口**的写法实测 3/3 仍绿 —— 窗口不宽时「砍中」是运气。判据只稳定抓「三块各自提交且窗口在位」这一形；要加严得让窗口由**库外**注入（不依赖被测路径自己睡）。
+- **两条存量红（HEAD 已有，非本批引入，各自核过）**：① `check-doc-numbers` rc=1 —— `check-status-gap.py` 未接进 `verify-all.sh`（`git show HEAD:Scripts/verify-all.sh` 命中 0；HEAD `e725c3fc` 提交信息自述「留作下一步」，加第 19 项要同批重编 18 处项块）；② `check-status-gap` rc=1 —— **16 行**实现 ✅ 判据 ⬜/🟡（8 条 Notes + `WS-AI-001` + 7 条 `WS-*`），在 HEAD 版台账上复跑同为这 16 行。
+- **未验证（≠ 通过）**：真 macOS 14 / 15 未测 · 真 Intel 硬件未测（Rosetta 是近似）· Windows / Linux 笔记模块未实现（0 处 note DDL）⇒ 三端表一致记未知 · `test-universal-build.sh` 未单跑 · `verify-all.sh` 第 11 / 18 项未执行。
+- **下一批 = `C4`**（`NFR-ALL-GATE-SEC-008` 统一外发日志 · `NFR-ALL-GATE-USE-005` 走不动的动作三选一 · `NFR-ALL-GATE-LANG-001` 简体中文界面 · `NFR-ALL-GATE-UI-001` 设计语言统一）。**另有一件压在队列前的活**：`check-status-gap` 那 16 行要按「补判据 = 点名已有测试 + 跑一次读数」逐行补，并且把这条门禁接进闭环（第 19 项，连带 `doc-numbers.json` 的 `gate-items` 与「十八项」四处形状）。
+- 证据 `.agent/evidence/2026-11-02-C3.md`
+
 ## v0.6.0 · C2 收口（性能读数表三条）· 2026-11-02
 
 - **收三条**：`NFR-ALL-GATE-PERF-001`（冷启动 ≤ 2 s）· `-002`（1 万行 × 20 列不卡）· `-003`（10 万行不 OOM），两列全 ✅。C2 批次清空。

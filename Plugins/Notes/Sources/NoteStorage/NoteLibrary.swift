@@ -230,6 +230,21 @@ public actor NoteLibrary {
     @discardableResult
     public func upsert(_ draft: NoteDraft, id: UUID? = nil, now: Date = Date()) throws -> Note {
         let database = try open()
+        let note = try preparedNote(draft, id: id, now: now, database: database)
+        _ = try database.upsert(note)
+        return note
+    }
+
+    /// 把草稿拼成要落库的那一条（保留 `createdAt` 与组织状态 / 私密挡位）。
+    ///
+    /// 抽出来是为了让 `upsert`（单独写）与 `save`（三块一个事务）**用同一份拼装**：
+    /// 两处各写一遍，改一处忘另一处就是「同一份草稿在两条路上落出不同结果」。
+    private func preparedNote(
+        _ draft: NoteDraft,
+        id: UUID?,
+        now: Date,
+        database: NoteDatabase
+    ) throws -> Note {
         // 查一次旧行只为了拿 `createdAt` 与**组织状态（收藏 / 置顶）**：拿不到（新笔记 / 库是空的）就用 `now` / `false`。
         // 为什么这两个要在这里读回来：`upsert` 的 `ON CONFLICT` 段刻意不碰 `favorite` / `pinned`（与
         // `notebook_uid` 同一条教训 —— 改几个字保存不该静默取消收藏 / 取消置顶），所以库里那份才是事实；
@@ -243,7 +258,6 @@ public actor NoteLibrary {
         // 所以库里那份才是事实；返回的 `Note` 要如实反映它，否则调用方拿到的是「看起来不私密」的假象。
         note.isPrivate = existing?.isPrivate ?? note.isPrivate
         note.updatedAt = now
-        _ = try database.upsert(note)
         return note
     }
 
@@ -265,13 +279,21 @@ public actor NoteLibrary {
         reason: NoteVersionReason = .save,
         retention: NoteVersionRetention = .default
     ) throws -> Note {
-        let written = try upsert(draft, id: id, now: now)
-        if let spans {
-            _ = try open().setNoteSpans(spans, body: noteBody(fromSpans: spans, fallback: draft.body), id: written.id)
-        }
-        _ = try open().recordVersion(noteID: written.id, at: now, reason: reason, retention: retention)
+        // **一个连接、一个事务**：三块（本体 / 正文权威源 / 历史版本）要么全在、要么全不在。
+        // 改前是 `upsert()` + `open().setNoteSpans()` + `open().recordVersion()` —— 三次提交、
+        // 三条连接：进程在中间被杀会留下「笔记在、版本没有」（`NoteCrashSafetyTests` 实测撞到）。
+        let database = try open()
+        let note = try preparedNote(draft, id: id, now: now, database: database)
+        try database.save(
+            note,
+            spans: spans,
+            body: spans.map { noteBody(fromSpans: $0, fallback: draft.body) } ?? draft.body,
+            versionAt: now,
+            reason: reason,
+            retention: retention
+        )
         // 返回**库里读回来的那一份**（正文 / spans / 版本号都以库为准，不用内存里那份猜）。
-        return try open().note(id: written.id) ?? written
+        return try database.note(id: note.id) ?? note
     }
 
     /// 正文投影（`spans` 编不出来时退回调用方给的正文）：与 `NoteBody` 的编解码面同一份，

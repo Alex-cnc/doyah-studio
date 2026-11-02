@@ -922,6 +922,49 @@ public final class NoteDatabase {
         }
     }
 
+    /// **一次保存 = 本体 + 正文权威源 + 历史版本，同一个事务**（`FR-STD-ALL-PLUG-008` ④）。
+    ///
+    /// 为什么必须有这一条：`upsert` / `setNoteSpans` / `recordVersion` 各自都原子，但它们是
+    /// **三次独立的提交** —— 进程在第二与第三次之间被杀，库里就留下「笔记在、版本没有」，
+    /// 读回来是一份没人说得清来源的内容（判据 `Tests/NoteCrashSafetyTests` 实测撞到过：
+    /// 第 16 条完整落盘却 `versionCount == 0`）。原子性只能写在同一个连接的**一个事务**里；
+    /// 跨连接不成立 —— `NoteLibrary` 每次 `open()` 都是一条新连接，所以这一层必须由库这边提供。
+    ///
+    /// - Parameter spans: `nil` = 不写正文列（只有标题 / 标签变了的那次保存）。
+    @discardableResult
+    public func save(
+        _ note: Note,
+        spans: String?,
+        body: String,
+        versionAt: Date,
+        reason: NoteVersionReason,
+        retention: NoteVersionRetention
+    ) throws -> Int64 {
+        try connection.transaction {
+            let rowID = try upsert(note)
+            gapDelay()
+            if let spans {
+                _ = try setNoteSpans(spans, body: body, id: note.id)
+            }
+            gapDelay()
+            _ = try recordVersion(noteID: note.id, at: versionAt, reason: reason, retention: retention)
+            return rowID
+        }
+    }
+
+    /// **负例开关**（只有判据会设）：把 `save` 三块之间的窗口人为拉宽，好让「中途被杀」这件事
+    /// **稳定复现** —— 不设的时候一次都不睡，正常保存路径上一个字节都不变。
+    ///
+    /// 为什么需要它：这条缺陷（三块各自提交）的真实窗口只有几微秒，靠运气砍中才能看见
+    /// （本批第一次跑确实撞到过一条无版本的笔记，但**复跑就绿了**）。判据要能证明
+    /// 「拆开就判红」，就必须把窗口拉宽；拉宽的睡点写在**事务里面**，
+    /// 所以原子实现下被杀 = 整个事务回滚（笔记根本不在），拆开实现下被杀 = 留下半条。
+    private func gapDelay() {
+        guard let raw = ProcessInfo.processInfo.environment["DOYAH_NOTE_SAVE_GAP_MS"],
+              let milliseconds = Double(raw), milliseconds > 0, milliseconds.isFinite else { return }
+        Thread.sleep(forTimeInterval: milliseconds / 1000.0)
+    }
+
     /// 追加一条附件索引（**只存路径**）。
     public func addAttachment(_ attachment: NoteAttachment, to id: UUID) throws {
         try connection.transaction {
