@@ -1,5 +1,16 @@
 # 检查点
 
+## v0.6.0 · 判据债第一片（Notes 8 条）· 2026-11-02
+
+- **本跳清的债**：`check-status-gap` **16 → 8 行**（Notes 侧清零，剩下 8 条全是 `FR-STD-WS-*`）。
+- **收两条（双 ✅）**：`FR-NTS-NOTE-VERSION-001`（`NoteVersionTests` **6 例**：版本带时间与摘要 / 回滚可取回原文且**回滚本身再生一版** / 保留上限可配）· `FR-NTS-NOTE-PRIVACY-001`（`NotePrivacyTests` **7 例**：两条检索路都不出私密笔记 / `canSync`·`canExport`·`canSendToAgent` 三档 + 公开件对照 / 取消私密要二次确认，查看走授权）。
+- **六条没有硬补 ✅，实现列如实降回 🟡**（这是本跳的实质，也是最坏的消息）：按需求书要点逐条核，**要点根本不在盘上** —— `FORMAT`（撤销只是 `allowsUndo`，无 `breakUndoCoalescing`；万行无探针）· `SEARCH`（**无语义检索**，`grep -ri 'embedding / 向量 / 语义检索' Plugins/Notes App` 为 0）· `ORG`（无归档、批量删除无撤销栈）· `TRASH`（无恢复路 `deleted_at = NULL`、无彻底清除与上限）· `SYNC`（⑥ 无全量还原入口、⑦ 关云后本机功能无读数）· `EXPORT`（无备份包 / 无导入还原 / 无格式版本号）。按旧账这 6 条是「v0.1.0-alpha 早收口」的 ✅ —— 收的其实是**实现列**，判据格一直空着就是这个原因。
+- **读数（本跳实跑）**：`swift test --filter`（Note 类 15 族）**Executed 195 tests, 0 failures** · 探针四族（`DOYAH_UI_SNAPSHOT=1` + 临时 `DOYAH_NOTES_DIR`）**25 例 / 0 失败 / 0 skipped** · 文档门禁 `tables 74 / numbers / plan-coverage 471 / status-consistency 471 / version-scope 471 / invariants / doc-layout / doc-versions` rc=0（`numbers` 只剩「`check-status-gap.py` 未接闭环」那一笔，本片前就有）。
+- **本跳修掉的自伤**：判据文本里写了 ASCII `|`（`grep -ri 'a|b|c'`）把表格行劈成 11 列 ⇒ `check-doc-tables` 判红点名 `:161 列数 11 != 表头 9`；已改成 `｜` 并把该行合回 9 列。教训：**台账判据格里不许出现 ASCII 竖线**（含反引号内的 grep 正则）。
+- **未验证（≠ 通过）**：`NoteSyncE2ETests` **11 例要真云端**未跑 · WS 8 条未动 · `check-status-gap.py` 仍未接 `verify-all.sh` · 真鼠标点验未做。
+- **下一跳**：`FR-STD-WS-*` 那 8 条 —— 每条按需求书 5 个要点逐点对探针（`AppearanceAxes/Font` · `MultiCursor` · `BrowserTabDownload` · `WorkspaceTabStripOverflow/ChromeHeight` · `WorkspaceFileRouting` · `EditorSurfaceTokenParity` · `FormatMenuWiring` · `EditAssist`），**对不上的照样降 🟡，不许拿「探针 3 例绿了」当 5 个要点都覆盖**；之后再把 `check-status-gap.py` 接成闭环第 19 项（那步要同批重编 AGENT-SPEC 里 65 处「项数仍十八」）。
+- 证据 `.agent/evidence/2026-11-02-notes-judgement-debt.md`
+
 ## v0.6.0 · C4 收口（接管跳：第二片落账 + 队列转 blocked）· 2026-11-02
 
 - **本跳是接管跳**：上一跳持锁超时，`C4` 第二片的整片改动**在盘上、未提交**（代码 / 界面 / 台账 / 派生队列 / 5 例新单测），无证据文件。按 N2a / C3 先例 —— **先复跑读数再落账，不重写盘上实现**。
