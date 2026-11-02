@@ -65,3 +65,5 @@
 - 2026-11-02 N1：`plan-batches.py --check` 认 `blocked` 但要求 `next_try` 非空（没写的 blocked 判红），理由是「blocked」必须是一个**声明了出口的卡点**，不是「我不想做」的别名。
 - 2026-11-02 N1 收尾片：`revealPrivate` 的中文默认值**删掉、`reason` 改必填**，不走 `--update-baseline` 上调棘轮 —— 上调会把「英文界面弹中文验证框」洗成合法欠账；而语言表里早就有 `notesPrivateUnlockReason`、调用方本来就在传，删默认值只让「忘了传」在编译期就红。
 - 2026-11-02（N1 第二片 · ATTACH-001）：删笔记**不动**附件文件 —— 墓碑只删索引行，删除改成「收据带回清单 + 界面另行确认」（判据③「不会静默删掉附件」的字面口径）；附件按 `<库目录>/attachments/<noteID>/<uuid>-<原名>` 落盘、`copyItem` 字节拷贝，**不做压缩 / 缩略图落盘**；`NoteLibrary.attachments(of:)` 对「查无此条」返回空表而不抛（与 `reminders()` 同口径），`requireRowID` 那类程序错误仍抛。
+
+- 2026-11-02 · 接管**孤儿锁**：上一跳锁持有 31 分钟（< 45 分钟陈旧门槛）但 pid 已死、`.agent/` 09:28 后无写入、无 swift/verify 进程在跑、且它那一跳的最终回复已经交付 ⇒ 判定为「跳已结束但没执行轮末释放」，用 `AGENT_LOCK_STALE_MINUTES=0 bash Scripts/agent-lock.sh acquire tick` 接管并在此留痕。不接管就要白等 14 分钟 × 5 跳，而且上一跳留下的 3 条判红与未提交改动没人收。
