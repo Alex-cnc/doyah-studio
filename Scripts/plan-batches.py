@@ -280,7 +280,7 @@ BLOCKED_V070: dict[str, str] = {
                          "（2026-11-02 复读台账状态原值）⇒ 机器面读不出「观感对」",
     "FR-STD-WS-AI-002": "许愿模式「先出改动后生效」要不要另设（不再逐条批）要主人拍板；`WishStaging` 暂存面未接线",
     "AC-ALL-GATE-REL-004": "要真实 PostgreSQL 端到端：本机无 pg 系（`command -v postgres` 空）、"
-                          "217 ping 100% 丢包（2026-11-02 复测 1 packet transmitted / 0 received）",
+                          "217 主机不在线（2026-11-03 用 Python socket 复测：5432 超时 5 s / 3306 `No route to host` / 22 `Host is down`、ARP 无条目，而同网段网关 443 0.00 s 可连 ⇒ 那台机器没开，不是网段或凭据问题；可达性只认 TCP 握手，`ping`/`nc` 在本 shell 有假阴性，不作判据）",
     "AC-ALL-GATE-REL-005": "同上：错误密码 / 错误端口 / 不存在表 / 不合法 SQL 都要真服务器给回执，桩件回执不算",
     "AC-ALL-GATE-REL-006": "同上：崩溃零容忍要在真实全流程上跑，没真库就没有这条流程",
     "FR-STD-DB-META-002": "GBase 8a 按 2026-11-02 主人令挂起（台账记 ➖）：无法安装部署、暂不支持；"
@@ -297,13 +297,13 @@ BLOCKED_V060: dict[str, str] = {
                            "本机是 macOS，装配与验收要点 ①③④ 不在这台机上做",
     "NFR-ALL-GATE-COMP-001": "等可连的 PostgreSQL 12–18 实例：本机无 postgres / pg_ctl / initdb / docker"
                              "（2026-11-02 实测 `/opt/homebrew/bin` 无 pg 系、`command -v postgres` 空），"
-                             "217 复测 ping 全丢 ⇒ 多版本回归无从跑",
+                             "217 主机不在线（2026-11-03 TCP 复测：5432 超时 5 s、22 `Host is down`，同网段网关 443 0.00 s 可连）⇒ 多版本回归无从跑",
     "NFR-ALL-GATE-COMP-002": "等 GBase 最新版 + GBase 8a 实例：与 `FR-STD-DB-META-002` 同一个卡点"
                              "（217 无 GBase，2026-11-02 复测整机不通）",
     "NFR-ALL-GATE-COMP-003": "等可连的 MySQL 最新大版本 + 向下 5 个大版本实例：本机无 mysql / mysqld"
                              "（`command -v mysqld` 空），只有线协议假服务器 `Scripts/mysql-stub` ⇒ 版本窗口无从验",
     "NFR-ALL-GATE-PERF-004": "等可连的局域网数据库：本条量的是「元数据单层懒加载在局域网内 ≤ 1 s」，"
-                             "本机无局域网 DB（217 ping 全丢，2026-11-02 复测）⇒ 只能量回环，不报通过",
+                             "本机无局域网 DB（217 主机不在线：2026-11-03 TCP 复测 5432 超时 5 s、22 `Host is down`、ARP 无条目，同网段网关 443 0.00 s 可连）⇒ 只能量回环，不报通过",
     # 卡的是**契约口径**与**判据口径**，不是判断力：两条的机器面读数都已在盘（见台账判据列），
     # 差的都不是「再写点代码」，分别要主人一句话 / 要一个跨端产物面。列 blocked 而不是留 todo，
     # 免得每一跳都把同一句「做不了」重跑一遍。
@@ -329,6 +329,16 @@ BLOCKED_V050: dict[str, str] = {
     "FR-AGT-UX-SYNC-001": "等主人定端云同步传输面（§7 阻塞 2）：语义面 19 例已绿，App 侧 0 调用点，且无第二端可对",
     "FR-AGT-UX-SESS-001": "等人工点验：8+10+6 例全绿（含删除真删的文件面），余「归档→恢复 / 导出再导入 / 删一条看盘」三下",
 }
+
+# 卡点措辞的**唯一源**：所有版本规则表按「旧 → 新」合并，同 id 以新表为准。
+# 为什么要合并：`--emit-plan` 按本版范围重出时，范围外的卡点靠「上一次 plan.yaml」携带，
+# 于是同一句 `next_try` 在派生件里另存了一份 —— 规则表改了，派生件仍说旧话
+# （2026-11-03 实测：三处还写着「217 ping 全丢」，而 `ping` 在本 shell 有假阴性、
+# 按 skill `doyah-real-db-verification` 不许作判据）。合并后 `next_try` 只认表。
+ALL_BLOCKED: dict[str, str] = {}
+for _table in (BLOCKED_V050, BLOCKED_V060, BLOCKED_V070):
+    ALL_BLOCKED.update(_table)
+del _table
 
 VERSION_SPECS: dict[str, dict] = {
     "0.7.0": dict(
@@ -556,9 +566,15 @@ def render_plan(rows: list[dict], spec_version: dict) -> str:
         "tasks:",
     ]
     in_scope = {r["id"] for r in rows}
-    # 本版规则表里写死的卡点 + 上一次 plan.yaml 里本版范围内已声明的卡点（后者优先）
-    blocked = dict(spec_version.get("blocked") or {})
-    blocked.update({k: v for k, v in read_blocked().items() if k in in_scope})
+    # 卡点措辞的唯一源 = 本版规则表（`spec_version["blocked"]`）；上一次 plan.yaml 只**补空位**
+    # （规则表没覆盖到的本版条目），不许反过来盖规则表。
+    # 反过来说：这行原来是「派生件优先」（`blocked.update(read_blocked())`），实测后果是
+    # 规则表里的理由改了、`--emit-plan` 重出后仍是旧话（2026-11-03 撞到：三处还在说
+    # 「217 ping 全丢」，而规则表已按 TCP 复测改写）—— 派生件于是成了第二事实源。
+    blocked = {k: v for k, v in ALL_BLOCKED.items() if k in in_scope}
+    blocked.update({k: v for k, v in read_blocked().items()
+                    if k in in_scope and k not in ALL_BLOCKED})
+    blocked.update(spec_version.get("blocked") or {})
     for r in rows:
         lines += [
             f"  - id: {r['id']}",
@@ -587,9 +603,26 @@ def render_plan(rows: list[dict], spec_version: dict) -> str:
                 f"    prio: {yaml_str(row['prio'] if row else '—')}",
                 "    status: blocked",
                 '    evidence: ""',
-                f"    next_try: {yaml_str(carry[ident]['next_try'])}",
+                f"    next_try: {yaml_str(ALL_BLOCKED.get(ident) or carry[ident]['next_try'])}",
             ]
     return "\n".join(lines) + "\n"
+
+
+def check_next_try_matches_rules(spec_version: dict) -> list[str]:
+    """本版范围内 blocked 的 `next_try` 必须逐字来自规则表。
+
+    为什么要这条：`next_try` 是「卡在谁、下次试什么」的唯一交代，它一旦允许派生件自己
+    留旧话，规则表改了没人知道 —— 2026-11-03 实测：规则表三处已改成 TCP 复测，
+    plan.yaml 里仍是「217 ping 全丢」（`ping` 在本 shell 有假阴性，按 skill 不许作判据）。
+    派生件落后或被人手改 ⇒ 判红，点名到具体 id。
+    """
+    problems: list[str] = []
+    for ident, text in read_blocked().items():
+        want = ALL_BLOCKED.get(ident)
+        if want is not None and want != text:
+            problems.append(
+                f"next_try 与规则表不一致：{ident}（派生件落后或被手改 ⇒ 跑 --emit-plan 重出）")
+    return problems
 
 
 def check_against_ledger(rows: list[dict], spec_version: dict) -> list[str]:
@@ -645,6 +678,7 @@ def main(argv: list[str]) -> int:
         rc = 0
         if spec_version["ledger_scope"] is not None:
             problems = check_against_ledger(ledger_open(spec_version["ledger_scope"]), spec_version)
+            problems += check_next_try_matches_rules(spec_version)
             for line in problems:
                 print(f"✗ {line}")
             if problems:

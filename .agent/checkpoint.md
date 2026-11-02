@@ -1,5 +1,16 @@
 # 检查点
 
+## 217 可达性证据换成判得住的那种 + 派生件 `next_try` 不许覆盖规则表 · 2026-11-03
+
+- **没有台账行**（换证据、修派生件取词方向，不改需求状态）。由来 = 开轮按 skill `doyah-real-db-verification` 复核 217，发现台账 §4.2 两格与 `plan.yaml` 三处 `next_try` 都拿「217 **ping 全丢**」当不可达的证据 —— 而该 skill 明写 `ping`/`nc`/`arp` 在本 shell 会假阴性、可达性只认 TCP 握手（铁律 13/15：判不住的证据不许当结论）。
+- **复测（TCP）**：5432 `TimeoutError` 5.00 s · 3306 `No route to host` · 22 `Host is down` · `arp` no entry · 同网段网关 443 **0.00 s 可连** ⇒ 结论仍是不可达（🟡 不改），但理由是**那台机器没开**，不是网段/防火墙/凭据。
+- **落法**：① 台账 §4.2 v0.3.0 / v0.9.0 两格 + ② `plan-batches.py` 三处规则表（REL-004 / COMP-001 / PERF-004）同批改写；③ **修 `render_plan` 的取词方向** —— 原为 `blocked.update(read_blocked())`（上一次 plan.yaml 盖掉规则表）⇒ 规则表改了、`--emit-plan` 重出仍是旧话（这三处旧话的真因）；改成规则表优先 + `ALL_BLOCKED`（V050/V060/V070 旧→新合并）供跨版携带取词；④ **新增判据 F** `check_next_try_matches_rules`（接进 `--check`）：每个 blocked 的 `next_try` 必须逐字等于规则表，否则点名判红。
+- **读数**：`plan-batches --check --version 0.7.0` 重出前 rc=1（点名 COMP-001 / PERF-004）→ `--write --emit-plan` 重出（0 todo / 28 blocked）→ rc=0；`plan.yaml` 里「主机不在线」3 处、「ping 全丢|ping 100%」**0** 处、blocked 28 = next_try 28；16 道文档/口径门禁全 rc=0。
+- **反例两段**（判红后 `sha256` 还原 `5b38829357fdb341…`）：旧派生件在盘 ⇒ rc=1 点名两条 · 手改 `plan.yaml` 一行 ⇒ rc=1 点名 REL-004，还原后复绿。
+- **全量 `verify-all.sh --keep-going`**：项块 **19** · 失败 **10 项（32 处）** · 平台跳过 0 · **未执行项 = 无**；第 5 项 ✅（判据 E 自检 6/6 在内）· 第 19 项 ✅。与上一跳基线（fs008：10 项 / 31 处）项号完全一致，唯一多出的一处 = 第 16 项 `check-path-ownership`（当时未提交 ⇒ 工作树里的 Docs/ 与 Scripts/ 记「共享面未登记」；**提交后单独复跑 ⇒ `RESULT: PASS (exit 0)`**，靠提交信息里的 `shared-surface:` 声明）。
+- **未验证（≠通过）**：217 为什么没开（要主人开机）· 三处 DB 卡点状态未变（只换证据）· **判据 F 还没接进 `verify-all`**（只在手工 `--check` 生效）· `check-menu-language.py` 单跑 >180 s 不返回（存量红）· 全量 32 处存量红仍未逐条给根因。
+- 证据 `.agent/evidence/2026-11-03-217-tcp-evidence.md`。**下一项**：判据 F 接进 `verify-all` 第 5 项（闭环）；队列仍 **0 todo / 28 blocked**，余账全卡外部实例与主人拍板。
+
 ## 报数归正 + 判据 E：§4.2 条数不再是手写的 · 2026-11-03
 
 - **没有台账行**（修的是报数口径与判据覆盖面，不是需求实现）；由来 = 上一节记的那句「§4.2 那张表仍欠 +11，属单独的报数跳」。
