@@ -10555,6 +10555,9 @@ final class AppState: ObservableObject {
         // 私密那一栏与中栏列表同源（都是这份库）：标 / 撤私密之后两处必须一起变，
         // 少刷一处就会出现「列表里没了、私密那一栏也没有」这种藏起来的效果。
         await refreshNotePrivateSummaries()
+        // 关联行也跟着重读：笔记被删 / 还原之后，「来源已删除」那一句要在同一轮里翻面
+        // （判据④；链接行不级联删，所以这一句由**读的一方**现判）。
+        await reloadTodoLinks()
     }
 
     /// 把一条笔记装进编辑器的**内容**（标题 / 正文 / 标签 + 正在编辑的 id）——**不动模式**。
@@ -11165,6 +11168,8 @@ final class AppState: ObservableObject {
             todos = []
             errorMessage = ErrorPresenter.message(for: error)
         }
+        // 关联行随任务一起重读：清单 / 详情里那句「来自笔记 / 已生成任务」不能比任务本身落后一轮。
+        await reloadTodoLinks()
     }
 
     /// 清单那一族共用的**参照窗口**（今天零点 / 明天零点 / 下周一零点）。
@@ -11319,6 +11324,155 @@ final class AppState: ObservableObject {
             await reloadReminders()
         } catch {
             errorMessage = ErrorPresenter.message(for: error)
+        }
+    }
+
+
+    // MARK: - 任务 ↔ 笔记的转化（`FR-NTS-TODO-LINK-001` · 概设 §15.14）
+
+    /// 库里的全部链接（界面一次读齐 —— 「对方还在不在」靠它与 `notes` / `todos` 现算）。
+    /// **判据⑤ 的前提**：链接行不随对象级联删，所以对象没了这一行还在，快照就还在。
+    @Published var todoNoteLinks: [TodoNoteLink] = []
+
+    func reloadTodoLinks() async {
+        guard notesEnabled else {
+            todoNoteLinks = []
+            return
+        }
+        do {
+            todoNoteLinks = try await NoteLibrary.defaultLibrary().links()
+        } catch {
+            // 读链接失败**不许**把上一次的读数留着（那会画出已经不存在的「来自笔记」行）；
+            // 也不弹错 —— 清单 / 笔记本身是好的，这一屏只是少一行关联。
+            todoNoteLinks = []
+        }
+    }
+
+    /// 正文区当前这一条（**没有 id 的草稿不算**：链接要给两端各一个 id）。
+    var linkingNote: Note? {
+        guard let id = noteBeingEdited else { return nil }
+        return notes.first { $0.id == id }
+    }
+
+    /// 一条笔记看到的关联行（判据②「双方详情都能看到」的笔记侧）。
+    func linkReadings(forNote id: UUID) -> [TodoLinkReading] {
+        let live = Set(todos.map(\.id))
+        return todoNoteLinks
+            .filter { $0.noteID == id }
+            .map { TodoLinkFactory.reading(of: $0, viewer: .note, counterpartExists: live.contains($0.todoID)) }
+    }
+
+    /// 一条任务看到的关联行（任务侧）。
+    func linkReadings(forTodo id: UUID) -> [TodoLinkReading] {
+        let live = Set(notes.map(\.id))
+        return todoNoteLinks
+            .filter { $0.todoID == id }
+            .map { TodoLinkFactory.reading(of: $0, viewer: .todo, counterpartExists: live.contains($0.noteID)) }
+    }
+
+    /// 正文区那一屏要画的那几行（视图不自己 filter）。
+    var linkReadingsForCurrentNote: [TodoLinkReading] {
+        guard let note = linkingNote else { return [] }
+        return linkReadings(forNote: note.id)
+    }
+
+    /// **笔记 ⇒ 任务**（判据①：只造新任务，原笔记一个字节都不改）。
+    ///
+    /// 「新建到可见」的那一下在这里：写完库立刻 `reloadTodos()` —— 清单里当场多一行，
+    /// 不需要用户再按一次刷新（概设 §15.14 与清单那一条同一纪律）。
+    func createTodoFromNote(_ note: Note) async {
+        guard notesEnabled else {
+            statusMessage = L(.licenseNotesNotIncluded)
+            return
+        }
+        let todo = TodoLinkFactory.todo(from: note, fallbackTitle: L(.notesUntitled))
+        do {
+            let library = NoteLibrary.defaultLibrary()
+            let saved = try await library.upsert(todo)
+            let link = TodoLinkFactory.link(note: note, todo: saved, origin: .fromNote)
+            _ = try await library.saveLink(link)
+            await reloadTodos()
+            await reloadTodoLinks()
+            statusMessage = L(.todoLinkCreatedTodo, TodoPresentation.title(saved) ?? L(.notesUntitled))
+        } catch {
+            errorMessage = ErrorPresenter.message(for: error)
+        }
+    }
+
+    /// **任务 ⇒ 笔记**（判据①：只造新笔记，原任务一个字节都不改）。
+    func createNoteFromTodo(_ todo: Todo) async {
+        guard notesEnabled else {
+            statusMessage = L(.licenseNotesNotIncluded)
+            return
+        }
+        let note = TodoLinkFactory.note(from: todo, fallbackTitle: L(.notesUntitled))
+        do {
+            let library = NoteLibrary.defaultLibrary()
+            let saved = try await library.save(
+                NoteDraft(title: note.title, body: note.body, tags: note.tags, source: note.source),
+                id: note.id
+            )
+            let link = TodoLinkFactory.link(note: saved, todo: todo, origin: .fromTodo)
+            _ = try await library.saveLink(link)
+            await reloadNotes()
+            await reloadTodoLinks()
+            flushNoteAutosave()
+            loadEditorContent(saved)
+            editorMode = .preview
+            notesModule = .notes
+            statusMessage = L(.todoLinkCreatedNote, note.title)
+        } catch {
+            errorMessage = ErrorPresenter.message(for: error)
+        }
+    }
+
+    /// **撤销**（判据③）：删掉**这次生成的那一个**，再销掉链接；源头一个字不动。
+    /// 两次删除分开做，任一步失败都如实说 —— 不做「删了一半也算成功」。
+    func undoConversion(linkID: UUID) async {
+        guard let link = todoNoteLinks.first(where: { $0.id == linkID }) else {
+            statusMessage = L(.todoLinkMissingObject)
+            return
+        }
+        do {
+            let library = NoteLibrary.defaultLibrary()
+            switch TodoLinkFactory.undoTarget(of: link) {
+            case .todo(let id):
+                try await library.deleteTodo(id: id)
+                if let pending = todoReminders[id] { await reminderDeliverer.cancel(id: pending.id) }
+                await reloadTodos()
+                await reloadReminders()
+            case .note(let id):
+                _ = try await library.delete(id: id, at: Date())
+                await reloadNotes()
+            }
+            _ = try await library.deleteLink(id: link.id)
+            await reloadTodoLinks()
+            statusMessage = L(.todoLinkUndoneStatus)
+        } catch {
+            errorMessage = ErrorPresenter.message(for: error)
+        }
+    }
+
+    /// **跳转**（判据②「可直接跳到对方」）：按对方是哪一面换屏 + 打开那一条。
+    /// 对方已被删 ⇒ 如实说一句（不假装跳过去）。
+    func openLinkedCounterpart(_ reading: TodoLinkReading) {
+        if reading.counterpartMissing {
+            statusMessage = L(.todoLinkMissingObject)
+            return
+        }
+        switch reading.counterpart {
+        case .todo:
+            notesModule = .todos
+            todoBeingEdited = nil
+            todoDetailID = reading.counterpartID
+        case .note:
+            guard let note = notes.first(where: { $0.id == reading.counterpartID }) else {
+                statusMessage = L(.todoLinkMissingObject)
+                return
+            }
+            notesModule = .notes
+            flushNoteAutosave()
+            handleNoteRowClick(note, modifiers: [])
         }
     }
 

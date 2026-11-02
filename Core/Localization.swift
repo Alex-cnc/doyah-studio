@@ -711,6 +711,25 @@ public enum LKey: String, CaseIterable, Sendable {
     case todoDelete
     /// 认不出的 id（队列 `L-100`）：库里没有这一条时**如实说**，不假装改成了。
     case todoMissing
+    // `FR-NTS-TODO-LINK-001`（任务 ↔ 笔记双向转化）：详情里那一行的轴名、四个方向词、两个动作、
+    // 两个如实交代（来源被删 / 撤销完成）。方向词四种组合都在 `TodoLinkText.originKey` 里选，
+    // 界面不自己按 origin 拼句子。
+    case todoLinkSectionTitle
+    case todoLinkCreateTodo
+    case todoLinkCreateNote
+    case todoLinkFromNote
+    case todoLinkFromTodo
+    case todoLinkGeneratedTodo
+    case todoLinkGeneratedNote
+    case todoLinkSourceDeleted
+    case todoLinkUndo
+    case todoLinkOpen
+    case todoLinkUndone
+    case todoLinkMissingObject
+    case todoLinkCreatedTodo
+    case todoLinkCreatedNote
+    case todoLinkUndoneStatus
+    case todoLinkNeedsSavedNote
     /// 待办那一屏左栏那一行（待办自己的入口与列表 —— `FR-NOTE-36`）。
     case todoAll
     // 队列 `L-100` **Core 半第二片**（日历）：月 / 周两档的名字（切换器的唯一出处；
@@ -4107,6 +4126,29 @@ public enum LocalizedStrings {
         .todoMarkDone: [.simplifiedChinese: "标记完成", .english: "Mark as done"],
         .todoMarkOpen: [.simplifiedChinese: "标记未完成", .english: "Mark as open"],
         .todoDelete: [.simplifiedChinese: "删除待办", .english: "Delete todo"],
+        // `FR-NTS-TODO-LINK-001`：任务 ↔ 笔记双向转化（详情里那一行 + 两个动作 + 两句如实交代）。
+        .todoLinkSectionTitle: [.simplifiedChinese: "关联", .english: "Links"],
+        .todoLinkCreateTodo: [.simplifiedChinese: "生成任务", .english: "Create task"],
+        .todoLinkCreateNote: [.simplifiedChinese: "记成笔记", .english: "Save as note"],
+        .todoLinkFromNote: [.simplifiedChinese: "来自笔记", .english: "From note"],
+        .todoLinkFromTodo: [.simplifiedChinese: "来自任务", .english: "From task"],
+        .todoLinkGeneratedTodo: [.simplifiedChinese: "已生成任务", .english: "Task created"],
+        .todoLinkGeneratedNote: [.simplifiedChinese: "已生成笔记", .english: "Note created"],
+        .todoLinkSourceDeleted: [.simplifiedChinese: "来源已删除", .english: "Source deleted"],
+        .todoLinkUndo: [.simplifiedChinese: "撤销转化", .english: "Undo conversion"],
+        .todoLinkOpen: [.simplifiedChinese: "打开对方", .english: "Open the other item"],
+        .todoLinkUndone: [.simplifiedChinese: "已撤销转化", .english: "Conversion undone"],
+        .todoLinkMissingObject: [.simplifiedChinese: "对方已不在了", .english: "The other item is gone"],
+        .todoLinkCreatedTodo: [.simplifiedChinese: "已生成任务：%@", .english: "Task created: %@"],
+        .todoLinkCreatedNote: [.simplifiedChinese: "已生成笔记：%@", .english: "Note created: %@"],
+        .todoLinkUndoneStatus: [
+            .simplifiedChinese: "已撤销转化（删掉的是这次生成的那一条，原对象没动）",
+            .english: "Conversion undone (the generated item was removed; the original is untouched)"
+        ],
+        .todoLinkNeedsSavedNote: [
+            .simplifiedChinese: "先保存这条笔记，再生成任务",
+            .english: "Save this note before creating a task"
+        ],
         .todoMissing: [.simplifiedChinese: "这条待办已经不在了", .english: "That todo is gone"],
         .todoAll: [.simplifiedChinese: "全部待办", .english: "All todos"],
         // 队列 `L-100` **Core 半第二片**（日历）：两档视图的名字（切换器读 `TodoCalendarView.key`）。

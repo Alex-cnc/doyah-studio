@@ -575,6 +575,41 @@ public actor NoteLibrary {
         try open().deleteTodo(id: id)
     }
 
+    // MARK: - 任务 ↔ 笔记的转化链接（schema v13 · `FR-NTS-TODO-LINK-001`）
+
+    /// 全部链接（界面那一屏一次读齐：靠它判「对方还在不在」，不逐条查库）。
+    /// 库还不存在时如实返回空表（**不顺手建一个空库**，与 `todos()` 同一条纪律）。
+    public func links() throws -> [TodoNoteLink] {
+        guard FileManager.default.fileExists(atPath: databaseURL.path) else { return [] }
+        return try open().links()
+    }
+
+    /// 某条笔记的链接。
+    public func links(noteID: UUID) throws -> [TodoNoteLink] {
+        guard FileManager.default.fileExists(atPath: databaseURL.path) else { return [] }
+        return try open().links(noteID: noteID)
+    }
+
+    /// 某条任务的链接。
+    public func links(todoID: UUID) throws -> [TodoNoteLink] {
+        guard FileManager.default.fileExists(atPath: databaseURL.path) else { return [] }
+        return try open().links(todoID: todoID)
+    }
+
+    /// 写一条链接（同一对对象只有一条）。
+    @discardableResult
+    public func saveLink(_ link: TodoNoteLink) throws -> TodoNoteLink {
+        _ = try open().upsert(link)
+        return link
+    }
+
+    /// 删一条链接：返回**真的删了几行**（0 = 本来就没有，调用方如实说）。
+    @discardableResult
+    public func deleteLink(id: UUID) throws -> Int {
+        guard FileManager.default.fileExists(atPath: databaseURL.path) else { return 0 }
+        return try open().deleteLink(id: id)
+    }
+
     // MARK: - 提醒（schema v6 · 队列 `L-100` 落法 ④ 的存储半）
 
     /// 某个归属（一条笔记 / 一条任务）的提醒。

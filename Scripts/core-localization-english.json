@@ -944,6 +944,12 @@
         "Core/SyntheticSpecBuilder.swift:86"
       ]
     },
+    "sync link row was not written": {
+      "kind": "internalErrorDescription",
+      "sites": [
+        "Plugins/Notes/Sources/NoteStorage/NoteDatabase.swift:1656"
+      ]
+    },
     "todo row has no usable uuid": {
       "kind": "internalErrorDescription",
       "sites": [

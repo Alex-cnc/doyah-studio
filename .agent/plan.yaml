@@ -1,7 +1,7 @@
 # v0.4.0 笔记与任务闭环 · 执行队列（**派生件**）
 # 唯一事实源 = Docs/Doyah产品开发计划任务清单-macOS.md（活书台账）。
 # 本文件只做「下一跳」排序，不许反向改台账；台账一改就跑 --emit-plan 重出，别手改。
-# 生成于 2026-11-02，源 = 台账里 FR-NTS-NOTE- / FR-NTS-TODO- 未闭 9 条（8 🟡 / 1 ⬜）。
+# 生成于 2026-11-02，源 = 台账里 FR-NTS-NOTE- / FR-NTS-TODO- 未闭 7 条（6 🟡 / 1 ⬜）。
 tasks:
   - id: FR-NTS-NOTE-ORG-002
     goal: "笔记本归类：笔记可归入**一个笔记本**（单层，不做「架 → 笔记本」两层；未指定时落默认「收件箱」），**归属唯一**，跨笔记本移动只改归属"
@@ -23,20 +23,6 @@ tasks:
     done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-NTS-TODO-LIST-002 | grep -q '✅'"
     layer: "基线必备"
     prio: "高"
-    status: todo
-    evidence: ""
-  - id: FR-NTS-TODO-LIST-003
-    goal: "**组织与检索**：分组（按时间 / 按状态 / **按标签**）· 筛选（今天 / 本周 / 已过期 / 无截止）· 排序"
-    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-NTS-TODO-LIST-003 | grep -q '✅'"
-    layer: "常用增强"
-    prio: "中"
-    status: todo
-    evidence: ""
-  - id: FR-NTS-TODO-LINK-001
-    goal: "任务 ↔ 笔记**双向转化**：笔记生成任务、任务记成笔记，带回指，可撤销"
-    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-NTS-TODO-LINK-001 | grep -q '✅'"
-    layer: "常用增强"
-    prio: "中"
     status: todo
     evidence: ""
   - id: FR-NTS-TODO-CALENDAR-001

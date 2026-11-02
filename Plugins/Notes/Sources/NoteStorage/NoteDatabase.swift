@@ -521,6 +521,43 @@ public enum NoteSchemaV12 {
     ]
 }
 
+/// **schema v13**（`FR-NTS-TODO-LINK-001`）：新增 **`todo_note_link`**（任务 ↔ 笔记的转化链接 + 快照）。
+///
+/// 三条口径（都不是顺手加的列）：
+///   · **没有外键、没有级联** —— 概设 §15.14 判据④要求「来源被删时保留快照并标注」；
+///     若挂 `REFERENCES`，删笔记会把链接行一起带走，快照就没了，界面只能显示断链。
+///     所以这一张表**故意**与 `note` / `todo` 松耦合，活对象的存亡由读取方现判。
+///   · **一对对象只留一条链接**（`UNIQUE (note_uuid, todo_uuid)`）：重复按「生成任务」不该堆出
+///     第二条链接（界面上会是两行一样的「来自笔记」，撤销时删错一条）。
+///   · **快照两列都是文本**（`snapshot_title` / `snapshot_excerpt`）：建立时写一次，此后不更新 ——
+///     判据③「目标后续被改时不自动改写对方内容」。
+public enum NoteSchemaV13 {
+
+    public static let version: Int32 = 13
+
+    /// 这一版**新增一张表**，没有新增列。
+    public static let tables: [String] = ["todo_note_link"]
+    /// 两条索引：一对对象的唯一性（`pair`）+ 从任务侧反查（`todo`）。
+    public static let indexes: [String] = ["todo_note_link_pair", "todo_note_link_todo"]
+
+    public static let ddl: [String] = [
+        """
+        CREATE TABLE todo_note_link (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            uuid TEXT NOT NULL UNIQUE,
+            note_uuid TEXT NOT NULL,
+            todo_uuid TEXT NOT NULL,
+            origin TEXT NOT NULL,
+            snapshot_title TEXT NOT NULL DEFAULT '',
+            snapshot_excerpt TEXT NOT NULL DEFAULT '',
+            created_at REAL NOT NULL
+        );
+        """,
+        "CREATE UNIQUE INDEX todo_note_link_pair ON todo_note_link (note_uuid, todo_uuid);",
+        "CREATE INDEX todo_note_link_todo ON todo_note_link (todo_uuid);"
+    ]
+}
+
 /// 附件索引的一条（`FR-PLUG-08`：**附件二进制留在文件系统，库里只存路径**）。
 public struct NoteAttachment: Equatable, Sendable {
     public var id: UUID
@@ -554,6 +591,8 @@ public struct NoteTimelineEntry: Equatable, Sendable {
 public enum NoteStorageFailure: Error, Equatable, CustomStringConvertible {
     /// 表里出现了这一版不认识的 `source_kind` —— 不降级、不猜（见文件头第三条口径）。
     case unknownSourceKind(String)
+    /// `todo_note_link.origin` 出现了这一版不认识的方向 —— 同样不猜：方向决定撤销删哪一头。
+    case unknownLinkOrigin(String)
     /// 库的 schema 版本比这一版代码更新（将来回退 App 版本时会遇到）：**拒绝写入**而不是继续用。
     case unsupportedSchemaVersion(found: Int32, supported: Int32)
     /// 快照目标已存在：**不覆盖**（备份不许把上一次的备份顶掉）。
@@ -569,6 +608,8 @@ public enum NoteStorageFailure: Error, Equatable, CustomStringConvertible {
         switch self {
         case .unknownSourceKind(let raw):
             return "unknown note source kind in the database: \(raw)"
+        case .unknownLinkOrigin(let raw):
+            return "unknown todo-note link origin in the database: \(raw)"
         case .unsupportedSchemaVersion(let found, let supported):
             return "database schema version \(found) is newer than supported \(supported)"
         case .snapshotTargetExists(let path):
@@ -613,8 +654,9 @@ public final class NoteDatabase {
     /// 这一版代码支持的 schema 版本（v1 → v2 补两层归属、v2 → v3 补收藏、v3 → v4 补置顶、
     /// v4 → v5 补待办任务清单、v5 → v6 补提醒、v6 → v7 补查询历史、v7 → v8 补正文 spans 列、
     /// v8 → v9 补待办备注 `note` 列、v9 → v10 补笔记墓碑 `deleted_at` 列、
-    /// **v10 → v11 补历史版本表 `note_version`、v11 → v12 补私密挡位 `is_private` 列**）。
-    public static let supportedVersion = NoteSchemaV12.version
+    /// **v10 → v11 补历史版本表 `note_version`、v11 → v12 补私密挡位 `is_private` 列、
+    /// v12 → v13 补转化链接表 `todo_note_link`**）。
+    public static let supportedVersion = NoteSchemaV13.version
 
     private let connection: SQLiteConnection
 
@@ -721,6 +763,10 @@ public final class NoteDatabase {
             if current < NoteSchemaV12.version {
                 for statement in NoteSchemaV12.ddl { try connection.execute(statement) }
                 try connection.setPragma("user_version = \(NoteSchemaV12.version)")
+            }
+            if current < NoteSchemaV13.version {
+                for statement in NoteSchemaV13.ddl { try connection.execute(statement) }
+                try connection.setPragma("user_version = \(NoteSchemaV13.version)")
             }
         }
     }
@@ -1515,6 +1561,134 @@ public final class NoteDatabase {
 
     public func todoCount() throws -> Int {
         Int(try connection.scalarInt("SELECT count(*) FROM todo") ?? 0)
+    }
+
+    // MARK: - 任务 ↔ 笔记的转化链接（schema v13 · `FR-NTS-TODO-LINK-001`）
+
+    /// 写入一条链接（**同一对对象只有一条**：`UNIQUE (note_uuid, todo_uuid)` 上冲突即更新快照与方向）。
+    ///
+    /// 三条口径：
+    ///   · **不校验两端存在** —— 这不是偷懒：链接要活过对象被删（概设 §15.14 判据④），
+    ///     写入时若要求「两端都在」，撤销一半之后留下的那条链接就再也写不回去；
+    ///   · **快照只由调用方给**（本层不改写、不从 `note` / `todo` 现取）；
+    ///   · 返回 rowid 按 uuid 反查（与笔记 / 待办 / 提醒三处同一个理由：UPDATE 分支上
+    ///     `last_insert_rowid()` 是上一句话留下的值）。
+    @discardableResult
+    public func upsert(_ link: TodoNoteLink) throws -> Int64 {
+        try connection.execute(
+            """
+            INSERT INTO todo_note_link (
+                uuid, note_uuid, todo_uuid, origin, snapshot_title, snapshot_excerpt, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT (note_uuid, todo_uuid) DO UPDATE SET
+                origin = excluded.origin,
+                snapshot_title = excluded.snapshot_title,
+                snapshot_excerpt = excluded.snapshot_excerpt,
+                created_at = excluded.created_at;
+            """,
+            [
+                .text(link.id.uuidString),
+                .text(link.noteID.uuidString),
+                .text(link.todoID.uuidString),
+                .text(link.origin.raw),
+                .text(link.snapshotTitle),
+                .text(link.snapshotExcerpt),
+                .real(link.createdAt.timeIntervalSince1970)
+            ]
+        )
+        // 按**一对对象**反查（不是按 uuid）：走 UPDATE 分支时库里那一行的 uuid 是**第一次**写进去的
+        // —— 重复按「生成任务」会带一个新的 uuid 来，按 uuid 反查就会「写完却查不到」。
+        return try requireLinkRowID(noteID: link.noteID, todoID: link.todoID)
+    }
+
+    /// 全部链接（**创建时间正序、同时间按 uuid 兜底** —— 稳定有序）。
+    public func links() throws -> [TodoNoteLink] {
+        try materializeLinks(
+            try connection.query("SELECT * FROM todo_note_link ORDER BY created_at ASC, uuid ASC")
+        )
+    }
+
+    /// 某条笔记的链接（一端可有多个任务 —— 「一条笔记生成多个任务」不禁止）。
+    public func links(noteID: UUID) throws -> [TodoNoteLink] {
+        try materializeLinks(
+            try connection.query(
+                "SELECT * FROM todo_note_link WHERE note_uuid = ? ORDER BY created_at ASC, uuid ASC",
+                [.text(noteID.uuidString)]
+            )
+        )
+    }
+
+    /// 某条任务的链接。
+    public func links(todoID: UUID) throws -> [TodoNoteLink] {
+        try materializeLinks(
+            try connection.query(
+                "SELECT * FROM todo_note_link WHERE todo_uuid = ? ORDER BY created_at ASC, uuid ASC",
+                [.text(todoID.uuidString)]
+            )
+        )
+    }
+
+    /// 删一条链接（撤销转化的最后一步）。返回命中的行数 —— **0 就是「本来就没有」**，由调用方如实说。
+    @discardableResult
+    public func deleteLink(id: UUID) throws -> Int {
+        try connection.execute("DELETE FROM todo_note_link WHERE uuid = ?", [.text(id.uuidString)])
+        return connection.changeCount
+    }
+
+    /// 按「一对对象」删（重复按「生成任务」时把旧链接一并销账，界面不会留下两行）。
+    @discardableResult
+    public func deleteLink(noteID: UUID, todoID: UUID) throws -> Int {
+        try connection.execute(
+            "DELETE FROM todo_note_link WHERE note_uuid = ? AND todo_uuid = ?",
+            [.text(noteID.uuidString), .text(todoID.uuidString)]
+        )
+        return connection.changeCount
+    }
+
+    private func requireLinkRowID(noteID: UUID, todoID: UUID) throws -> Int64 {
+        let rows = try connection.query(
+            "SELECT id FROM todo_note_link WHERE note_uuid = ? AND todo_uuid = ?",
+            [.text(noteID.uuidString), .text(todoID.uuidString)]
+        )
+        guard let value = rows.first?.int("id") else {
+            throw SQLiteFailure(
+                code: SQLiteResultCode.mismatch,
+                message: "sync link row was not written",
+                operation: .step
+            )
+        }
+        return value
+    }
+
+    /// 行 → `TodoNoteLink`。**`origin` 认不出就抛错**（与 `source_kind` 同族）：
+    /// 方向决定撤销删哪一头，猜错就是删掉用户还要的那一个。
+    private func materializeLinks(_ rows: [SQLiteRow]) throws -> [TodoNoteLink] {
+        try rows.map { row in
+            guard
+                let uuidText = row.text("uuid"), let uuid = UUID(uuidString: uuidText),
+                let noteText = row.text("note_uuid"), let noteID = UUID(uuidString: noteText),
+                let todoText = row.text("todo_uuid"), let todoID = UUID(uuidString: todoText)
+            else {
+                throw SQLiteFailure(
+                    code: SQLiteResultCode.mismatch,
+                    message: "todo_note_link row has no usable uuid",
+                    operation: .step
+                )
+            }
+            let rawOrigin = row.text("origin") ?? ""
+            guard let origin = TodoLinkOrigin(raw: rawOrigin) else {
+                throw NoteStorageFailure.unknownLinkOrigin(rawOrigin)
+            }
+            return TodoNoteLink(
+                id: uuid,
+                noteID: noteID,
+                todoID: todoID,
+                origin: origin,
+                snapshotTitle: row.text("snapshot_title") ?? "",
+                snapshotExcerpt: row.text("snapshot_excerpt") ?? "",
+                createdAt: Date(timeIntervalSince1970: row["created_at"].doubleValue ?? 0)
+            )
+        }
     }
 
     // MARK: - 提醒（schema v6 · 队列 `L-100` 落法 ④ 的存储半）

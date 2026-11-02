@@ -931,6 +931,9 @@ struct NotesEditorView: View {
             // **附件条**（`FR-NTS-NOTE-ATTACH-001`）：只画库里的索引（文件本体在文件系统）。
             // 缺失的那几个**画成缺失态并写「文件不在了」**（判据②），不静默跳过。
             attachmentStrip
+            // **关联条**（`FR-NTS-TODO-LINK-001`）：这一条笔记与任务之间的转化链接 ——
+            // 一条都没有时只画「生成任务」那一枚（先有入口才谈得上闭环）；有链接时逐条画读数行。
+            linkStrip
             // **正文那一块按 `appState.editorMode` 分两半**（片 `N2-3a`「单击预览」）：
             //   · `.edit`（新建 / 「改」）⇒ SwiftUI `TextEditor`，就是本片之前那一支；
             //   · `.preview`（列表里单击一条）⇒ `NotePreviewBody`：真 `NSTextView` 且
@@ -1030,7 +1033,81 @@ struct NotesEditorView: View {
     }
 
     /// **附件条**（`FR-NTS-NOTE-ATTACH-001`）：一枚一枚画名字；文件不在的那一枚带缺失标记。
+    /// （说明文字在 `attachmentStrip` 定义处。）
+
+    /// **关联条**（`FR-NTS-TODO-LINK-001` 判据②③④的界面落点）：
+    ///  - 「生成任务」= 判据①的入口（只造新任务，原笔记不动）；
+    ///  - 每条链接一行：方向词（来自 / 已生成）+ **快照标题** + 两个出口（打开对方 / 撤销转化）；
+    ///  - 对方已被删 ⇒ 那一行**不消失**，改成写「来源已删除」并把「打开对方」灰掉
+    ///    （判据④：留快照、标来源已删除、不显示断链、不跟着删）。
     ///
+    /// 视图不做判定：方向词来自 `TodoLinkText.originKey`，缺失来自 `TodoLinkReading.counterpartMissing`，
+    /// 这里只照读数画。
+    private var linkStrip: some View {
+        VStack(alignment: .leading, spacing: Spacing.hair) {
+            HStack(spacing: Spacing.xs) {
+                Image(systemName: "link")
+                    .font(Theme.font(.caption))
+                    .foregroundStyle(Theme.text(.secondary))
+                Text(L(.todoLinkSectionTitle))
+                    .font(Theme.font(.caption))
+                    .foregroundStyle(Theme.text(.secondary))
+                Spacer(minLength: Spacing.xs)
+                // **带字符的按钮一律图标化**（人类主人令 2026-10-13 / 裁决 2026-10-14 · 判据 C）：
+                // 这一条是「笔记 ⇒ 任务」的动作入口，名字由 `help` 与读屏标签给。
+                Button {
+                    guard let note = appState.linkingNote else { return }
+                    Task { await appState.createTodoFromNote(note) }
+                } label: {
+                    Image(systemName: "checklist")
+                        .font(Theme.font(.caption))
+                }
+                .buttonStyle(.plain)
+                // 没有落库的笔记（新建未保存）⇒ 没有 id 可指，灰着并给一句人话
+                .disabled(appState.linkingNote == nil)
+                .help(appState.linkingNote == nil ? L(.todoLinkNeedsSavedNote) : L(.todoLinkCreateTodo))
+                .accessibilityLabel(Text(appState.linkingNote == nil ? L(.todoLinkNeedsSavedNote) : L(.todoLinkCreateTodo)))
+                .accessibilityIdentifier("notes-link-create-todo")
+            }
+            ForEach(appState.linkReadingsForCurrentNote, id: \.linkID) { reading in
+                HStack(spacing: Spacing.xs) {
+                    Text(L(reading.originKey))
+                        .font(Theme.font(.caption))
+                        .foregroundStyle(Theme.text(.secondary))
+                    Text(reading.counterpartTitle.isEmpty ? L(.notesUntitled) : reading.counterpartTitle)
+                        .font(Theme.font(.caption))
+                        .lineLimit(1)
+                    if reading.counterpartMissing {
+                        Text(L(.todoLinkSourceDeleted))
+                            .font(Theme.font(.caption))
+                            .foregroundStyle(Theme.status(.danger))
+                    }
+                    Spacer(minLength: Spacing.xs)
+                    // 两个出口也都是**图标按钮**（名字交给 `help` 与读屏标签，判据 C/F）。
+                    Button { appState.openLinkedCounterpart(reading) } label: {
+                        Image(systemName: "arrow.up.forward.square")
+                            .font(Theme.font(.caption))
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(reading.counterpartMissing)
+                    .help(L(.todoLinkOpen))
+                    .accessibilityLabel(Text(L(.todoLinkOpen)))
+                    Button {
+                        Task { await appState.undoConversion(linkID: reading.linkID) }
+                    } label: {
+                        Image(systemName: "arrow.uturn.backward")
+                            .font(Theme.font(.caption))
+                    }
+                    .buttonStyle(.plain)
+                    .help(L(.todoLinkUndo))
+                    .accessibilityLabel(Text(L(.todoLinkUndo)))
+                }
+                .accessibilityIdentifier("notes-link-row-\(reading.linkID.uuidString)")
+            }
+        }
+        .accessibilityIdentifier("notes-task-links")
+    }
+
     /// 为什么只画名字不画缩略图：缩略图要先解码一次图片 —— 那是「读」不是「改写」，
     /// 但离屏判据（`TestsUISnapshot`）里没有真窗口可解码，画出来反而让「文件在不在」这件事
     /// 变得不可判。名字 + 缺失态是这两条判据都能读到的形状；图片预览留给真机点验。
@@ -2069,6 +2146,7 @@ struct TodoDetailView: View {
             )
             if !todo.tags.isEmpty { tags }
             if !todo.note.isEmpty { note }
+            taskLinks
             Spacer(minLength: 0)
         }
         .padding(Spacing.l)
@@ -2104,6 +2182,72 @@ struct TodoDetailView: View {
             Spacer(minLength: 0)
         }
         .accessibilityIdentifier(id)
+    }
+
+    /// **关联**（`FR-NTS-TODO-LINK-001` 判据②③④的**任务侧**）：一行「记成笔记」入口 +
+    /// 每条链接一行（方向词 + 快照标题 + 打开对方 / 撤销转化）。
+    ///
+    /// 对方（笔记）已被删 ⇒ 那一行仍画，写「来源已删除」并把「打开对方」灰掉（判据④）；
+    /// 视图不自己判，全部读 `TodoLinkReading`。
+    private var taskLinks: some View {
+        let readings = appState.linkReadings(forTodo: todo.id)
+        return VStack(alignment: .leading, spacing: Spacing.xs) {
+            HStack(spacing: Spacing.xs) {
+                Image(systemName: "link")
+                    .font(Theme.font(.caption))
+                    .foregroundStyle(Theme.text(.secondary))
+                Text(L(.todoLinkSectionTitle))
+                    .font(Theme.font(.caption))
+                    .foregroundStyle(Theme.text(.secondary))
+                Spacer(minLength: Spacing.xs)
+                Button {
+                    Task { await appState.createNoteFromTodo(todo) }
+                } label: {
+                    Image(systemName: "note.text")
+                        .font(Theme.font(.caption))
+                }
+                .buttonStyle(.plain)
+                .help(L(.todoLinkCreateNote))
+                .accessibilityLabel(Text(L(.todoLinkCreateNote)))
+                .accessibilityIdentifier("todo-link-create-note")
+            }
+            ForEach(readings, id: \.linkID) { reading in
+                HStack(spacing: Spacing.xs) {
+                    Text(L(reading.originKey))
+                        .font(Theme.font(.caption))
+                        .foregroundStyle(Theme.text(.secondary))
+                    Text(reading.counterpartTitle.isEmpty ? L(.notesUntitled) : reading.counterpartTitle)
+                        .font(Theme.font(.caption))
+                        .lineLimit(1)
+                    if reading.counterpartMissing {
+                        Text(L(.todoLinkSourceDeleted))
+                            .font(Theme.font(.caption))
+                            .foregroundStyle(Theme.status(.danger))
+                    }
+                    Spacer(minLength: Spacing.xs)
+                    // 两个出口也都是**图标按钮**（名字交给 `help` 与读屏标签，判据 C/F）。
+                    Button { appState.openLinkedCounterpart(reading) } label: {
+                        Image(systemName: "arrow.up.forward.square")
+                            .font(Theme.font(.caption))
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(reading.counterpartMissing)
+                    .help(L(.todoLinkOpen))
+                    .accessibilityLabel(Text(L(.todoLinkOpen)))
+                    Button {
+                        Task { await appState.undoConversion(linkID: reading.linkID) }
+                    } label: {
+                        Image(systemName: "arrow.uturn.backward")
+                            .font(Theme.font(.caption))
+                    }
+                    .buttonStyle(.plain)
+                    .help(L(.todoLinkUndo))
+                    .accessibilityLabel(Text(L(.todoLinkUndo)))
+                }
+                .accessibilityIdentifier("todo-link-row-\(reading.linkID.uuidString)")
+            }
+        }
+        .accessibilityIdentifier("todo-detail-links")
     }
 
     /// 标签那一行：标签本身是**用户数据**，照原样显示（不翻译、不排序 —— 顺序是用户给的那个顺序）。
