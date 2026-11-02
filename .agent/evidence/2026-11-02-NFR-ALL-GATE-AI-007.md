@@ -12,7 +12,7 @@ $ python3 Scripts/check-doc-numbers.py → ✅ 三向一致（5259）
   doc-tables 74 文件 / plan-coverage 471 空壳 0 / status 471 / version-scope 471 rc=0
 $ python3 Scripts/plan-batches.py --version 0.5.0 --check → ✅ 0 条待办
 $ python3 Scripts/ledger-row.py NFR-ALL-GATE-AI-007 | grep -q '✅' → OK
-提交：待填（本文件与代码同笔提交，提交号见 git log）
+提交：cf4e4643（代码 + 测试 + 台账 + 派生队列 + 本证据一次提交）
 未验证：真机重启未点（重启 = 新实例读同一目录）· 密钥住 0600 文件而非系统钥匙串（主人 2026-10-30 令；钥匙串那条记未覆盖）· 真鼠标存 / 删 Key 未点 · verify-all.sh 第 11 / 18 项未执行
 
 改动：
