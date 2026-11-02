@@ -433,6 +433,10 @@ struct MainWindow: View {
         .sheet(isPresented: $appState.isAgentAuditPresented) {
             AgentAuditPanel()
         }
+        // `FR-AGT-KNOW-MEM-003`：跨会话长期记忆的检视 / 删除 / 解释面。
+        .sheet(isPresented: $appState.isAgentMemoryPresented) {
+            AgentMemoryPanel()
+        }
         .sheet(isPresented: $appState.isEgressLogPresented) {
             EgressLogSheet()
         }

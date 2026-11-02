@@ -928,6 +928,20 @@ final class AppState: ObservableObject {
     /// 「审批与审计…」面板的呈现开关（菜单命令驱动）。
     @Published var isAgentAuditPresented = false
 
+    // MARK: 对话记忆（FR-AGT-KNOW-MEM-003 · 跨会话长期记忆）
+
+    /// 「对话记忆…」面板的呈现开关（菜单命令驱动）。
+    ///
+    /// 这一块过去**没有任何界面**（台账 2026-10-28 降级的另一条原话），于是「可检视 / 删除」
+    /// 只存在于 Core 与单测里。面板读的是 `AgentMemoryDesk.snapshot` 那一份投影，
+    /// 与上下文组装读的是**同一份事实源**（`AgentMemoryStore.defaultDirectory`）。
+    @Published var isAgentMemoryPresented = false
+    /// 最近一次读盘投影；`nil` = 没工作区 / 还没读过。
+    @Published var agentMemorySnapshot: AgentMemorySnapshot?
+    /// 最近一次写 / 删 / 重建的结论（面板据此说一句人话；`nil` = 本次打开还没动过）。
+    @Published var agentMemoryNotice: AgentMemoryNotice?
+
+
     // MARK: 统一外发日志（NFR-SEC-08）
     //
     // 浏览器页签的**状态**（页签集 / 选中 / 引擎缓存）不在这里（队列 `L-149` 剩余①）：
@@ -4297,6 +4311,68 @@ final class AppState: ObservableObject {
         agentMCPLoadError = nil
     }
 
+    // MARK: - 对话记忆（`FR-AGT-KNOW-MEM-003`）
+
+    /// 当前工作区 + 当前连接的记忆工作面；**没有工作区就没有面**（不编一个空壳出来）。
+    var agentMemoryDesk: AgentMemoryDesk? {
+        let rootPath = WorkspaceStore.shared.rootPath ?? ""
+        if rootPath.isEmpty { return nil }
+        return AgentMemoryDesk(workspace: rootPath, connection: selectedConnection?.name)
+    }
+
+    /// 重读一次投影（面板打开、以及每次写 / 删之后调）。
+    func refreshAgentMemory(now: Date = Date()) {
+        guard let desk = agentMemoryDesk else {
+            agentMemorySnapshot = nil
+            return
+        }
+        agentMemorySnapshot = desk.snapshot(now: now)
+    }
+
+    func openAgentMemory() {
+        agentMemoryNotice = nil
+        refreshAgentMemory()
+        isAgentMemoryPresented = true
+    }
+
+    /// **写入的唯一入口**：对话里他说了「记住…」。
+    ///
+    /// 返回值 = 判定结论（`nil` = 这句话不是在让我记东西）；界面与判据读同一个结论。
+    /// 放在端点判定之前调 —— 「记住」是人的指令，跟模型在不在线无关；
+    /// 脏内容谁要写都拒（触发方式与内容闸都在 `AgentMemoryWriteGate` / `AgentMemoryIntake`）。
+    @discardableResult
+    func rememberAgentMemoryFromPrompt(_ prompt: String,
+                                       workspacePath: String,
+                                       round: Int? = nil,
+                                       at date: Date = Date()) -> AgentMemoryNotice? {
+        let desk = AgentMemoryDesk(workspace: workspacePath, connection: selectedConnection?.name)
+        guard let notice = desk.rememberFromPrompt(prompt, round: round, at: date) else { return nil }
+        agentMemoryNotice = notice
+        refreshAgentMemory(now: date)
+        return notice
+    }
+
+    /// 删一条（**真删**：事实源整份重写 + 派生索引重建）。
+    func deleteAgentMemory(id: String) {
+        guard let desk = agentMemoryDesk else { return }
+        agentMemoryNotice = desk.delete(id: id)
+        refreshAgentMemory()
+    }
+
+    /// 清空这个工作区的记忆（界面那边先问一次，这里不再问）。
+    func clearAgentMemory() {
+        guard let desk = agentMemoryDesk else { return }
+        agentMemoryNotice = desk.clear()
+        refreshAgentMemory()
+    }
+
+    /// 重建派生索引（「索引是可重建的派生缓存」那条的可点动作）。
+    func rebuildAgentMemoryIndex() {
+        guard let desk = agentMemoryDesk else { return }
+        agentMemoryNotice = desk.rebuildIndex()
+        refreshAgentMemory()
+    }
+
     /// 造一条对话循环：流式网关（`FR-AI-16`）+ 循环（`FR-AI-18`）+ 六个工具（`FR-AI-19/20`）+ 审计（`FR-AI-24`）。
     ///
     /// 造不出来（端点没配 / 地址不合法）⇒ 返回 `nil` —— 界面那边**如实拦**，不假装在跑。
@@ -4306,6 +4382,10 @@ final class AppState: ObservableObject {
                            workspacePath: String,
                            checkpointScopeID: String? = nil,
                            observer: any AgentLoopObserver) async -> (loop: AgentLoop, context: AgentLoopContext)? {
+        // `FR-AGT-KNOW-MEM-003` 的写入接线：他说「记住…」就落一条（过闸在 Core）。
+        // 放在端点判定之前：端点没配时这句话也照样记住 —— 指令是给人的，不是给模型的。
+        rememberAgentMemoryFromPrompt(prompt, workspacePath: workspacePath)
+
         guard case .ready(let model, let endpoint) = agentChatEndpointState,
               let url = URL(string: endpoint) else { return nil }
         // `FR-AI-22` 上下文供给（第一批：**当前连接的表结构摘要 + 活跃页签**）：

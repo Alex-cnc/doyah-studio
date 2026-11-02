@@ -39,6 +39,8 @@ public enum MenuLocalization {
         .menuNotes,
         .menuDataTask,
         .menuAgentAudit,
+        // 对话记忆（`FR-AGT-KNOW-MEM-003`）：与审计同住「智能体」菜单，同属自有菜单项。
+        .menuAgentMemory,
         .menuEgressLog,
         .menuOpenFile,
         .menuNewBrowserTab,

@@ -1,5 +1,23 @@
 # 检查点
 
+## v0.5.0 · A2（第一片：对话记忆接线）· 2026-11-02
+
+- **收一条**：`FR-AGT-KNOW-MEM-003`（记忆可检视 / 删除 / 解释）两列全 ✅。
+  - 缺口就是 2026-10-28 那句原话：**读在盘**（`AgentMemoryContext.references` 早挂进上下文）、**写零调用点**、**无记忆目录**、**无记忆界面**。
+    记忆层本身 30+ 例早已全绿 —— 也就是说「判据都绿、功能不存在」。
+  - 落法 = ① `Core/AgentMemoryInstruction`（「记住…」解析成一条 `AgentMemoryDraft`：五个触发词长词优先 / 礼貌前缀 / 冒号可省 / **空触发与问句不算** / 句中提及不算）；
+    ② 对话入口 `makeAgentChatLoop` 第一句就调 `rememberAgentMemoryFromPrompt`（**排在端点判定之前**）；
+    ③ `Core/AgentMemoryDesk`（snapshot = 条目 + 每条的 `MemoryExplanation.describe` 原文理由 + 是否仍进上下文 + 索引在盘 / 条数 / **是否陈旧** + 跳过读数；remember / delete / clear / rebuildIndex 四个结论是机器形态，人话在视图）；
+    ④ `App/Views/AgentMemoryPanel.swift`（菜单「智能体 → 对话记忆…」；逐条删除 / 整层清空先问 / 重建索引 / 坏文件与缺头行显式说出来）。
+- **读数**：`--filter AgentMemoryDeskTests` **13 例 / 0 失败** · `verify-core.sh` **5241 例 / 13 skipped / 1 失败**（5228 → +13；那 1 条 = `SSHTunnelRuntimeTests` **存量抖动**，单族连跑 3 次全绿）· `verify-ui-interactions.sh` **116 条全跑 / 无跳过 / 源锚点全在** rc=0 · 文档门禁十一到 rc=0（numbers 三向 5241；tables 74 / plan-coverage·status·version-scope 471 / invariants 5/5 / layout 0 / versions 17 / req-index 488 / agents-index 15 / q-series 10 / plan-batches `--check` 2 条待办）。
+- **反例四段**（判红后 `sha256` 逐字节还原）：撤对话入口那一句 ⇒ 源锚点判红 · 删除不重建索引 ⇒ 1 红 · 解析放大问句 ⇒ 2 红 · 陈旧索引恒报不陈旧 ⇒ 1 红。
+- **同批顺手修掉的两处门禁读数**：`panel-root-frames` 台账 `scannedFiles` 118 → **120**（HEAD 上已是 118↔119 的存量漂移，本跳新增一个视图文件）；`MenuLocalization.menuKeys` 补登 `menuAgentMemory`（`MenuLocalizationTests` 当场判红点名）。
+- **存量红（HEAD `9a8e8956` 工作树逐条复跑，读数与本跳工作树**相同**）**：`check-format-arguments` 225/22（预算 188）· `check-design-tokens` 17 处 · `check-button-icon-only` 判据 F 1 处 · `check-network-egress` 8 处 · `check-core-localization` 棘轮 B 38 项 · `panel-root-frames` 台账 118 ↔ 实测 119（HEAD 上）。本跳均未引入。
+- **未验证（≠ 通过）**：真鼠标点「删除 / 清空 / 重建索引」未点 · 真模型未连（本条不涉及外发）· 模型自发的写入仍只转候选等人确认（`FR-AGT-KNOW-MEM-006`）· `verify-all.sh` 第 11 / 18 项未执行。
+- **队列口径（本片后实测）**：`plan.yaml` = **2 todo + 11 blocked**；`batches.yaml` = A2 剩 **2 条**（`NFR-ALL-GATE-AI-006` / `NFR-ALL-GATE-AI-007`）；台账 §4.2 v0.5.0 13 → **12**（10 / 2），本仓未闭 130 → **129**（🟡 32 / ⬜ 97），§2 AGT 行 ✅ 71 → 72 / 🟡 11 → 10。
+- **下一项 = `NFR-ALL-GATE-AI-006`**（本地 OpenAI 兼容端点：Ollama / vLLM）。起跳先核：`AgentProviderCatalog` 的预填是不是只认远端预设、`AgentConfiguration.endpoint` 对 `http://127.0.0.1:11434/v1` 这类地址有没有「非 https 一律拒」的隐含假设、模型名空串时面板有没有可选项（本地端点常常要先「拉一次模型列表」）。
+- 证据 `.agent/evidence/2026-11-02-FR-AGT-KNOW-MEM-003.md`
+
 ## v0.5.0 · A1 收口（第三片：成本与配额）· 2026-11-02
 
 - **收一条**：`NFR-ALL-GATE-AI-004`（token / 调用次数上限与超时）两列全 ✅；A1 批次到此清空。

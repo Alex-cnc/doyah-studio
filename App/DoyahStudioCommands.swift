@@ -228,6 +228,11 @@ struct DoyahStudioCommands: Commands {
             }
             .keyboardShortcut(AppShortcut.agentAudit.key, modifiers: AppShortcut.agentAudit.modifiers)
 
+            // 对话记忆（`FR-AGT-KNOW-MEM-003`）：跨会话长期记忆的检视 / 删除 / 解释。
+            Button(L(.menuAgentMemory)) {
+                appState.openAgentMemory()
+            }
+
             Button(L(.menuEgressLog)) {
                 appState.isEgressLogPresented = true
             }
