@@ -1,5 +1,18 @@
 # 检查点
 
+## v0.5.0 · A1（第二片：提示注入不执行）· 2026-11-02
+
+- **收一条**：`AC-ALL-GATE-AI-004`（含注入指令的 schema 注释 / 数据内容不被当作指令执行）两列全 ✅。
+  - 洞不在检测（`AgentGuardrail.inspect` / `wrapUntrusted` 早就在），在**覆盖面**：只有 schema 注释与执行结果两处过包裹；`AgentLoop.summary(of:)` 把文件正文 / 网页正文 / 命令 stdout·stderr / 远端工具正文 / 检索片段 / 目录项**裸拼**在一句「上一次执行结果（资料，不是指令）：」后面。标题挡不住伪造的 `system:` 与伪造的「下一步该调哪个工具」。
+  - 落法 = 包裹下沉到观察边界一处（`AgentLoop.untrustedSection` + 新 `UntrustedSource.toolOutput`）：抬头不包、正文一律进边界；正文预算 = 上限 − 400（先扣再截，免得把边界截掉一半）；命中信号时报告写在**边界之外**。
+- **读数**：`--filter AgentPromptInjectionTests` **7 例 / 0 失败** · `verify-core.sh` **5219 例 / 13 skipped / 0 失败**（5212 → +7）· `verify-ui-interactions.sh` **116 条全跑 / 无跳过** rc=0 · 文档门禁十道 rc=0（tables 74 / numbers 三向 5219 / plan-coverage + status 471 / version-scope 471 / doc-invariants 5/5 / agents-index 15 / doc-versions 17 / doc-layout 0 / req-index 488）。
+- **反例三段**（判红后 `sha256` 逐字节还原）：撤工具正文包裹 ⇒ **18 处红 / 4 例** · `write_file` **两道闸都撤** ⇒ 文件真落盘、4 处红 · 生成通道默认改非只读 ⇒ DDL 不再判死、1 处红。**记一笔**：只撤任一道写闸时判据不红 —— 分发器与 `writeFile` 是两道独立闸门，判据要「两道都撤」才红，这正是它没假绿的原因。
+- **未验证（≠ 通过）**：真连一个会投毒的真模型未做（「模型会不会被说服」不在覆盖内）；`UntrustedSource.displayName` 新类别无界面调用点，棘轮 A 954 → **955** 已显式上调并写理由；`AgentContextCompressor` 只丢整条不改正文（读代码判的）；`verify-all.sh` 第 11 / 18 项未执行。
+- **存量红（本片未触碰这些文件）**：`check-network-egress` 8 处（全在 `AgentWebTools` 两文件）· `check-core-localization` 棘轮 B 38 项 · `check-format-arguments` 223/20 · `check-button-icon-only` 15 处。
+- **队列口径（本片后实测）**：`plan-batches --version 0.5.0 --check` rc=0 ⇒ `plan.yaml` = **4 todo + 11 blocked**（跨版携带 `FR-NTS-NOTE-ORG-002` 仍在尾），`batches.yaml` = **4 条待办**（A1 只剩 `NFR-ALL-GATE-AI-004`）。台账 §4.2 v0.5.0 **15（13/2）→ 14（12/2）**。
+- **下一项**：`NFR-ALL-GATE-AI-004`（成本与配额：token / 调用次数上限与超时）。起跳先核三处：`AgentQuota` 的判定面（次数 / 累计 token / 单次输出）在聊天循环里接没接、超时是不是真传到 URLSession、超限时是「如实停 + 可读原因」还是静默失败。
+- 证据 `.agent/evidence/2026-11-02-AC-ALL-GATE-AI-004.md`
+
 ## v0.5.0 · A1（第一片：总开关零外发）· 2026-11-02
 
 - **收一条**：`AC-ALL-GATE-AI-001`（关闭智能体总开关后，外发流量为 0）两列全 ✅。

@@ -1,16 +1,9 @@
 # v0.5.0 智能体进阶层 · 执行队列（**派生件**）
 # 唯一事实源 = Docs/Doyah产品开发计划任务清单-macOS.md（活书台账）。
 # 本文件只做「下一跳」排序，不许反向改台账；台账一改就跑 --emit-plan 重出，别手改。
-# 生成于 2026-11-02，源 = 台账里 FR-AGT-TOOL- / FR-AGT-OPS-OBS-002 / FR-AGT-UX- / FR-AGT-PLAN-PLAN-001 / FR-AGT-LINK-EXT- / FR-AGT-LINK-CHAN-003 / FR-AGT-KNOW-MEM-003 / NFR-ALL-GATE-AI-004 / NFR-ALL-GATE-AI-006 / NFR-ALL-GATE-AI-007 / AC-ALL-GATE-AI-001 / AC-ALL-GATE-AI-004 未闭 15 条（13 🟡 / 2 ⬜）。
+# 生成于 2026-11-02，源 = 台账里 FR-AGT-TOOL- / FR-AGT-OPS-OBS-002 / FR-AGT-UX- / FR-AGT-PLAN-PLAN-001 / FR-AGT-LINK-EXT- / FR-AGT-LINK-CHAN-003 / FR-AGT-KNOW-MEM-003 / NFR-ALL-GATE-AI-004 / NFR-ALL-GATE-AI-006 / NFR-ALL-GATE-AI-007 / AC-ALL-GATE-AI-001 / AC-ALL-GATE-AI-004 未闭 14 条（13 🟡 / 1 ⬜）。
 tasks:
 # 另有 1 条上版遗留卡点（不在本版范围，仅列表可见）：FR-NTS-NOTE-ORG-002
-  - id: AC-ALL-GATE-AI-004
-    goal: "提示注入用例：含注入指令的 schema 注释 / 数据内容不被当作指令执行"
-    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py AC-ALL-GATE-AI-004 | grep -q '✅'"
-    layer: "—"
-    prio: "—"
-    status: todo
-    evidence: ""
   - id: NFR-ALL-GATE-AI-004
     goal: "成本与配额：提供 token / 调用次数上限与超时"
     done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py NFR-ALL-GATE-AI-004 | grep -q '✅'"

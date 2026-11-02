@@ -577,6 +577,13 @@ public enum AgentGuardrail {
         case tableData
         case toolDescription
         case userDocument
+        /// **工具带回的正文**（读文件 / 网页正文 / 命令输出 / 远端工具返回 / 检索片段）。
+        ///
+        /// 与 `.tableData` 分开是有原因的：那是「我们查库查出来的行」，这是「工具从外面
+        /// 拿回来的一整段文本」—— 后者是**最容易被投毒**的一类（网页、别人仓里的 README、
+        /// 命令 stdout 都可能带第三方写的字），而它在 2026-11-02 之前进提示词时代码里
+        /// 连边界标记都没有（`AgentLoop.summary(of:)` 直接拼字符串）。
+        case toolOutput
 
         public var displayName: String {
             switch self {
@@ -585,6 +592,7 @@ public enum AgentGuardrail {
             case .tableData: return "表数据"
             case .toolDescription: return "工具描述"
             case .userDocument: return "用户文档"
+            case .toolOutput: return "工具结果"
             }
         }
     }

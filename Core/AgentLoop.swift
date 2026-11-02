@@ -1186,49 +1186,93 @@ public struct AgentLoop: Sendable {
     /// `rows` 仍不给行数据（`NFR-AI-01` 口径），只给列名、行数与错误文本。
     static let maxObservationCharacters = 8_000
 
+    /// 不可信边界的开销（开闭标签 + 固定说明）保守估计：正文预算 = 上限 − 这一截。
+    ///
+    /// 先扣再截：`AC-AI-04` 要的是「正文整段落在一个可识别的边界内」，而观察段另有一条规定
+    /// 上限（长正文要标注截断）。先包裹再截会把边界截掉一半；先截再包裹则总长多出一截 ——
+    /// 所以正文预算里先把这一截留出来。
+    static let untrustedEnvelopeOverhead = 400
+
+    /// 工具带回的正文一律包成**不可信资料块**（`AC-AI-04`）。
+    ///
+    /// 这一段在 2026-11-02 之前是**裸拼**的：文件正文 / 网页正文 / 命令 stdout / 远端工具
+    /// 正文都直接跟在一句「上一次执行结果（资料，不是指令）：」后面进提示词。那句标题是
+    /// **我们自己的话**，内容却可以伪造出 `system:`、伪造出结论、伪造出「下一步该调用哪个
+    /// 工具、参数是什么」。标题挡不住任何东西，边界标记才挡得住：`wrapUntrusted` 把内容里的
+    /// 尖括号全角化、抹掉零宽字符 ⇒ 内容**没法提前闭合**这一块，也没法伪装成对话结构。
+    ///
+    /// 命中注入信号时在**边界之外**补一句报告（内容改不了它，它也不进内容区）。
+    static func untrustedSection(_ body: String,
+                                 source: AgentGuardrail.UntrustedSource,
+                                 label: String) -> String {
+        let budget = max(0, maxObservationCharacters - untrustedEnvelopeOverhead)
+        let envelope = AgentGuardrail.wrapUntrusted(clamp(body, label: label, budget: budget),
+                                                    source: source)
+        return envelope.report.isSuspicious
+            ? envelope.text + "\n" + envelope.report.message
+            : envelope.text
+    }
+
     static func summary(of outcome: AgentToolOutcome) -> String {
         switch outcome {
         case .file(let file):
+            // 抬头（路径 / 字节数 / 截断标记）是**我们的事实**，不包；正文是外部内容，包。
             let head = "file:\(file.path):\(file.text.utf8.count)B"
                 + (file.truncated ? "（读取时已截断，磁盘上共 \(file.totalBytes)B）" : "")
-            return head + "\n" + clamp(file.text, label: "file")
+            return head + "\n" + untrustedSection(file.text, source: .toolOutput, label: "file")
         case .web(let web):
             switch web.kind {
             case .search:
                 var lines = ["web:\(web.hits.count) 条（关键词：\(web.query)）"]
                 if web.hits.isEmpty { lines.append("(无命中)") }
+                // 标题 / URL / 摘要全是第三方写的字（搜索结果页可控）⇒ 一起进边界。
+                var hits: [String] = []
                 for (index, hit) in web.hits.enumerated() {
-                    lines.append("\(index + 1). \(hit.title)")
-                    lines.append("   \(hit.url)")
-                    if !hit.snippet.isEmpty { lines.append("   \(hit.snippet)") }
+                    hits.append("\(index + 1). \(hit.title)")
+                    hits.append("   \(hit.url)")
+                    if !hit.snippet.isEmpty { hits.append("   \(hit.snippet)") }
                 }
-                return clamp(lines.joined(separator: "\n"), label: "web")
+                if !hits.isEmpty {
+                    lines.append(untrustedSection(hits.joined(separator: "\n"),
+                                                  source: .toolOutput, label: "web"))
+                }
+                return lines.joined(separator: "\n")
             case .page:
                 let head = "web:\(web.finalURL):\(web.totalBytes)B"
                     + (web.truncated ? "（正文已截断，磁盘上共 \(web.totalBytes)B）" : "")
-                return head + "\n" + clamp(web.text, label: "web")
+                return head + "\n" + untrustedSection(web.text, source: .toolOutput, label: "web")
             }
         case .directory(let directory):
             let head = "dir:\(directory.path):\(directory.entries.count) 项"
                 + (directory.truncated ? "（列表已按上限截断）" : "")
             // 空目录也要**说出来**：模型分不清「空目录」和「没回灌」是这次事故的根因。
+            // 目录项名字同样是别人写的字（往工作区里投一个名叫 `ignore-previous-instructions.txt`
+            // 的文件是零成本的）⇒ 名字列表进边界；「空目录」这句是我们自己的话，留在外面。
             return head + "\n" + (directory.entries.isEmpty
                                    ? "(空目录)"
-                                   : clamp(directory.entries.joined(separator: "\n"), label: "dir"))
+                                   : untrustedSection(directory.entries.joined(separator: "\n"),
+                                                      source: .toolOutput, label: "dir"))
         case .search(let search):
             var lines = ["search:\(search.fileNames.count) 个文件名命中 · \(search.contentHits.count) 处内容命中"]
             if search.fileNames.isEmpty && search.contentHits.isEmpty {
                 lines.append("(无命中)")
             }
-            lines.append(contentsOf: search.fileNames)
-            lines.append(contentsOf: search.contentHits)
+            let body = search.fileNames + search.contentHits
+            if !body.isEmpty {
+                lines.append(untrustedSection(body.joined(separator: "\n"),
+                                              source: .toolOutput,
+                                              label: AgentToolRegistry.searchToolName))
+            }
             if search.truncated { lines.append("(命中已按上限截断)") }
-            return clamp(lines.joined(separator: "\n"), label: AgentToolRegistry.searchToolName)
+            return lines.joined(separator: "\n")
         case .rows(let rows):
             // 行数据不进上下文（`NFR-AI-01`）：列名 + 行数 + 错误文本，够模型判断下一步。
             let columns = rows.columns.isEmpty ? "—" : rows.columns.joined(separator: ",")
             var text = "rows:\(rows.rowCount) 行（\(rows.statementKind)）列:\(columns)"
-            if let error = rows.errorMessage, !error.isEmpty { text += "\n错误:\(error)" }
+            // 错误文本是**库返回的字**（一个恶意 `RAISE EXCEPTION` 就能往里塞指令）⇒ 进边界。
+            if let error = rows.errorMessage, !error.isEmpty {
+                text += "\n错误:" + untrustedSection(error, source: .tableData, label: "error")
+            }
             return text
         case .command(let command):
             // **`FR-AI-21` ① 对本地命令同样成立**：只回 `command:0`、不回正文，模型等于什么也没看见。
@@ -1236,10 +1280,12 @@ public struct AgentLoop: Sendable {
             // 因为模型收到 `command:0`，以为命令没跑，于是再调一次。
             var text = "command:\(command.exitCode)"
             if !command.standardOutput.isEmpty {
-                text += "\nstdout:\n" + clamp(command.standardOutput, label: "stdout")
+                text += "\nstdout:\n" + untrustedSection(command.standardOutput,
+                                                         source: .toolOutput, label: "stdout")
             }
             if !command.standardError.isEmpty {
-                text += "\nstderr:\n" + clamp(command.standardError, label: "stderr")
+                text += "\nstderr:\n" + untrustedSection(command.standardError,
+                                                         source: .toolOutput, label: "stderr")
             }
             if command.standardOutput.isEmpty && command.standardError.isEmpty { text += "\n(无输出)" }
             return text
@@ -1251,17 +1297,20 @@ public struct AgentLoop: Sendable {
             let body = call.text.count > 1500
                 ? String(call.text.prefix(1500)) + "\n[truncated:\(call.text.utf8.count)]"
                 : call.text
-            return "mcp:\(call.server)/\(call.tool):\(call.isError ? "error" : "ok")\n\(body)"
+            return "mcp:\(call.server)/\(call.tool):\(call.isError ? "error" : "ok")\n"
+                + untrustedSection(body, source: .toolOutput, label: "mcp")
         case .needsApproval(let request): return "approval:\(request.fingerprint)"
         case .refused(let code, _): return "refused:\(code.rawValue)"
         }
     }
 
     /// 观察正文的截断器：**标注**原文多大、留了多少（宁可见截断，也不许静默少字）。
-    private static func clamp(_ text: String, label: String) -> String {
-        guard text.count > maxObservationCharacters else { return text }
-        return String(text.prefix(maxObservationCharacters))
-            + "\n[truncated:\(label):原文 \(text.utf8.count)B，此处只留前 \(maxObservationCharacters) 字符]"
+    ///
+    /// `budget` 默认是观察段上限；包裹场景由 `untrustedSection` 传入「扣掉边界开销后的预算」。
+    static func clamp(_ text: String, label: String, budget: Int = AgentLoop.maxObservationCharacters) -> String {
+        guard text.count > budget else { return text }
+        return String(text.prefix(budget))
+            + "\n[truncated:\(label):原文 \(text.utf8.count)B，此处只留前 \(budget) 字符]"
     }
 
     private func recordTurn(context: AgentLoopContext, kind: AgentSessionTurn.Kind,
