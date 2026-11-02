@@ -8,7 +8,7 @@
 - **同批修的一句假话**：`workspaceFormatRefusedNoFormatter` 原文「外部工具没装，也没有内置兜底」在定案「只用内置」之后不成立 ⇒ 改「还没有内置格式化档（本版只用内置、不联网），所以一个字都没改」，两语同改并钉住。
 - 读数：`verify-core` **5322 / 13 skipped / 0 失败**（+3）· `verify-ui-interactions` **121 条全跑无跳过** · `check-status-gap` **2 → 1 行** · 文档门禁十四道 rc=0 · `check-doc-numbers` 只剩「status-gap 未接闭环」一笔（存量）· 反例六段各判红后 `sha256` 逐字节还原。
 - **未验证（≠ 通过）**：真鼠标点菜单 / ⇧⌘F 一条没点 · 观感未看 · 真拔网线未做 · `verify-all.sh` 第 11 / 18 项未执行。
-- 证据 `.agent/evidence/2026-11-02-FR-STD-WS-NAV-014.md`；提交号见本行之后补号。
+- 提交：`a19f5b72`（已推送，local = remote；锁已释放，工作树干净）。证据 `.agent/evidence/2026-11-02-FR-STD-WS-NAV-014.md`。
 
 ## 下一项：`FR-STD-WS-AI-001`（编辑区 AI 辅助，判据 ⬜，实现 ✅）
 
