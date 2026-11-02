@@ -30,6 +30,6 @@ NFR-ALL-GATE-AI-006 ✅
 2. 本地地址表删掉 `::1` 那一行 ⇒ `testLocalAddressesNeedNoAPIKey` 4 条断言红（`[::1]` 判成远端）
 3. 结论行把不可用原因丢掉（`problemMessage` 恒空）⇒ 脚本 7 条 FAIL（「原因有重复（只有 1 种）」等）
 
-提交：<见本文件落盘后的 commit>
+提交：`877ebd6d`（本片代码 + 台账 + 派生队列 + 证据一次提交；证据补号见随后的 `证据补号` 提交）
 
 未验证（≠ 通过）：真 Ollama / vLLM 联调未做（本机没有模型，`Scripts/test-real-endpoint.sh` 仍要人给端点）· `*.local` / `::1` 只判到判定层（真 HTTP 只跑了 `localhost` 与 `127.0.0.1`）· 设置面板那一行真鼠标未看 · `verify-all.sh` 第 11 项（打包 .app）与第 18 项（生成物一致性）本跳未执行

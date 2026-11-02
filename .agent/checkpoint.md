@@ -1,5 +1,19 @@
 # 检查点
 
+## v0.5.0 · A2（第二片：本地 OpenAI 兼容端点）· 2026-11-02
+
+- **收一条**：`NFR-ALL-GATE-AI-006`（本地模型优先：OpenAI 兼容本地端点，如 Ollama / vLLM）两列全 ✅。
+  - 本跳接的是**上一跳被判陈旧锁（46 分钟）留下的未提交整片改动**：代码 / 测试 / 脚本 / 台账 / 证据全在盘，无提交。按 N2a 先例**先复跑验证再落账**，未重写盘上的实现。
+  - 洞在**判据缺一条、且判定把两件事压成一件**：盘上只有一枚 `isLocalEndpoint: Bool` ⇒「远端该填 Key」与「地址根本不对」同答「否（需要 API Key）」，人照着去补一把用它不上的 Key；「判定失败给可读原因」一条判据都没有。
+  - 落法 = `Core/AgentEndpointDiagnosis`（本地 / 远端 / 不可用三档 + 五种不可用原因：空 / 少协议头 / 协议不是 http(s) / 缺主机名 / 解析不了；`isLocalHost` = 「什么算本地」唯一定义，`AgentConfiguration.isLocalEndpoint` / `requiresAPIKey` 与两个本地预设都转发它，不再各写一份地址表）；`agent-endpoint`（**离线**出口，一个字节都不发，退出码 0 / 3）；`agent-sql` 判定行改三档（旧串「是（免 API Key）」保留，脚本按它断言）；设置面板端点多一行同一句结论。
+- **读数（本跳复跑，非沿用）**：`swift test --filter AgentEndpointDiagnosisTests` **10 例 / 0 失败** · `env -u DOYAH_UI_SNAPSHOT ./Scripts/verify-core.sh` **5251 例 / 13 skipped / 1 失败**（`.build/core-test-count.txt` = 5251；唯一失败 = `SSHTunnelRuntimeTests.testBusyPortFailsFastWithoutStartingAnything`，存量抖动，本跳日志 `core-test.log:158` 逐字对上）· `verify-ui-interactions.sh` **116 条 / 0 失败** rc=0 · `Scripts/test-endpoint-modes.sh` **22 条全 PASS**（含真 HTTP：`localhost` 主机名 + 假端点侧 `auth=None`）· 文档门禁五道 rc=0（tables 74 / numbers 三向 5251 / plan-coverage 471 空壳 0 / status 471 / version-scope 471）。
+- **反例三段**（上一跳判红后 `sha256` 逐字节还原 `2c88a6098fc36eb7…`）：不可用也算「需要 Key」⇒ 10 例全红 · 本地表漏 `::1` ⇒ 1 例 4 断言红 · 不可用原因被丢掉 ⇒ 脚本 7 条 FAIL。
+- **未验证（≠ 通过）**：真 Ollama / vLLM 联调未做（本机没有模型；`Scripts/test-real-endpoint.sh` 仍要人给端点）· `*.local` / `::1` 只判到判定层（真 HTTP 只跑了 `localhost` / `127.0.0.1`）· 设置面板那一行真鼠标未看 · `verify-all.sh` 第 11 / 18 项未执行。
+- **提交**：`877ebd6d`（代码 + 台账 + 派生队列 + 证据一次提交）。
+- **队列口径（本片后实测）**：`plan-batches --version 0.5.0 --check` rc=0 ⇒ `plan.yaml` = **1 todo + 11 blocked**（`NFR-ALL-GATE-AI-007` 唯一 todo；blocked 11 = 台账 §7.1 外部卡点 10 + 跨版携带 `FR-NTS-NOTE-ORG-002`）；`batches.yaml` = **A2 只剩 1 条**。
+- **下一项 = `NFR-ALL-GATE-AI-007`**（会话持久化与长上下文：压缩 / 检查点）。起跳先核：`AgentContextCompressor` 现在只丢整条不改正文、检查点的「续跑位置」落在哪个文件、`NFR-ALL-GATE-AI-008` 已 ✅ 的压缩判定是否与它就是同一处（若是，差的是**会话落盘与恢复**那一半，别重复造判定）。
+- 证据 `.agent/evidence/2026-11-02-NFR-ALL-GATE-AI-006.md`
+
 ## v0.5.0 · A2（第一片：对话记忆接线）· 2026-11-02
 
 - **收一条**：`FR-AGT-KNOW-MEM-003`（记忆可检视 / 删除 / 解释）两列全 ✅。
