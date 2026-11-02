@@ -558,6 +558,28 @@ public enum NoteSchemaV13 {
     ]
 }
 
+/// **schema v14**（`FR-NTS-TODO-LIST-001`）：给 `todo` 补一列 **`repeat_rule`**（重复规则）。
+///
+/// 三条口径：
+///   · **一列、文本、缺省空串 = 不重复**（`TodoRepeat.storageText` 的「空串即没有」）——
+///     不拆成「种类 / 次数 / 单位 / 周几」四列：那四格只有「按间隔」或「按周几」其中一半有意义，
+///     四列里必然有两列常年是空值，而「哪一半有效」还得由种类判一次（同一件事两处判断）。
+///   · **不加 CHECK、不在库里解释规则**：规则的归一与认不出怎么办只有 `TodoRepeat` 一处
+///     （库里再判一遍就是第二套口径；旧库升上来那一列是 `''`，本来就是合法值）。
+///   · **加列不加表**：重复规则是任务自己的一个本体字段（概设 §15.11 四字段之一），
+///     不是与别人的关系 ⇒ 与 v9 的 `note` 列同一条落法。
+public enum NoteSchemaV14 {
+
+    public static let version: Int32 = 14
+
+    /// 这一版**只加列**，没有新增表。
+    public static let tables: [String] = []
+
+    public static let ddl: [String] = [
+        "ALTER TABLE todo ADD COLUMN repeat_rule TEXT NOT NULL DEFAULT '';"
+    ]
+}
+
 /// 附件索引的一条（`FR-PLUG-08`：**附件二进制留在文件系统，库里只存路径**）。
 public struct NoteAttachment: Equatable, Sendable {
     public var id: UUID
@@ -655,8 +677,8 @@ public final class NoteDatabase {
     /// v4 → v5 补待办任务清单、v5 → v6 补提醒、v6 → v7 补查询历史、v7 → v8 补正文 spans 列、
     /// v8 → v9 补待办备注 `note` 列、v9 → v10 补笔记墓碑 `deleted_at` 列、
     /// **v10 → v11 补历史版本表 `note_version`、v11 → v12 补私密挡位 `is_private` 列、
-    /// v12 → v13 补转化链接表 `todo_note_link`**）。
-    public static let supportedVersion = NoteSchemaV13.version
+    /// v12 → v13 补转化链接表 `todo_note_link`、v13 → v14 补待办重复规则 `repeat_rule` 列**）。
+    public static let supportedVersion = NoteSchemaV14.version
 
     private let connection: SQLiteConnection
 
@@ -767,6 +789,10 @@ public final class NoteDatabase {
             if current < NoteSchemaV13.version {
                 for statement in NoteSchemaV13.ddl { try connection.execute(statement) }
                 try connection.setPragma("user_version = \(NoteSchemaV13.version)")
+            }
+            if current < NoteSchemaV14.version {
+                for statement in NoteSchemaV14.ddl { try connection.execute(statement) }
+                try connection.setPragma("user_version = \(NoteSchemaV14.version)")
             }
         }
     }
@@ -1484,8 +1510,8 @@ public final class NoteDatabase {
             try connection.execute(
                 """
                 INSERT INTO todo (
-                    uuid, title, note, due_at, done, completed_at, priority, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    uuid, title, note, due_at, done, completed_at, priority, repeat_rule, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT (uuid) DO UPDATE SET
                     title = excluded.title,
                     note = excluded.note,
@@ -1493,6 +1519,7 @@ public final class NoteDatabase {
                     done = excluded.done,
                     completed_at = excluded.completed_at,
                     priority = excluded.priority,
+                    repeat_rule = excluded.repeat_rule,
                     updated_at = excluded.updated_at;
                 """,
                 [
@@ -1503,6 +1530,8 @@ public final class NoteDatabase {
                     .integer(todo.done ? 1 : 0),
                     todo.completedAt.map { SQLiteValue.real($0.timeIntervalSince1970) } ?? .null,
                     .text(todo.priority.raw),
+                    // 空串 = 不重复（`TodoRepeat.storageText` 的唯一写法；归一在那一处做，这里只搬字节）。
+                    .text(todo.repeatRule?.storageText ?? ""),
                     .real(todo.createdAt.timeIntervalSince1970),
                     .real(todo.updatedAt.timeIntervalSince1970)
                 ]
@@ -2480,6 +2509,7 @@ public final class NoteDatabase {
                 completedAt: row["completed_at"].doubleValue.map { Date(timeIntervalSince1970: $0) },
                 priority: TodoPriority(raw: row.text("priority") ?? ""),
                 tags: tagsByRow[row.int("id") ?? 0] ?? [],
+                repeatRule: TodoRepeat.decode(storageText: row.text("repeat_rule")),
                 note: row.text("note") ?? "",
                 createdAt: Date(timeIntervalSince1970: row["created_at"].doubleValue ?? 0),
                 updatedAt: Date(timeIntervalSince1970: row["updated_at"].doubleValue ?? 0)

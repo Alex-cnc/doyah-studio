@@ -2018,6 +2018,33 @@ struct TodoListView: View {
             .padding(.horizontal, Spacing.s)
             // 组织与检索：筛选 / 排序 / 分组（三条切换器；档位空间全来自 Core）
             TodoQueryBar()
+            // **删除可撤销**（`FR-NTS-TODO-LIST-002` 判据③）：刚删掉一条时这里出现一行，
+            // 撤销把**同一条**（同 id、同全部字段）原样写回；按钮只在真有一次删除时出现。
+            if let undo = appState.todoUndoRemoval {
+                HStack(spacing: Spacing.xs) {
+                    Image(systemName: "trash")
+                        .font(Theme.font(.caption))
+                        .foregroundStyle(Theme.text(.secondary))
+                    Text(TodoPresentation.title(undo.todo) ?? L(.notesUntitled))
+                        .font(Theme.font(.caption))
+                        .foregroundStyle(Theme.text(.secondary))
+                        .lineLimit(1)
+                    Spacer(minLength: Spacing.xs)
+                    // 图标 + 提示（`T-20261013-042` 的图标令）：一枚动作按钮不带文字，
+                    // 名字交给悬停提示与无障碍标签。
+                    Button {
+                        Task { await appState.undoLastTodoRemoval() }
+                    } label: {
+                        Image(systemName: "arrow.counterclockwise")
+                    }
+                    .buttonStyle(.plain)
+                    .help(L(.todoUndoRemoval))
+                    .accessibilityLabel(Text(L(.todoUndoRemoval)))
+                    .accessibilityIdentifier("todo-undo-removal")
+                }
+                .padding(.horizontal, Spacing.s)
+                .accessibilityIdentifier("todo-undo-strip")
+            }
             Divider()
             if board.total == 0 {
                 // 空态两句不同的话：「一条都没有」与「这一档没有」—— 判定在 Core（`todoEmptyKind`）。
@@ -2144,6 +2171,13 @@ struct TodoDetailView: View {
                 tone: todo.priority == .high ? Theme.status(.warning) : Theme.text(.primary),
                 id: "todo-detail-priority"
             )
+            // **重复规则**（`FR-NTS-TODO-LIST-001` 判据①的第四个字段）：不重复**不画这一行**
+            // （`L-50` 那一课：画不出来的东西不要画成空态）；句子由 `TodoRepeatPresentation` 一处出。
+            if let repeatText = TodoRepeatPresentation.summary(
+                todo.repeatRule, language: LocalizationManager.shared.effectiveLanguage
+            ) {
+                row(L(.todoRepeatLabel), value: repeatText, tone: Theme.text(.primary), id: "todo-detail-repeat")
+            }
             if !todo.tags.isEmpty { tags }
             if !todo.note.isEmpty { note }
             taskLinks
@@ -2321,6 +2355,9 @@ struct TodoEditorView: View {
                     Text(L(priority.key)).tag(priority)
                 }
             }
+            // **重复规则**（`FR-NTS-TODO-LIST-001` 判据①的第四个字段）：档位与归一全在 Core，
+            // 这里只画三件事 —— 档位下拉 / 间隔（次数 + 单位）/ 每周勾哪几天。
+            repeatEditor
             // **四档优先级 = 取值 ⇒ 下拉**（片 `N2-2` 判据①：NotesPanel 的分段条 4 → 1）。
             // 同一屏的「保存 / 删除」两枚是**动作**（不是取值）⇒ 优先级那种「四档取值」用下拉。
             // （当时两枚都带文字，且 `NotesEditorSaveProbeTests` 有一条按文字排版校准的像素判据，
@@ -2362,6 +2399,92 @@ struct TodoEditorView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(Theme.surface(.content))
         .accessibilityIdentifier("todo-editor")
+    }
+
+    /// **重复规则那一格**（`FR-NTS-TODO-LIST-001` 判据①；概设 §15.11「本体四字段齐备」）。
+    ///
+    /// 三条口径：
+    ///  ① **档位空间来自 Core**（`TodoRepeatMode.allCases`）：界面不自己列「有哪几档」；
+    ///  ② 选完的值**已经是归一后的**（`AppState.setTodoEditorRepeatMode` 取 `TodoRepeat.defaultValue`），
+    ///     视图不回算「每 1 天是不是该显示成每天」；
+    ///  ③ 「每周几天」用 `Menu` 里的勾选项而不是一排文字按钮：那是**取值**不是动作，
+    ///     且菜单项保留文字是既有口径（`FR-EXEC-13` 只管工具条上的动作按钮）。
+    @ViewBuilder
+    private var repeatEditor: some View {
+        VStack(alignment: .leading, spacing: Spacing.xs) {
+            Picker(
+                L(.todoRepeatLabel),
+                selection: Binding(
+                    get: { appState.todoEditorRepeatMode },
+                    set: { appState.setTodoEditorRepeatMode($0) }
+                )
+            ) {
+                ForEach(TodoRepeatMode.allCases, id: \.self) { mode in
+                    Text(L(mode.key)).tag(mode)
+                }
+            }
+            .pickerStyle(.menu)
+            .help(L(.todoRepeatLabel))
+            .accessibilityIdentifier("todo-repeat-mode")
+            if let rule = appState.todoEditorRepeat {
+                switch rule.rule {
+                case .interval:
+                    HStack(spacing: Spacing.xs) {
+                        Stepper(
+                            value: Binding(
+                                get: { appState.todoEditorRepeat?.intervalCount ?? 1 },
+                                set: { appState.setTodoEditorRepeatCount($0) }
+                            ),
+                            in: 1...30
+                        ) {
+                            Text("\(L(.todoRepeatIntervalCount)) \(rule.intervalCount)")
+                                .font(Theme.font(.caption))
+                        }
+                        .accessibilityIdentifier("todo-repeat-count")
+                        Picker(
+                            L(.todoRepeatIntervalUnit),
+                            selection: Binding(
+                                get: { appState.todoEditorRepeat?.intervalUnit ?? .day },
+                                set: { appState.setTodoEditorRepeatUnit($0) }
+                            )
+                        ) {
+                            Text(L(.todoRepeatEveryDayUnit)).tag(ReminderUnit.day)
+                            Text(L(.todoRepeatEveryWeekUnit)).tag(ReminderUnit.week)
+                        }
+                        .labelsHidden()
+                        .pickerStyle(.menu)
+                        .accessibilityIdentifier("todo-repeat-unit")
+                        Spacer(minLength: 0)
+                    }
+                case .weekly:
+                    Menu {
+                        ForEach(1...7, id: \.self) { day in
+                            Button {
+                                appState.toggleTodoEditorRepeatWeekday(day)
+                            } label: {
+                                if rule.weekdays.contains(day) {
+                                    Label(L(TodoRepeat.weekdayKey(day)), systemImage: "checkmark")
+                                } else {
+                                    Text(L(TodoRepeat.weekdayKey(day)))
+                                }
+                            }
+                        }
+                    } label: {
+                        Text(
+                            (TodoRepeatPresentation.summary(rule, language: LocalizationManager.shared.effectiveLanguage)
+                                ?? L(.todoRepeatPickDays))
+                        )
+                        .font(Theme.font(.caption))
+                    }
+                    .menuStyle(.borderlessButton)
+                    .help(L(.todoRepeatPickDays))
+                    .accessibilityIdentifier("todo-repeat-weekdays")
+                case .once:
+                    EmptyView()
+                }
+            }
+        }
+        .accessibilityIdentifier("todo-repeat-editor")
     }
 
     /// **顶部编辑工具条**（片 `N2-3b` 的「工具条行」）：保存 / 删除。

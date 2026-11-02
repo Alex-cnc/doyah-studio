@@ -194,7 +194,12 @@ final class TodoQueryOrganizationTests: XCTestCase {
 
         XCTAssertEqual(
             Set(names),
-            ["id", "title", "note", "dueAt", "done", "completedAt", "priority", "tags", "createdAt", "updatedAt"],
+            [
+                "id", "title", "note", "dueAt", "done", "completedAt", "priority", "tags",
+                // `repeatRule` 是**本体字段**（`FR-NTS-TODO-LIST-001` 判据①的第四个），不是分类维度：
+                // 它说的是「这一条按什么节律再发生」，不参与归堆。加它不改「分类维度只有 `tags`」这条口径。
+                "repeatRule", "createdAt", "updatedAt",
+            ],
             "待办的持久维度只许这一套：分类维度只有 `tags` 一个"
         )
         XCTAssertTrue(names.contains("tags"), "标签那一维必须在")

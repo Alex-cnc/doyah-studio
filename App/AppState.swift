@@ -696,6 +696,11 @@ final class AppState: ObservableObject {
     @Published var todoEditorDueAt = Date()
     @Published var todoEditorPriority: TodoPriority = .normal
     @Published var todoEditorTags = ""
+    /// 编辑面里那一格「重复」的草稿（`FR-NTS-TODO-LIST-001` 的第四个本体字段；`nil` = 不重复）。
+    /// 与标题 / 标签一样是**编辑器草稿**：进编辑态时从库里那一份灌进来（`edit(_:)`），
+    /// 新建态清空（`beginNewTodo`），保存时随 `saveTodoFromEditor()` 一起写回。
+    /// **归一不在这里**：`TodoRepeat.normalized()` 是唯一一处（界面只负责选，选完存的是归一后的值）。
+    @Published var todoEditorRepeat: TodoRepeat?
     /// 编辑面里那一格「备注」的正文本（**纯文本、允换行**；契约 `Todo.note` · 片 `TD-NOTE`）。
     /// 与标题 / 标签一样是**编辑器草稿**：进编辑态时从库里那一份灌进来（`edit(_:)`），
     /// 新建态清空（`beginNewTodo`），保存时随 `saveTodoFromEditor()` 一起写回。
@@ -11071,13 +11076,31 @@ final class AppState: ObservableObject {
     ///   · **没登录就没有云同步**（`S1`/`S2` 的前提是账号）：本机钥匙串里没有会话 ⇒ 直接让路；
     ///   · **失败不打扰保存**（笔记已在本地库 = 唯一事实源）：断网只让这一条留在队列里（`IR-21`），
     ///     不写用户可见错误面 —— 本片不新画同步界面。
-    private func enqueueCloudSync(uid: String, operation: SyncOperation = .upsert) async {
+    private func enqueueCloudSync(
+        uid: String,
+        operation: SyncOperation = .upsert,
+        family: SyncFamily = .note
+    ) async {
         guard CloudSyncPreference.isEnabled() else { return }
         do {
             let service = try cloudSync()
-            let report = await service.enqueueAndPush(
-                uid: uid, operation: operation, source: NoteLibraryCloudSource()
-            )
+            let report: CloudSyncService.FlushReport?
+            switch family {
+            case .note:
+                report = await service.enqueueAndPush(
+                    uid: uid, operation: operation, source: NoteLibraryCloudSource()
+                )
+            case .todo:
+                // 待办：**同一个服务、同一个队列、同一份退避**，只是多给一个现取源
+                // （`TodoLibraryCloudSource` 读同一个库文件）。
+                report = await service.enqueueAndPush(
+                    uid: uid,
+                    operation: operation,
+                    source: NoteLibraryCloudSource(),
+                    family: .todo,
+                    todoSource: TodoLibraryCloudSource()
+                )
+            }
             lastCloudSyncReport = report
         } catch {
             // 装配不起来（没会话 / 状态文件坏）：同步这一侧静默让路，保存照常成功。
@@ -11205,7 +11228,153 @@ final class AppState: ObservableObject {
         todoEditorDueAt = Date()
         todoEditorPriority = .normal
         todoEditorTags = ""
+        todoEditorRepeat = nil
         todoEditorNote = ""
+    }
+
+    // MARK: - 五列就地改（`FR-NTS-TODO-LIST-002` 判据①：五列都显示且可改）
+
+    /// 正在就地改的那一行（`nil` = 没有一行在改）。
+    /// **一行只一个**：两行同时在改就有两份草稿、两条写路，判据①「同一次写入」在形状上就不成立。
+    @Published var todoInlineEditingID: UUID?
+    @Published var todoInlineTitle = ""
+    @Published var todoInlineHasDue = false
+    @Published var todoInlineDueAt = Date()
+    @Published var todoInlinePriority: TodoPriority = .normal
+    @Published var todoInlineTags = ""
+
+    /// 进就地改：草稿从**库里那一份**灌进来（与编辑面 `edit(_:)` 同一条纪律：
+    /// 草稿永远是某个已知状态的拷贝，不是界面自己攒的）。
+    func beginTodoInlineEdit(_ todo: Todo) {
+        todoInlineEditingID = todo.id
+        todoInlineTitle = todo.title
+        todoInlineHasDue = todo.dueAt != nil
+        todoInlineDueAt = todo.dueAt ?? Date()
+        todoInlinePriority = todo.priority
+        todoInlineTags = todo.tags.joined(separator: " ")
+    }
+
+    /// 退出就地改（Esc / 改到一半点别处）：**什么都不写**。
+    func cancelTodoInlineEdit() {
+        todoInlineEditingID = nil
+    }
+
+    /// 就地改的提交：五列**一次写完**，仍是一次 `upsert`（同一次写入、同一行）。
+    ///
+    /// 认不出的 id（那一行已被别处删掉）⇒ 静默收起草稿，**不假装改成了**。
+    func commitTodoInlineEdit() async {
+        guard notesEnabled else {
+            statusMessage = L(.licenseNotesNotIncluded)
+            return
+        }
+        guard let id = todoInlineEditingID,
+              var value = todos.first(where: { $0.id == id }) else {
+            todoInlineEditingID = nil
+            return
+        }
+        let now = Date()
+        value = TodoInlineEdit.settingTitle(todoInlineTitle, on: value, now: now)
+        value = TodoInlineEdit.settingDueAt(todoInlineHasDue ? todoInlineDueAt : nil, on: value, now: now)
+        value = TodoInlineEdit.settingPriority(todoInlinePriority, on: value, now: now)
+        value = TodoInlineEdit.settingTags(todoInlineTags, on: value, now: now)
+        do {
+            _ = try await NoteLibrary.defaultLibrary().upsert(value)
+            todoInlineEditingID = nil
+            await reloadTodos()
+            await enqueueCloudSync(uid: value.id.uuidString, family: .todo)
+        } catch {
+            errorMessage = ErrorPresenter.message(for: error)
+        }
+    }
+
+    /// 优先级那一列的直接入口（判据①「五列都可改」的第五格之外的那一格）：
+    /// 点行上的优先级 ⇒ 三档菜单 ⇒ **只改这一格**，一次 `upsert`、不经过编辑面。
+    func setTodoPriorityInline(_ todo: Todo, _ priority: TodoPriority) async {
+        guard notesEnabled else {
+            statusMessage = L(.licenseNotesNotIncluded)
+            return
+        }
+        guard priority != todo.priority else { return }
+        do {
+            let value = TodoInlineEdit.settingPriority(priority, on: todo)
+            _ = try await NoteLibrary.defaultLibrary().upsert(value)
+            await reloadTodos()
+            await enqueueCloudSync(uid: value.id.uuidString, family: .todo)
+        } catch {
+            errorMessage = ErrorPresenter.message(for: error)
+        }
+    }
+
+    // MARK: - 删除可撤销（`FR-NTS-TODO-LIST-002` 判据③）
+
+    /// 删掉的那一条的完整快照（删前抓；撤销时原样写回）。
+    /// 只留**最近一次**：需求给的是「当场的那个撤销」，不是回收站（理由见 `TodoRemovalUndo`）。
+    @Published var todoUndoRemoval: TodoRemovalUndo?
+
+    /// 撤销上一次删除：同 id、同全部字段写回（一次 `upsert`，不产生第二条）。
+    func undoLastTodoRemoval() async {
+        guard notesEnabled else {
+            statusMessage = L(.licenseNotesNotIncluded)
+            return
+        }
+        guard let undo = todoUndoRemoval else { return }
+        do {
+            let restored = undo.restored()
+            _ = try await NoteLibrary.defaultLibrary().upsert(restored)
+            todoUndoRemoval = nil
+            await reloadTodos()
+            await reloadReminders()
+            statusMessage = L(.todoRemovalUndone)
+            await enqueueCloudSync(uid: restored.id.uuidString, family: .todo)
+        } catch {
+            errorMessage = ErrorPresenter.message(for: error)
+        }
+    }
+
+    // MARK: - 待办「重复」那一格（`FR-NTS-TODO-LIST-001` 判据①的第四个字段）
+
+    /// 编辑器当前落在哪一档（回显用；`nil` 规则 ⇒ `.none`）。
+    var todoEditorRepeatMode: TodoRepeatMode { todoEditorRepeat?.mode ?? .none }
+
+    /// 切档：**取值与归一都来自 Core**（`TodoRepeat.defaultValue(for:)`），这里只接受那一个结果。
+    func setTodoEditorRepeatMode(_ mode: TodoRepeatMode) {
+        // 同档位再点一次不该把用户已经调好的次数重置掉 —— 只在**真的换档**时换值。
+        if todoEditorRepeatMode == mode { return }
+        todoEditorRepeat = TodoRepeat.defaultValue(for: mode)
+    }
+
+    /// 间隔次数（1...30；`< 1` 归一在 Core，界面只给合法范围）。
+    func setTodoEditorRepeatCount(_ count: Int) {
+        guard let current = todoEditorRepeat, current.rule == .interval else { return }
+        todoEditorRepeat = TodoRepeat(
+            rule: .interval,
+            intervalCount: max(1, count),
+            intervalUnit: current.intervalUnit
+        ).normalized()
+    }
+
+    /// 间隔单位（天 / 周）。
+    func setTodoEditorRepeatUnit(_ unit: ReminderUnit) {
+        guard let current = todoEditorRepeat, current.rule == .interval else { return }
+        todoEditorRepeat = TodoRepeat(
+            rule: .interval,
+            intervalCount: current.intervalCount,
+            intervalUnit: unit
+        ).normalized()
+    }
+
+    /// 周内某一天的开 / 关。**一天都不剩时保持最后一天**（不是把规则清空）：
+    /// 清空是「不重复」那一档的事，这里只是勾选 —— 静默变成「不重复」会让用户以为勾掉了没生效。
+    func toggleTodoEditorRepeatWeekday(_ weekday: Int) {
+        guard let current = todoEditorRepeat, current.rule == .weekly else { return }
+        var days = current.weekdays
+        if let index = days.firstIndex(of: weekday) {
+            guard days.count > 1 else { return }
+            days.remove(at: index)
+        } else {
+            days.append(weekday)
+        }
+        todoEditorRepeat = TodoRepeat.weekly(days)
     }
 
     /// **点清单里的一行 ⇒ 只读详情**（片 `TD-LIST-1` · 派单 `T-20261009-026` 的 A6）。
@@ -11238,6 +11407,7 @@ final class AppState: ObservableObject {
         todoEditorDueAt = todo.dueAt ?? Date()
         todoEditorPriority = todo.priority
         todoEditorTags = todo.tags.joined(separator: " ")
+        todoEditorRepeat = todo.repeatRule
         todoEditorNote = todo.note
         // 档位回显（界面入口半）：这条任务已经挂着提醒 ⇒ 档位选择器落在**它那一档**上
         // （重算不出来 = 那条规则不是四个档位之一 ⇒ 回落默认档，但那条规则照样照实显示）。
@@ -11278,11 +11448,14 @@ final class AppState: ObservableObject {
         value.dueAt = todoEditorHasDue ? todoEditorDueAt : nil
         value.priority = todoEditorPriority
         value.tags = tags
+        // 重复规则：存的是**归一后**的那一份（`TodoRepeat.normalized()`；`nil` = 不重复）。
+        value.repeatRule = todoEditorRepeat?.normalized()
         value.note = todoEditorNote
         if todoBeingEdited != nil { value.updatedAt = Date() }
         do {
             _ = try await NoteLibrary.defaultLibrary().upsert(value)
             await reloadTodos()
+            await enqueueCloudSync(uid: value.id.uuidString, family: .todo)
             beginNewTodo()
         } catch {
             errorMessage = ErrorPresenter.message(for: error)
@@ -11301,6 +11474,8 @@ final class AppState: ObservableObject {
             let changed = try await NoteLibrary.defaultLibrary().setDone(id: todo.id, !todo.done)
             if changed == 0 { statusMessage = L(.todoMissing) }
             await reloadTodos()
+            // 完成 / 重开也是任务本体的一次变更 ⇒ 与保存走同一条上行（判据②「同一条链路」）。
+            if changed > 0 { await enqueueCloudSync(uid: todo.id.uuidString, family: .todo) }
         } catch {
             errorMessage = ErrorPresenter.message(for: error)
         }
@@ -11315,6 +11490,11 @@ final class AppState: ObservableObject {
             // 系统的通知**不归库的级联管**（`ON DELETE CASCADE` 只清库里的行）⇒ 删任务时
             // 同批把它已经排上的那一条撤掉（库与通知中心两处必须一起变）。
             let pending = todoReminders[id]
+            // **删除可撤销**（`FR-NTS-TODO-LIST-002` 判据③）：删之前把那一行整份留下 ——
+            // 撤回来的必须是同一条（同 id、同备注、同重复规则、同标签），不是「一条新的同名任务」。
+            if let removed = todos.first(where: { $0.id == id }) {
+                todoUndoRemoval = TodoRemovalUndo(todo: removed)
+            }
             try await NoteLibrary.defaultLibrary().deleteTodo(id: id)
             if let pending { await reminderDeliverer.cancel(id: pending.id) }
             if todoBeingEdited == id { beginNewTodo() }
@@ -11322,6 +11502,8 @@ final class AppState: ObservableObject {
             if todoDetailID == id { todoDetailID = nil }
             await reloadTodos()
             await reloadReminders()
+            // 墓碑上行（`IR-17`）：队列只记「欠哪一条删」，正文不需要（`flush` 现造墓碑行）。
+            await enqueueCloudSync(uid: id.uuidString, operation: .delete, family: .todo)
         } catch {
             errorMessage = ErrorPresenter.message(for: error)
         }
@@ -11393,6 +11575,7 @@ final class AppState: ObservableObject {
             _ = try await library.saveLink(link)
             await reloadTodos()
             await reloadTodoLinks()
+            await enqueueCloudSync(uid: saved.id.uuidString, family: .todo)
             statusMessage = L(.todoLinkCreatedTodo, TodoPresentation.title(saved) ?? L(.notesUntitled))
         } catch {
             errorMessage = ErrorPresenter.message(for: error)
@@ -11912,6 +12095,7 @@ final class AppState: ObservableObject {
         do {
             _ = try await NoteLibrary.defaultLibrary().upsert(value)
             await reloadTodos()
+            await enqueueCloudSync(uid: value.id.uuidString, family: .todo)
         } catch {
             errorMessage = ErrorPresenter.message(for: error)
         }

@@ -61,7 +61,17 @@ public struct CloudSyncEndpoints: Sendable {
     /// 把查询串挂上去（`select` / `updated_at` / `order` / `limit` / `uid` …）。
     /// 交给 `URLComponents` 编码：`eq.` / `gte.` 里的 `.` 与值里的中文都不会被破坏。
     public func notesURL(query: [(String, String)]) -> URL {
-        var components = URLComponents(url: notesURL(), resolvingAgainstBaseURL: false)!
+        tableURL("notes", query: query)
+    }
+
+    /// 任意表的入口（`FR-NTS-TODO-LIST-001` 判据②：待办与笔记走同一条链路，只差表名）。
+    public func tableURL(for family: SyncFamily) -> URL {
+        tableURL(family.tableName)
+    }
+
+    /// 任意表 + 查询串（与 `notesURL(query:)` 同一条编码路径，不各写一份）。
+    public func tableURL(_ table: String, query: [(String, String)]) -> URL {
+        var components = URLComponents(url: tableURL(table), resolvingAgainstBaseURL: false)!
         components.queryItems = query.map { URLQueryItem(name: $0.0, value: $0.1) }
         return components.url!
     }
@@ -280,9 +290,9 @@ public struct CloudConflictCopy: Codable, Equatable, Sendable {
 /// 却没落冲突副本，都会在下一次同步里变成「重复上行 / 静默丢一版」。收成一份可整体序列化 /
 /// 反序列化的状态，就不会出现「只写了一半」。
 public struct CloudSyncState: Codable, Equatable, Sendable {
-    /// 增量游标（`SyncCursor`：时刻 + 同刻 boundaryUIDs）。
+    /// 增量游标（`SyncCursor`：时刻 + 同刻 boundaryUIDs）。**这一格是笔记的**（历史字段，名字不改）。
     public var cursor: SyncCursor
-    /// 每条 `uid` 已上行到的 `rev`（本机视角的版本账）。
+    /// 每条 `uid` 已上行到的 `rev`（本机视角的版本账；键见 `revKey(family:uid:)`）。
     public var revByUID: [String: Int]
     /// 出端标识（契约 §6.4.1 `device_id`）。
     public var deviceId: String
@@ -290,19 +300,64 @@ public struct CloudSyncState: Codable, Equatable, Sendable {
     public var queue: [SyncQueueEntry]
     /// 被判负而留下的第二版（冲突副本）。
     public var conflicts: [CloudConflictCopy]
+    /// **笔记以外各家族的增量游标**（`FR-NTS-TODO-LIST-001` 判据②：同一份状态文件，按家族分格）。
+    ///
+    /// 为什么不共用一格游标：游标是「哪一刻之前的都见过了」，两条表各自的 `updated_at` 序列
+    /// 互不相干 —— 共用一格会在「待办比笔记旧」时把待办那半页当成已见过（下行静默丢条）。
+    /// 键 = `SyncFamily.rawValue`（笔记那一格仍留在上面的 `cursor`，旧状态文件不用搬）。
+    public var familyCursors: [String: SyncCursor]
 
     public init(
         cursor: SyncCursor = SyncCursor(),
         revByUID: [String: Int] = [:],
         deviceId: String = CloudSyncState.defaultDeviceId(),
         queue: [SyncQueueEntry] = [],
-        conflicts: [CloudConflictCopy] = []
+        conflicts: [CloudConflictCopy] = [],
+        familyCursors: [String: SyncCursor] = [:]
     ) {
         self.cursor = cursor
         self.revByUID = revByUID
         self.deviceId = deviceId
         self.queue = queue
         self.conflicts = conflicts
+        self.familyCursors = familyCursors
+    }
+
+    /// **解码**：`familyCursors` 是后加的字段（旧状态文件没有这一格）⇒ 空字典（各家族从头拉）。
+    /// 与 `SyncQueueEntry.family` 同一条纪律：加字段不许让旧文件解不出来。
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        cursor = (try? container.decode(SyncCursor.self, forKey: .cursor)) ?? SyncCursor()
+        revByUID = (try? container.decode([String: Int].self, forKey: .revByUID)) ?? [:]
+        deviceId = (try? container.decode(String.self, forKey: .deviceId)) ?? CloudSyncState.defaultDeviceId()
+        queue = (try? container.decode([SyncQueueEntry].self, forKey: .queue)) ?? []
+        conflicts = (try? container.decode([CloudConflictCopy].self, forKey: .conflicts)) ?? []
+        familyCursors = (try? container.decode([String: SyncCursor].self, forKey: .familyCursors)) ?? [:]
+    }
+
+    /// 某个家族的增量游标（笔记 = 历史那一格；其余 = `familyCursors` 里的那一格，缺省空）。
+    public func cursor(for family: SyncFamily) -> SyncCursor {
+        switch family {
+        case .note: return cursor
+        default: return familyCursors[family.rawValue] ?? SyncCursor()
+        }
+    }
+
+    /// 写回某个家族的游标（笔记仍写历史那一格 —— 读与写在**同一处分叉**，不会一处忘改）。
+    public mutating func setCursor(_ value: SyncCursor, for family: SyncFamily) {
+        switch family {
+        case .note: cursor = value
+        default: familyCursors[family.rawValue] = value
+        }
+    }
+
+    /// 版本账的键：笔记沿用裸 `uid`（历史键，不搬），其余家族加前缀（两类对象的 `uid`
+    /// 各在各的命名空间，同一个 UUID 出现在两边不该共用一份 rev 账）。
+    public static func revKey(family: SyncFamily, uid: String) -> String {
+        switch family {
+        case .note: return uid
+        default: return "\(family.rawValue):\(uid)"
+        }
     }
 
     /// 出端标识：优先环境变量 `DOYAH_DEVICE_ID`，否则主机名；**都不含用户名 / 口令**。
@@ -374,6 +429,16 @@ public final class MemoryCloudSyncStateStore: CloudSyncStateStore, @unchecked Se
 public protocol CloudNoteSource: Sendable {
     /// 现取某 `uid` 的当前本地行（已装配成云端整行；`owner_id` 留空由服务端填）。取不到返回 `nil`。
     func cloudRow(uid: String) async throws -> CloudNoteRow?
+}
+
+/// **待办那一侧的现取源**（`FR-NTS-TODO-LIST-001` 判据②：与笔记同一条链路、不做第二套）。
+///
+/// 与 `CloudNoteSource` 分成两个协议、而不是加一个 `kind` 参数：两个族的「现取」各自要知道
+/// 自己那张表怎么读（笔记要拼 spans 与归属，待办要拼 payload），塞进一个协议就会变成
+/// 「一个方法里两套 if」。**队列 / 决胜 / 退避 / 上行体是一个** —— 那才是「同一条链路」。
+public protocol CloudTodoSource: Sendable {
+    /// 现取某 `uid` 的当前待办（已装配成云端整行）。取不到返回 `nil`（本地已删）。
+    func todoCloudRow(uid: String) async throws -> CloudNoteRow?
 }
 
 // MARK: - 同步服务
@@ -452,14 +517,22 @@ public final class CloudSyncService: @unchecked Sendable {
 
     public var deviceId: String { state.deviceId }
     public var cursor: SyncCursor { state.cursor }
+    /// 某个家族的增量游标（判据②「同一份状态文件、按家族分格」的读数口）。
+    public func cursor(for family: SyncFamily) -> SyncCursor { state.cursor(for: family) }
     public var pendingCount: Int { state.queue.count }
+    /// 队列快照（只读）：判据要能指着说「这两条欠账各自属于哪一族」。
+    public var pendingEntries: [SyncQueueEntry] { state.queue }
     public var conflicts: [CloudConflictCopy] { state.conflicts }
 
-    /// 某 `uid` 已上行到的 `rev`（没有 = 0）。
-    public func revision(for uid: String) -> Int { state.revByUID[uid] ?? 0 }
+    /// 某 `uid` 已上行到的 `rev`（没有 = 0）。`family` 决定读哪一格账（待办那一格带前缀）。
+    public func revision(for uid: String, family: SyncFamily = .note) -> Int {
+        state.revByUID[CloudSyncState.revKey(family: family, uid: uid)] ?? 0
+    }
 
     /// 下一次上行这一 `uid` 该用的 `rev`（单调 +1）。
-    public func nextRevision(for uid: String) -> Int { revision(for: uid) + 1 }
+    public func nextRevision(for uid: String, family: SyncFamily = .note) -> Int {
+        revision(for: uid, family: family) + 1
+    }
 
     // MARK: 冲突副本的销账（`FR-NTS-NOTE-SYNC-002` ③④）
 
@@ -497,9 +570,9 @@ public final class CloudSyncService: @unchecked Sendable {
 
     /// 记「这一 `uid` 欠云端一次操作」。同 `uid` 只一条（`SyncQueue` 的幂等落在队列上）。
     @discardableResult
-    public func enqueue(uid: String, operation: SyncOperation = .upsert) throws -> Bool {
+    public func enqueue(uid: String, operation: SyncOperation = .upsert, family: SyncFamily = .note) throws -> Bool {
         var queue = SyncQueue(entries: state.queue, now: now)
-        let added = queue.enqueue(uid: uid, operation: operation)
+        let added = queue.enqueue(uid: uid, operation: operation, family: family)
         state.queue = queue.entries
         try stateStore.save(state)
         return added
@@ -523,12 +596,12 @@ public final class CloudSyncService: @unchecked Sendable {
     ///   - rev: 这一版的 `rev`（调用方用 `nextRevision(for:)` 取）。
     /// - Returns: 决胜结果（`.accepted` 已接收 / `.expired` 已过期 / `.conflict` 留两版）。
     @discardableResult
-    public func push(row: CloudNoteRow, rev: Int) throws -> SyncMerge {
+    public func push(row: CloudNoteRow, rev: Int, family: SyncFamily = .note) throws -> SyncMerge {
         let token = try requireToken()
         var outgoing = row
         outgoing.rev = rev
 
-        let remote = try fetchRow(uid: row.uid, token: token)
+        let remote = try fetchRow(uid: row.uid, token: token, family: family)
         let merge = SyncResolution.decide(incoming: outgoing.record, local: remote?.record)
 
         switch merge.verdict {
@@ -536,7 +609,7 @@ public final class CloudSyncService: @unchecked Sendable {
             // 服务端那一版更新：本地这一版判负 —— **不丢**，落冲突副本；不上行。
             recordConflict(merge.conflict ?? outgoing.record, winner: merge.primary)
         case .accepted:
-            try upload(outgoing, token: token)
+            try upload(outgoing, token: token, family: family)
         case .conflict:
             // 两版都留：**只有胜者是 `outgoing` 时才上行**。
             // 胜者是服务端那一版时**绝不上行** —— 否则 `outgoing`（判负版）会覆盖胜版，
@@ -544,12 +617,12 @@ public final class CloudSyncService: @unchecked Sendable {
             // P6 服务端现存却是 `{"v":"macOS-older"}`）。
             // 「不上行」不等于丢：判负版紧接着落冲突副本（`recordConflict`）⇒ 两端收敛到胜者 + 留两版。
             if isOutgoingWinner(merge, outgoing: outgoing) {
-                try upload(outgoing, token: token)
+                try upload(outgoing, token: token, family: family)
             }
             if let losing = merge.conflict { recordConflict(losing, winner: merge.primary) }
         }
 
-        state.revByUID[row.uid] = merge.primary.rev
+        state.revByUID[CloudSyncState.revKey(family: family, uid: row.uid)] = merge.primary.rev
         try stateStore.save(state)
         ledger.apply(merge.primary)
         return merge
@@ -567,15 +640,17 @@ public final class CloudSyncService: @unchecked Sendable {
     // MARK: `IR-15` 增量下拉
 
     /// 一页记录（`IR-15`）：`updated_after=<游标>` 取回、滤掉同刻已见过的那些。
-    public func fetchPage(token: String) throws -> [CloudNoteRow] {
+    public func fetchPage(token: String, family: SyncFamily = .note) throws -> [CloudNoteRow] {
         var query: [(String, String)] = [("select", "*"), ("order", "updated_at.asc"), ("limit", String(pageLimit))]
-        if let after = state.cursor.updatedAfter {
+        // 游标**按家族各读各的**（`CloudSyncState.cursor(for:)`）：两条表的 `updated_at` 序列
+        // 互不相干，共用一格会把「比笔记旧的那半页待办」当成已见过（下行静默丢条）。
+        if let after = state.cursor(for: family).updatedAfter {
             query.append(("updated_at", "gte.\(CloudSyncCoding.iso8601String(after))"))
         }
         let response = try send(
             CloudAuthHTTPRequest(
                 method: "GET",
-                url: endpoints.notesURL(query: query),
+                url: endpoints.tableURL(family.tableName, query: query),
                 headers: ["Authorization": "Bearer \(token)"]
             )
         )
@@ -593,14 +668,16 @@ public final class CloudSyncService: @unchecked Sendable {
     ///
     /// - Returns: 这一页逐 `uid` 的回执三态 + 真正新见的条数（游标判据与 `SyncCursor.unseen` 同源）。
     @discardableResult
-    public func pull() throws -> (verdicts: [String: SyncVerdict], fetched: Int, unseen: Int) {
+    public func pull(family: SyncFamily = .note) throws -> (verdicts: [String: SyncVerdict], fetched: Int, unseen: Int) {
         let token = try requireToken()
-        let page = try fetchPage(token: token)
-        let unseen = state.cursor.unseen(in: page.map(\.record))
+        let page = try fetchPage(token: token, family: family)
+        var cursor = state.cursor(for: family)
+        let unseen = cursor.unseen(in: page.map(\.record))
         let verdicts = ledger.apply(unseen)
-        state.cursor.advance(with: page.map(\.record))
-        for row in page where (state.revByUID[row.uid] ?? 0) < row.rev {
-            state.revByUID[row.uid] = row.rev
+        cursor.advance(with: page.map(\.record))
+        state.setCursor(cursor, for: family)
+        for row in page where revision(for: row.uid, family: family) < row.rev {
+            state.revByUID[CloudSyncState.revKey(family: family, uid: row.uid)] = row.rev
         }
         try stateStore.save(state)
         return (verdicts, page.count, unseen.count)
@@ -627,7 +704,10 @@ public final class CloudSyncService: @unchecked Sendable {
     /// 断网时（传输抛 `transport`）失败**不出队**、退避往后推；恢复后再调一次即自动补传。
     /// - Returns: 读数（尝试 / 成功 / 失败 / 队列长度 / 逐条重试次数）。
     @discardableResult
-    public func flush(source: CloudNoteSource) async throws -> FlushReport {
+    public func flush(
+        source: CloudNoteSource,
+        todoSource: (any CloudTodoSource)? = nil
+    ) async throws -> FlushReport {
         let token = try requireToken()
         var queue = SyncQueue(entries: state.queue, now: now)
         let ready = queue.ready(at: now())
@@ -636,32 +716,62 @@ public final class CloudSyncService: @unchecked Sendable {
 
         for entry in ready {
             do {
-                guard let row = try await source.cloudRow(uid: entry.uid) else {
-                    // 本地已经没有这一行（删了）：队列里这一条欠账就地销账，不假装成功。
-                    queue.dequeue(uid: entry.uid)
-                    continue
+                switch entry.family {
+                case .note:
+                    guard let row = try await source.cloudRow(uid: entry.uid) else {
+                        // 本地已经没有这一行（删了）：队列里这一条欠账就地销账，不假装成功。
+                        queue.dequeue(uid: entry.uid)
+                        continue
+                    }
+                    if entry.operation == .delete {
+                        // 墓碑上行：`deleted_at` 非空即可（`IR-17`：**不物理删**）。
+                        var tombstone = row
+                        tombstone.deletedAt = now()
+                        // 删除也是一次内容变更：`rev` 照常 +1。
+                        _ = try push(row: tombstone, rev: nextRevision(for: entry.uid), family: .note)
+                    } else {
+                        _ = try push(row: row, rev: nextRevision(for: entry.uid), family: .note)
+                    }
+                case .todo:
+                    // **待办走同一条重放路**（同一队列 / 同一退避 / 同一个 `push` 决胜）——
+                    // 差别只有：读哪一族的现取源、上行到哪张表（判据②「不做第二套」）。
+                    if entry.operation == .delete {
+                        // 待办是**物理删**（没有墓碑列）⇒ 删完之后现取拿不到内容，而墓碑
+                        // 本来也不需要内容：`uid` + `rev` + `deleted_at` 三件就够云端标掉这一行。
+                        let tombstone = CloudNoteRow(
+                            uid: entry.uid,
+                            title: nil,
+                            content: nil,
+                            contentType: nil,
+                            notebookUid: nil,
+                            tags: nil,
+                            pinned: nil,
+                            rev: 0,
+                            updatedAt: CloudSyncCoding.normalizedToMilliseconds(now()),
+                            deletedAt: CloudSyncCoding.normalizedToMilliseconds(now()),
+                            deviceId: nil
+                        )
+                        _ = try push(row: tombstone, rev: nextRevision(for: entry.uid, family: .todo), family: .todo)
+                    } else {
+                        guard let todoSource, let row = try await todoSource.todoCloudRow(uid: entry.uid) else {
+                            queue.dequeue(uid: entry.uid, family: .todo)
+                            continue
+                        }
+                        _ = try push(row: row, rev: nextRevision(for: entry.uid, family: .todo), family: .todo)
+                    }
                 }
-                if entry.operation == .delete {
-                    // 墓碑上行：`deleted_at` 非空即可（`IR-17`：**不物理删**）。
-                    var tombstone = row
-                    tombstone.deletedAt = now()
-                    // 删除也是一次内容变更：`rev` 照常 +1。
-                    _ = try push(row: tombstone, rev: nextRevision(for: entry.uid))
-                } else {
-                    _ = try push(row: row, rev: nextRevision(for: entry.uid))
-                }
-                queue.dequeue(uid: entry.uid)
+                queue.dequeue(uid: entry.uid, family: entry.family)
                 succeeded += 1
             } catch let error as CloudSyncError where error.isOfflineLike {
-                queue.fail(uid: entry.uid)
+                queue.fail(uid: entry.uid, family: entry.family)
                 failed += 1
             } catch let error as CloudSyncError {
                 // 服务端拒绝（非断网）：也按失败退避 —— 但不静默丢，下一次仍会重试。
                 _ = error
-                queue.fail(uid: entry.uid)
+                queue.fail(uid: entry.uid, family: entry.family)
                 failed += 1
             } catch {
-                queue.fail(uid: entry.uid)
+                queue.fail(uid: entry.uid, family: entry.family)
                 failed += 1
             }
         }
@@ -684,9 +794,15 @@ public final class CloudSyncService: @unchecked Sendable {
     /// 这是 `AppState` 的触发点入口：写库成功后调它 —— 在线则当场补传（队列清空），
     /// 断网则**留在队列**（不报错、不丢），联网后由下一次 `flush` 自动补传（`IR-21`）。
     @discardableResult
-    public func enqueueAndPush(uid: String, operation: SyncOperation = .upsert, source: CloudNoteSource) async -> FlushReport? {
-        try? enqueue(uid: uid, operation: operation)
-        return try? await flush(source: source)
+    public func enqueueAndPush(
+        uid: String,
+        operation: SyncOperation = .upsert,
+        source: CloudNoteSource,
+        family: SyncFamily = .note,
+        todoSource: (any CloudTodoSource)? = nil
+    ) async -> FlushReport? {
+        try? enqueue(uid: uid, operation: operation, family: family)
+        return try? await flush(source: source, todoSource: todoSource)
     }
 
     // MARK: 内部 · 网络
@@ -712,8 +828,8 @@ public final class CloudSyncService: @unchecked Sendable {
         }
     }
 
-    private func fetchRow(uid: String, token: String) throws -> CloudNoteRow? {
-        let url = endpoints.notesURL(query: [
+    private func fetchRow(uid: String, token: String, family: SyncFamily = .note) throws -> CloudNoteRow? {
+        let url = endpoints.tableURL(family.tableName, query: [
             ("select", "*"),
             ("uid", "eq.\(uid)"),
             ("limit", "1"),
@@ -731,14 +847,14 @@ public final class CloudSyncService: @unchecked Sendable {
         }
     }
 
-    private func upload(_ row: CloudNoteRow, token: String) throws {
+    private func upload(_ row: CloudNoteRow, token: String, family: SyncFamily = .note) throws {
         // **上行体 = canonical JSON**（契约 §6.4.1.1 判据①②）：键序按契约列序（不是字典序）、
         // 可选键省略、`deleted_at` 显式 `null` —— 由 `CloudSyncCoding.uploadJSON` 一处成形。
         let body = Data(CloudSyncCoding.uploadJSON(row).utf8)
         let response = try send(
             CloudAuthHTTPRequest(
                 method: "POST",
-                url: endpoints.notesURL(),
+                url: endpoints.tableURL(for: family),
                 headers: [
                     "Authorization": "Bearer \(token)",
                     "Prefer": "resolution=merge-duplicates,return=representation",
@@ -892,6 +1008,75 @@ public struct NoteLibraryCloudSource: CloudNoteSource {
             // 本地墓碑时刻（`nil` = 活的）。墓碑上行时 `flush` 会把它刷成"此刻"，但**本地事实**
             // 由这一处读出来 —— 判据要能在同一轮里看到"本地确实落了墓碑"。
             deletedAt: (try? await library.deletedAt(id: id)) ?? nil,
+            deviceId: nil
+        )
+    }
+}
+
+// MARK: - 待办的云端装配点（`FR-NTS-TODO-LIST-001` 判据②）
+
+/// 待办在云端行里的载荷形态：**就是 `Todo` 的 `Codable` 本身**（排序键、毫秒归一的 JSON）。
+///
+/// 为什么不另立一套「交换面 DTO」：笔记那边要 DTO 是因为正文有内部形态与交换形态两种
+/// （`NoteBody` / `NoteBodyExchange`）；待办没有这层差别，它的模型就是它的载荷 ——
+/// 再抄一个同字段的 DTO，只会多一处「两边改了不同步」。
+public enum TodoCloudPayload {
+
+    /// 编码（键排序 ⇒ 逐字节稳定；`updatedAt` 先归一到毫秒，与行上的那一格同一个值）。
+    public static func encode(_ todo: Todo) -> String {
+        var value = todo
+        value.updatedAt = CloudSyncCoding.normalizedToMilliseconds(todo.updatedAt)
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        encoder.dateEncodingStrategy = .secondsSince1970
+        guard let data = try? encoder.encode(value), let text = String(data: data, encoding: .utf8) else {
+            return ""
+        }
+        return text
+    }
+
+    /// 解码（解不出 ⇒ `nil`，不抛错：同步面的坏载荷不该把整页拉崩）。
+    public static func decode(_ text: String?) -> Todo? {
+        guard let text, !text.isEmpty, let data = text.data(using: .utf8) else { return nil }
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .secondsSince1970
+        return try? decoder.decode(Todo.self, from: data)
+    }
+}
+
+/// 待办的现取源：从同一个 `NoteLibrary`（**同一个库文件、同一条存储链路**）取一条待办，
+/// 装配成与笔记同形的云端整行。
+///
+/// 字段落法（每一格都有理由）：
+///   · `content` = `TodoCloudPayload`（整条任务的 JSON）—— 决胜只看 `SyncRecord.payload`，
+///     把内容放这里，冲突判定的输入就是真内容；
+///   · `title` / `tags` 照搬（服务端那一列不用来解释语义，只让人在控制台看得懂）；
+///   · `content_type` = `application/json`（与笔记的 `text/plain` 不同 —— 这一列说的是
+///     「content 是什么」，待办那边确实是 JSON）；
+///   · `rev` 由服务给（这里填 0，`push` 会按 `nextRevision` 覆盖）。
+public struct TodoLibraryCloudSource: CloudTodoSource {
+
+    public let library: NoteLibrary
+
+    public init(library: NoteLibrary = NoteLibrary.defaultLibrary()) {
+        self.library = library
+    }
+
+    public func todoCloudRow(uid: String) async throws -> CloudNoteRow? {
+        guard let id = UUID(uuidString: uid) else { return nil }
+        let todos = try await library.todos()
+        guard let todo = todos.first(where: { $0.id == id }) else { return nil }
+        return CloudNoteRow(
+            uid: uid,
+            title: todo.title,
+            content: TodoCloudPayload.encode(todo),
+            contentType: "application/json",
+            notebookUid: nil,
+            tags: todo.tags,
+            pinned: nil,
+            rev: 0,
+            updatedAt: CloudSyncCoding.normalizedToMilliseconds(todo.updatedAt),
+            deletedAt: nil,
             deviceId: nil
         )
     }

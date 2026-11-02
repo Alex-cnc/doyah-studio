@@ -711,6 +711,26 @@ public enum LKey: String, CaseIterable, Sendable {
     case todoDelete
     /// 认不出的 id（队列 `L-100`）：库里没有这一条时**如实说**，不假装改成了。
     case todoMissing
+    // `FR-NTS-TODO-LIST-001`（本体四字段之「重复规则」）：轴名 / 六种说法 / 周内七天 /
+    // 两个输入轴名 + 两档单位。「每 N 天 / 每 N 周」带数字槽（`%d`）；
+    // 「每周 %@」的槽填周内名字（读 `TodoRepeat.weekdayKey`，不填数字）。
+    case todoRepeatLabel
+    case todoRepeatNone
+    case todoRepeatDaily
+    case todoRepeatWeekly
+    case todoRepeatEveryDays
+    case todoRepeatEveryWeeks
+    case todoRepeatWeekdays
+    case todoRepeatPickDays
+    case todoRepeatIntervalCount
+    case todoRepeatIntervalUnit
+    case todoRepeatEveryDayUnit
+    case todoRepeatEveryWeekUnit
+    /// 编辑面那两个「不是现成档」的档名（自定义间隔 / 每周几天）。
+    case todoRepeatModeInterval
+    case todoRepeatModeWeekdays
+    // 周内七天**复用**日历那一组键（`todoWeekdayMonday…Sunday` 早已在表里）——
+    // 不在这里再声明一遍：同一句话两个键，正是「同一个字有两个出处」的起点。
     // `FR-NTS-TODO-LINK-001`（任务 ↔ 笔记双向转化）：详情里那一行的轴名、四个方向词、两个动作、
     // 两个如实交代（来源被删 / 撤销完成）。方向词四种组合都在 `TodoLinkText.originKey` 里选，
     // 界面不自己按 origin 拼句子。
@@ -730,6 +750,12 @@ public enum LKey: String, CaseIterable, Sendable {
     case todoLinkCreatedNote
     case todoLinkUndoneStatus
     case todoLinkNeedsSavedNote
+    /// 片 `N2` 第二片（`FR-NTS-TODO-LIST-002`）：**五列就地改**的提示与**删除可撤销**的两句。
+    /// 五列的空值话（「无标签」）也在这里 —— 空列也要有话说，否则那一列会凭空消失。
+    case todoTagsNone
+    case todoInlineEditHint
+    case todoUndoRemoval
+    case todoRemovalUndone
     /// 待办那一屏左栏那一行（待办自己的入口与列表 —— `FR-NOTE-36`）。
     case todoAll
     // 队列 `L-100` **Core 半第二片**（日历）：月 / 周两档的名字（切换器的唯一出处；
@@ -4090,6 +4116,10 @@ public enum LocalizedStrings {
         .todoSectionOpen: [.simplifiedChinese: "未完成", .english: "Open"],
         .todoSectionCompleted: [.simplifiedChinese: "已完成", .english: "Completed"],
         .todoDueNone: [.simplifiedChinese: "无截止", .english: "No due date"],
+        .todoTagsNone: [.simplifiedChinese: "无标签", .english: "No tags"],
+        .todoInlineEditHint: [.simplifiedChinese: "就地改这一行", .english: "Edit this row in place"],
+        .todoUndoRemoval: [.simplifiedChinese: "撤销", .english: "Undo"],
+        .todoRemovalUndone: [.simplifiedChinese: "已恢复那一条", .english: "Restored that item"],
         .todoDueOverdue: [.simplifiedChinese: "已过期", .english: "Overdue"],
         .todoDueToday: [.simplifiedChinese: "今天", .english: "Today"],
         .todoDueThisWeek: [.simplifiedChinese: "本周", .english: "This Week"],
@@ -4150,6 +4180,23 @@ public enum LocalizedStrings {
             .english: "Save this note before creating a task"
         ],
         .todoMissing: [.simplifiedChinese: "这条待办已经不在了", .english: "That todo is gone"],
+        // `FR-NTS-TODO-LIST-001`（本体四字段之「重复规则」）：轴名 / 六种说法 / 周内七天 /
+        // 「选哪几天」。**档位与归一全在 `Core/TodoRepeat.swift`**，这里只有句子。
+        // 「每 N 天 / 每 N 周」带数字槽（`%d`）；「每周 %@」里填的是周内名字（不是数字）。
+        .todoRepeatLabel: [.simplifiedChinese: "重复", .english: "Repeat"],
+        .todoRepeatNone: [.simplifiedChinese: "不重复", .english: "Does not repeat"],
+        .todoRepeatDaily: [.simplifiedChinese: "每天", .english: "Every day"],
+        .todoRepeatWeekly: [.simplifiedChinese: "每周", .english: "Every week"],
+        .todoRepeatEveryDays: [.simplifiedChinese: "每 %d 天", .english: "Every %d days"],
+        .todoRepeatEveryWeeks: [.simplifiedChinese: "每 %d 周", .english: "Every %d weeks"],
+        .todoRepeatWeekdays: [.simplifiedChinese: "每周 %@", .english: "Every %@"],
+        .todoRepeatPickDays: [.simplifiedChinese: "选哪几天", .english: "Which days"],
+        .todoRepeatIntervalCount: [.simplifiedChinese: "间隔", .english: "Interval"],
+        .todoRepeatIntervalUnit: [.simplifiedChinese: "单位", .english: "Unit"],
+        .todoRepeatEveryDayUnit: [.simplifiedChinese: "天", .english: "day(s)"],
+        .todoRepeatEveryWeekUnit: [.simplifiedChinese: "周", .english: "week(s)"],
+        .todoRepeatModeInterval: [.simplifiedChinese: "自定义间隔", .english: "Custom interval"],
+        .todoRepeatModeWeekdays: [.simplifiedChinese: "每周几天", .english: "Days of week"],
         .todoAll: [.simplifiedChinese: "全部待办", .english: "All todos"],
         // 队列 `L-100` **Core 半第二片**（日历）：两档视图的名字（切换器读 `TodoCalendarView.key`）。
         .todoCalendarMonth: [.simplifiedChinese: "月", .english: "Month"],

@@ -386,6 +386,17 @@ struct TodoRowView: View {
     @EnvironmentObject private var appState: AppState
 
     var body: some View {
+        if appState.todoInlineEditingID == todo.id {
+            inlineEditor
+        } else {
+            readRow
+        }
+    }
+
+    /// **只读那一行**（`FR-NTS-TODO-LIST-002` 判据①：五列都显示）。
+    /// 五列 = 标题 / 截止 / 完成态 / 优先级 / 标签；**空值也有话说**（「无截止」「无标签」），
+    /// 否则那一列在行上凭空消失，读的人会以为没有这一列。
+    private var readRow: some View {
         HStack(spacing: Spacing.xs) {
             Button {
                 Task { await appState.toggleTodoDone(todo) }
@@ -402,19 +413,65 @@ struct TodoRowView: View {
                     .font(Theme.font(.body))
                     .lineLimit(1)
                 HStack(alignment: .firstTextBaseline, spacing: Spacing.xs) {
-                    Text(L(TodoQuery.band(of: todo, window: appState.todoWindow).key))
-                        .font(Theme.font(.caption))
-                        .foregroundStyle(dueTone(todo))
-                    if todo.priority != .normal {
-                        Text(L(todo.priority.key))
+                    // ② 截止时间（分带词；空 = 「无截止」）：点它 ⇒ 改期那张既有弹框
+                    // —— 改期是一条**既有写路**，这里不新开第三条。
+                    Button {
+                        appState.beginReschedule(todo)
+                    } label: {
+                        Text(columnText(.dueAt))
                             .font(Theme.font(.caption))
-                            .foregroundStyle(todo.priority == .high ? Theme.status(.warning) : Theme.text(.secondary))
+                            .foregroundStyle(dueTone(todo))
                     }
-                    if !todo.tags.isEmpty {
-                        Text(todo.tags.joined(separator: " "))
+                    .buttonStyle(.plain)
+                    .help(L(.todoReschedule))
+                    .accessibilityIdentifier("todo-cell-due-\(todo.id.uuidString)")
+                    // ④ 优先级：点它 ⇒ 三档菜单 ⇒ 只改这一格（一次 `upsert`，不经过编辑面）。
+                    Menu {
+                        ForEach(TodoPriority.allCases, id: \.self) { priority in
+                            Button {
+                                Task { await appState.setTodoPriorityInline(todo, priority) }
+                            } label: {
+                                if priority == todo.priority {
+                                    Label(L(priority.key), systemImage: "checkmark")
+                                } else {
+                                    Text(L(priority.key))
+                                }
+                            }
+                        }
+                    } label: {
+                        Text(columnText(.priority))
+                            .font(Theme.font(.caption))
+                            .foregroundStyle(
+                                todo.priority == .high ? Theme.status(.warning) : Theme.text(.secondary)
+                            )
+                    }
+                    .menuStyle(.borderlessButton)
+                    .help(L(.todoPriorityLabel))
+                    .accessibilityIdentifier("todo-cell-priority-\(todo.id.uuidString)")
+                    // ⑤ 标签：点它 ⇒ 就地改（那一行里有一个输入框）。
+                    Button {
+                        appState.beginTodoInlineEdit(todo)
+                    } label: {
+                        Text(columnText(.tags))
                             .font(Theme.font(.caption))
                             .foregroundStyle(Theme.text(.secondary))
                             .lineLimit(1)
+                    }
+                    .buttonStyle(.plain)
+                    .help(L(.todoInlineEditHint))
+                    .accessibilityIdentifier("todo-cell-tags-\(todo.id.uuidString)")
+                    // **重复标记**（`FR-NTS-TODO-LIST-001` 判据①的第四个字段）：只在真有规则时画，
+                    // 名字交给悬停提示（一句话由 `TodoRepeatPresentation` 一处出）。
+                    if let repeatRule = todo.repeatRule,
+                       let repeatText = TodoRepeatPresentation.summary(
+                           repeatRule, language: LocalizationManager.shared.effectiveLanguage
+                       ) {
+                        Image(systemName: "repeat")
+                            .font(Theme.font(.caption))
+                            .foregroundStyle(Theme.text(.secondary))
+                            .help(repeatText)
+                            .accessibilityLabel(Text(repeatText))
+                            .accessibilityIdentifier("todo-repeat-badge-\(todo.id.uuidString)")
                     }
                 }
             }
@@ -431,12 +488,17 @@ struct TodoRowView: View {
         }
         .contentShape(Rectangle())
         // **点一行 ⇒ 只读详情**（片 `TD-LIST-1` · 派单 `T-20261009-026` 的 A6）：只把「看哪一条」
-        // 记下来（`showTodoDetail`），**不进编辑态** —— 只读 ≠ 编辑。要改走下面右键那枚「编辑」。
+        // 记下来（`showTodoDetail`），**不进编辑态** —— 只读 ≠ 编辑。
+        // **双击 ⇒ 就地改**（`FR-NTS-TODO-LIST-002` 判据①：五列都可改）：不离开清单、不换右栏。
+        // 双击先注册：单击仍是「看」。
+        .onTapGesture(count: 2) { appState.beginTodoInlineEdit(todo) }
         .onTapGesture { appState.showTodoDetail(todo) }
         .contextMenu {
             // 「编辑」是**进写入面**的那条路（片 `TD-LIST-1`）：详情那一屏自己不带编辑控件，
             // 所以改这一件事必须在这儿留一个入口，否则「点开只剩看」就成了功能缺失。
             Button(L(.commonEdit)) { appState.edit(todo) }
+            // 「就地改」= 不换右栏的那条路（判据①）；与上面那条说的是同一件事的两种做法。
+            Button(L(.todoInlineEditHint)) { appState.beginTodoInlineEdit(todo) }
             Divider()
             // 与那一枚圆点说的是同一件事、两种措辞（当前不是完成 ⇒「标记完成」）——
             // 写库与重读都在 `AppState.toggleTodoDone` 一处。
@@ -462,6 +524,77 @@ struct TodoRowView: View {
                 : Color.clear
         )
         .accessibilityIdentifier("todo-row-\(todo.id.uuidString)")
+    }
+
+    /// 某一列的显示文本 —— **只走 Core 那一处**（`TodoInlinePresentation`）：分带词、优先级名字、
+    /// 「无截止 / 无标签」两句都在那里，行上不自己拼第二套。
+    private func columnText(_ field: TodoInlineField) -> String {
+        TodoInlinePresentation.text(
+            field, of: todo, window: appState.todoWindow,
+            language: LocalizationManager.shared.effectiveLanguage
+        )
+    }
+
+    /// **就地改那一行**（判据①的可改面）：五列在同一行里改完，提交时**一次写入**。
+    ///
+    /// 完成态不在这里面：它本来就是行首那一枚开关（一按即写 —— 那是 `setDone` 那一条写路），
+    /// 再画一个同样的开关就是两个入口说同一件事。这里的四格 + 行首那一枚 = 五列都可改。
+    private var inlineEditor: some View {
+        VStack(alignment: .leading, spacing: Spacing.xs) {
+            // ① 标题
+            TextField(L(.todoTitlePlaceholder), text: $appState.todoInlineTitle)
+                .textFieldStyle(.roundedBorder)
+                .onSubmit { Task { await appState.commitTodoInlineEdit() } }
+                .accessibilityIdentifier("todo-inline-title")
+            HStack(spacing: Spacing.xs) {
+                // ② 截止时间（关掉 = **显式清掉**，与编辑面那枚开关同口径）
+                Toggle(L(.todoDueLabel), isOn: $appState.todoInlineHasDue)
+                    .toggleStyle(.checkbox)
+                    .accessibilityIdentifier("todo-inline-due-toggle")
+                if appState.todoInlineHasDue {
+                    DatePicker("", selection: $appState.todoInlineDueAt, displayedComponents: [.date, .hourAndMinute])
+                        .labelsHidden()
+                        .accessibilityIdentifier("todo-inline-due-picker")
+                }
+                // ④ 优先级
+                Picker(L(.todoPriorityLabel), selection: $appState.todoInlinePriority) {
+                    ForEach(TodoPriority.allCases, id: \.self) { priority in
+                        Text(L(priority.key)).tag(priority)
+                    }
+                }
+                .labelsHidden()
+                .pickerStyle(.menu)
+                .accessibilityIdentifier("todo-inline-priority")
+                Spacer(minLength: 0)
+            }
+            // ⑤ 标签（空格 / 逗号分隔，切分在 Core）
+            TextField(L(.todoTagsNone), text: $appState.todoInlineTags)
+                .textFieldStyle(.roundedBorder)
+                .accessibilityIdentifier("todo-inline-tags")
+            HStack(spacing: Spacing.xs) {
+                Button {
+                    Task { await appState.commitTodoInlineEdit() }
+                } label: {
+                    Image(systemName: "checkmark")
+                }
+                .buttonStyle(.plain)
+                .help(L(.commonSave))
+                .accessibilityLabel(Text(L(.commonSave)))
+                .accessibilityIdentifier("todo-inline-commit")
+                Button {
+                    appState.cancelTodoInlineEdit()
+                } label: {
+                    Image(systemName: "xmark")
+                }
+                .buttonStyle(.plain)
+                .help(L(.commonCancel))
+                .accessibilityLabel(Text(L(.commonCancel)))
+                .accessibilityIdentifier("todo-inline-cancel")
+                Spacer(minLength: 0)
+            }
+        }
+        .padding(.vertical, Spacing.hair)
+        .accessibilityIdentifier("todo-inline-editor-\(todo.id.uuidString)")
     }
 
     /// 带 → 颜色：**逾期**（未完成 且 早于今天零点）是危险色（`FR-NOTE-38` 的「显式标识」），

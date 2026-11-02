@@ -75,6 +75,15 @@ public struct Todo: Identifiable, Codable, Equatable, Sendable {
     /// 标签（**复用** `TagRules` 的口径；空数组 = 无标签，与 `Note.tags` 同口径）。
     public var tags: [String]
 
+    /// **重复规则**（`FR-NTS-TODO-LIST-001` 的第四个本体字段 · 概设 §15.11；schema v14）。
+    ///
+    /// `nil` = **不重复**，且这是「不重复」的唯一写法（`ReminderRule.once` 在归一那一步就变成
+    /// `nil` —— 见 `TodoRepeat` 的口径②）。它只描述「这一条按什么节律再发生」，
+    /// **不是**任务的第二套分类：归类维度仍然只有 `tags`（`FR-NTS-TODO-LIST-003`）。
+    ///
+    /// 「按发生日铺开」属日历那一条（`FR-NTS-TODO-CALENDAR-001`）—— 本字段只管存与改。
+    public var repeatRule: TodoRepeat?
+
     /// **备注正文**（纯文本；契约 `Todo.note` · 片 `TD-NOTE` · 派单 `T-20261009-042` ②）。
     ///
     /// 三条口径（逐条取自契约落笔；本侧**不自行发明**）：
@@ -98,6 +107,7 @@ public struct Todo: Identifiable, Codable, Equatable, Sendable {
         completedAt: Date? = nil,
         priority: TodoPriority = .normal,
         tags: [String] = [],
+        repeatRule: TodoRepeat? = nil,
         note: String = "",
         createdAt: Date = Date(),
         updatedAt: Date = Date()
@@ -109,6 +119,7 @@ public struct Todo: Identifiable, Codable, Equatable, Sendable {
         self.completedAt = completedAt
         self.priority = priority
         self.tags = tags
+        self.repeatRule = repeatRule
         self.note = note
         self.createdAt = createdAt
         self.updatedAt = updatedAt
@@ -128,11 +139,14 @@ public struct Todo: Identifiable, Codable, Equatable, Sendable {
         completedAt = try container.decodeIfPresent(Date.self, forKey: .completedAt)
         priority = try container.decode(TodoPriority.self, forKey: .priority)
         tags = try container.decode([String].self, forKey: .tags)
+        // **认不出 / 缺字段 ⇒ 不重复**（`TodoRepeat` 的口径③；与 `note` 缺字段按空串同一条纪律：
+        // 加字段不许让旧备份解不出来）。
+        repeatRule = (try? container.decodeIfPresent(TodoRepeat.self, forKey: .repeatRule)) ?? nil
         createdAt = try container.decode(Date.self, forKey: .createdAt)
         updatedAt = try container.decode(Date.self, forKey: .updatedAt)
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, title, note, dueAt, done, completedAt, priority, tags, createdAt, updatedAt
+        case id, title, note, dueAt, done, completedAt, priority, tags, repeatRule, createdAt, updatedAt
     }
 }

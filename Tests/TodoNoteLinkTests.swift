@@ -225,7 +225,7 @@ final class TodoNoteLinkTests: XCTestCase {
     /// 认不出的方向**不许猜**（猜错就是撤销删错对象）。
     func testAnUnknownOriginIsRejectedRatherThanGuessed() throws {
         let database = try makeDatabase()
-        XCTAssertEqual(database.userVersion, NoteSchemaV13.version)
+        XCTAssertEqual(database.userVersion, NoteDatabase.supportedVersion)
         // 用**另一条连接**直接写一行坏方向（不经过 `upsert(_:)` 的归一）——
         // 这条判据要问的正是「读到坏值时读的一方怎么办」。
         let raw = try SQLiteConnection(path: url().path)
@@ -240,17 +240,20 @@ final class TodoNoteLinkTests: XCTestCase {
         }
     }
 
-    /// schema 升到 v13：链接表在、版本号跟着 `supportedVersion` 走、重开幂等。
+    /// schema 至少到 v13 且**跟着 `supportedVersion` 走**：链接表在、重开幂等。
+    ///
+    /// 判的是「v13 那张表与它的数据在不在」，**不是**「版本号恰等于 13」——
+    /// 版本号会随下一次补列 / 补表往前挪（v14 补了待办的 `repeat_rule`），钉死数字就是给未来埋一条红。
     func testSchemaReachesV13AndKeepsTodoData() throws {
         let database = try makeDatabase()
         XCTAssertEqual(database.userVersion, NoteDatabase.supportedVersion)
-        XCTAssertEqual(NoteDatabase.supportedVersion, NoteSchemaV13.version)
+        XCTAssertGreaterThanOrEqual(NoteDatabase.supportedVersion, NoteSchemaV13.version)
         XCTAssertTrue(try database.tableNames().contains("todo_note_link"))
 
         let todo = Todo(title: "老数据")
         _ = try database.upsert(todo)
         let reopened = try makeDatabase()
-        XCTAssertEqual(reopened.userVersion, NoteSchemaV13.version, "重开幂等")
+        XCTAssertEqual(reopened.userVersion, NoteDatabase.supportedVersion, "重开幂等")
         XCTAssertEqual(try reopened.todoCount(), 1, "补表不改既有语义")
     }
 

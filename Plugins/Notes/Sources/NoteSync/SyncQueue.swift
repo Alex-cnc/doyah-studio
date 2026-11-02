@@ -9,6 +9,36 @@ public enum SyncOperation: String, Codable, Sendable, CaseIterable, Equatable {
     case delete
 }
 
+// MARK: - 记录家族（同一套链路上的两类对象）
+/// **同一条同步链路上的两类对象**（`FR-NTS-TODO-LIST-001` 判据②：与笔记走同一条链路、不做第二套）。
+///
+/// 为什么是一个字段、而不是第二条队列 / 第二个服务：契约要求的是「同一条链路」——
+/// 一个队列（同一份退避、同一份入队序）、一个决胜引擎（`SyncResolution`）、一次认证、
+/// 一个重放循环。差别只有一处：**上行到哪张表**。把它做成枚举，新增一类对象时
+/// 只多一个 case，而不是再抄一份 `SyncQueue` + `CloudSyncService`。
+///
+/// 取值即协议、**只增不改**：认不出的家族在解码时按 `.note` 落（与 `TodoPriority` 同一条
+/// 「当没给」口径 —— 旧状态文件里没有这一格，读出来就是笔记）。
+public enum SyncFamily: String, Codable, Sendable, CaseIterable, Equatable {
+    /// 笔记（云端 `notes` 表）。
+    case note
+    /// 待办任务（云端 `todos` 表）。
+    case todo
+
+    /// 云端表名（`CloudSyncEndpoints.tableURL` 的直接入参）。
+    public var tableName: String {
+        switch self {
+        case .note: return "notes"
+        case .todo: return "todos"
+        }
+    }
+
+    /// 认不出的取值 ⇒ `.note`（旧状态文件没有这一格）。
+    public init(raw: String) {
+        self = SyncFamily(rawValue: raw) ?? .note
+    }
+}
+
 // MARK: - 队列条目
 /// 队列里的一条待办：**只记「哪条 `uid` 欠一次什么操作」**。
 ///
@@ -18,6 +48,9 @@ public enum SyncOperation: String, Codable, Sendable, CaseIterable, Equatable {
 public struct SyncQueueEntry: Equatable, Codable, Sendable {
     public var uid: String
     public var operation: SyncOperation
+    /// 这条欠账属于哪一类对象（`FR-NTS-TODO-LIST-001` 判据②：同一队列、同一退避，只差上行的表）。
+    /// **缺这一格（旧状态文件）⇒ `.note`** —— 见下面的 `init(from:)`。
+    public var family: SyncFamily
     /// 已失败次数（成功 / 从未失败为 0）。
     public var attempts: Int
     public var enqueuedAt: Date
@@ -27,15 +60,34 @@ public struct SyncQueueEntry: Equatable, Codable, Sendable {
     public init(
         uid: String,
         operation: SyncOperation = .upsert,
+        family: SyncFamily = .note,
         attempts: Int = 0,
         enqueuedAt: Date,
         nextAttemptAt: Date
     ) {
         self.uid = uid
         self.operation = operation
+        self.family = family
         self.attempts = attempts
         self.enqueuedAt = enqueuedAt
         self.nextAttemptAt = nextAttemptAt
+    }
+
+    /// **解码**：`family` 是后加的字段（旧状态文件的队列里没有它）⇒ 缺这一格按 `.note`。
+    /// 与 `Todo.note` / `Note.isFavorite` 同一条纪律：加字段不许让旧文件解不出来
+    /// （否则一次升级就把「断网时攒下的欠账」全丢了 —— 那是真的丢数据，不是显示问题）。
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        uid = try container.decode(String.self, forKey: .uid)
+        operation = (try? container.decode(SyncOperation.self, forKey: .operation)) ?? .upsert
+        family = SyncFamily(raw: (try? container.decodeIfPresent(String.self, forKey: .family)) ?? "")
+        attempts = (try? container.decode(Int.self, forKey: .attempts)) ?? 0
+        enqueuedAt = try container.decode(Date.self, forKey: .enqueuedAt)
+        nextAttemptAt = try container.decode(Date.self, forKey: .nextAttemptAt)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case uid, operation, family, attempts, enqueuedAt, nextAttemptAt
     }
 }
 
@@ -107,8 +159,8 @@ public struct SyncQueue: Sendable {
     public var isEmpty: Bool { entries.isEmpty }
     public var pendingCount: Int { entries.count }
 
-    public func entry(uid: String) -> SyncQueueEntry? {
-        entries.first { $0.uid == uid }
+    public func entry(uid: String, family: SyncFamily = .note) -> SyncQueueEntry? {
+        entries.first { $0.uid == uid && $0.family == family }
     }
 
     /// 到点可以重放的条目（**入队序**）。已到 `nextAttemptAt` 的算到点。
@@ -118,11 +170,14 @@ public struct SyncQueue: Sendable {
 
     // MARK: 写
 
-    /// **入队**。同 `uid` 已有未完成项 ⇒ 不新增条目（返回 `false`），只把操作种类按后写覆盖。
+    /// **入队**。同 `(family, uid)` 已有未完成项 ⇒ 不新增条目（返回 `false`），只把操作种类按后写覆盖。
+    ///
+    /// 去重键是 `(family, uid)` 而不是单 `uid`：笔记与待办是两类对象，各自的 `uid` 各自命名空间
+    /// （同一个 UUID 在两边同时出现不该被合成一条欠账）。
     @discardableResult
-    public mutating func enqueue(uid: String, operation: SyncOperation = .upsert) -> Bool {
+    public mutating func enqueue(uid: String, operation: SyncOperation = .upsert, family: SyncFamily = .note) -> Bool {
         let now = clock()
-        if let index = entries.firstIndex(where: { $0.uid == uid }) {
+        if let index = entries.firstIndex(where: { $0.uid == uid && $0.family == family }) {
             // `delete` 是更重的语义：先 upsert 后 delete 记 delete；反向则保留 delete
             // （本地删了又被改回来的情况由下一次 upsert 的正常入队覆盖，不走这条路）。
             if operation == .delete || entries[index].operation != .delete {
@@ -131,25 +186,32 @@ public struct SyncQueue: Sendable {
             return false
         }
         entries.append(
-            SyncQueueEntry(uid: uid, operation: operation, attempts: 0, enqueuedAt: now, nextAttemptAt: now)
+            SyncQueueEntry(
+                uid: uid,
+                operation: operation,
+                family: family,
+                attempts: 0,
+                enqueuedAt: now,
+                nextAttemptAt: now
+            )
         )
         return true
     }
 
     /// **出队**（重放成功后调用）。返回是否真的移除了这一条。
     @discardableResult
-    public mutating func dequeue(uid: String) -> Bool {
-        guard let index = entries.firstIndex(where: { $0.uid == uid }) else { return false }
+    public mutating func dequeue(uid: String, family: SyncFamily = .note) -> Bool {
+        guard let index = entries.firstIndex(where: { $0.uid == uid && $0.family == family }) else { return false }
         entries.remove(at: index)
         return true
     }
 
     /// **失败**：失败次数 +1，并按指数退避把 `nextAttemptAt` 推到「现在 + 等待秒数」。
     ///
-    /// - Returns: 本轮等待秒数；队列里没有这条 `uid` 时返回 `nil`。
+    /// - Returns: 本轮等待秒数；队列里没有这一条时返回 `nil`。
     @discardableResult
-    public mutating func fail(uid: String) -> TimeInterval? {
-        guard let index = entries.firstIndex(where: { $0.uid == uid }) else { return nil }
+    public mutating func fail(uid: String, family: SyncFamily = .note) -> TimeInterval? {
+        guard let index = entries.firstIndex(where: { $0.uid == uid && $0.family == family }) else { return nil }
         let attempts = entries[index].attempts + 1
         let delay = policy.delay(afterFailures: attempts)
         entries[index].attempts = attempts
