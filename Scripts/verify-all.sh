@@ -4,11 +4,11 @@ set -euo pipefail
 # 本工程的一条命令验证闭环。
 #
 # 拆开跑过很多次、也就漏跑过很多次（尤其是文档计数与设计令牌这两项），
-# 所以合成一条：**改完代码跑它，十八项全过才算完**。
+# 所以合成一条：**改完代码跑它，十九项全过才算完**。
 #
 # ⚠️ **中止行为与「未执行项」**（队列 L-110，2026-10-11 第 488 轮）：本脚本是 `set -euo pipefail`
 # —— 失败**当场中止**，后面的项**根本没跑**（2026-09-30 实测：第 1 项红了 ⇒ 只能报「第 1 项红」，
-# 当时文档里那句「十八项里只有第 1 项红」是**没有证据**的写法：**未执行 ≠ 通过**）。现在两条都成机制：
+# 当时文档里那句「十九项里只有第 1 项红」是**没有证据**的写法：**未执行 ≠ 通过**）。现在两条都成机制：
 #   · 默认跑法：中止前由 `ERR` 陷阱**自己打印**「失败的是第几项 / 脚本第几行 / **哪些项没跑**」；
 #   · `./Scripts/verify-all.sh --keep-going`：**跑完再汇总** —— 单项失败不中止，收尾给一张
 #     逐项判定表（通过 / 失败（含行号）/ 平台跳过），有失败则统一 `exit 1`；
@@ -102,6 +102,10 @@ set -euo pipefail
 #        （`build-app.sh` 走 SwiftPM，根本不读它）⇒ 入库那份曾经 869 行、包标识还是改名前的
 #        `com.vnull.PostgresClient*`、且**少了两个目标**，从 2026-09-22 起就一直过期而无人知
 #        （`Docs/archive/root-20261026/项目评审-2026-09-23.md` 把这条记成风险，但风险没有判据）。
+#  19. 台账两列一致（实现列 ↔ 判据列）：**实现已 ✅ 而判据还是 ⬜/🟡 的行必须为 0**
+#      （`check-status-gap.py`｜其 `--self-test` 5 例）。`—`（不适用）与 `➖`（挂起 · 暂不支持）两档
+#      不判红，但**逐条点名**打印 —— 免得这两档被当成逃生门。它只查**格子形状**，
+#      不查「✅ 是否名副其实」（后者归每条自己的证据文件与本闭环的其余项）。
 #
 # 第 18 项是 2026-09-27（队列 L-43）补的：生成器与 `--check` 早就写好，**脚本头部自己也写着
 # 「本 check 未接进 verify-all」** —— 有判据、没闭环，等于手改一行生成物、或头文件换版后忘了
@@ -151,7 +155,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd -P)"
 cd "${ROOT}"
 
 # ── 平台判定与「跳过」语义（L-33，开发循环第 29 轮）────────────────────────────
-# 十八项里有 **两项是 macOS 专属**：第 1 项（Core 单测）与第 11 项（打包 .app）——
+# 十九项里有 **两项是 macOS 专属**：第 1 项（Core 单测）与第 11 项（打包 .app）——
 # 两者都要 Xcode 工具链（`DEVELOPER_DIR` → `/Applications/Xcode.app/Contents/Developer`；两份脚本各自在设置段
 # `${DEVELOPER_DIR:-…}` 兜底并可被外部覆盖，且每次跑都把工具链版本打进输出 —— 回执可复现，见单 T-20261009-095 ②）。
 # 在非 macOS 机器（另一平台 / Linux）上跑，原先会以「命令或路径不存在」的形式**硬失败**，
@@ -190,13 +194,13 @@ skip_step() {   # skip_step <项号> <说明>
   SKIPPED_COUNT=$((SKIPPED_COUNT + 1))
   SKIPPED_ITEMS="${SKIPPED_ITEMS}   · 第 $1 项 ${2}
 "
-  echo "==> $1/18 ⏭ 跳过（平台不适用：PLATFORM=${PLATFORM}，缺 Xcode 工具链）—— ${2}"
+  echo "==> $1/19 ⏭ 跳过（平台不适用：PLATFORM=${PLATFORM}，缺 Xcode 工具链）—— ${2}"
   echo "    等价物见 Docs/Doyah产品概要设计说明书.md §8.3（每端必需项清单）与 §8.5.3（另一平台的 PowerShell 版）"
 }
 
 # ── L-110（2026-10-11 第 488 轮）：失败行的行号 → 项号 + 「未执行项」如实报 ──────────────────
 # 项表**从本文件自己数**（`==> N/M` 项块的行号；与 `check-doc-numbers.py` 的 `gate-scan` 同源），
-# 于是 `ERR` 陷阱里那个行号能翻译成「第几项」。项块行全文只在正文里出现十八次（注释里不写死项块）。
+# 于是 `ERR` 陷阱里那个行号能翻译成「第几项」。项块行全文只在正文里出现十九次（注释里不写死项块）。
 ITEM_PAIRS=""
 while read -r table_line; do
   [ -n "${table_line}" ] || continue
@@ -235,7 +239,7 @@ platform_skipped_items() {   # 本平台会被 skip_step 跳过的项号（与�
 unexecuted_summary() {   # unexecuted_summary <已中止项号> ⇒ 点名「本平台接下来本会跑、但没跑」的项
   local from="$1" n out="" skipped
   skipped="$(platform_skipped_items)"
-  for n in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18; do
+  for n in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19; do
     if [ "${n}" -le "${from}" ]; then continue; fi
     case " ${skipped} " in
       *" ${n} "*) continue ;;
@@ -294,13 +298,13 @@ if [ "${PLATFORM}" = "macos" ]; then
   # 「这一轮的实测」（第 4 项那条判据只认同一次运行的数）。删掉之后，本轮没跑第 1 项时
   # 判据会如实报「跳过实测」——而不是拿一个陈旧数字冒充现状。
   rm -f .build/core-test-count.txt
-  echo "==> 1/18 Core 与平台适配层单测"
+  echo "==> 1/19 Core 与平台适配层单测"
   ./Scripts/verify-core.sh
 else
   skip_step 1 "Core 与平台适配层单测（Scripts/verify-core.sh 要 Xcode 工具链的 swift）"
 fi
 
-echo "==> 2/18 平台中立性（Core 不含平台专属依赖 · 脚本不含平台专属路径标识 · 语言登记形状）"
+echo "==> 2/19 平台中立性（Core 不含平台专属依赖 · 脚本不含平台专属路径标识 · 语言登记形状）"
 python3 Scripts/check-core-portability.py
 # 第 91 轮（提案 0005 **采纳**）：第二条管的是 **`Scripts/*.py` 自己** ——
 # `Scripts/` 是**两侧都在跑**的判据（Windows 侧 `platform/windows/Tools/verify-all.ps1` 第 ③ 项就是
@@ -314,7 +318,7 @@ python3 Scripts/check-core-portability.py
 python3 Scripts/check-script-portability.py
 
 # L-106（FR-STD-WS-NAV-002 ①③，2026-09-30 开发循环第 117 轮）：语言的**登记形状** ——
-# 与本项同源，都是「Core 的形状」那类判据（项数仍十八）。
+# 与本项同源，都是「Core 的形状」那类判据（项数仍十九）。
 # 「语言表声明式登记」这句话要能被机械看住：语言知识（扩展名映射 + 关键字 / 类型 / 字面量 /
 # 注释 / 运算符规则集）只允许住在 `Core/CodeLanguageDefinitions.swift`，而**消费方那一族**
 # （词法器 / 规则集 / 判语言 / 补全 / 两个编辑器 / CLI）里出现 `language == .xxx` / `case .sql:`
@@ -335,7 +339,7 @@ python3 Scripts/check-language-registry.py
 python3 Scripts/check-language-registry.py --self-test
 python3 Scripts/test-language-registry-gate.py
 
-echo "==> 3/18 本地化：Core 展示文本棘轮（R-037）+「当前语言只有一个来源」（L-13）+「文案即所见」（L-19）+「语言是传进来的」（L-47）"
+echo "==> 3/19 本地化：Core 展示文本棘轮（R-037）+「当前语言只有一个来源」（L-13）+「文案即所见」（L-19）+「语言是传进来的」（L-47）"
 python3 Scripts/check-core-localization.py
 # L-109（2026-10-11 第 487 轮）：同一条命令跑**两条**棘轮 —— ① 含汉字的字面量（R-037，基线
 # `Scripts/core-localization-baseline.json`）② 写死的英文展示文案（白名单
@@ -399,7 +403,7 @@ python3 Scripts/test-literal-language-gate.py
 python3 Scripts/check-button-icon-only.py
 python3 Scripts/check-button-icon-only.py --self-test
 
-echo "==> 4/18 文档表格与派生计数"
+echo "==> 4/19 文档表格与派生计数"
 # L-33（2026-09-27 第 29 轮）：本项的默认清单里有 **12 份被 `.gitignore` 排除的文档**
 # （兼容性矩阵 / GBase-技术验证 / 测试用例 / 发布方案 / 手工验收运行手册 + **L-41 起纳入的
 # `智能体助手-开发规范.md` 与 `design/开发循环-任务队列.md`** + **L-89 起纳入的 6 份**：
@@ -542,7 +546,7 @@ python3 Scripts/check-pending-agenda.py --self-test
 python3 Scripts/check-self-test-counts.py
 python3 Scripts/check-self-test-counts.py --self-test
 
-echo "==> 5/18 需求状态一致性（一单 §3 台账 ↔ 其它文档状态括注）+ 版本范围（版本 / 版本口径）"
+echo "==> 5/19 需求状态一致性（一单 §3 台账 ↔ 其它文档状态括注）+ 版本范围（版本 / 版本口径）"
 python3 Scripts/check-status-consistency.py
 # L-69 ③（2026-09-28 第 56 轮）：上面那条管的是「其它文档括注 ↔ 台账**状态一致**」（2026-10-20 改口径，
 # 原为「索引 ↔ 定义行」），管不了「这条 🟡 到底算不算本版范围」。
@@ -555,13 +559,13 @@ python3 Scripts/check-status-consistency.py
 python3 Scripts/check-version-scope.py
 python3 Scripts/check-version-scope.py --self-test
 
-echo "==> 6/18 设计令牌棘轮 + 外观样张与产品同源 + 主题集（三选一）"
+echo "==> 6/19 设计令牌棘轮 + 外观样张与产品同源 + 主题集（三选一）"
 python3 Scripts/check-design-tokens.py
 # L-79 ㈡（2026-09-29 第 76 轮）：上面那条棘轮管的是 **App/ 里的裸颜色 / 裸字号 / 裸间距**，
 # 管不了「**样张到底是不是照着产品画的**」。真现场：`Scripts/design-mock.swift` 自带一份调色板
 # （头部注释写着「未来会变成 Core/DesignTokens.swift 的真身」）⇒ 方案 D 换值后，它照样出**旧配色**
 # 的图（深色中性灰 + 旧强调色），而逐屏复查 / 定调 / 跨端对照全都建立在这张图上。
-# 判据 `Scripts/check-design-mock-tokens.py`（项数仍十八）：
+# 判据 `Scripts/check-design-mock-tokens.py`（项数仍十九）：
 #   A 脚本面 `Scripts/**/*.swift` 全登记（新脚本出现即红）：不许有色值字面量（形状全集 = 6/8 位 `0x…`、
 #     `#RRGGBB[AA]`、浮点分量 `NSColor(…Red:…)`；判定物**先剥注释与字符串**；只豁免 3 个 macOS 交通灯
 #     系统外壳色）+ 两条「第二份调色板形态」回归钉
@@ -587,7 +591,7 @@ python3 Scripts/check-design-mock-tokens.py --self-test
 #      "漏了某个角色""某个值不过门槛"只会在同一个实现里红；
 #   ② 主题名要与 Linux 侧对齐、推导出来的两套值**不许静默当实际值**—— 这两件事单测根本看不见；
 #   ③ 「语法六档挂家族」这条口径在换表时最容易脱钩（有人直接把某个语法色写回十六进制）。
-# 判据 `Scripts/check-design-themes.py`（项数仍十八）：
+# 判据 `Scripts/check-design-themes.py`（项数仍十九）：
 #   A 主题集 = 台账里那三个（id 与顺序），`DesignTheme.all` 不许漏列主题，`ThemePalette.of` 三支齐全
 #   B 每套值表必须含全部 20 个字段（18 色角色 + 发丝线两参数），缺一个即红
 #   C **独立复算**：本脚本自己重新实现 WCAG，从 Swift 源里解析出三套值，逐主题 × 深浅两态复算
@@ -624,7 +628,7 @@ python3 Scripts/check-design-themes.py --self-test
 # **默认画系统的 `textBackgroundColor`**，而工作区代码编辑器与数据库 SQL 编辑器早就在用
 # `Theme.nsColor(Surface.content)`（`L-111` 那一批）。棘轮扫的是「写坏的值」，
 # 这里的问题是**什么都没写** ⇒ 门禁全绿、观感不对（这正是覆盖面缺口）。
-# 判据 `Scripts/check-editor-surface-tokens.py`（项数仍十八）：
+# 判据 `Scripts/check-editor-surface-tokens.py`（项数仍十九）：
 #   A 台账双向对账（`App/` 下每处多行编辑面都登记；登记的必须真的还在 ⇒ 新加编辑面要登记）
 #   B 每个编辑面都挂 `.editorSurface()`（处数棘轮：挂了的处数 == 编辑面的处数）
 #   C 唯一出处 `App/Views/EditorSurface.swift`（函数体必须 `scrollContentBackground(.hidden)`
@@ -641,7 +645,7 @@ python3 Scripts/check-design-themes.py --self-test
 python3 Scripts/check-editor-surface-tokens.py
 python3 Scripts/check-editor-surface-tokens.py --self-test
 
-echo "==> 7/18 平台等价矩阵 + P-* 平台差异登记对账"
+echo "==> 7/19 平台等价矩阵 + P-* 平台差异登记对账"
 # L-26（2026-09-27 第 25 轮）：这一项跑两条 ——
 # ① `--check`：SRS §10.10 的表是否与 `Docs/平台实现状态.json` 台账一致（列由台账决定，
 #    加平台 = 加台账里的一项，见脚本头注释）；
@@ -682,10 +686,10 @@ python3 Scripts/gen-platform-board.py --self-test
 python3 Scripts/check-board-parity.py
 python3 Scripts/check-board-parity.py --self-test
 
-echo "==> 8/18 平台中立性棘轮"
+echo "==> 8/19 平台中立性棘轮"
 python3 Scripts/check-platform-neutrality.py
 
-echo "==> 9/18 界面接线与状态归属（命令面板 FR-STD-WS-UI-005 / 侧边栏折叠 FR-STD-DB-CONN-012 / 空数据按钮 L-50 / 终端多会话页签 L-84）"
+echo "==> 9/19 界面接线与状态归属（命令面板 FR-STD-WS-UI-005 / 侧边栏折叠 FR-STD-DB-CONN-012 / 空数据按钮 L-50 / 终端多会话页签 L-84）"
 # 2026-10-14（派单 T-20261010-044 · 合册 T-20261013-027）：命令面板这条判据的判定物由「`is*=true`
 # 字面形状」改成**分派器函数体里赋值全集**（含同行 `case "…": <名> = <值>` / 名字带数字 / 非 `is`
 # 前缀的状态，如 `notesSearchScope`）；「读」改按**剥注释与字符串后的代码行**判（原先整份文件里
@@ -807,7 +811,7 @@ python3 Scripts/check-perf-ledger.py --self-test
 python3 Scripts/check-agent-provider-presets.py
 python3 Scripts/check-agent-provider-presets.py --self-test
 
-echo "==> 10/18 插件装配链（FR-STD-ALL-PLUG-001~03 / 06 / 07 + ADR-35）"
+echo "==> 10/19 插件装配链（FR-STD-ALL-PLUG-001~03 / 06 / 07 + ADR-35）"
 python3 Scripts/check-note-module-isolation.py
 python3 Scripts/check-plugin-assembly.py
 # L-22：FR-STD-ALL-PLUG-005 的「Linux 笔记＝本地离线、数据不外发（公司合规）」不能只是一句话 ——
@@ -893,7 +897,7 @@ python3 Scripts/check-browser-tab-ownership.py
 python3 Scripts/check-browser-tab-ownership.py --self-test
 
 if [ "${PLATFORM}" = "macos" ]; then
-  echo "==> 11/18 打包 .app（沙箱）"
+  echo "==> 11/19 打包 .app（沙箱）"
   ./Scripts/build-app.sh
   # L-145（2026-10-01 内测丙2 · 「中文菜单里有 2 个英文菜单」）：**菜单栏那一层**的判据。
   # 由头 = 界面快照拍不到菜单栏（它不在任何视图里）、源码判据也读不到它（`NSMenuItem.title` 是
@@ -925,16 +929,16 @@ else
   skip_step 11 "打包 .app（Scripts/build-app.sh 走 xcodebuild，且产物是 .app 包）"
 fi
 
-echo "==> 12/18 脚本 shell 多字节安全（bash 3.2 变量名坑）"
+echo "==> 12/19 脚本 shell 多字节安全（bash 3.2 变量名坑）"
 python3 Scripts/check-shell-locale-safety.py
 
-echo "==> 13/18 脚本连接信息参数化（连真库的脚本不许写死端口 / 地址 / 账号）"
+echo "==> 13/19 脚本连接信息参数化（连真库的脚本不许写死端口 / 地址 / 账号）"
 python3 Scripts/check-script-env-parameterization.py
 
-echo "==> 14/18 连接失败的文案覆盖面（驱动错误码 ↔ 文案台账）"
+echo "==> 14/19 连接失败的文案覆盖面（驱动错误码 ↔ 文案台账）"
 python3 Scripts/check-connection-failure-coverage.py
 
-echo "==> 15/18 可读化覆盖面（L-15 命令行失败输出 + L-74 非文本类型那一格的值）"
+echo "==> 15/19 可读化覆盖面（L-15 命令行失败输出 + L-74 非文本类型那一格的值）"
 # L-15：CLI 有 57 处「把失败说给用户看」的输出原先各写各的（`print("…：\(error.localizedDescription)")`），
 # 打出来是 `The operation couldn't be completed. (PostgresNIO.PSQLError error 1.)` —— 既不是人话、
 # 也没给方向，而驱动其实说过原因（SQLSTATE / 驱动码），只是没人接。这一项把「每一处用户可见的
@@ -952,7 +956,7 @@ python3 Scripts/check-cli-failure-readability.py
 python3 Scripts/check-cell-decode-coverage.py
 python3 Scripts/check-cell-decode-coverage.py --self-test
 
-echo "==> 16/18 越界检查（三书独占节 + 路径归属：改动不得落在对侧节 / 对侧子树上）"
+echo "==> 16/19 越界检查（三书独占节 + 路径归属：改动不得落在对侧节 / 对侧子树上）"
 # 形态 A（2026-09-27 拍板）：三书单点定稿，但「平台实现」层按端独占 —— 标记 `[独占:macos]` /
 # `[独占:windows]` 的节只由该侧改；本机 = macOS 侧。判据与逃生门见脚本头注释。
 # 第二条是**门禁自己的证据**（L-42）：**44 例**负例里含「非所有者新开 `[开放]` 节」这条窄通道 ——（**2026-10-03 订正 23 → 29 → 35**（29 → 35 = 派活单 `T-20261003-003` 的契约所有者 = 演员名 6 例；**35 → 41 = 派活单 `T-20261005-038` 的演员名跟版护栏 6 例**；**41 → 44 = 派单 `T-20261013-005` §四.1 的平台词表 `watchos`**）：实跑 `python3 Scripts/check-exclusive-sections.py --self-test` = **44/44 通过**（2026-11-02 实测；此前这条尾巴写「41 → 45 / 45/45」，与脚本里 `self_test()` 的 44 个 `r.append` 和 `self-test-counts.json` 的 `cases: 44` 都对不上，按实跑归位）；数字的唯一来源 = `Scripts/self-test-counts.json` 的 `exclusive-sections`，`check-doc-numbers` 对账）
@@ -1012,7 +1016,7 @@ DOYAH_SIDE="$DOYAH_PLATFORM_SIDE" python3 Scripts/check-path-ownership.py --self
 python3 Scripts/check-tri-repo-parity.py
 python3 Scripts/check-tri-repo-parity.py --self-test
 
-echo "==> 17/18 vendored SQLite（FR-STD-ALL-PLUG-008 / Q23）：台账对账 + 负例 + 现编现跑自证"
+echo "==> 17/19 vendored SQLite（FR-STD-ALL-PLUG-008 / Q23）：台账对账 + 负例 + 现编现跑自证"
 # 为什么这三条必须一起跑（第 18 轮 L-25 第 1 批）：
 #   · 这份 `sqlite3.c` 是 9.5 MB 的**生成文件**，换版本 / 手改一行 / 编译宏掉一个都**不会有症状**，
 #     只会让三端行为悄悄不一致（FR-STD-ALL-PLUG-008 的口径是「三端同一份引擎，不许换系统 libsqlite3」）；
@@ -1036,7 +1040,7 @@ python3 Scripts/smoke-vendored-sqlite.py
 python3 Scripts/check-note-storage-unity.py
 python3 Scripts/check-note-storage-unity.py --self-test
 
-echo "==> 18/18 生成物一致性（L-43）：生成物 ↔ vendored 头文件逐字节"
+echo "==> 18/19 生成物一致性（L-43）：生成物 ↔ vendored 头文件逐字节"
 # 为什么这一项必须有（第 30 轮 L-43）：`Core/NoteStorage/SQLiteConstants.swift` 是**生成物**，
 # 生成器 `gen-sqlite-constants.py` 早就写好了 `--check`，**而且脚本头部自己就写着
 # 「本 check 未接进 verify-all.sh」** —— 有判据、没闭环。后果：手改生成物一行、
@@ -1055,10 +1059,20 @@ python3 Scripts/gen-sqlite-constants.py --self-test
 python3 Scripts/check-release-version.py
 python3 Scripts/check-release-version.py --self-test
 
+echo "==> 19/19 台账两列一致（实现列 ↔ 判据列）：实现已 ✅ 而判据还是 ⬜/🟡 的行必须为 0"
+# 为什么要有这一项（2026-11-02）：v0.4.0 收口时按**实现列**报「13/14 已收口」，而 8 条判据格还空着 ——
+# 同一件事在两列里各说各话，最晚到 v1.0.0 门前才会以「总数对不上」的形态爆出来。
+# 判据 `Scripts/check-status-gap.py`：§3 台账**全部行**逐行比第 6 格（实现）与第 7 格（判据）；
+# 判据格是 `—`（不适用）或 `➖`（挂起 · 暂不支持那一族）的不判红，但**逐条点名**打印出来
+# （免得这两档被当成逃生门）。它只查**格子形状**，不查「✅ 是否名副其实」—— 后者归每条自己的证据文件。
+# 第二条是门禁自己的证据：`--self-test` 5 例（全绿 · 判据⬜ 必红 · 判据🟡 必红 · 判据 — 不红 · 判据 ➖ 挂起不红）。
+python3 Scripts/check-status-gap.py
+python3 Scripts/check-status-gap.py --self-test
+
 if [ "${KEEP_GOING}" = "1" ]; then
   echo ""
   echo "── 逐项判定（--keep-going：跑完再汇总）──────────────────────────────"
-  for n in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18; do
+  for n in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19; do
     n_status="✅ 通过"
     case " ${FAILED_ITEMS} " in
       *" ${n} "*) n_status="❌ 失败" ;;
@@ -1086,9 +1100,9 @@ if [ "${REQUIRE_ALL}" = "1" ] && [ "${SKIPPED_COUNT}" -gt 0 ]; then
 fi
 
 if [ "${SKIPPED_COUNT}" -gt 0 ]; then
-  echo "✅ 本平台（${PLATFORM}）可跑的项全部通过：十八项中跑 $((18 - SKIPPED_COUNT)) 项、跳过 ${SKIPPED_COUNT} 项"
+  echo "✅ 本平台（${PLATFORM}）可跑的项全部通过：十九项中跑 $((19 - SKIPPED_COUNT)) 项、跳过 ${SKIPPED_COUNT} 项"
   echo "   —— **跳过 ≠ 通过**，跳过的是平台不适用项，逐条如下（等价物见 §8.3 / §8.5.3）："
   echo "${SKIPPED_ITEMS}"
 else
-  echo "✅ 验证闭环全部通过（十八项）"
+  echo "✅ 验证闭环全部通过（十九项）"
 fi

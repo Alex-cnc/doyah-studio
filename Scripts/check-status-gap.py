@@ -10,7 +10,8 @@ v0.4.0 收口时，`FR-NTS-NOTE-FORMAT-001` 等 8 条判据格还空着（⬜）
 - 扫的：`Docs/Doyah产品开发计划任务清单-macOS.md` §3 台账**全部行**（`FR-` / `NFR-` / `AC-` 开头），
   逐行比「实现列」（第 6 格）与「判据列」（第 7 格）。
 - 判红的：`实现 ✅` 且 `判据` 是 `⬜` 或 `🟡`。
-- 不算的：`判据` 为 `—`（不适用）—— 单独计数并打印，不判红；
+- 不算的：`判据` 为 `—`（不适用）或 `➖`（**挂起标记**，2026-11-02 主人令「GBase 8a 暂不支持」那一族：
+  判据永远验不了，所以不是「债」而是「不适用」）—— 两档都**逐条点名**打印，不判红，避免拿来当逃生门；
   `FR-RTR-*`（Retro 仓的跨仓条目）—— 不计，属覆盖外；
   反向情形（实现未绿而判据绿）—— **本判据不管**，由 `check-status-consistency.py` 覆盖。
 - 覆盖不到：判据格写着 `✅` 但实际没有可跑用例的情况。本判据只查**格子形状**，
@@ -60,7 +61,7 @@ def scan(text: str) -> tuple[list[tuple[str, str, str]], list[str], int]:
         if "FR-RTR-" in rid:          # 跨仓条目，覆盖外
             continue
         scanned += 1
-        if judge.startswith("—"):
+        if judge.startswith("—") or judge.startswith("➖"):
             na.append(rid)
             continue
         if impl.startswith("✅") and not judge.startswith("✅"):
@@ -81,6 +82,7 @@ FIXTURE_GREEN = FIXTURE_HEAD + "| FR-AAA-XX-YY-001 | a | m | l | p | ✅ | ✅ |
 FIXTURE_GAP_BLANK = FIXTURE_HEAD + "| FR-AAA-XX-YY-001 | a | m | l | p | ✅ | ⬜ | v0.1.0-alpha | — |\n"
 FIXTURE_GAP_HALF = FIXTURE_HEAD + "| FR-AAA-XX-YY-001 | a | m | l | p | ✅ | 🟡 | v0.1.0-alpha | — |\n"
 FIXTURE_NA = FIXTURE_HEAD + "| FR-AAA-XX-YY-001 | a | m | l | p | ✅ | — | v0.1.0-alpha | — |\n"
+FIXTURE_NA_SUSPENDED = FIXTURE_HEAD + "| FR-AAA-XX-YY-001 | a | m | l | p | ✅ | ➖ | v1.1+ | 挂起 · 暂不支持 |\n"
 
 
 def self_test() -> int:
@@ -89,6 +91,7 @@ def self_test() -> int:
         ("实现✅ 判据⬜ 必红", FIXTURE_GAP_BLANK, 1),
         ("实现✅ 判据🟡 必红", FIXTURE_GAP_HALF, 1),
         ("判据为 — 不算缺口", FIXTURE_NA, 0),
+        ("判据为 ➖（挂起）不算缺口", FIXTURE_NA_SUSPENDED, 0),
     ]
     ok = True
     for name, text, want in cases:
@@ -98,7 +101,7 @@ def self_test() -> int:
         if got != want:
             ok = False
         print(f"  {mark} {name}：期望 {want} 条缺口，实得 {got}")
-    print("✅ 自检通过（4 例）" if ok else "✗ 自检失败：判据本身的判断不可信")
+    print("✅ 自检通过（5 例）" if ok else "✗ 自检失败：判据本身的判断不可信")
     return 0 if ok else 2
 
 
@@ -108,7 +111,9 @@ def main(argv: list[str]) -> int:
 
     gaps, na, scanned = scan(load())
     print(f"扫描面：台账 §3 全部行，跳过 `FR-RTR-*` ⇒ 实扫 {scanned} 行"
-          f"（判据为 `—` 的 {len(na)} 行按不适用计数，不判红）")
+          f"（判据为 `—` 或 `➖` 的 {len(na)} 行按不适用计数，不判红）")
+    if na:
+        print(f"   不适用（逐条点名，方便核它是不是在当逃生门）：{'、'.join(na)}")
     if not gaps:
         print("✅ 无「实现 ✅ 判据未跟上」的行")
         return 0

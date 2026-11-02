@@ -1,5 +1,24 @@
 # 检查点
 
+## v0.6.0 · 门禁债收口：`check-status-gap` 接成闭环第 19 项 · 2026-11-02
+
+- **先纠账（这也是本跳的由头）**：上一片（`d070ff66` / 书头 v1.0.152）自述「台账该行判据列翻 ✅ · `check-status-gap` **1 → 0 行**」，本跳实测**两处都不成立** —— `Docs/…任务清单-macOS.md:372` 的判据格还是 `⬜`（那一笔只改了书头版本行，`git show d070ff66 -- <台账>` 里那一行一字未动），门禁实跑 **2 行**（`FR-STD-WS-AI-001` + `FR-STD-DB-DRV-009`）。按 v1.0.152 的说法「完成」是**假的读数**。
+- **本跳复跑读数**（不照抄）：`EditAssistTests` **26 例 / 0 失败**；`EditAssistProbeTests` 9 例落在 `verify-ui-interactions` 的 **130 条全跑 / 0 跳过**里（日志 `.build/ui-interactions/run-20261102-211450.log`，无 skipped 行）⇒ 判据格**真的**翻成 ✅ 并写明三档边界。
+- **门禁自己的第二处洞**：`➖`（2026-11-02 主人令「GBase 8a 暂不支持」那一族的挂起标记）原来不被认作「不适用」⇒ `FR-STD-DB-DRV-009` 一直**假红**。现在 `—` 与 `➖` 同按不适用处理，但**逐条点名**打印（`不适用（逐条点名…）：FR-STD-DB-DRV-009、FR-STD-WS-UI-012、FR-STD-DB-META-002、NFR-ALL-GATE-COMP-002`），免得这两档被当逃生门；`--self-test` 4 → **5 例**。
+- **接闸**：`Scripts/verify-all.sh` 新增 `==> 19/19 台账两列一致`（`check-status-gap.py` + 其 `--self-test`），头注释补第 19 项目录行；「项数」四种形状同批重编（项块 18 → 19 · 收尾行 `$((19-…))` · 中文「十九项」5 处 · 运行时打印 `$1/19` · 项号枚举 2 处）；`doc-numbers.json`（value 19 / spellout 十九 / gateBlocks 19）· `AGENT-SPEC.md` 现状语境 4 行 · `Docs/design/待人工验收清单.md` 1 处同批跟版；**历史变更行不动**（v1.24 那行改过又还原 —— 那是当时的读数）。
+- **改项数的连带修理**：`Scripts/test-verify-all-gate.py` 的夹具断言硬编码「十八行 / 十八项 / `==> 18/18` / 项块 18 个」⇒ 跟到十九，**8/8 例达到预期**。
+- **读数**：`check-status-gap` **2 → 0 行** rc=0 · `check-doc-numbers` **rc=0**（判据脚本 69 个 = 被闭环引用 64 + 登记豁免 5）· 文档门禁十六道 rc=0 · 全量 `verify-all.sh --keep-going`：**项块 19 个 · 19 项里 11 项红（28 处）· 平台跳过 0 · 未执行项 = 无**，其中**第 19 项 ✅ 通过**。那 10 项存量红在 HEAD `d070ff66` 的临时工作树（`git worktree add /tmp/head-wt HEAD`）里逐条复跑**读数相同** ⇒ 不是本片引入。
+- **反例**：把 `FR-STD-WS-AI-001` 判据格改回 `⬜` ⇒ `check-status-gap` rc=1 并点名该行；还原后 `sha256 f5f7b6f866c0…` 逐字节一致 ⇒ rc=0。
+- **新发现（记 next_try，不在本片改动面上）**：第 11 项的红是**判据覆盖面缺口** —— 编辑菜单那五条 AI 辅助项（`Explain Selection` / `Rewrite as Described` / `Complete from Context` / `Fix the Error` / `Slow query ranking`）在 `Core/Localization.swift:6823…` 两语都有，但 `check-menu-language.py` 的识别表里没有它们 ⇒ 判成「未覆盖项（认不出 ⇒ 自愈不碰它）」（40 条）。
+- **未验证（≠ 通过）**：`check-doc-numbers` 四种形状的反例**未逐段注入**（由该脚本 `--self-test` 覆盖，本跳只经第 4 项真跑一遍）· `check-status-gap` 仍未进 `Scripts/self-test-counts.json` 的族台账 · 10 项存量红没修（逐条确认存在）。
+- 证据 `.agent/evidence/2026-11-02-gate-item19.md`
+
+## 下一项：补 `check-menu-language` 的识别表（五条 AI 辅助菜单项）
+
+- 现状：第 11 项红，40 条「未覆盖项 / 中文界面下没有汉字」都指向那五条（`editAssistActionExplain` / `Rewrite` / `Complete` / `Fix` / `Slow query ranking` 那一族）。译文本身在语言表里齐全 ⇒ 缺的是**判据的识别表**（认不出就当停在启动语言，是好判据，坏在清单没跟上）。
+- 起跳先核：识别表在哪（`Scripts/check-menu-language.py` 的登记面）、`Slow query ranking` 属于哪条需求（它不在 AI 辅助四动作里）、补完要配一条「故意把某项译文删掉 ⇒ 判红」的负例。
+- 之后：队列 `plan.yaml` 仍 **0 todo / 18 blocked**（v0.6.0 机器面已无活），下一版按 `.agent/next-version.md` §五 派生，派生之前先核 §4.2 与台账逐行实算的差。
+
 ## v0.6.0 · 判据债第四片（收尾）：`FR-STD-WS-AI-001` 编辑区 AI 辅助 · 2026-11-02
 
 - **收一条（双 ✅）**：`FR-STD-WS-AI-001`。这一条原本是「实现 ✅ / 判据 ⬜」，备注里那句「23 例 + 6 例全绿」是旧读数，而且那 6 例当时是「取证件」（不在闭环里，跳过也不会红）。

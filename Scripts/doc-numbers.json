@@ -54,17 +54,17 @@
   {
    "key": "gate-items",
    "label": "闭环项数（Scripts/verify-all.sh 的项块数）",
-   "value": 18,
+   "value": 19,
    "unit": "项",
-   "spellout": "十八",
+   "spellout": "十九",
    "measure": {
     "kind": "gate-scan",
     "script": "Scripts/verify-all.sh",
     "expect": [
-     18
+     19
     ],
     "hardcodedSites": {
-     "gateBlocks": 18,
+     "gateBlocks": 19,
      "closeWrites": 1,
      "chineseNumerals": 5,
      "skipPrints": 1,

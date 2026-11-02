@@ -11,7 +11,7 @@
 **夹具 = 真脚本原样 + 桩件**：把仓库的 `Scripts/verify-all.sh` **逐字节**拷进临时迷你仓，
 再按它引用的每个 `Scripts/*.py|*.sh` 造一个桩；桩读 `<夹具>/.stub-failures` 清单 ——
 清单里点了名的桩就以退出码 3 失败（= 那一项红），其余退出 0。于是整条闭环能在
-**零点几秒**内跑完十八项（桩不做实事），而**控制流一行都不是仿写**：项表、行号 → 项号的翻译、
+**零点几秒**内跑完十九项（桩不做实事），而**控制流一行都不是仿写**：项表、行号 → 项号的翻译、
 `ERR` 陷阱、两种跑法的话，全跑的是真文件。
 
 断言的都是「它说了什么」这件事本身：
@@ -21,9 +21,9 @@
          2026-11-02 实测它让「契约所有者改三书」在全量验收里永远判红；桩现在把 argv 记进 `.stub-argv`）
   例 3 默认跑法第 1 项红 ⇒ 未执行从第 2 项起、**不含第 1 项**
   例 4 `DOYAH_PLATFORM=linux` + 第 16 项红 ⇒ 未执行里**不许**出现被跳过的第 1 / 11 项
-  例 5 `--keep-going` + 第 3 项红 ⇒ **第 4 项到第 18 项真的跑了**（输出里有它们的项块头）
+  例 5 `--keep-going` + 第 3 项红 ⇒ **第 4 项到第 19 项真的跑了**（输出里有它们的项块头）
   例 6 `--keep-going` + 两处红（第 3 / 16 项）⇒ 汇总**两项都点名**（不许只报第一个）
-  例 7 `--keep-going` 绿 ⇒ 逐项判定表十八行全 ✅ 且收尾仍报「十八项全过」
+  例 7 `--keep-going` 绿 ⇒ 逐项判定表十九行全 ✅ 且收尾仍报「十九项全过」
   例 8 末例：真仓库 `Scripts/verify-all.sh` 逐字节未变（「只在副本上写坏」这句话本身要被验证）
 
 跑法（改 `verify-all.sh` 的控制流之后跑一次）：
@@ -129,15 +129,15 @@ def main() -> int:
                   if ln.startswith("check-exclusive-sections.py ")]
     side_ok = bool(argv_lines) and all("--mine hugehippo" in ln for ln in argv_lines) \
         and not any("--mine macos" in ln for ln in argv_lines)
-    case("例 1 绿对照（默认跑法）⇒ rc=0 + 「十八项全过」+ 第 16 项按**演员名**调用判据",
-         rc == 0 and "✅ 验证闭环全部通过（十八项）" in out and "未执行" not in out and side_ok,
+    case("例 1 绿对照（默认跑法）⇒ rc=0 + 「十九项全过」+ 第 16 项按**演员名**调用判据",
+         rc == 0 and "✅ 验证闭环全部通过（十九项）" in out and "未执行" not in out and side_ok,
          f"rc={rc} side_ok={side_ok} argv={' | '.join(argv_lines[:3])}")
 
     rc, out = run_gate(root, failures=("check-effective-language.py",))
     line = unexecuted_line(out)
-    case("例 2 默认跑法 · 第 3 项红 ⇒ 点名第 3 项 + **未执行**从第 4 项列到第 18 项",
+    case("例 2 默认跑法 · 第 3 项红 ⇒ 点名第 3 项 + **未执行**从第 4 项列到第 19 项",
          rc != 0 and "⛔ 第 3 项失败" in out and line.startswith("   **未执行**")
-         and "第 4 项" in line and "第 18 项" in line and "全部通过" not in out,
+         and "第 4 项" in line and "第 19 项" in line and "全部通过" not in out,
          f"rc={rc} 未执行行={line!r}")
 
     rc, out = run_gate(root, failures=("verify-core.sh",))
@@ -148,14 +148,14 @@ def main() -> int:
 
     rc, out = run_gate(root, failures=("check-exclusive-sections.py",), platform="linux")
     line = unexecuted_line(out)
-    case("例 4 linux · 第 16 项红 ⇒ 未执行 = 17/18，被跳过的第 1 / 11 项不进「未执行」",
-         rc != 0 and "⛔ 第 16 项失败" in out and "第 17 项" in line and "第 18 项" in line
+    case("例 4 linux · 第 16 项红 ⇒ 未执行 = 17/19，被跳过的第 1 / 11 项不进「未执行」",
+         rc != 0 and "⛔ 第 16 项失败" in out and "第 17 项" in line and "第 19 项" in line
          and "第 1 项" not in line and "第 11 项" not in line and out.count("⏭ 跳过") == 2,
          f"rc={rc} 未执行行={line!r} 跳过行数={out.count('⏭ 跳过')}")
 
     rc, out = run_gate(root, failures=("check-effective-language.py",), args=("--keep-going",))
-    case("例 5 --keep-going · 第 3 项红 ⇒ 第 4 项到第 18 项**真的跑了**（项块头在输出里）",
-         rc != 0 and "==> 4/18" in out and "==> 18/18" in out
+    case("例 5 --keep-going · 第 3 项红 ⇒ 第 4 项到第 19 项**真的跑了**（项块头在输出里）",
+         rc != 0 and "==> 4/19" in out and "==> 19/19" in out
          and re.search(r"第\s+3 项\s+❌ 失败", out) is not None
          and re.search(r"第\s+4 项\s+✅ 通过", out) is not None
          and "❌ --keep-going 汇总" in out,
@@ -170,9 +170,9 @@ def main() -> int:
 
     rc, out = run_gate(root, args=("--keep-going",))
     table_rows = re.findall(r"第\s+(\d+) 项\s+✅ 通过", out)
-    case("例 7 --keep-going 绿 ⇒ 逐项判定表十八行全 ✅ + 收尾仍报「十八项全过」",
-         rc == 0 and len(table_rows) == 18 and "项块 18 个" in out
-         and "✅ 验证闭环全部通过（十八项）" in out,
+    case("例 7 --keep-going 绿 ⇒ 逐项判定表十九行全 ✅ + 收尾仍报「十九项全过」",
+         rc == 0 and len(table_rows) == 19 and "项块 19 个" in out
+         and "✅ 验证闭环全部通过（十九项）" in out,
          f"rc={rc} 表行数={len(table_rows)}")
 
     after = hashlib.sha256((REPO / TARGET).read_bytes()).hexdigest()
