@@ -118,6 +118,10 @@ final class TodoDetailSearchProbeTests: XCTestCase {
             .deletingLastPathComponent()
             .appendingPathComponent("ui-snapshot-scratch", isDirectory: true)
         try? FileManager.default.createDirectory(at: scratch, withIntermediateDirectories: true)
+        // 同 `TodoCalendarEntriesProbeTests.makeHost`：这一族在**笔记屏**上跑 ⇒ 偏好显式设成笔记
+        // （默认档是待办 —— `FR-NTS-ALL-HOME-001`，那条默认值判据在 `NoteLandingPageTests`）。
+        UserDefaults.standard.set(NoteLandingPage.notes.rawValue, forKey: NoteLandingPage.storageKey)
+        addTeardownBlock { UserDefaults.standard.removeObject(forKey: NoteLandingPage.storageKey) }
         let state = AppState()
         state.connections = []
         state.selectedConnectionID = nil
@@ -249,7 +253,7 @@ final class TodoDetailSearchProbeTests: XCTestCase {
         XCTAssertNil(host.state.todoDetailID, "新宿主不该有详情目标")
         XCTAssertNil(host.state.todoDetailTodo, "新宿主不该有详情目标")
         XCTAssertNil(host.state.todoEditingID, "新宿主不该在编辑态")
-        XCTAssertEqual(host.state.notesModule, .notes, "模块初值该是笔记（切待办那一屏在本宿主里进不去，见头注释边界）")
+        XCTAssertEqual(host.state.notesModule, .notes, "按偏好该落在笔记那一屏（偏好由 makeHost 显式设成笔记）")
 
         // ── 起点：三条都在（活宿主：三行 + 两个段头），右栏那一件画的是**编辑器**（对照件）。
         let startRows = todoScreenTableRows(host, "起点").reduce(0, +)

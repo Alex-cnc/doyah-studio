@@ -704,8 +704,17 @@ final class AppState: ObservableObject {
     }
 
     // MARK: - 待办（队列 `L-100` 界面半第一片 · 清单屏）
+    /// **冷启动落页偏好**（`FR-NTS-ALL-HOME-001` · 概设 §15.17【契约】）。
+    ///
+    /// 值是**用户偏好**，不是端内常量：构造 `AppState` 时读一次盘（= 一次冷启动），
+    /// 之后只由设置面板那一个写入口 `setNoteLandingPage` 改。
+    @Published private(set) var noteLandingPage: NoteLandingPage
     /// 笔记区里当前看哪一屏（笔记 / 待办）—— `FR-NOTE-36` 的「各自入口与列表，不塞进笔记列表」。
-    @Published private(set) var notesModule: NotesModule = .notes
+    ///
+    /// **首屏由偏好派生**（`FR-NTS-ALL-HOME-001`）：初值在 `init` 里落成 `noteLandingPage.module`
+    /// （未设置 ⇒ 待办，见 `NoteLandingPage.defaultPage`）。页内切换（`setNotesModule`）
+    /// **不回写**偏好 —— 需求 §3.5.18「不做」那一条：不是「记住上次所在页」。
+    @Published private(set) var notesModule: NotesModule
     /// 从库里读回来的任务（**创建时间正序**，与 `NoteLibrary.todos()` 同源）。
     /// 分区只经 Core 的 `TodoPresentation.sections`（本文件不自己 `filter` 两遍 —— 那正是分家现场）。
     @Published var todos: [Todo] = []
@@ -1853,6 +1862,11 @@ final class AppState: ObservableObject {
         self.secretStore = secretStore
         self.agentKeyStore = agentKeyStore
         self.agentIMCredentialStore = agentIMCredentialStore
+        // **冷启动落页**（`FR-NTS-ALL-HOME-001` · 概设 §15.17）：偏好读一次，笔记区首屏由它派生。
+        // 未设置 / 坏值 ⇒ 待办（`NoteLandingPage.defaultPage`）；磁盘上怎么写都不许落第三处。
+        let landing = NoteLandingPage.load()
+        noteLandingPage = landing
+        notesModule = landing.module
         let firstTab = QueryTab(title: L(.workspaceTabTitle, tabNumbers.next()))
         tabs = [firstTab]
         selectedTabID = firstTab.id
@@ -11664,6 +11678,19 @@ final class AppState: ObservableObject {
     }
 
     // MARK: - 待办（队列 `L-100` 界面半第一片 · 清单屏）
+
+    /// **改默认落页**（设置面板的**唯一**写入口）—— `FR-NTS-ALL-HOME-001` · 概设 §15.17。
+    ///
+    /// 三件事刻意**不做**（逐条对契约，别顺手加）：
+    ///  ① **不把当前这一屏切过去**：改偏好 ≠ 现在跳页，下一次冷启动才生效
+    ///     （契约 ①「改完在**冷启动**落在所选页」）；
+    ///  ② **不动库**：不落库、不产生版本、不碰笔记 / 待办条数与完成态（契约 ③）；
+    ///  ③ **不动 `notesModule`**：本条只写偏好那一格。
+    func setNoteLandingPage(_ page: NoteLandingPage) {
+        guard page != noteLandingPage else { return }
+        noteLandingPage = page
+        NoteLandingPage.store(page)
+    }
 
     /// 切「看哪一屏」（笔记 / 待办）。切到待办时**读一次库** —— 与 `openNotes()` 同一条：
     /// 界面上能看见的东西必须来自库，不能来自上一次的残留（`todos` 是内存态，库才是事实）。

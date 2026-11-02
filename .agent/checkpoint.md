@@ -525,3 +525,18 @@
 - **未验证（≠通过）**：静态扫描判不住藏在 xcframework / 二进制依赖里的计费与系统收据校验付费 · 真支付流程未做（本条要求的就是「没有」）· ② 只到源树与能力位，界面逐面板点验未做 · `verify-all.sh` 全量本跳未跑（只跑 `verify-core` + 九道文档门禁）。
 - **下一批 = D2 余三条**：`FR-NTS-ALL-HOME-001`（默认落页：用户显式二选一、未设置落待办、`UserDefaults` 记住 —— 先核 `Core/LanguagePreference` 那种「一处解析 + 一处键」的做法照抄）/ `FR-NTS-NOTE-EXPORT-001`（备份包 + 格式版本号 + 导入还原创 `NoteBodyProjection.exportMarkdown` 已有的一半）/ `FR-STD-WS-FS-008`（① 的另一半：图片等按各自视图，不许再走 `openAsText` 当二进制拒绝）。
 - 证据 `.agent/evidence/2026-11-02-FR-NTS-ALL-LIC-001.md`（D1 那份 `.agent/evidence/2026-11-02-D1.md` 随 2bcabf15 一并落库）
+
+## v0.7.0 · D2 第二条：`FR-NTS-ALL-HOME-001` 首页可配置（默认落页）· 2026-11-02
+
+- **一条两列全 ✅**：`FR-NTS-ALL-HOME-001`。原来是「各端均未实现」，本跳在 macOS（Studio 内笔记区）落地并判据化：
+  - **偏好一处**：新 `Plugins/Notes/Sources/NoteLandingPage.swift` —— 只有两个取值（原值 `todo` / `notes`）+ 键 `notes.home` + `resolve(stored:)` 一处解析（没存过 / 空串 / 坏值 ⇒ `defaultPage` = 待办）+ `load` / `store` 一处读写入口。
+  - **冷启动一处**：`AppState.init` 读一次；`notesModule` 初值**由偏好派生**（原写死的 `= .notes` 删掉）；`setNoteLandingPage` 是唯一写入口（不跳页 / 不动库 / 不动当前屏）；`setNotesModule`（页内切换）**不写回**。
+  - **设置项落点**：`AppearanceSheet` 新增「笔记首屏」段（`notes-landing-picker` 二选一）+ 语言表两键两语 —— macOS 唯一的设置面板就是「外观…」，按契约「设置页『通用 / 外观』组、不进关于页」放这里（这是本跳的自行决定，已写 `decisions.md`）。
+  - **判据** `Tests/NoteLandingPageTests` **7 例**：① 只有两个取值 + 键名 + 真 `UserDefaults` 往返（两档都判）；② 未设置 / 坏值 ⇒ 待办，且**真 `AppState` 构造三次**（未设置 ⇒ `.todos`、设笔记 ⇒ `.notes`、坏值 ⇒ `.todos`）；③ 真库：改偏好前后**库文件逐字节相同**、笔记与待办逐项一致、完成态 / 完成时刻 / 截止时间不变；④ 源锚点（`setNoteLandingPage` 体内无提醒 / 同步 / 私密 / 库符号）；⑤ 真 `AppState` 页内切换后 `notes.home` 仍是空。
+- **读数**：`--filter NoteLandingPageTests` **7 例 / 0 失败** · `verify-core` **5348 / 13 skipped / 0 失败**（5341 → +7；`doc-numbers.json` + `AGENT-SPEC.md` 两处同批改数）· `verify-ui-interactions` **133 条全跑、无跳过** rc=0 · 文档门禁 invariants / tables / numbers(5348 三向) / plan-coverage / status-consistency / version-scope / doc-layout / agents-index / status-gap 全 rc=0 · `plan-batches --version 0.7.0 --check` rc=0（**2 条待办**）。
+- **反例三段**（判红后 `sha256` 逐字节还原 `2fca23b7…` / `bfa60b34…`）：`defaultPage` → `.notes` ⇒ ② 红 4 断言 · `setNotesModule` 补一句 `NoteLandingPage.store` ⇒ ⑤ 红 1 例 · `init` 里把 `notesModule` 写回 `.notes` ⇒ ② 冷启动那半红 2 断言。
+- **顺带清两笔存量债**：`check-note-module-isolation`（`NOTE_SOURCES` 补登 8 件，逐件核过 `import` 面只有 Foundation）**8 条红 → rc=0**；`core-localization-english.json` 给 `SELECT uid FROM notebook` 补 `kind: sql` ⇒ 棘轮 B rc=0。
+- **未验证（≠通过）**：整个 App 首屏仍是活动栏记忆（`ui.activityBarItem`，属 `FR-EDIT-32`）—— 本条只管笔记区首屏 · 真鼠标点那枚二选一未点 · ④ 只到源锚点（真通知中心在 `swift test` 宿主里会崩）· 移动三端未动（Android 详设 §3.9 在 Notes 仓；iOS / 鸿蒙未实现，差异须按 `PARITY-001` 登记）· `check-book-subset` / `check-format-arguments` 是本跳未动的存量红（逐条核过不在本片改动面上）。
+- **队列口径（本片后实测）**：`plan.yaml` = **2 todo / 28 blocked**；`batches.yaml` 只剩 **D2（2 条）**。
+- **下一批 = D2 余两条**：`FR-NTS-NOTE-EXPORT-001`（备份包格式版本号 + 导入还原；Markdown 导出半边已在 `NoteBodyProjection.exportMarkdown`）→ `FR-STD-WS-FS-008`（① 的另一半：图片等按各自视图，别再一律 `openAsText` 当二进制拒绝）。
+- 证据 `.agent/evidence/2026-11-02-FR-NTS-ALL-HOME-001.md`

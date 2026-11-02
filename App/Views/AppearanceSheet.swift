@@ -48,6 +48,8 @@ struct AppearanceSheet: View {
             // 否则小屏上「关闭」按钮会被顶出可视区（这条是面板变长之后必须补的）。
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
+                    landingSection
+                    Divider()
                     themeSection
                     Divider()
                     designThemeSection
@@ -79,6 +81,50 @@ struct AppearanceSheet: View {
         }
         .padding(.horizontal, Spacing.l)
         .padding(.vertical, Spacing.m)
+    }
+
+    // MARK: 笔记首屏（`FR-NTS-ALL-HOME-001`）
+
+    /// 默认落页的二选一（待办 / 笔记）。
+    ///
+    /// 为什么落在这一面板：macOS 上**唯一的设置面板**就是它（菜单「外观…」），
+    /// 而契约 §15.17 把设置项钉在「设置页『通用 / 外观』组」、且**不进关于页**（关于页只读）。
+    /// 为什么只有两个取值、且**没有**「记住上次所在页」那一档：需求 §3.5.18「不做」原文 ——
+    /// 隐式落页说不清也判不了。
+    ///
+    /// 写入口只有一个（`AppState.setNoteLandingPage`）：本视图不碰 `UserDefaults`，
+    /// 否则「设置里改了、重启没变」这类缺陷在界面上没有任何症状。
+    private var landingSection: some View {
+        VStack(alignment: .leading, spacing: Spacing.m) {
+            Text(L(.notesLandingSection))
+                .font(Theme.font(.caption))
+                .foregroundStyle(Theme.text(.secondary))
+
+            Picker("", selection: landingBinding) {
+                // 两个取值的名字复用笔记区那一枚切换器的文案：同一个概念不另起说法。
+                ForEach(NoteLandingPage.allCases, id: \.self) { page in
+                    Text(L(page == .todos ? .notesModuleTodos : .notesTitle)).tag(page)
+                }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .accessibilityIdentifier("notes-landing-picker")
+
+            Text(L(.notesLandingHint))
+                .font(Theme.font(.caption))
+                .foregroundStyle(Theme.text(.tertiary))
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.horizontal, Spacing.l)
+        .padding(.vertical, Spacing.m)
+    }
+
+    /// 偏好那一格的读写都经 `AppState` 一个入口（本视图只做呈现）。
+    private var landingBinding: Binding<NoteLandingPage> {
+        Binding(
+            get: { appState.noteLandingPage },
+            set: { appState.setNoteLandingPage($0) }
+        )
     }
 
     // MARK: 主题（FR-EDIT-26）

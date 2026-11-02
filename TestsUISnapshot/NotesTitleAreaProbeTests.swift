@@ -45,6 +45,10 @@ final class NotesTitleAreaProbeTests: XCTestCase {
         try? FileManager.default.createDirectory(at: scratch, withIntermediateDirectories: true)
         let historyURL = scratch.appendingPathComponent("notes-titlearea-probe-\(UUID().uuidString).json")
 
+        // 这一族的宿主画的是**笔记那一屏**：首屏现在由用户偏好派生（`FR-NTS-ALL-HOME-001`，
+        // 未设置 ⇒ 待办）⇒ 显式把偏好设成笔记，跑完清掉（不污染同进程后续用例）。
+        UserDefaults.standard.set(NoteLandingPage.notes.rawValue, forKey: NoteLandingPage.storageKey)
+        addTeardownBlock { UserDefaults.standard.removeObject(forKey: NoteLandingPage.storageKey) }
         let state = AppState()
         state.connections = []
         state.selectedConnectionID = nil

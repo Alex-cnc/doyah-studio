@@ -76,6 +76,20 @@ NOTE_SOURCES = [
     # 队列 `L-184` 三栏重排：中栏卡片的摘要与相对时间（纯函数，无网络、无库；只吃 `Date` /
     # `Calendar` / `LKey`）—— 同上，算笔记侧
     "Plugins/Notes/Sources/NotePresentation.swift",
+    # `FR-NTS-ALL-HOME-001`（首页可配置 / 默认落页）：只有两个取值 + 一处键（`notes.home`）+ 一处解析。
+    # 纯值类型（`Foundation` 的 `UserDefaults` 而已，零平台 API、无网络、无库）⇒ 算笔记侧：
+    # 改它的人同样受「不许背数据库代码 / 不许碰 Ultra 侧类型」这两条约束。
+    "Plugins/Notes/Sources/NoteLandingPage.swift",
+    # 2026-11-02（`FR-NTS-ALL-HOME-001` 这一跳顺带补登的存量漏登）：本清单的自维护检查一直在报的
+    # 7 件笔记侧源文件 —— 逐件核过 `import` 面（都只有 Foundation、零数据库侧 / Ultra 侧类型名），
+    # 「漏登」不等于「不受约束」，补进清单后才能被下面两条禁令真正看住。
+    "Plugins/Notes/Sources/NoteAttachmentStore.swift",
+    "Plugins/Notes/Sources/NoteCapture.swift",
+    "Plugins/Notes/Sources/NotePrivacy.swift",
+    "Plugins/Notes/Sources/NoteSync/SyncConflictResolution.swift",
+    "Plugins/Notes/Sources/NoteTrash.swift",
+    "Plugins/Notes/Sources/NoteVersion.swift",
+    "Plugins/Notes/Sources/TodoNoteLink.swift",
     # 队列 `N-11` 的 macOS 核心层半：待办任务清单的**模型**（`Todo` + `TodoPriority`；纯值类型、
     # 无网络、无库）—— 库表 / 行映射在 `Plugins/Notes/Sources/NoteStorage/NoteDatabase.swift`
     # （那一层自 2026-10-14 起**也**在本清单里：扫描面改递归后按真路径登记，见文件尾那 5 条）

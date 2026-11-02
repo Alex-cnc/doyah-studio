@@ -588,6 +588,12 @@
     "Core/KeepAlive.swift:37"
    ]
   },
+  "SELECT uid FROM notebook": {
+   "kind": "sql",
+   "sites": [
+    "Plugins/Notes/Sources/NoteStorage/NoteDatabase.swift:1280"
+   ]
+  },
   "SET DEFAULT": {
    "kind": "sql",
    "sites": [

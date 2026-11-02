@@ -91,6 +91,11 @@ final class TodoCalendarEntriesProbeTests: XCTestCase {
             .deletingLastPathComponent()
             .appendingPathComponent("ui-snapshot-scratch", isDirectory: true)
         try? FileManager.default.createDirectory(at: scratch, withIntermediateDirectories: true)
+        // **首屏由用户偏好派生**（`FR-NTS-ALL-HOME-001`）：这一族要在**笔记屏**上跑，
+        // 所以这里显式把偏好设成笔记（默认档是待办，那条判据在 `NoteLandingPageTests`）。
+        // 不设这一句，宿主会落在待办那一屏 —— 本族的甲 / 丙两组就没地方跑了。
+        UserDefaults.standard.set(NoteLandingPage.notes.rawValue, forKey: NoteLandingPage.storageKey)
+        addTeardownBlock { UserDefaults.standard.removeObject(forKey: NoteLandingPage.storageKey) }
         let state = AppState()
         state.connections = []
         state.selectedConnectionID = nil
@@ -197,7 +202,7 @@ final class TodoCalendarEntriesProbeTests: XCTestCase {
         host.state.todoCalendarView = .month
         host.state.todoCalendarAnchor = monthStart
         XCTAssertNil(host.state.todoCalendarSelectedDay, "新宿主不该有选中日")
-        XCTAssertEqual(host.state.notesModule, .notes, "模块初值该是笔记（切待办那一屏在本宿主里进不去，见头注释边界）")
+        XCTAssertEqual(host.state.notesModule, .notes, "按偏好该落在笔记那一屏（偏好由 makeHost 显式设成笔记）")
 
         // ── 甲（反面）：**没选中任何一天** ⇒ 两枚入口一条都不画（这一区是「选中日」的地盘）。
         let withoutDay = try renderTodoScreen("probe-td-cal-1-entries-no-day", host: host)

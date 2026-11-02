@@ -732,6 +732,10 @@ public enum LKey: String, CaseIterable, Sendable {
     // 队列 `L-100` **界面半第一片**：待办那一屏自己的入口、空态、编辑器与行上的三个动作。
     // 名字与句子只在这里（Core 里一个汉字都没有 —— `R-45` 棘轮）。
     case notesModuleTodos
+    /// **首页可配置（默认落页）**入口（`FR-NTS-ALL-HOME-001`）：
+    /// 设置面板那一段的标题 + 一句「什么时候生效 / 不动什么」。
+    case notesLandingSection
+    case notesLandingHint
     case todosEmpty
     case todoTitlePlaceholder
     /// 待办备注正文那一格的轴名（片 `TD-NOTE` · 契约 `Todo.note`）：编辑面与只读详情共用这一个词。
@@ -4277,6 +4281,13 @@ public enum LocalizedStrings {
         .todosEmptyFiltered: [.simplifiedChinese: "这一档没有任务", .english: "No tasks in this view"],
         // 队列 `L-100` **界面半第一片**（待办那一屏的入口 / 空态 / 编辑器 / 行上动作）：都没有数字槽。
         .notesModuleTodos: [.simplifiedChinese: "待办", .english: "Todos"],
+        // `FR-NTS-ALL-HOME-001`：设置里那一段（标题 / 一句边界说明）—— 只有两个取值，
+        // 两个取值的名字复用上面 `.notesModuleTodos` 与 `.notesTitle`（同一个概念不另起说法）。
+        .notesLandingSection: [.simplifiedChinese: "笔记首屏", .english: "Notes landing page"],
+        .notesLandingHint: [
+            .simplifiedChinese: "打开笔记区时先落在哪一屏。默认待办；改这里只影响下次启动，不动笔记与待办数据。",
+            .english: "Which screen Notes opens on. Default: Todos. Takes effect from the next launch and never changes your notes or todos."
+        ],
         .todosEmpty: [.simplifiedChinese: "还没有待办", .english: "No todos yet"],
         .todoTitlePlaceholder: [.simplifiedChinese: "待办标题", .english: "Todo title"],
         .todoNoteLabel: [.simplifiedChinese: "备注", .english: "Note"],
