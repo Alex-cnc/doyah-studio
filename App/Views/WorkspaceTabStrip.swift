@@ -60,11 +60,17 @@ struct WorkspaceTabStrip: View {
                     // 内置浏览器页签（队列 `L-149`）：与 Home / 文件是**同一类页签**。
                     // 需求提出者 2026-09-30：「浏览器内置到工作区 Tab 页……本质上 html 也是一种文件」；
                     // 原先它长在数据库侧 —— 那是 **SQL 这门语言的工作台**，不归它管。
-                    ForEach(browser.browserPages) { page in
-                        browserTabButton(page)
-                    }
+                    // **Home 必须永远在最左**（人类主人 2026-11-03 真机点验：打开 `page.html` 后
+                    // 浏览器页签排到了 Home 前面）。原来这里是「浏览器页签先、工作区页签后」两个
+                    // `ForEach`，于是任何一个浏览器页签都会插到 Home 左侧 —— 而 Home 是这排页签的
+                    // 锚点（`WorkspaceTabsModel.tabs[0]` 恒为 Home，见 `restoredTabs.insert(.home, at: 0)`），
+                    // 锚点被人挤到右边，用户第一眼就找不到「回首页」。
+                    // 现在顺序固定为：**工作区页签（Home 打头）→ 浏览器页签**；两类页签各自保序。
                     ForEach(tabs.tabs) { tab in
                         tabButton(tab)
+                    }
+                    ForEach(browser.browserPages) { page in
+                        browserTabButton(page)
                     }
                 }
                 .padding(.vertical, Spacing.hair)
