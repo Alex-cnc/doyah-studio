@@ -28,6 +28,16 @@ $ ./Scripts/verify-all.sh --keep-going
 - 队列 21 blocked → **17 blocked**（`AI-002` / `ORG-002` / `LANG-001` / `UI-001` 在台账已 ✅，不再当卡点携带）；0 todo 不变。
 - 台账状态列**一字未改**；未闭数与 §2 计数照旧（本跳只动派生件）。
 
+## 提交后复验（第 16 项）
+$ python3 Scripts/check-path-ownership.py
+   ✅ 共享面：Docs/archive/root-20261026/平台对齐-Studio-Windows对macOS.md ⇒ 提交信息（… 由 gen-studio-win-align.py 按台账重出 …）
+   受检路径 5 条：共享面 2 / 本侧 0 / 对侧 0 / 白名单 3 / 未登记 0
+RESULT: PASS (exit 0)
+
+提交：`082f0f5d`（已推送 `local == origin/master == 082f0f5d`；同一推送上带了另一写者同克隆的 `80195c90`）
+复验：推后重跑五道派生判据全 rc=0（req-index 488 / 平台矩阵 411 / 对齐件 411 / 看板 411 · macOS 314✅/12🟡/85⬜ / board-parity 逐列一致）
+
 ## 未验证
 - 三条「已 ✅」的收口判据是别的写者的读数，本跳只核了 `ledger-row.py` 的 `✅` 与 `check-status-gap` rc=0，**没有重跑它们各自的测试族**。
-- 第 16 项提交后单跑结果见本节追加（未跑 = 未知，不算通过）。
+- 第 19 项「台账两列一致」为绿，但「实现 ✅」之外的 🟡 行是否真能跑通仍按各自 next_try 卡着，本跳未动。
+

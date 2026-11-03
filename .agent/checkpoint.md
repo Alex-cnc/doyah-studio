@@ -1,5 +1,15 @@
 # 检查点
 
+## 派生件归正：队列 21 → **17 blocked**，`verify-all` 余 3 项红全清（0 todo · 台账状态列未动）· 2026-11-03
+
+- **队列 0 todo / 17 blocked**（`plan-batches --version 0.7.0 --check` rc=0 · 判据 F 覆盖 17/17）。21 → 17 的四条不是新收口：`AI-002` / `ORG-002` / `LANG-001` / `UI-001` 在台账里已按主人令 ✅，只是派生队列还在当卡点携带（上一跳的 `--emit-plan` 重出之后它们才落盘 ⇒ 队列读数一直是陈旧的 21）。
+- **上一跳拒做的前提已消失**：上一跳不重出看板，理由是「`gen-platform-parity` 会把 ORG-002 改写成实现 ✅，而其口径正在被另一写者改写」。本跳先核前提：`ledger-row.py` 读 `FR-NTS-NOTE-ORG-002` / `FR-STD-WS-AI-002` 都是 `✅`、`check-status-gap` rc=0 ⇒ 重出只是**把台账事实搬到看板**，不替谁拍板。
+- **收掉的三项红**（上一跳只做归属、没动）：① `check-req-index`（`gen-req-index` 重出 488 条）；② 第 7 项四道看板（`gen-platform-parity` / `gen-studio-win-align` / `gen-platform-board` / `check-board-parity` 全 rc=0，411 条 · macOS 314✅/12🟡/85⬜）；③ 第 16 项 `check-path-ownership`（共享面 `Docs/archive/root-20261026/平台对齐-Studio-Windows对macOS.md` 在提交信息里登记 `shared-surface:` ⇒ 提交后单跑 `RESULT: PASS`）。
+- **全量实跑**（`verify-all.sh --keep-going`，日志 `.build/verify-20261103-tick.log`）：项块 **19** · 失败 **1 项 / 1 处** · 平台跳过 0 · **未执行 = 无**。第 1 项 **5368 例 / 16 skipped / 0 失败**；第 3 / 4 / 7 / 11 / 18 / 19 全 ✅（第 11 项含真启动菜单语言 + 打包，上一跳的 `.common` 修法复跑仍绿）。唯一那处红 = 第 16 项**因本片尚未提交**（工作树里的共享面改动没处登记），提交后单跑 PASS ⇒ **现存余红 0 项**。
+- **十道文档门禁** rc=0（invariants / tables / numbers 三向 / plan-coverage / status-consistency / version-scope / doc-layout / agents-index / status-gap / blocker-table §7.1 = 台账未闭集合）。
+- **提交** `082f0f5d`（已推送 `local == origin/master == 082f0f5d`；同一推送上带了另一写者同克隆的 `80195c90`）· 证据 `.agent/evidence/2026-11-03-derived-artifacts-refresh.md` · 台账（一单）**一字未改**。
+- **下一项 ID：无**（0 todo / 17 blocked）。17 条逐条都是外部条件或拍板：真云端账号 / 真 QQ 凭据 / 另两端不在场 / 嵌入源选型 / 界面人工点验。**机器面已无存量红**。
+
 ## `check-menu-language` 收口：探针收起器改挂 `.common` 定时器（`verify-all` 第 11 项转绿 · 队列 0 todo / 21 blocked）· 2026-11-03
 
 - **队列仍 0 todo / 21 blocked**（`plan-batches.py --version 0.7.0 --check` rc=0）⇒ 不开批次、不动台账状态列。本跳收的是 `verify-all` 第 11 项**最后一处机器面存量红**，上一跳记的是「要图形会话、需主人终端跑一次」—— 这条前提被测否。
