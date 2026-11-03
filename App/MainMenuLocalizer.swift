@@ -33,6 +33,16 @@ enum MainMenuLocalizer {
     /// 代价：每 0.3 秒比一次 9 个顶层标题的字符串；一致时一次都不写。
     @MainActor private static var guardTimer: Timer?
 
+    /// 下一次允许检查的时间点（退避用）。
+    ///
+    /// **为什么要有退避**（人类主人 2026-11-03 实测：「大模型在思考时菜单不停地闪烁」）：
+    /// 流式输出期间 SwiftUI 每帧都在重建 `Commands`，`retitle` 每拍都能发现「不一致」，
+    /// 于是 0.3 秒一次改写菜单标题 ⇒ 顶栏肉眼可见地闪。语言本身没变，闪的只是重写动作。
+    /// 现在：连续 3 拍都要改写就判定「菜单正在被高频重建」，退避 10 秒再看；
+    /// 同时**菜单展开期间（`highlightedItem != nil`）一律不动**，避免和用户的操作打架。
+    @MainActor private static var nextEarliestCheck: Date = .distantPast
+    @MainActor private static var consecutiveRewrites = 0
+
     /// 「补刷窗口」的截止时刻：语言切换后的头几秒里，**窗口每次刷新都顺手把菜单栏对齐一次**。
     ///
     /// 为什么需要这么密：`setLanguage` 之后 SwiftUI 会重建命令图，那次重建把系统菜单标题恢复成
@@ -259,15 +269,29 @@ enum MainMenuLocalizer {
     @MainActor
     private static func startMenuGuard() {
         guard guardTimer == nil else { return }
-        let timer = Timer(timeInterval: 0.3, repeats: true) { _ in
+        let timer = Timer(timeInterval: 1.0, repeats: true) { _ in
             MainActor.assumeIsolated {
-                guard NSApp.mainMenu != nil else { return }
-                // 直接走同一条 `refresh`：它内部逐项比标题，**一致时一次都不写**
-                // （`retitle` 返回 0 就 return）—— 所以这里不需要另算一份"应该是什么样"。
+                guard let menu = NSApp.mainMenu else { return }
+                // 用户正在展开菜单：不跟他抢（会话期间改写标题会让高亮项跳走）
+                guard menu.highlightedItem == nil else { return }
+                guard Date() >= nextEarliestCheck else { return }
+                let before = topLevelTitles(of: menu)
                 refresh(to: LocalizationManager.shared.language)
+                let after = topLevelTitles(of: NSApp.mainMenu ?? menu)
+                if before == after {
+                    consecutiveRewrites = 0
+                } else {
+                    consecutiveRewrites += 1
+                    if consecutiveRewrites >= 3 {
+                        // 连着重写三拍 ⇒ 菜单正在被高频重建（流式输出、刚打开文档）
+                        // ⇒ 退避 10 秒，别把顶栏刷成跑马灯。
+                        nextEarliestCheck = Date().addingTimeInterval(10)
+                        consecutiveRewrites = 0
+                    }
+                }
             }
         }
-        timer.tolerance = 0.1
+        timer.tolerance = 0.25
         RunLoop.main.add(timer, forMode: .common)
         guardTimer = timer
     }
