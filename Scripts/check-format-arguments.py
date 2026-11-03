@@ -33,8 +33,12 @@
   `ErrorPresenter.message(for: error)` 这类调用）的实参**不是白名单放行**：
   ① 它的**形状**必须在 `Scripts/format-argument-dispositions.json` 的 `shapes` 里
   逐条登记（带 `kind` 与理由），未登记 ⇒ **红**（逐条点名 `文件:行号`）；
-  ② 每个形状的命中处数不得超登记的 `maxSites`（**棘轮**：只许不增），
-  全局未登记总量不得超 `unknownBudget`。
+  ② 每个形状的命中处数不得超登记的 `maxSites`（**棘轮**：只许不增）；
+  ③ 全局**无据**量不得超 `unknownBudget`：无据 = 未登记 + 登记成 `unverified`
+  （`unverified` = 台账拿不出出处，只被形状与处数钉住）。
+  登记成 `text` / `number` 的形状**不算无据**：它们带出处，并进判据 A / A′ 的
+  槽位交叉检查（比「无据」更严）—— 预算只量「没人拿得出出处」的那部分，
+  登记了有据的 kind 反而让门禁更严，不该同时罚它超预算。
   撤销（命中变少）不判红，只打 `ℹ️` 提示 —— 减少是好事，但不许静默改台账。
 * **F（扫描面不许写死）** 扫描面由 `Package.swift` 的**生产 target** 声明派生（`path:` /
   `sources:`；测试 target 不进面）—— 生产 target 没声明路径 ⇒ 判红、面里的根盘上不存在 ⇒
@@ -73,7 +77,7 @@
 
     python3 Scripts/check-format-arguments.py            # 判红出口码（闭环第 3 项）
     python3 Scripts/check-format-arguments.py --report   # 人读清单（含形状直方图）
-    python3 Scripts/check-format-arguments.py --self-test # 门禁自己的证据（14 例）
+    python3 Scripts/check-format-arguments.py --self-test # 门禁自己的证据（16 例）
 
 `--self-test` 的夹具一律写在**临时目录**的合成小仓里（不碰真仓库），末例核对
 真仓库三份文件逐字节未变。
@@ -602,6 +606,9 @@ def evaluate(root: Path) -> dict:
     hits: dict[str, int] = {name: 0 for name in shapes}
     seen_exceptions: set[tuple[str, str, str]] = set()
     unknown_total = 0
+    unknown_unregistered = 0
+    unknown_unverified = 0
+    typed_by_evidence = 0
     checked = 0
     shape_counter: dict[str, int] = {}
     per_judgement: dict[str, list[str]] = {"A": [], "A′": [], "B": []}
@@ -670,9 +677,11 @@ def evaluate(root: Path) -> dict:
             if kind == "unknown":
                 shape = shape_of(arg)
                 shape_counter[shape] = shape_counter.get(shape, 0) + 1
-                unknown_total += 1
                 entry = shapes.get(shape)
                 if entry is None:
+                    # 无据：形状压根没登记 ⇒ 计进预算（判据 D）并点名（判据 C）。
+                    unknown_total += 1
+                    unknown_unregistered += 1
                     errors.append(
                         f"❌ [C] {file}:{line}  L(.{key})  未登记的类型不明实参 "
                         f"「{arg}」⇒ 形状 `{shape}` 不在 {LEDGER_REL} 的 shapes 里"
@@ -684,10 +693,19 @@ def evaluate(root: Path) -> dict:
                 if kind not in ("text", "number", "unverified"):
                     errors.append(f"❌ [E] 台账形状 `{shape}` 的 kind 非法：{kind!r}")
                     kind = "unknown"
+                    unknown_total += 1
+                    unknown_unverified += 1
                 elif kind == "unverified":
                     # 已登记但**无机械依据**：不参与槽位交叉检查（判据 A/A′ 只认
                     # 有出处的 kind），只被形状与处数棘轮钉住。台账 reason 里写清是哪种。
+                    # **它算预算**（判据 D 量的是「没人拿得出出处」的量），不过预算就是放行。
                     kind = "unknown"
+                    unknown_total += 1
+                    unknown_unverified += 1
+                else:
+                    # 登记成 text / number 的形状带出处：进判据 A / A′ 的槽位交叉检查，
+                    # 比「无据」更严 ⇒ 不占预算（预算只量无据的部分，见脚本文档判据 D）。
+                    typed_by_evidence += 1
             kinds.append(kind)
 
         for language, specs in spec_keys[key].items():
@@ -732,7 +750,9 @@ def evaluate(root: Path) -> dict:
             )
     if unknown_total > ledger.get("unknownBudget", 0):
         errors.append(
-            f"❌ [D] 类型不明实参共 {unknown_total} 处，超预算 {ledger.get('unknownBudget')}"
+            f"❌ [D] 无据的类型不明实参共 {unknown_total} 处，超预算 "
+            f"{ledger.get('unknownBudget')}（未登记 {unknown_unregistered} + 登记为 "
+            f"unverified {unknown_unverified}）"
         )
     # E：台账双向对账（例外必须仍对应真违规 / 形状必须仍被命中）
     for token, item in exceptions.items():
@@ -751,6 +771,9 @@ def evaluate(root: Path) -> dict:
         "call_sites_with_spec": checked,
         "call_sites_total": len(sites),
         "unknown_total": unknown_total,
+        "unknown_unregistered": unknown_unregistered,
+        "unknown_unverified": unknown_unverified,
+        "typed_by_evidence": typed_by_evidence,
         "unknown_budget": ledger.get("unknownBudget", 0),
         "errors": errors,
         "notes": notes,
@@ -772,8 +795,10 @@ def print_report(result: dict) -> None:
         f"带占位符键的调用点 {result['call_sites_with_spec']}（总调用点 {result['call_sites_total']}）"
     )
     print(
-        f"类型不明实参 {result['unknown_total']} 处（预算 {result['unknown_budget']}）；"
-        f"已登记形状 {len(result['shapes'])} 个"
+        f"无据的类型不明实参 {result['unknown_total']} 处（预算 {result['unknown_budget']}；"
+        f"未登记 {result['unknown_unregistered']} + 登记为 unverified {result['unknown_unverified']}）"
+        f"；有据登记的形状实参 {result['typed_by_evidence']} 处（进判据 A/A′ 槽位检查）"
+        f"；已登记形状 {len(result['shapes'])} 个"
     )
     print(
         f"扫描面 {len(result['face'])} 个源根（{PACKAGE_REL} 生产 target 派生 · "
@@ -960,6 +985,32 @@ def run_self_test() -> int:
             "超登记上限",
         ),
         (
+            "D 预算：登记成 text / number 的形状不算无据，预算 0 也判绿",
+            FIXTURE_OK,
+            {**FIXTURE_LEDGER, "unknownBudget": 0},
+            True,
+            "",
+        ),
+        (
+            "D 预算：登记成 unverified 的实参算无据，超预算 ⇒ 判红",
+            FIXTURE_OK.replace("L(.greet, name, count)", "L(.greet, mystery, count)"),
+            {
+                **FIXTURE_LEDGER,
+                "unknownBudget": 0,
+                "shapes": [
+                    *FIXTURE_LEDGER["shapes"],
+                    {
+                        "shape": "<mystery>",
+                        "kind": "unverified",
+                        "maxSites": 1,
+                        "reason": "夹具：无出处 ⇒ 只被形状与处数钉住，仍占预算",
+                    },
+                ],
+            },
+            False,
+            "超预算",
+        ),
+        (
             "E 例外陈旧（登记的违规已不存在）",
             FIXTURE_OK,
             {
@@ -1045,8 +1096,10 @@ def run_self_test() -> int:
             root = write_fixture_tree(
                 tmp / f"case{index}", source, ledger, package_text, extra_files
             )
-            if index == 8:
-                # 第 8 例：把语言表里的占位符全删掉 ⇒ 判据取不到输入，必须报红
+            if title.startswith("空跑不许通过"):
+                # 空跑例：把语言表里的占位符全删掉 ⇒ 判据取不到输入，必须报红
+                # （按**用例标题**定位，不按序号 —— 序号会在插入新例时漂移，第 8 例的硬编码
+                # 曾在插两例后把「空跑」的改动挪到隔壁用例上 ⇒ 空跑用例反而判绿/假红）
                 (root / TABLE_REL).write_text(
                     FIXTURE_TABLE.replace("%@", "").replace("%d", ""), encoding="utf-8"
                 )

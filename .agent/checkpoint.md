@@ -1,5 +1,18 @@
 # 检查点
 
+
+## `check-format-arguments` 收口：判据 D 预算口径归正 + 15 个新形状登记（队列 0 todo / 21 blocked）· 2026-11-03
+
+- **队列仍 0 todo / 21 blocked**（`plan-batches --check` rc=0）⇒ 不开批次、不新增需求。本跳收的是 `verify-all` 第 3 项**最后一处存量红** `check-format-arguments`（上一跳已把同项 `check-button-icon-only` 收掉）。
+- **真缺陷（判据自身）**：判据 D 的文档原文是「全局**未登记**总量不得超 `unknownBudget`」，实现却在**登记判定之前**就自增 ⇒ 已登记、带出处、且已进 A/A′ 交叉检查的实参也被算成「类型不明」，历史上只能反复抬预算消红（116→117→…→190）。本跳按文档口径改成只量**无据**（未登记 + `unverified`），预算 190 → **126**（收紧 64）。三条一条没松：未登记仍判 [C]、每形状处数仍判 [D]、`unverified` 仍占预算。
+- **同批销账**：补登记 15 个形状（导出三形态 9 个：`<rows>`×4 `<pages>` `<table>`×2 `<ok>` `<failed>` `<index>` `<total>` `<label>` `plan.jobs[0].label` / 笔记回收站 `<purged>` `<restored>` / 配额行 `<requests>` `<tokens>` / 分页 `<renderedPageCount>` / 图片页 `?`），每处都写清 `file:line` 出处；`<path>` 4 处、`<line>` 4 处、`.line` 3 处、`<loadedRowCount>` 2 处按出处从 `unverified` 升成 `text`/`number`（升了才进 A/A′ 检查），`<reason>` 17 → 20 仍留 `unverified`（同形状里出处不统一）。
+- **顺带修一处夹具缺陷**：`--self-test` 的「空跑不许通过」例原先按**序号 8** 定位语言表改动，插两例后挪到隔壁用例上（该例判绿、隔壁假红）⇒ 改成按用例标题定位。
+- **读数**：`check-format-arguments` **rc=0**（无据 126 / 预算 126 / 未登记 0 / 有据 104 / 形状 122）· `--self-test` **16/16** · `verify-all.sh` 第 3 项 12 条命令整段 `set -e` **rc=0**（含 `check-button-icon-only` 48/48、`check-core-localization`、`check-effective-language`、`check-copy-emphasis`）· 11 道文档门禁全 rc=0 · `self-test-counts --no-run` 族 57 / 例 **1084** / 锚点 86。
+- **反例三段**（各判红后 `sha256` 逐字节还原 `ddb59193…` / `39d052bb…`）：模板 `%d` 改 `%@` ⇒ `[A] AgentSettingsSheet.swift:947` 两位数槽判红（新登记的 number 形状真被检查）· 删 `<renderedPageCount>` 登记 ⇒ `[C] ResultPagerBar.swift:175` · 预算 126→125 ⇒ `[D] 127 > 125`。
+- **未验证（≠ 通过）**：`verify-all.sh` 全量未跑（约 35 分钟）⇒ 第 11 项 `check-menu-language` 真启动取证、打包项未执行；`swift test` 本跳未跑（无 `App/**` `Core/**` 改动）；`self-test-counts` 用 `--no-run`（没真跑 57 族）。
+- **下一项 ID：无**（0 todo / 21 blocked）。机器面只剩一处要环境的红：`check-menu-language`（要图形会话，需主人终端跑一次 `python3 Scripts/check-menu-language.py`）。
+- 证据 `.agent/evidence/2026-11-03-format-arguments.md`。
+
 ## 按钮图标化收尾：a 类 7 → 0（`verify-all` 第 3 项少一处红）· 2026-11-03
 
 - **队列仍 0 todo / 21 blocked**（`plan-batches --check` rc=0）⇒ 不开批次、不新增需求。本跳做的是 `verify-all.sh` 第 3 项两处存量红里的**第二处**（`check-button-icon-only`）：余 7 处全在 `Plugins/Notes/Views/NotesPanel.swift`。
