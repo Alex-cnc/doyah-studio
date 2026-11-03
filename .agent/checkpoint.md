@@ -9,7 +9,7 @@
 - **报数**：未闭 21 → **19**（🟡 17 → 15）· §2 ✅ 366 → **368** · §4.2 v0.5.0 10 → **8**（8 / 0）；台账 v1.0.160 → **v1.0.161**。
 - **未验证（≠ 通过）**：面板里真鼠标点「保存并连接」与观感未点（机械证据 = `AppState.saveAgentMCPConfiguration` → `connectAgentMCPNow` → `agentMCPReports` 同一条路）· GUI 启动继承 `PATH` 只有 `/usr/bin:/bin:/usr/sbin:/sbin`，`/opt/homebrew/bin` 要用户自己在配置 `env` 里给（自动补包管理器路径 = 另一条判定，本跳不做，记 next_try）· 只这一台机的 mcp 包 v2.36.2。
 - **下一项 ID：无**（0 todo / 21 blocked）。机器面新开的口子 = 「自动补包管理器路径」，属口径判断，不是读数。
-- 证据 `.agent/evidence/2026-11-03-FR-AGT-LINK-EXT-001-002.md`；提交号见下一条。
+- 证据 `.agent/evidence/2026-11-03-FR-AGT-LINK-EXT-001-002.md`；提交 `cd299afa`（已推送，`local == origin/master`）。
 
 ## SEARCH-001 阻塞前提量测：嵌入端点 404 + 本机离线模型 top-1 1/8（状态列未动）· 2026-11-03
 
