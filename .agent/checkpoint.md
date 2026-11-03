@@ -8,7 +8,7 @@
 - **读数**：`check-button-icon-only` **a 类 0 处 · F 93/93 缺 0 · RESULT=PASS**；`--self-test` **48/48**（含 ㉑ 盘点基线逐字节未变）；反例两段（改回文字按钮 ⇒ 点名 `:3025` 判红；删掉 `:620` 登记 ⇒ 点名未登记差异判红）各判红后逐字节还原（`d4c44243…` / `f03471d7…`）。`verify-core` **5366 例 0 失败** · `verify-ui-interactions` **133 条全跑 / 无跳过 / 0 失败** · `swift build` Build complete · 13 道纪律门禁全 rc=0 · `self-test-counts --no-run` 族 57 / 例 1082 / 锚点 86。
 - **未验证（≠ 通过）**：`verify-all.sh` 全量本跳未跑（约 35 分钟）⇒ 第 3 项另一处 `check-format-arguments`（230 > 预算 190）、第 11 项 `check-menu-language` 真启动取证、第 11 项打包均**未执行**；四枚新图标按钮真鼠标未点（133 条 UI 探针按 id 抓、不按文案）；跨端图标一致未判。
 - **下一项 ID：无**（0 todo / 21 blocked）。机器面还剩两处红：`check-format-arguments`（40 处类型不明实参要从 230 降到 190，且 25 条占位符对账；改法 = 逐处补类型，仍要派单或主人拍板）与 `check-menu-language`（要图形会话）。
-- 证据 `.agent/evidence/2026-11-03-icon-only-notes-panel.md`。
+- 证据 `.agent/evidence/2026-11-03-icon-only-notes-panel.md`；提交 `d61b47a8`（已推送，`local == origin/master`）。
 
 ## FR-AGT-LINK-EXT-001 / -002 双 ✅：MCP 真对端 = 本机的第三方 CloudBase MCP（队列 0 todo / 21 blocked）· 2026-11-03
 
