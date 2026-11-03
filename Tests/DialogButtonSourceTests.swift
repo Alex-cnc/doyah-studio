@@ -243,4 +243,160 @@ final class DialogButtonSourceTests: XCTestCase {
             "画什么必须由 Core 的投影决定，不许在视图里另写一套次序"
         )
     }
+
+    // MARK: - ④ `.alert` / `.confirmationDialog` 的动作区：真 `Button` + 可见文字
+
+    /// 同一族缺陷已经发生过四次（`WS-FS-006` 删除确认、`WS-UI-014` 对话框按钮、终端页签改名、
+    /// 以及这一条要钉住的关闭/重启页签、账户提示、错误复制、连接删除）。
+    ///
+    /// 形状都一样：`.alert(...) { }` / `.confirmationDialog(...) { }` 的 actions 里放
+    /// `ToolbarIconButton(systemName:)` —— 那是**自绘图标按钮**，标题是空串。macOS 的
+    /// 面板只按标题渲染，于是界面上要么只剩一个空按钮、要么只有一个系统「好」；
+    /// 而且点下去 action **不触发**（人类主人实测：点了文件没删、终端页签改名不生效）。
+    ///
+    /// ③ 那条判据只扫 `App/Views/*Sheet*.swift`，这四处全在别的文件里，所以一直没人管。
+    /// 这一条改成**全仓扫动作区**：只要文件名不以 `Sheet` 结尾就漏掉，正是它复发的原因。
+    ///
+    /// 判三件事（都不看注释、不看字符串正文）：
+    /// ① 动作区里不许出现 `ToolbarIconButton(`；
+    /// ② 每枚 `Button` 必须有可见文字（没有 `label: { Image(systemName:) }` 这种纯图标形态）；
+    /// ③ 取消档带 `role: .cancel`、删除档带 `role: .destructive`（改成文字按钮时最容易把 role 弄丢）。
+    func testAlertActionBlocksUseTextButtons() throws {
+        let blocks = try actionBlocks()
+        XCTAssertGreaterThanOrEqual(
+            blocks.count, 20,
+            "只扫到 \(blocks.count) 段动作区 —— 扫描口径坏了，『没有违规』不作数"
+        )
+
+        var findings: [String] = []
+        for block in blocks {
+            for problem in Self.alertActionViolations(in: block.code) {
+                findings.append("\(block.file):\(block.line) \(problem)")
+            }
+        }
+        XCTAssertTrue(findings.isEmpty, "对话框动作区里出现图标按钮 / 丢 role：\n" + findings.joined(separator: "\n"))
+    }
+
+    /// ④ 的反例自证：把「图标按钮 + 丢 role + 纯图标 label」三种形状喂进同一条判据，
+    /// **必须项项判红**。判据与生产件跑同一份逻辑，反例才证明得了它没瞎。
+    func testAlertActionViolationDetectionRejectsIconButtons() {
+        let good = """
+        Button(L(.commonDelete), role: .destructive) { }
+        Button(L(.commonCancel), role: .cancel) { }
+        Button(L(.connectionFormCopyFullError)) { }
+        """
+        XCTAssertTrue(Self.alertActionViolations(in: good).isEmpty, "合规写法被判红：\(Self.alertActionViolations(in: good))")
+
+        let regressed = """
+        ToolbarIconButton(systemName: "trash", help: L(.commonDelete), role: .destructive) { }
+        Button(L(.commonCancel)) { }
+        Button(action: {}) { Image(systemName: "checkmark") }
+        """
+        let problems = Self.alertActionViolations(in: regressed)
+        XCTAssertTrue(problems.contains { $0.contains("ToolbarIconButton") }, "要点名 ToolbarIconButton：\(problems)")
+        XCTAssertTrue(problems.contains { $0.contains("role: .cancel") }, "取消档丢了 role: .cancel 要点名：\(problems)")
+        XCTAssertTrue(problems.contains { $0.contains("纯图标") }, "纯图标 label 要点名：\(problems)")
+    }
+
+    /// 动作区的一段源码：从 `.alert(` / `.confirmationDialog(` 的**动作闭包**（`{` … `}`）取原文。
+    /// 文本已过 `sanitized`（注释抹空、字符串抹平），所以括号可以直接数。
+    private struct ActionBlock {
+        let file: String
+        let line: Int
+        let code: String
+    }
+
+    private func actionBlocks() throws -> [ActionBlock] {
+        let views = root.appendingPathComponent("App/Views")
+        let files = try FileManager.default
+            .contentsOfDirectory(at: views, includingPropertiesForKeys: nil)
+            .filter { $0.pathExtension == "swift" }
+            .sorted { $0.lastPathComponent < $1.lastPathComponent }
+
+        var blocks: [ActionBlock] = []
+        for file in files {
+            let text = Self.sanitized(try String(contentsOf: file, encoding: .utf8))
+            for maker in [".alert(", ".confirmationDialog("] {
+                var searchRange = text.startIndex..<text.endIndex
+                while let range = text.range(of: maker, range: searchRange) {
+                    searchRange = range.upperBound..<text.endIndex
+                    // 先配对参数表，再看它后面是不是动作闭包（没有闭包 = 只有 message 的提醒框，跳过）。
+                    let openOffset = text.distance(from: text.startIndex, to: range.upperBound) - 1
+                    guard let closeParen = Self.match("(", ")", from: openOffset, in: text) else { continue }
+                    var cursor = text.index(text.startIndex, offsetBy: closeParen + 1)
+                    while cursor < text.endIndex, text[cursor].isWhitespace {
+                        cursor = text.index(after: cursor)
+                    }
+                    guard cursor < text.endIndex, text[cursor] == "{" else { continue }
+                    let braceOffset = text.distance(from: text.startIndex, to: cursor)
+                    guard let end = Self.match("{", "}", from: braceOffset, in: text) else {
+                        blocks.append(ActionBlock(
+                            file: file.lastPathComponent,
+                            line: lineNumber(at: braceOffset, in: text),
+                            code: "括号没配上"
+                        ))
+                        continue
+                    }
+                    let start = text.index(text.startIndex, offsetBy: braceOffset)
+                    let stop = text.index(text.startIndex, offsetBy: end)
+                    blocks.append(ActionBlock(
+                        file: file.lastPathComponent,
+                        line: lineNumber(at: braceOffset, in: text),
+                        code: String(text[start...stop])
+                    ))
+                }
+            }
+        }
+        return blocks
+    }
+
+    /// 删除档 —— 这几个文案键对应的动作必须是 `role: .destructive`。
+    private static let destructiveKeys = ["commonDelete", "connectionDelete", "workspaceDelete", "agentChatSessionDelete"]
+
+    /// 一段动作区里有什么问题（空数组 = 全是真 `Button` + 可见文字 + role 对）。
+    static func alertActionViolations(in block: String) -> [String] {
+        var problems: [String] = []
+
+        if block == "括号没配上" {
+            return ["动作区括号没配上 —— 扫描位置不可信"]
+        }
+        if block.contains("ToolbarIconButton(") {
+            problems.append("用了只给图标的 ToolbarIconButton —— 面板只按标题渲染 ⇒ 空按钮，点下去 action 不触发")
+        }
+
+        var searchIndex = block.startIndex
+        while let range = block.range(of: "Button(", range: searchIndex..<block.endIndex) {
+            searchIndex = range.upperBound
+            let openOffset = block.distance(from: block.startIndex, to: range.upperBound) - 1
+            guard let close = match("(", ")", from: openOffset, in: block) else { continue }
+            var stop = block.index(block.startIndex, offsetBy: close)
+            // 尾随闭包也要收进来：`Button(action: {}) { Image(systemName:) }` 这种纯图标 label
+            // 的图标在**闭包**里，只看参数表会漏掉（反例自证抓到的第一个漏洞）。
+            var afterCall = block.index(after: stop)
+            while afterCall < block.endIndex, block[afterCall].isWhitespace {
+                afterCall = block.index(after: afterCall)
+            }
+            if afterCall < block.endIndex, block[afterCall] == "{" {
+                let closureOffset = block.distance(from: block.startIndex, to: afterCall)
+                if let closureEnd = match("{", "}", from: closureOffset, in: block) {
+                    stop = block.index(block.startIndex, offsetBy: closureEnd)
+                }
+            }
+            let call = String(block[range.lowerBound...stop])
+
+            let hasIconLabel = call.contains("Image(systemName:")
+            let hasVisibleText = call.contains("Text(") || call.contains("Label(") || call.contains("L(.")
+            if hasIconLabel && !hasVisibleText {
+                problems.append("纯图标动作（没有可见文字）：\(call.prefix(60))")
+            }
+
+            if cancelKeys.contains(where: { call.contains(".\($0)") }), !call.contains("role: .cancel") {
+                problems.append("取消档缺 role: .cancel：\(call.prefix(60))")
+            }
+            if destructiveKeys.contains(where: { call.contains(".\($0)") }), !call.contains("role: .destructive") {
+                problems.append("删除档缺 role: .destructive：\(call.prefix(60))")
+            }
+        }
+        return problems
+    }
 }

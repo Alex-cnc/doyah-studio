@@ -422,7 +422,8 @@ struct MainWindow: View {
             L(.accountUndecidedTitle),
             isPresented: $appState.isAccountNoticePresented
         ) {
-            ToolbarIconButton(systemName: "checkmark", help: L(.commonOk), role: .cancel) {}
+            // `.alert` actions 只认真 `Button` + 可见文字（`ToolbarIconButton` 在这里不落地）。
+            Button(L(.commonOk), role: .cancel) {}
         } message: {
             Text(L(.accountUndecidedMessage))
         }
@@ -523,11 +524,12 @@ struct MainWindow: View {
         ) {
             // 系统弹窗的正文**不能选中**，所以给一个复制按钮 —— 错误原文一长串，
             // 截图或手抄都会丢信息（用户实测反馈过这一条）。
-            ToolbarIconButton(systemName: "doc.on.doc", help: L(.connectionFormCopyFullError)) {
+            // 真 `Button` + 可见文字（`.alert` actions 里图标按钮不落地、点了不触发）。
+            Button(L(.connectionFormCopyFullError)) {
                 NSPasteboard.general.clearContents()
                 NSPasteboard.general.setString(appState.errorMessage ?? "", forType: .string)
             }
-            ToolbarIconButton(systemName: "checkmark", help: L(.commonOk), role: .cancel) {}
+            Button(L(.commonOk), role: .cancel) {}
         } message: {
             Text(appState.errorMessage ?? "")
         }

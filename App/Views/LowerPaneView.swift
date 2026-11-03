@@ -72,8 +72,11 @@ struct LowerPaneView: View {
                 set: { if !$0 { terminal.cancelClose() } }
             )
         ) {
-            ToolbarIconButton(systemName: "xmark", help: L(.terminalTabCloseConfirmAction), role: .destructive) { terminal.confirmClose() }
-            ToolbarIconButton(systemName: "xmark.circle", help: L(.commonCancel), role: .cancel) { terminal.cancelClose() }
+            // **必须真 `Button` + 可见文字**：`.alert` 的 actions 里 `ToolbarIconButton(systemName:)`
+            // （自绘图标、标题是空串）渲染不成「关闭 / 取消」，且点下去 action 不触发 ——
+            // 与下面终端改名、`WS-FS-006` 删除确认、`WS-UI-014` 对话框按钮是同一族缺陷。
+            Button(L(.terminalTabCloseConfirmAction), role: .destructive) { terminal.confirmClose() }
+            Button(L(.commonCancel), role: .cancel) { terminal.cancelClose() }
         } message: {
             Text(L(.terminalTabCloseConfirmMessage))
         }
@@ -153,8 +156,9 @@ struct LowerPaneView: View {
                     set: { if !$0 { terminal.cancelRestart() } }
                 )
             ) {
-                ToolbarIconButton(systemName: "checkmark", help: L(.terminalRestartConfirmAction), role: .destructive) { terminal.confirmRestart() }
-                ToolbarIconButton(systemName: "xmark.circle", help: L(.commonCancel), role: .cancel) { terminal.cancelRestart() }
+                // 同上一族：`.alert` actions 只认真 `Button` + 可见文字（图标按钮在这里不落地）。
+                Button(L(.terminalRestartConfirmAction), role: .destructive) { terminal.confirmRestart() }
+                Button(L(.commonCancel), role: .cancel) { terminal.cancelRestart() }
             } message: {
                 Text(L(.terminalRestartConfirmMessage))
             }

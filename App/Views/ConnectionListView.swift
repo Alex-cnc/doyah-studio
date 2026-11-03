@@ -202,11 +202,13 @@ struct ConnectionListView: View {
             ),
             presenting: pendingDeletion
         ) { configuration in
-            ToolbarIconButton(systemName: "trash", help: L(.commonDelete), role: .destructive) {
+            // `confirmationDialog` 的 actions 同样只认真 `Button` + 可见文字（图标按钮在面板上
+            // 没有标题 ⇒ 只剩空按钮、点击不触发）；role 保持原样：删除 destructive、取消 cancel。
+            Button(L(.commonDelete), role: .destructive) {
                 pendingDeletion = nil
                 Task { await appState.deleteConnection(configuration) }
             }
-            ToolbarIconButton(systemName: "xmark.circle", help: L(.commonCancel), role: .cancel) {
+            Button(L(.commonCancel), role: .cancel) {
                 pendingDeletion = nil
             }
         } message: { configuration in
