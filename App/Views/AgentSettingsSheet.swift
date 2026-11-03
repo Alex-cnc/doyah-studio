@@ -814,12 +814,19 @@ struct AgentSettingsSheet: View {
         AgentProviderCatalog.preset(id: providerID) ?? AgentProviderCatalog.custom
     }
 
-    /// 选提供商 ⇒ 自动填端点；有预设模型清单时把模型也带到第一项。
-    /// 清单为空（本机服务 / 接入点 ID 这类）时**不动**用户已填好的模型名。
+    /// 选提供商 ⇒ 自动填端点；模型**只在还空着时**带预设第一项。
+    ///
+    /// **不许顶掉用户手填的模型名**（人类主人 2026-11-03 实测：「我明明设置的是
+    /// `deepseek-v4.1-flash`，保存之后打开又显示 `pro`」）。原因就是这里无条件
+    /// `model = preset.models.first`：预设清单里只有 `deepseek-v4-pro / -flash`，
+    /// 手填的 `v4.1-flash` 一旦被重认提供商（`syncProvider(with:)` 在端点变化/加载时
+    /// 都会调过来）就会被覆盖成清单第一项 = `pro`。清单永远是滞后于厂商发版的，
+    /// 所以「用户填的 > 预设清单」这条优先序必须写死在这里。
     private func applyProvider(_ id: String) {
         guard let preset = AgentProviderCatalog.preset(id: id), !preset.isCustom else { return }
         endpoint = preset.endpoint
-        if let first = preset.models.first { model = first }
+        let typed = model.trimmingCharacters(in: .whitespacesAndNewlines)
+        if typed.isEmpty, let first = preset.models.first { model = first }
     }
 
     /// 手改端点 ⇒ 重认一次「这是谁」（认不出就是「自定义」）——
