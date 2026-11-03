@@ -56,10 +56,9 @@ struct AboutLicenseSheet: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: Spacing.s) {
-            HStack {
-                Spacer()
-                DialogActionButton(systemName: "xmark", title: L(.commonClose), role: .cancel) { dismiss() }
-            }
+            // 顶部**不再放关闭键**（人类主人 2026-11-03 真机点验：「version and license 对话框
+            // 顶部有一个多余的 close 关闭按钮」）。关掉这个对话框的入口只有一处 = 底部 `footer`
+            // 那枚；同一件事在屏幕上出现两次，用户会犹豫该点哪个。
             // 品牌区（2026-10-27 人类主人令）：**左图标 · 右产品名 → 版权 → 版本 / 开发者**。
             // 版式钉死在这一处：换行位置、谁在上谁在下都不许各页面自己发挥。
             HStack(alignment: .center, spacing: Spacing.m) {
