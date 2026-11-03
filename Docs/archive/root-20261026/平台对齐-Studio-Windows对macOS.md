@@ -252,7 +252,7 @@
 | FR-RTR-MKT-STORE-004 | 数据落库 | 基线必备 | ⬜ | — | ⬜ |
 | FR-AGT-GUARD-PERM-004 | 数据边界 | 基线必备 | ✅ | — | ⬜ |
 | FR-NTS-NOTE-ORG-001 | 整理 | 常用增强 | ✅ | — | ⬜ |
-| FR-NTS-NOTE-ORG-002 | 整理 | 基线必备 | ⬜ | — | ⬜ |
+| FR-NTS-NOTE-ORG-002 | 整理 | 基线必备 | ✅ | — | ⬜ |
 | FR-STD-WS-FS-002 | 文件树 | 常用增强 | ✅ | — | ✅ |
 | FR-STD-WS-FS-003 | 文件树 | 常用增强 | ✅ | — | ✅ |
 | FR-AGT-TOOL-INGEST-002 | 文档解析 | 常用增强 | ✅ | — | ⬜ |
@@ -374,7 +374,7 @@
 | FR-AGT-KNOW-MEM-001 | 记忆 | 常用增强 | ✅ | — | ⬜ |
 | FR-AGT-KNOW-MEM-002 | 记忆 | 常用增强 | ✅ | — | ⬜ |
 | FR-AGT-KNOW-MEM-003 | 记忆 | 常用增强 | ✅ | — | ⬜ |
-| FR-STD-WS-AI-002 | 许愿式编程 | 常用增强 | 🟡 | — | ⬜ |
+| FR-STD-WS-AI-002 | 许愿式编程 | 常用增强 | ✅ | — | ⬜ |
 | FR-STD-WS-NAV-007 | 诊断 | 基线必备 | ✅ | — | ✅ |
 | FR-STD-WS-NAV-008 | 诊断 | 常用增强 | ✅ | — | ✅ |
 | FR-STD-WS-NAV-009 | 诊断 | 基线必备 | ✅ | — | ✅ |

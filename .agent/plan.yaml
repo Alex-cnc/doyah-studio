@@ -1,9 +1,9 @@
 # v0.7.0 余账收口 · 执行队列（**派生件**）
 # 唯一事实源 = Docs/Doyah产品开发计划任务清单-macOS.md（活书台账）。
 # 本文件只做「下一跳」排序，不许反向改台账；台账一改就跑 --emit-plan 重出，别手改。
-# 生成于 2026-11-03，源 = 台账里 FR-NTS-NOTE-FORMAT-001 / FR-NTS-NOTE-SEARCH-001 / FR-NTS-NOTE-ORG-001 / FR-NTS-NOTE-TRASH-001 / FR-NTS-NOTE-SYNC-001 / FR-NTS-NOTE-EXPORT-001 / FR-NTS-ALL-HOME-001 / FR-NTS-ALL-LIC-001 / FR-NTS-ALL-DIST-001 / FR-NTS-ALL-PARITY-001 / FR-STD-WS-FS-008 / FR-STD-WS-TOOL-001 / FR-STD-WS-AI-002 / AC-ALL-GATE-REL-004 / AC-ALL-GATE-REL-005 / AC-ALL-GATE-REL-006 / FR-STD-DB-META-002 未闭 7 条（4 🟡 / 2 ⬜ / 1 其他（挂起或带复核注））。
+# 生成于 2026-11-03，源 = 台账里 FR-NTS-NOTE-FORMAT-001 / FR-NTS-NOTE-SEARCH-001 / FR-NTS-NOTE-ORG-001 / FR-NTS-NOTE-TRASH-001 / FR-NTS-NOTE-SYNC-001 / FR-NTS-NOTE-EXPORT-001 / FR-NTS-ALL-HOME-001 / FR-NTS-ALL-LIC-001 / FR-NTS-ALL-DIST-001 / FR-NTS-ALL-PARITY-001 / FR-STD-WS-FS-008 / FR-STD-WS-TOOL-001 / FR-STD-WS-AI-002 / AC-ALL-GATE-REL-004 / AC-ALL-GATE-REL-005 / AC-ALL-GATE-REL-006 / FR-STD-DB-META-002 未闭 6 条（3 🟡 / 2 ⬜ / 1 其他（挂起或带复核注））。
 tasks:
-# 另有 14 条上版遗留卡点（不在本版范围，仅列表可见）：FR-AGT-LINK-CHAN-003, FR-AGT-OPS-OBS-002, FR-AGT-PLAN-PLAN-001, FR-AGT-TOOL-MEDIA-001, FR-AGT-TOOL-SYS-002, FR-AGT-UX-CONV-001, FR-AGT-UX-SESS-001, FR-AGT-UX-SYNC-001, FR-NTS-NOTE-ORG-002, FR-STD-ALL-PLUG-005, NFR-ALL-GATE-COMP-002, NFR-ALL-GATE-COMP-003, NFR-ALL-GATE-LANG-001, NFR-ALL-GATE-UI-001
+# 另有 11 条上版遗留卡点（不在本版范围，仅列表可见）：FR-AGT-LINK-CHAN-003, FR-AGT-OPS-OBS-002, FR-AGT-PLAN-PLAN-001, FR-AGT-TOOL-MEDIA-001, FR-AGT-TOOL-SYS-002, FR-AGT-UX-CONV-001, FR-AGT-UX-SESS-001, FR-AGT-UX-SYNC-001, FR-STD-ALL-PLUG-005, NFR-ALL-GATE-COMP-002, NFR-ALL-GATE-COMP-003
   - id: FR-NTS-NOTE-SEARCH-001
     goal: "列表与检索：按时间 / 标签 / 关键词 / 语义检索，**两种检索都在**，语义不可用时降级并说出来"
     done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-NTS-NOTE-SEARCH-001 | grep -q '✅'"
@@ -20,14 +20,6 @@ tasks:
     status: blocked
     evidence: ""
     next_try: "⑥ 云端全量还原要可连的云同步服务（本机无账号；`NoteSyncE2ETests` 11 例要真云端，历轮记「未执行」）；⑦「关掉同步后本机功能一个不少」可单出读数，但本条判据要求 ①–⑦ 全 ✅ ⇒ 只能停在 ⑥"
-  - id: FR-STD-WS-AI-002
-    goal: "许愿式编程：用一段话描述要做的事，Agent 在整个工作区范围内多次读写文件后交付可"
-    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-WS-AI-002 | grep -q '✅'"
-    layer: "常用增强"
-    prio: "高"
-    status: blocked
-    evidence: ""
-    next_try: "许愿模式「先出改动后生效」要不要另设（不再逐条批）要主人拍板；`WishStaging` 暂存面未接线"
   - id: FR-STD-WS-TOOL-001
     goal: "底部终端面板：主窗口底部可拖拽 / 可折叠的面板，内嵌本机交互式 shell（真 P"
     done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-WS-TOOL-001 | grep -q '✅'"
@@ -124,14 +116,6 @@ tasks:
     status: blocked
     evidence: ""
     next_try: "等主人定端云同步传输面（§7 阻塞 2）：语义面 19 例已绿，App 侧 0 调用点，且无第二端可对"
-  - id: FR-NTS-NOTE-ORG-002
-    goal: "笔记本归类：笔记可归入**一个笔记本**（单层，不做「架 → 笔记本」两层；未指定时落默认「收件箱」），**归属唯一**，跨笔记本移动只改归属"
-    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-NTS-NOTE-ORG-002 | grep -q '✅'"
-    layer: "基线必备"
-    prio: "高"
-    status: blocked
-    evidence: ""
-    next_try: "等契约所有者裁决：需求书 §3.5 ORG-002 要单层笔记本（不做架→笔记本两层），契约 §2.12 与已上盘 shelf/notebook 两层冲突；裁决后要么改契约+拆两层，要么改需求书条文"
   - id: FR-STD-ALL-PLUG-005
     goal: "Linux 端装配笔记，且必须是本地离线实现：数据只落本机 SQLite（笔记自己的"
     done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-STD-ALL-PLUG-005 | grep -q '✅'"
@@ -156,19 +140,3 @@ tasks:
     status: blocked
     evidence: ""
     next_try: "口令在钥匙串但那条目的 ACL 只放行 DoyahStudio 本体（外部进程 `-w` 弹系统授权、实测挂住 180 s）：要主人终端亲跑一次 `DOYAH_MYSQL_CONNECTION=DemoMySQL DOYAH_MYSQL_DATABASE=doyah_test ./Scripts/test-mysql-real.sh` 并点「允许」；或把这条自检搬进应用进程（ACL 天然放行，属代码活、须先排进队列）。实例本身在 192.168.5.26:3306（握手 8.4.10）"
-  - id: NFR-ALL-GATE-LANG-001
-    goal: "v1.x 界面语言为简体中文"
-    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py NFR-ALL-GATE-LANG-001 | grep -q '✅'"
-    layer: "常用增强"
-    prio: "—"
-    status: blocked
-    evidence: ""
-    next_try: "① 与 `NFR-ALL-GATE-LANG-003` ② 互斥（前者要「首次启动默认简体中文」，后者要「默认跟随系统语言」，系统语言是英文的机器上两条不能同真）⇒ 要主人拍一句哪条算数；②③④ 已有机器读数（`LanguagePreferenceTests` 5 例、两档棘轮、菜单语言门禁），改口只需动 `Core/LanguagePreference.resolve` 一处"
-  - id: NFR-ALL-GATE-UI-001
-    goal: "界面设计语言统一：同一产品内各平台（macOS / Windows / iOS /"
-    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py NFR-ALL-GATE-UI-001 | grep -q '✅'"
-    layer: "基线必备"
-    prio: "—"
-    status: blocked
-    evidence: ""
-    next_try: "①③ 已有读数（图标 + `.help` 89/89 · a 类文字按钮 11 → 0），缺的是 ② 与 ④ 的判据口径：②「同一呈现函数（禁止第二套）」要先把「什么算第二套」写成可扫的判据（现只有「同一动作 ⇒ 同一图标」间接承担）；④「平台间对照表（逐行含成对截图）」要各端都能出图（Windows / iOS / 安卓 / 鸿蒙 / Linux 不在本机）⇒ 本侧只出得了 macOS 一侧"
