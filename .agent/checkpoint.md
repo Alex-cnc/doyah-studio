@@ -724,3 +724,12 @@
 - **队列口径（本片后实测）**：`plan.yaml` = **0 todo / 26 blocked**；`batches.yaml` = 0 条待办。
 - **下一项 ID：无（0 todo）**。下一个能开的口子 = `AC-ALL-GATE-REL-004/005/006`（同一个新前提：真 PG 现在可连，端到端验收面待做）。
 - 证据 `.agent/evidence/2026-11-03-NFR-ALL-GATE-PERF-004.md`
+
+## 队列空 · 记账更正跳（三条 blocked 的前提被读数证伪）· 2026-11-03
+
+- **`plan.yaml` = 0 todo / 23 blocked**（`--check` rc=0）。23 条逐条读 next_try：没有一条能在无人值守下判完（主人拍板 / 另两端不在场 / 外部实例 / 人工点验）⇒ 不开新工，只更正记账。
+- **三处更正**（状态列未动）：① `NFR-ALL-GATE-COMP-003` 旧话「没有已存口令」**错** —— 口令在钥匙串（`studio.doyah.DoyahStudio` / 账户 = 连接 id `B0A37FC3-…`，存在性 rc=0），真卡点是**该条目 ACL 只放行应用本体**（`-w` 挂住 180 s、已杀、不作数）；next_try 换「主人终端亲跑一次并点允许」/「搬进应用进程」。② `FR-AGT-UX-CONV-001` ③ `FR-AGT-PLAN-PLAN-001` 旧话「`model` 是空串、端点未配」**错** —— 现为 `deepseek-v4-flash` + `https://api.deepseek.com/v1` + `agent.api-key`（在开发形态口令文件里、公开可逆），真调一次 ⇒ **HTTP 200 / total_tokens 44**；仍差真模型端到端 + 界面点一次。
+- **派生件**：`Scripts/plan-batches.py` 三处 next_try 改口 → `--emit-plan --write` 重出；`--check` rc=0、仍 0 todo / 23 blocked。九道文档门禁全 rc=0。
+- **未验证**：MySQL 口令本体没读到（`test-mysql-real.sh` 未跑）· 真模型只证到端点与密钥可用 · 其余 20 条只做粗筛。
+- **下一项 ID：无**（0 todo / 23 blocked）。下一次能动的两种情形：主人按上面两条 next_try 给出手（点一次允许 / 点一次界面），或换版本开工（`Docs/Doyah产品开发计划任务清单-macOS.md` §4.2 下一个里程碑）。
+- 证据 `.agent/evidence/2026-11-03-blocked-premise-corrections.md`

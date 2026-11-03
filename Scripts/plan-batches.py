@@ -300,8 +300,9 @@ BLOCKED_V060: dict[str, str] = {
                              "217 主机不在线（2026-11-03 TCP 复测：5432 超时 5 s、22 `Host is down`，同网段网关 443 0.00 s 可连）⇒ 多版本回归无从跑",
     "NFR-ALL-GATE-COMP-002": "等 GBase 最新版 + GBase 8a 实例：与 `FR-STD-DB-META-002` 同一个卡点"
                              "（217 无 GBase，2026-11-02 复测整机不通）",
-    "NFR-ALL-GATE-COMP-003": "等可连的 MySQL 最新大版本 + 向下 5 个大版本实例：本机无 mysql / mysqld"
-                             "（`command -v mysqld` 空），只有线协议假服务器 `Scripts/mysql-stub` ⇒ 版本窗口无从验",
+    "NFR-ALL-GATE-COMP-003": "口令在钥匙串但那条目的 ACL 只放行 DoyahStudio 本体（外部进程 `-w` 弹系统授权、实测挂住 180 s）："
+                             "要主人终端亲跑一次 `DOYAH_MYSQL_CONNECTION=DemoMySQL DOYAH_MYSQL_DATABASE=doyah_test ./Scripts/test-mysql-real.sh` 并点「允许」；"
+                             "或把这条自检搬进应用进程（ACL 天然放行，属代码活、须先排进队列）。实例本身在 192.168.5.26:3306（握手 8.4.10）",
     "NFR-ALL-GATE-PERF-004": "等可连的局域网数据库：本条量的是「元数据单层懒加载在局域网内 ≤ 1 s」，"
                              "本机无局域网 DB（217 主机不在线：2026-11-03 TCP 复测 5432 超时 5 s、22 `Host is down`、ARP 无条目，同网段网关 443 0.00 s 可连）⇒ 只能量回环，不报通过",
     # 卡的是**契约口径**与**判据口径**，不是判断力：两条的机器面读数都已在盘（见台账判据列），
@@ -318,8 +319,8 @@ BLOCKED_V060: dict[str, str] = {
 # 台账 §7.1（2026-10-27 逐条核验）+ 各行备注已把卡点写死：这 10 条机器面做不了，
 # 卡在主人 / 外部实例。队列里必须**看得见**它们 ⇒ 落 blocked + next_try（不是删掉）。
 BLOCKED_V050: dict[str, str] = {
-    "FR-AGT-UX-CONV-001": "等主人给模型名 + 密钥（或指一个可用档）：`agent.json` 的 `profiles[0].model` 是空串，真模型端点未配 ⇒ 对话式诊断无输入",
-    "FR-AGT-PLAN-PLAN-001": "同上：DBA 维护编排要真模型先生成计划，端点未配 ⇒ 无从验收",
+    "FR-AGT-UX-CONV-001": "端点与密钥已可用（`agent.json` = `deepseek-v4-flash` + `https://api.deepseek.com/v1`，本跳真调一次 HTTP 200 / total_tokens 44）⇒ 旧话「端点未配」作废；仍差真模型跑一段诊断（执行计划 / 慢查询 / 锁阻塞）+ 界面入口人工点一次",
+    "FR-AGT-PLAN-PLAN-001": "端点与密钥已可用（同 `FR-AGT-UX-CONV-001` 那次真调，HTTP 200）：仍差真模型生成一份维护计划的端到端读数 + 界面入口人工点一次",
     "FR-AGT-LINK-EXT-001": "等主人给一个可连的 MCP server（命令或 URL）：`resources/read` 仍 0 命中、host 方向仍批处理式，无真对端可验",
     "FR-AGT-LINK-EXT-002": "等主人装一个真 MCP server 并把配置面板点一遍：判据四族 8+20+15+23 例已全绿，余「真 server 端到端 + 面板观感」",
     "FR-AGT-LINK-CHAN-003": "等真 QQ 凭据 + 官方网关：配置面 / 入站任务 / 官方 REST 外发三段已在盘，真 WS 握手与「手机派活→手机收结论」要真账号",
