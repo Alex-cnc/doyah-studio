@@ -1100,6 +1100,13 @@ echo "==> 19/19 台账两列一致（实现列 ↔ 判据列）：实现已 ✅ 
 # 第二条是门禁自己的证据：`--self-test` 5 例（全绿 · 判据⬜ 必红 · 判据🟡 必红 · 判据 — 不红 · 判据 ➖ 挂起不红）。
 python3 Scripts/check-status-gap.py
 python3 Scripts/check-status-gap.py --self-test
+# 同一项的第二族（2026-11-03，项数不变）：§7.1「智能体剩余 N 条」卡点表是手抄摘要，台账才是状态唯一源
+# （铁律 12）—— EXT-001/002 双 ✅ 收口后摘要里仍写「无真 MCP 对端实例」，读的人会去办已办完的事。
+# 判据 `Scripts/check-blocker-table.py`：表头「剩余 N 条」= 表行数 · 表里不许再有 §3 已双 ✅ 的号 ·
+# §3 未双 ✅ 的 FR-AGT 号一条不许漏登 · 卡点格不许空；「已收口留痕」子表按表头跳过（那里放已闭的号合法）。
+# 第二条是门禁自己的证据：`--self-test` 5 例（全绿 · 已收口仍留表 · 表头数不符 · 未闭漏登 · 台账行数不足）。
+python3 Scripts/check-blocker-table.py
+python3 Scripts/check-blocker-table.py --self-test
 
 if [ "${KEEP_GOING}" = "1" ]; then
   echo ""
