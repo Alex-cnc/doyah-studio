@@ -236,6 +236,8 @@ struct DoyahStudioApp: App {
                     )
                     // **工作区文件监听**（人类主人 2026-10-16 点名「工作区是实时加载或感知文件的修改重载的」）：
                     // 助手 / 外部编辑器 / git 改的是磁盘，编辑器手里是内存正文 —— 没有它屏幕上是旧内容。
+                    // 通知授权：**启动就申请**一次（不依赖「有没有发通知」这条路径）
+                    AgentNotificationPoster.requestAuthorizationIfNeeded()
                     if let root = workspace.rootPath, !root.isEmpty {
                         appState.startWorkspaceWatching(root: root)
                     }

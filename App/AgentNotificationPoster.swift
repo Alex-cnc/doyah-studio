@@ -43,6 +43,26 @@ enum AgentNotificationPoster {
         }
     }
 
+    /// **启动即申请一次授权**（人类主人 2026-11-03 实测：任务跑完没弹框）。
+    ///
+    /// 为什么不能在 `post` 里申请：`post` 只在「面板不可见 / App 不在前台」时才会被调用
+    /// （`agentChat.paneIsVisible = { NSApp.isActive }` 那条闸），用户盯着屏幕跑任务时
+    /// **一次都不会走到这里** ⇒ 永远不会申请授权 ⇒ 系统设置里永远看不到本应用。
+    @MainActor
+    static func requestAuthorizationIfNeeded() {
+        guard let center = center else { return }
+        Task {
+            let settings = await center.notificationSettings()
+            guard settings.authorizationStatus == .notDetermined else { return }
+            do {
+                _ = try await center.requestAuthorization(options: [.alert, .sound])
+                StartupLog.write("通知授权：已请求（用户动作由系统弹框决定）")
+            } catch {
+                StartupLog.write("通知授权：请求失败 \(error.localizedDescription)")
+            }
+        }
+    }
+
     /// 没有 bundle 标识的进程（`swift test` 宿主）里取中心会抛 ObjC 异常 ⇒ 先判。
     private static var center: UNUserNotificationCenter? {
         Bundle.main.bundleIdentifier == nil ? nil : UNUserNotificationCenter.current()
