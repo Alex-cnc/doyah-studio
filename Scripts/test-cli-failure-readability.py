@@ -33,6 +33,10 @@ FILES = [
     "CLI/CLIFailureText.swift",
     "CLI/AgentStreamCommand.swift",
     "CLI/PluginCommands.swift",
+    # 台账 `outputScan.files` 里登记了它（`CLI/AgentIMCommand.swift` 的失败路径走 `CLIFailureText`）
+    # ⇒ 副本必须带上：少带一个，夹具就因「扫描目标不存在」判红，两条例（注释假输出 / 面内新增登记）
+    # 会红在错误的原因上（2026-11-03 实测：`cli-failure-readability` 族 32/34）。
+    "CLI/AgentIMCommand.swift",
     "App/Utilities/ErrorPresenter.swift",
     "App/AppState.swift",
     "Core/ConnectionFailure.swift",

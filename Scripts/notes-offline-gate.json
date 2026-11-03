@@ -52,6 +52,51 @@
       "role": "中栏卡片的摘要与相对时间 —— 队列 `L-184` 三栏重排；纯函数，无网络无库，只吃 `Date` / `Calendar` / `LKey`"
     },
     {
+      "path": "Plugins/Notes/Sources/NoteArchive.swift",
+      "layer": "core",
+      "role": "导出与迁移的包格式（`NOTE-EXPORT-001`）：只读库取数 + 三形态（Markdown / 纯文本 / 备份包）同源派生，落盘由调用方做，无网络"
+    },
+    {
+      "path": "Plugins/Notes/Sources/NoteAttachmentStore.swift",
+      "layer": "core",
+      "role": "附件落盘（`NOTE-ATTACH-001`）：`FileManager` 字节拷贝 / 缺失判定 / 另行删除，不解码不重编码，无网络"
+    },
+    {
+      "path": "Plugins/Notes/Sources/NoteCapture.swift",
+      "layer": "core",
+      "role": "快速捕获（`NOTE-CAPTURE-001`）：首行推标题 + `commit` 只写本地库一次事务，捕获路径里没有网络代码（联网上传归同步队列）"
+    },
+    {
+      "path": "Plugins/Notes/Sources/NoteLandingPage.swift",
+      "layer": "core",
+      "role": "首页可配置 / 默认落页（`ALL-HOME-001`）：两个取值 + 键 `notes.home` + 一处读写，`UserDefaults` 之外无副作用，无网络"
+    },
+    {
+      "path": "Plugins/Notes/Sources/NotePrivacy.swift",
+      "layer": "core",
+      "role": "私密保护（`NOTE-PRIVACY-001`）：可检索 / 可同步 / 可导出三处判定 —— 防的是随手翻，不是整机加密，无网络"
+    },
+    {
+      "path": "Plugins/Notes/Sources/NoteSync/SyncConflictResolution.swift",
+      "layer": "core",
+      "role": "冲突留两版（`NOTE-SYNC-002`）：两版展示 / 另存 / 合并成新版本 rev 递增，纯判定；真 HTTP 客户端在同目录 outOfScope 的 `CloudAuth`"
+    },
+    {
+      "path": "Plugins/Notes/Sources/NoteTrash.swift",
+      "layer": "core",
+      "role": "回收站与归档判定层（`NOTE-TRASH-001` / `ORG-001` ③）：上限 / 恢复 / 到期清除的读数，纯判定，无 IO 无网络"
+    },
+    {
+      "path": "Plugins/Notes/Sources/NoteVersion.swift",
+      "layer": "core",
+      "role": "历史版本（`NOTE-VERSION-001`）：全量快照的纯数据与纯函数，落库与编排在 `NoteDatabase` / `NoteLibrary`，无网络"
+    },
+    {
+      "path": "Plugins/Notes/Sources/TodoNoteLink.swift",
+      "layer": "core",
+      "role": "任务 ↔ 笔记双向转化（`TODO-LINK-001`）：只造新对象 + 链接快照 + 两端各读那半句话，无 IO 无网络"
+    },
+    {
       "path": "Core/Todo.swift",
       "layer": "core",
       "role": "待办任务清单的模型（`Todo` / `TodoPriority`）—— 队列 `N-11` 的 macOS 核心层半；纯值类型，无网络无库（库表与行映射在 `Plugins/Notes/Sources/NoteStorage/`，那一层自 2026-10-14 起**也**在本清单的按名扫描里）"
@@ -115,6 +160,26 @@
       "path": "Core/LicenseSignature.swift",
       "layer": "core",
       "role": "Ed25519 签名校验（ADR-34：**只做离线校验，不联网激活**）—— 这条口径现在由本门禁机械守着"
+    },
+    {
+      "path": "Core/LicenseDeviceStore.swift",
+      "layer": "core",
+      "role": "设备配额与设备台账（`FR-STD-ALL-LIC-005`）：本地 `license-devices.json` 读写 + 满了指名释放最早一台 —— 纯文件 IO，不联网激活"
+    },
+    {
+      "path": "Core/LicenseHighlights.swift",
+      "layer": "core",
+      "role": "「关于」页的能力亮点文案（`FR-STD-ALL-LIC-002`）：纯值类型 + 每条的授权位对账，无 IO 无网络"
+    },
+    {
+      "path": "Core/LicenseScope.swift",
+      "layer": "core",
+      "role": "授权范围口径（`FR-STD-ALL-LIC-004`）：桌面三块一套 / 移动端不管辖，纯判定，无 IO 无网络"
+    },
+    {
+      "path": "Core/LicenseStatusLine.swift",
+      "layer": "core",
+      "role": "「版本 + 授权状态」那一行（`LIC-002` / `WS-LIC-001`）：一个拼装函数，Home / 帮助 / 许可证页同源，无 IO 无网络"
     },
     {
       "path": "Core/AICapture.swift",
@@ -208,6 +273,22 @@
     {
       "path": "Core/LicenseSignature.swift",
       "reason": "同上：ADR-34 的「只做离线签名校验」这条口径由本门禁守着。"
+    },
+    {
+      "path": "Core/LicenseDeviceStore.swift",
+      "reason": "同 `LicenseLoader` 一族：许可链要给 Windows / Linux 复用，所以不在解耦门禁的笔记清单里，但笔记模块的零网络出口必须覆盖它 —— 设备配额是「顺手联网激活 / 联网校验设备」最容易长出来的地方（ADR-34 明写不联网激活），本门禁把这句话变成判据。"
+    },
+    {
+      "path": "Core/LicenseHighlights.swift",
+      "reason": "同上：关于页的能力亮点要给三端复用，不在解耦清单里；它只读授权位拼文案，属笔记模块的许可半边，须受零网络出口约束。"
+    },
+    {
+      "path": "Core/LicenseScope.swift",
+      "reason": "同上：授权范围判定（桌面三块一套 / 移动端不管辖）随许可链跨平台，属笔记模块的许可半边，须受零网络出口约束。"
+    },
+    {
+      "path": "Core/LicenseStatusLine.swift",
+      "reason": "同上：版本 + 授权状态的拼装行要跨三端同一句，不在解耦清单里；把它纳入范围是为了让「许可状态怎么读」这条链没有出网口子。"
     }
   ],
   "outOfScope": [
@@ -338,7 +419,7 @@
   ],
   "exceptions": [],
   "scopeFloors": {
-    "minFiles": 36,
+    "minFiles": 51,
     "requiredLayers": [
       "core",
       "app"

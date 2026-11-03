@@ -90,6 +90,21 @@ TREE_FILES = [
     "Plugins/Notes/Sources/NoteStorage/NoteLibrary.swift",
     "Plugins/Notes/Sources/NoteStorage/NoteLibraryMigration.swift",
     "Plugins/Notes/Sources/NoteStorage/NoteSearchDisclosure.swift",
+    # 2026-11-03：`v0.4.0`–`v0.7.0` 期间新落地的 13 件（许可链 4 + 笔记源文件 9）补登进台账范围 ⇒
+    # 夹具必须与台账声明同集合，少带一个「干净副本」那一例就因「台账写了、盘上没有」假红（同前几条的坑）
+    "Core/LicenseDeviceStore.swift",
+    "Core/LicenseHighlights.swift",
+    "Core/LicenseScope.swift",
+    "Core/LicenseStatusLine.swift",
+    "Plugins/Notes/Sources/NoteArchive.swift",
+    "Plugins/Notes/Sources/NoteAttachmentStore.swift",
+    "Plugins/Notes/Sources/NoteCapture.swift",
+    "Plugins/Notes/Sources/NoteLandingPage.swift",
+    "Plugins/Notes/Sources/NotePrivacy.swift",
+    "Plugins/Notes/Sources/NoteSync/SyncConflictResolution.swift",
+    "Plugins/Notes/Sources/NoteTrash.swift",
+    "Plugins/Notes/Sources/NoteVersion.swift",
+    "Plugins/Notes/Sources/TodoNoteLink.swift",
     # 派单 `T-20261010-043`（第 28 行）：前缀无关的 6 件本轮进了面/登记 ⇒ 副本必须带上
     # （少带一个，「干净副本」那一例会因为「台账写了、盘上没有」而假红）
     "Plugins/Notes/Sources/NoteStorage/SQLiteKit.swift",
