@@ -1,5 +1,15 @@
 # 检查点
 
+## 按钮图标化收尾：a 类 7 → 0（`verify-all` 第 3 项少一处红）· 2026-11-03
+
+- **队列仍 0 todo / 21 blocked**（`plan-batches --check` rc=0）⇒ 不开批次、不新增需求。本跳做的是 `verify-all.sh` 第 3 项两处存量红里的**第二处**（`check-button-icon-only`）：余 7 处全在 `Plugins/Notes/Views/NotesPanel.swift`。
+- **处置按 `--inventory` 盘点清单逐条来**（清单早给了每条处置，本跳不自选口径）：四处图标化（`:88` 撤销→`arrow.uturn.backward` · `:436` 归档→纯 `archivebox` · `:3025` 恢复→`arrow.uturn.backward` · `:3033` 永久删除→`trash`，四枚都带 `.help` + `.accessibilityLabel`，`accessibilityIdentifier` 一个未改）；三处登记进 `Scripts/button-icon-exceptions.json`（`:620` 回收站侧栏行 = 内容承载 · `:2986`/`:2990` 彻底清除确认行的取消与删除 = 弹框）。
+- **一处改判如实记**：清单第 53 号给 `:2990` 拟的图标是 `bolt`（与「永久删除」无关，清单自己标「待裁」）⇒ 本跳不图标化、改登记「弹框」，依据 = 人类主人 2026-10-25「对话框 / 表单用文字按钮」；清单那条作废，已写 `decisions.md`。
+- **读数**：`check-button-icon-only` **a 类 0 处 · F 93/93 缺 0 · RESULT=PASS**；`--self-test` **48/48**（含 ㉑ 盘点基线逐字节未变）；反例两段（改回文字按钮 ⇒ 点名 `:3025` 判红；删掉 `:620` 登记 ⇒ 点名未登记差异判红）各判红后逐字节还原（`d4c44243…` / `f03471d7…`）。`verify-core` **5366 例 0 失败** · `verify-ui-interactions` **133 条全跑 / 无跳过 / 0 失败** · `swift build` Build complete · 13 道纪律门禁全 rc=0 · `self-test-counts --no-run` 族 57 / 例 1082 / 锚点 86。
+- **未验证（≠ 通过）**：`verify-all.sh` 全量本跳未跑（约 35 分钟）⇒ 第 3 项另一处 `check-format-arguments`（230 > 预算 190）、第 11 项 `check-menu-language` 真启动取证、第 11 项打包均**未执行**；四枚新图标按钮真鼠标未点（133 条 UI 探针按 id 抓、不按文案）；跨端图标一致未判。
+- **下一项 ID：无**（0 todo / 21 blocked）。机器面还剩两处红：`check-format-arguments`（40 处类型不明实参要从 230 降到 190，且 25 条占位符对账；改法 = 逐处补类型，仍要派单或主人拍板）与 `check-menu-language`（要图形会话）。
+- 证据 `.agent/evidence/2026-11-03-icon-only-notes-panel.md`。
+
 ## FR-AGT-LINK-EXT-001 / -002 双 ✅：MCP 真对端 = 本机的第三方 CloudBase MCP（队列 0 todo / 21 blocked）· 2026-11-03
 
 - **两条 blocked 的前提又过期一次**：`next_try` 写「无真 MCP 对端」，而本机 `~/.hermes/config.yaml` 里就配着一个第三方 stdio server（`npx -y @cloudbase/cloudbase-mcp@latest`）。真跑：对端自报 `server=cloudbase-mcp protocol=2024-11-05 tools=42`，`tools/call searchKnowledgeBase` 回 **3351 字节**真正文 ⇒ host 方向「握手 → 列工具 → 调用 → 取结果」在**外部实例**上成立（不是本仓假 server）。

@@ -85,10 +85,17 @@ struct NotesListView: View {
                         .font(Theme.font(.caption))
                         .foregroundStyle(Theme.text(.secondary))
                         .lineLimit(1)
-                    Button(L(.notesUndo)) {
+                    // 图标化（图标令 `T-20261013-042` 第 31 号站点）：左边那句
+                    // 「撤销 · N」已经把动作名说出来了，按钮再写一遍字是重复 ⇒
+                    // 纯图标 + 悬停提示 + 无障碍标签（同一动作同一图标 = 回转箭头）。
+                    Button {
                         Task { await appState.undoLastNoteOrganize() }
+                    } label: {
+                        Image(systemName: "arrow.uturn.backward")
                     }
                     .buttonStyle(.link)
+                    .help(L(.notesUndo))
+                    .accessibilityLabel(L(.notesUndo))
                     .accessibilityIdentifier("notes-undo-organize")
                     Spacer(minLength: 0)
                 }
@@ -426,16 +433,16 @@ struct NotesListView: View {
     /// 写库与重读都在 `AppState.toggleNoteArchive` 一处 —— 视图不自己 set 布尔。
     @ViewBuilder
     private func archiveToggle(for note: Note) -> some View {
+        // 图标化（图标令 `T-20261013-042` 第 35 号站点）：与 `favoriteToggle` /
+        // `pinnedToggle` 那两条**菜单项**不同，这一枚挂在笔记行的悬停条上（不是菜单），
+        // 属 a 类水平按钮 ⇒ 纯图标 + 悬停提示 + 无障碍标签。
         Button {
             Task { await appState.toggleNoteArchive(id: note.id) }
         } label: {
-            Label {
-                Text(L(note.isArchived ? .notesUnarchiveAction : .notesArchiveAction))
-            } icon: {
-                Image(systemName: note.isArchived ? "archivebox" : "archivebox.fill")
-            }
+            Image(systemName: note.isArchived ? "archivebox" : "archivebox.fill")
         }
         .help(L(note.isArchived ? .notesUnarchiveAction : .notesArchiveAction))
+        .accessibilityLabel(L(note.isArchived ? .notesUnarchiveAction : .notesArchiveAction))
         .accessibilityIdentifier("notes-archive-toggle-\(note.id.uuidString)")
     }
 
@@ -3012,13 +3019,24 @@ struct NotesTrashSheet: View {
             }
             Spacer(minLength: Spacing.s)
             if entry.isRecoverable {
-                Button(L(.notesTrashRestore)) {
+                // 图标化（图标令 `T-20261013-042` 第 54/55 号站点）：回收站行内两枚动作
+                // 各配一枚语义唯一的图标（恢复 = 回转箭头 / 永久删除 = 垃圾桶），
+                // 悬停提示与无障碍标签同一句。删除仍有二次确认框（文字按钮）挡着。
+                Button {
                     Task { await appState.restoreTrashedNote(id: entry.noteID) }
+                } label: {
+                    Image(systemName: "arrow.uturn.backward")
                 }
+                .help(L(.notesTrashRestore))
+                .accessibilityLabel(L(.notesTrashRestore))
                 .accessibilityIdentifier("notes-trash-restore-\(entry.noteID.uuidString)")
-                Button(L(.notesTrashPurge)) {
+                Button {
                     appState.requestNotePurge(id: entry.noteID)
+                } label: {
+                    Image(systemName: "trash")
                 }
+                .help(L(.notesTrashPurge))
+                .accessibilityLabel(L(.notesTrashPurge))
                 .accessibilityIdentifier("notes-trash-purge-\(entry.noteID.uuidString)")
             }
         }
