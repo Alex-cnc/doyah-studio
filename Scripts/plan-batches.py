@@ -302,9 +302,11 @@ BLOCKED_V060: dict[str, str] = {
                              "217 主机不在线（2026-11-03 TCP 复测：5432 超时 5 s、22 `Host is down`，同网段网关 443 0.00 s 可连）⇒ 多版本回归无从跑",
     "NFR-ALL-GATE-COMP-002": "等 GBase 最新版 + GBase 8a 实例：与 `FR-STD-DB-META-002` 同一个卡点"
                              "（217 无 GBase，2026-11-02 复测整机不通）",
-    "NFR-ALL-GATE-COMP-003": "口令在钥匙串但那条目的 ACL 只放行 DoyahStudio 本体（外部进程 `-w` 弹系统授权、实测挂住 180 s）："
-                             "要主人终端亲跑一次 `DOYAH_MYSQL_CONNECTION=DemoMySQL DOYAH_MYSQL_DATABASE=doyah_test ./Scripts/test-mysql-real.sh` 并点「允许」；"
-                             "或把这条自检搬进应用进程（ACL 天然放行，属代码活、须先排进队列）。实例本身在 192.168.5.26:3306（握手 8.4.10）",
+    "NFR-ALL-GATE-COMP-003": "口令在钥匙串（ACL 第 0 条 `decrypt` 只放行 requirement = identifier studio.doyah.DoyahStudio + certificate root = H e55d8fe2…，即本机自签身份 `Doyah Local Dev`）："
+                             "① **CLI 侧根本不读钥匙串**（`CLI/main.swift:1770` 走 `FileSecretStore()`）⇒ 旧话「主人跑到脚本点一次允许」按现码不成立，只会空口令连、被服务端拒；"
+                             "② 冒名外壳已实测不通（同身份、DR 逐字相同的 .app，直接 exec 与 `open -n -W` 都挂授权弹窗）⇒ 别再试；"
+                             "③ 可行两条：主人 `DoyahCLI secret set --id B0A37FC3-4F87-4D84-820D-A41921A6E5B6 --stdin` 写进文件存储后脚本原样可用，或把自检搬进本体进程（属代码活、须先排进队列）。"
+                             "实例在 192.168.5.26:3306（握手 8.4.10）",
     "NFR-ALL-GATE-PERF-004": "等可连的局域网数据库：本条量的是「元数据单层懒加载在局域网内 ≤ 1 s」，"
                              "本机无局域网 DB（217 主机不在线：2026-11-03 TCP 复测 5432 超时 5 s、22 `Host is down`、ARP 无条目，同网段网关 443 0.00 s 可连）⇒ 只能量回环，不报通过",
     # 卡的是**契约口径**与**判据口径**，不是判断力：两条的机器面读数都已在盘（见台账判据列），

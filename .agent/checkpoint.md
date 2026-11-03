@@ -1,5 +1,20 @@
 # 检查点
 
+## `COMP-003` 卡点量测：旧指路「主人点一次允许」按现码走不通（队列 0 todo / 17 blocked，状态列未动）· 2026-11-03
+
+- **队列仍 0 todo / 17 blocked**（`plan-batches.py --version 0.7.0 --check` rc=0 · 判据 F 覆盖 17/17）⇒ 不开批次、不新增需求、不动台账状态列。本跳挑唯一一条「能无人值守判完」的事做：把 `NFR-ALL-GATE-COMP-003` 的**卡点前提**量清楚。
+- **ACL 原文（新读数）**：`security dump-keychain -a` 读到该条目（svce `studio.doyah.DoyahStudio` / acct `B0A37FC3-…`）第 0 条 `decrypt` **只放行一条 requirement** = `identifier "studio.doyah.DoyahStudio" and certificate root = H"e55d8fe2…"`，即本机自签身份 `Doyah Local Dev`（`security find-identity` 在列）；它不是路径绑、也不是 cdhash 绑。
+- **三处实测改口**：
+  ① **CLI 侧根本不读钥匙串** —— `CLI/main.swift:1770` 取口令走 `FileSecretStore()`（`.secrets/credentials.json` 实测只有 `agent.api-key` + 两条 PG id，无这条 MySQL）。⇒ 旧 next_try「主人在终端跑 `test-mysql-real.sh` 并点一次『允许』」**按现码不成立**：脚本走 `--connection`，取不到口令，只能空口令连，服务端回 `Access denied for user 'dsh_test'@'192.168.5.28' (using password: YES)`。
+  ② **冒名外壳不通（别再试）** —— 把 `DoyahCLI` 与一枚 5 行 `SecItemCopyMatching` 探针分别装进 `CFBundleIdentifier=studio.doyah.DoyahStudio` 的 .app、用同一身份签名（`codesign -d -r-` 出的 DR 与 ACL 那条逐字相同）：DoyahCLI 与裸 CLI 同一条报错（证它没碰钥匙串）；探针 `直接 exec` 与 `open -n -W` 两种启动都 **45 s 内不返回**、输出文件未生成，`SecurityAgent` 在场 ⇒ 挂在授权弹窗。
+  ③ DDL 仍须赶进 `doyah_test`（连接里存的是业务库 `dsh_db`）。
+- **改口的落点**：台账该行备注按上面三条重写（版本 v1.0.162）+ `Scripts/plan-batches.py` 规则表 `NFR-ALL-GATE-COMP-003` 的 `next_try` 同批改口，重出 `.agent/plan.yaml` / `.agent/batches.yaml`（0 todo / 17 blocked）。**状态列一个字未动**（⬜ / ⬜），**报数不变**。
+- **门禁读数**：`check-doc-invariants` / `check-doc-tables`（74 份）/ `check-doc-numbers`（三向一致）/ `check-plan-coverage` / `check-doc-versions`（17 份）/ `check-doc-layout` / `check-agents-index` / `check-status-gap` / `check-blocker-table` / `check-version-scope`（471 条）**全 rc=0** · `plan-batches --check` rc=0。
+- **反例（判据 F 真会红）**：先把 requirement 原文带双引号写进 Python 串（`\"`）⇒ `plan-batches --check` rc=1 并点名 `next_try 与规则表不一致：NFR-ALL-GATE-COMP-003`；去掉内层双引号后复绿。另：中途在台账备注里写了裸 `|` ⇒ `check-doc-tables` 判红（列数 10 != 表头 9）并连带 `check-doc-numbers` / `check-version-scope` 红，改掉后三条全绿。
+- **未跑**：`swift test` 与 `verify-all.sh` 全量（本片零 Swift 改动；上一跳已在同一 HEAD `05a35e44` 跑过全量 19 项全 ✅）。
+- **未验证（≠ 通过）**：口令本身对不对（取不出来就读不出）、界面「测试连接」当前是否成功（未点）、MySQL 侧 `doyah_test` 库是否存在（未连上）。
+- **下一项 ID：无**（0 todo）。`COMP-003` 现只剩两条可执行路：① 主人 `.build/debug/DoyahCLI secret set --id B0A37FC3-4F87-4D84-820D-A41921A6E5B6 --stdin < 0600 口令文件`（写进文件存储，脚本原样可用）；② 把这条自检搬进本体进程（属代码活，须先排进队列）。
+
 ## 派生件归正：队列 21 → **17 blocked**，`verify-all` 余 3 项红全清（0 todo · 台账状态列未动）· 2026-11-03
 
 - **队列 0 todo / 17 blocked**（`plan-batches --version 0.7.0 --check` rc=0 · 判据 F 覆盖 17/17）。21 → 17 的四条不是新收口：`AI-002` / `ORG-002` / `LANG-001` / `UI-001` 在台账里已按主人令 ✅，只是派生队列还在当卡点携带（上一跳的 `--emit-plan` 重出之后它们才落盘 ⇒ 队列读数一直是陈旧的 21）。
