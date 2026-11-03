@@ -846,3 +846,8 @@
 - **未验证（≠通过）**：17 条 blocked 只沿用上一跳的 next_try 读数，本跳未复测前提 · 界面人工点验项不在本机能力内。
 - **下一项 ID：无**（0 todo / 17 blocked）。`NFR-ALL-GATE-COMP-003` 仍只两条可执行路：主人跑 `DoyahCLI secret set --id B0A37FC3-4F87-4D84-820D-A41921A6E5B6 --stdin`，或把该自检搬进本体进程（代码活、须先排进队列）。
 - 证据 `.agent/evidence/2026-11-03-head-6de4c810-verify-all.md`
+
+## 待办（缺陷，2026-11-03 真机点验发现）
+
+- **Markdown 预览不渲染 GFM 任务框**：`- [x] todo` 在预览里是「· **[x]** todo」（字面量），应渲染成复选框且勾选状态跟随源码。
+  判据建议：预览 `WKWebView` 的 DOM 里查 `input[type=checkbox]`，`checked` 随 `[x]/[ ]` 双向变化；反例＝把渲染器退回纯文本判红。
