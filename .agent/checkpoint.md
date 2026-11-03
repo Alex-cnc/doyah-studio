@@ -7,6 +7,7 @@
 - **4 处红逐条**：① 第 3 项 `check-format-arguments`（类型不明实参 **230 处 > 预算 190**，另 25 条占位符↔实参对账；集中在 `AppState.swift` / `AgentSettingsSheet.swift` 等的未登记实参）；② 第 3 项 `check-button-icon-only`（`NotesPanel.swift` **7 处** a 类水平文案按钮 + **7 处**未登记差异）；③ 第 11 项 `check-menu-language`（真启动两档都等不到 dump，菜单文案未判）；④ 第 16 项 `check-path-ownership`（台账 `Docs/Doyah产品开发计划任务清单-macOS.md` 共享面未登记）。
 - **⚠️ 读数跨树（如实记）**：本跳跑到一半，**另一写者**在同一克隆落了 `6d23effd`「版本口径收窄（主人令）：COMP-001 在 18.6 实测收口，COMP-003 阻塞于 MySQL 口令」（2 份文档）⇒ 第 16 项那处红**由他人提交造成**（提交信息无 `shared-surface:`），不是产品缺陷；本侧**未改他人提交**、未 rebase 它。
 - **余红三分**：确定性 **3 处**（format-arguments 预算 / icon-only NotesPanel / menu-language 真启动取证 —— 都要动界面文案或真启动环境级取证，需派单或主人拍板）；抖动 0；未复现 0。第 ④ 处单列为「他人提交未登记」，不计入产品债。
+- **推送后复测（09:52）**：`af275339` 推上 origin 后，第 16 项 `check-path-ownership` 单跑 **RESULT: PASS**（改动集已并入基线 ⇒ 空扫描；脚本自警「无内容可查 ≠ 已通过」）⇒ **现存余红按 3 项 / 3 处**算。
 - **下一项**：无（0 todo / 28 blocked）。推进得等外部条件或新派单。
 
 ## 零网络出口台账补登 13 件 + 两处夹具漏带（判据面 · 无台账行）· 2026-11-03
