@@ -1,5 +1,16 @@
 # 检查点
 
+## AC-ALL-GATE-REL-004 / -005 / -006 三条验收一起收口（真库端到端）· 2026-11-03 10:35
+
+- **一条队列里 0 todo，但三条 blocked 的前提已过期** —— 上一跳证伪了「本机无局域网 DB」，本跳顺着把这三条验收做完：真 PG 18.6 @ `192.168.5.26`（Keychain 口令非交互取，不落文件）。
+- **判据 = 新 `TestsUISnapshot/AcceptanceRealPostgresTests` 4 例，在同一条真连接上把验收原文跑完**：新建连接 → 测试连接（`DatabaseServiceFactory` 同一条路）→ `StatementSplitter` 多语句（建表 / 插中文+NULL / 查回 2 行）→ 对象树四层（3 列）→ `ResultClipboard` 复制 → `AppState.checkSyntax`（真 service，结论「已检查 2 条语句」）。错误路径四条：`28P01` / 连接超时 / `42P01` 点名该表（**不被连接失败档抢走**）/ `42601` 点出错词。崩溃零容忍：整链 3 遍 + CLI 子进程 3 条（0 / 0 / 2，`terminationReason` 全 `exit`）+ 新增崩溃报告 **0**。
+- **读数**：`swift test --filter AcceptanceRealPostgresTests` **4 例 / 0 失败**（rc=0）· `verify-core` **5361 / 13 skipped / 0 失败** · 文档门禁 12 道 rc=0（plan-coverage 未闭 21 = 🟡17/⬜4）· `plan-batches --check` rc=0（0 待办 / **23 blocked**，26 → 23）。
+- **反例三段**（改坏 ⇒ 判红 ⇒ `sha256` 逐字节还原 eec19cd2… / 1b696d83… / f4e04dc2…）：schema 层不展开 ⇒ 点名该表（REL-004/006 同红）· 可 EXPLAIN 首词表去掉 `SELECT` ⇒ 结论 0 条判红 · `ConnectionFailure.describe` 恒返 nil ⇒ 错误密码那一档判红。
+- **未验证（≠ 通过）**：只这一台实例；真鼠标与界面观感未点；真 `NSPasteboard` 那一步沿用 `ResultCopyProbeTests`（本片未重跑）；CLI 侧文案脚本未重跑；换版本 / 跨网段未测。
+- **下一项**：仍无 todo（0 / 23 blocked）。剩下两条发布门槛 = `FR-NTS-ALL-DIST-001` / `PARITY-001`（另两端不在场 + 分发签名口径要主人定），其余 blocked 全卡外部实例 / 凭据 / 拍板。机器面余红仍是 `check-format-arguments`（25 条占位符对账）与 `check-button-icon-only`（真产品面债）。
+- 证据 `.agent/evidence/2026-11-03-AC-ALL-GATE-REL-004-005-006.md`。
+
+
 ## 全量实跑取证 + 收口（0 todo / 28 blocked · 无台账行）· 2026-11-03 09:41
 
 - **队列仍空**：`plan-batches.py --check` rc=0（**0 条 todo / 28 blocked**，全卡外部：217 开机 · 真 PG/MySQL/GBase · 真云端 · 真 MCP 对端 · 真 QQ 凭据 · 主人拍板）。按 `rules.md` 出口 1 收口；**不开判据维护跳**（出口第 5 条预算已用满）。
