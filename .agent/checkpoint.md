@@ -754,3 +754,16 @@
 - **未验证**：MySQL 口令本体没读到（`test-mysql-real.sh` 未跑）· 真模型只证到端点与密钥可用 · 其余 20 条只做粗筛。
 - **下一项 ID：无**（0 todo / 23 blocked）。下一次能动的两种情形：主人按上面两条 next_try 给出手（点一次允许 / 点一次界面），或换版本开工（`Docs/Doyah产品开发计划任务清单-macOS.md` §4.2 下一个里程碑）。
 - 证据 `.agent/evidence/2026-11-03-blocked-premise-corrections.md`
+
+## 队列空后的记账更正 #2：§7.1 卡点表 ↔ 台账，并给这张表上锁 · 2026-11-03
+
+- **队列口径（本跳实测）**：`plan.yaml` / `batches.yaml` = **0 todo / 21 blocked**（`plan-batches.py --version 0.7.0 --check` rc=0）⇒ 无批次可开，本跳不新开需求。
+- **真缺陷**：一单 §7.1「智能体剩余 N 条」是 2026-10-27 手抄的摘要，台账才是状态唯一源（铁律 12），而它漂了两处 —— `FR-AGT-LINK-EXT-001` / `-002` 上一跳已双 ✅ 收口，摘要里仍写「无真 MCP 对端实例 / 装一个真 server 并把配置面点一遍」；`FR-AGT-UX-CONV-001` / `FR-AGT-PLAN-PLAN-001` 仍写「`model` 是空串、真端点未配」，而该前提已被真调读数（HTTP 200 / total_tokens 44）证伪。读摘要的人会去办已经办完的事。**没有任何门禁盖住这张表**（status-gap 只比 §3 两列，status-consistency 只扫其它文档的括注）。
+- **落法**：表 10 → 8 条并新增「已收口留痕」子表（放已闭的号，合法）· 两条改口 · 尾部「72 条 ✅」按实测改 81 · 版本头 v1.0.160 → v1.0.161；新判据 `Scripts/check-blocker-table.py`（§7.1 号集合 = §3 里 `FR-AGT` 未双 ✅ 的集合，不多不少；表头 N = 表行数；卡点格不许空；留痕子表按表头跳过；空跑防护 台账 < 400 / 表 < 5 判红；`--self-test` 5 例）接进 `verify-all.sh` 第 19 项（**项数仍 19**）；`self-test-counts.json` 新增 `blocker-table` 族 ⇒ 族 56 → 57 / 例 1077 → 1082。
+- **顺带修上一跳的漏项**：`Tests/MCPRealServerTests.swift` 只落在磁盘、没进 `DoyahStudio.xcodeproj`（第 18 项 C3 判红「磁盘上有、生成物里没有」）⇒ `xcodegen generate` 重生成，pbxproj 只多 4 行；`check-release-version.py` → RESULT: OK。
+- **顺带清一处存量**：`requirement-index.jsonl` 与正文不一致（NFR-ALL-GATE-COMP-001/003 早前被主人令改过、索引没跟）⇒ `gen-req-index.py` 重生成 ⇒ 488 条、`check-req-index` rc=0（派生件，不入仓）。
+- **读数**：`check-blocker-table` rc=0（台账 471 行 / 未双 ✅ 8 条 / 表 8 行 / 表头「剩余 8 条」）· `--self-test` 5/5 · 真台账负例 rc=1 并点名 EXT-001 · 11 道文档门禁全 rc=0 · `verify-all.sh --keep-going` **rc=1**：第 3 项两处**存量**（format-arguments 230 > 190 · button-icon-only Notes 面板 7 处，HEAD 00ed502e 另建 worktree 复跑同红）· 第 4 项已转绿 · 第 16 项 shared-surface 已写进提交信息（单跑 rc=0）· 第 11 项 menu-language 两档 dump 未产出。
+- **提交**：`96c90cdf`。
+- **下一项 ID：无**（0 todo / 21 blocked）。
+- **未验证（≠通过）**：第 11 项 menu-language —— 两次都是三次 ×120 s 等不到 dump，第二次后台复跑 9 分钟无进展（已杀，无残留进程）；本跳判为**无人值守会话的环境限制**，需主人图形会话里跑一次 `python3 Scripts/check-menu-language.py` · `FR-AGT-UX-CONV-001` / `FR-AGT-PLAN-PLAN-001` 的真模型端到端读数与界面入口点一次仍未做 · 其余 20 条 blocked 只按 next_try 粗筛，未复测。
+- 证据 `.agent/evidence/2026-11-03-blocker-table.md`
