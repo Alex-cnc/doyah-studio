@@ -51,7 +51,16 @@ echo "$OUT" | grep -q "调试详情" && echo "$OUT" | grep -q "PSQLError" \
 
 echo ""
 echo "== 2) 主机名解析不了 =="
-OUT2="$(PGHOST=no-such-host.invalid PGPORT=5432 PGUSER=x PGPASSWORD="${DOYAH_TEST_PGPASSWORD}" PGDATABASE=x \
+# 前提：这个环境里必须真的有一个「解析不了」的名字。
+# 本机开着代理（DNS 被接管成 fake-ip 198.18.0.0/16）时，**任意**名字都会解析成功
+# （实测 `no-such-host.invalid` → 198.18.0.26），于是驱动那一步报的是「连接中断」，
+# 用例就测不到解析那一档 —— 换一个连 IDNA 编码都过不去的非法标签，解析必然失败。
+UNRESOLVABLE_HOST="no-such-host.invalid"
+if python3 -c "import socket,sys; socket.getaddrinfo('no-such-host.invalid', 5432)" >/dev/null 2>&1; then
+    UNRESOLVABLE_HOST="a..b"
+    echo "  注：本机 DNS 把任意名字都解析成代理地址（fake-ip）⇒ 改用非法标签 a..b 构造解析失败"
+fi
+OUT2="$(PGHOST="${UNRESOLVABLE_HOST}" PGPORT=5432 PGUSER=x PGPASSWORD="${DOYAH_TEST_PGPASSWORD}" PGDATABASE=x \
     "$CLI" -c "SELECT 1" 2>&1)"
 # 这一档 2026-09-26 之前报的是「与数据库的连接中断了」：实测（探针在 Tests/HostResolutionTests.swift）
 # 驱动会把解析失败压成 `PSQLError(code: serverClosedConnection)` 且 `underlying == nil` ——
@@ -68,7 +77,7 @@ echo "${OUT2}" | grep -q "连接中断" \
     || check "不再说成「连接中断」（本轮修掉的那句）" 0
 echo "${OUT2}" | grep -q "建议：" && echo "${OUT2}" | grep -q "主机名" \
     && check "建议里提醒先确认主机名" 0 || check "建议里提醒先确认主机名" 1
-echo "${OUT2}" | grep -q "no-such-host.invalid:5432/x" && check "带上了目标" 0 || check "带上了目标" 1
+echo "${OUT2}" | grep -q "${UNRESOLVABLE_HOST}:5432/x" && check "带上了目标" 0 || check "带上了目标" 1
 echo "${OUT2}" | grep -qE "UnknownHost|nodename nor servname" && check "原始串仍然保留（信息不丢）" 0 \
     || check "原始串仍然保留（信息不丢）" 1
 echo "${OUT2}" | grep -q "错误码：hostUnresolvable" && check "错误码指明是解析（不是驱动类别）" 0 \

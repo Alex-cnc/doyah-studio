@@ -306,6 +306,10 @@ struct DoyahCLI {
         if arguments.contains("--tree") {
             let includeColumns = arguments.contains("--columns")
             let maxDepth = includeColumns ? 4 : 3
+            // --timings：逐层量「元数据加载」耗时（NFR-ALL-GATE-PERF-004 的读数来源）。
+            // 只打冷加载（cached=0）才算数 —— 命中缓存的时间不能拿去证明懒加载够快。
+            let emitTimings = arguments.contains("--timings")
+            var timingRows: [(depth: Int, kind: String, name: String, ms: Double, cold: Bool)] = []
             do {
                 let serverLabel = "\(username)@\(host):\(port)"
                 var extraServices: [String: any DatabaseService] = [:]
@@ -353,8 +357,21 @@ struct DoyahCLI {
 
                     let database = object.database ?? serverInfo.database
                     do {
+                        let cachedBefore = metadataCache[database] != nil
                         let tree = try await metadata(for: database)
-                        let children = try await tree.loadChildren(of: object)
+                        let children: [DatabaseObject]
+                        if emitTimings {
+                            let clock = ContinuousClock()
+                            let start = clock.now
+                            children = try await tree.loadChildren(of: object)
+                            let elapsed = clock.now - start
+                            let ms = Double(elapsed.components.seconds) * 1000
+                                + Double(elapsed.components.attoseconds) / 1_000_000_000_000_000
+                            timingRows.append((depth: depth + 1, kind: object.kind.rawValue,
+                                               name: object.name, ms: ms, cold: !cachedBefore))
+                        } else {
+                            children = try await tree.loadChildren(of: object)
+                        }
                         for child in children.prefix(50) {
                             await printTree(child, depth: depth + 1)
                         }
@@ -377,6 +394,17 @@ struct DoyahCLI {
                 }
                 await service.disconnect()
                 print("")
+                if emitTimings {
+                    for row in timingRows {
+                        let cold = row.cold ? "1" : "0"
+                        print(String(format: "[timing] depth=%d kind=%@ name=%@ ms=%.1f cold=%@",
+                                     row.depth, row.kind, row.name, row.ms, cold))
+                    }
+                    let coldRows = timingRows.filter(\.cold)
+                    let total = coldRows.reduce(0.0) { $0 + $1.ms }
+                    print(String(format: "[timing] summary loads=%d cold=%d cold_total_ms=%.1f",
+                                 timingRows.count, coldRows.count, total))
+                }
                 print("对象树加载完成。")
                 return
             } catch {
