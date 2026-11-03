@@ -3,7 +3,7 @@
 # 本文件只做「下一跳」排序，不许反向改台账；台账一改就跑 --emit-plan 重出，别手改。
 # 生成于 2026-11-03，源 = 台账里 FR-NTS-NOTE-FORMAT-001 / FR-NTS-NOTE-SEARCH-001 / FR-NTS-NOTE-ORG-001 / FR-NTS-NOTE-TRASH-001 / FR-NTS-NOTE-SYNC-001 / FR-NTS-NOTE-EXPORT-001 / FR-NTS-ALL-HOME-001 / FR-NTS-ALL-LIC-001 / FR-NTS-ALL-DIST-001 / FR-NTS-ALL-PARITY-001 / FR-STD-WS-FS-008 / FR-STD-WS-TOOL-001 / FR-STD-WS-AI-002 / AC-ALL-GATE-REL-004 / AC-ALL-GATE-REL-005 / AC-ALL-GATE-REL-006 / FR-STD-DB-META-002 未闭 7 条（4 🟡 / 2 ⬜ / 1 其他（挂起或带复核注））。
 tasks:
-# 另有 16 条上版遗留卡点（不在本版范围，仅列表可见）：FR-AGT-LINK-CHAN-003, FR-AGT-LINK-EXT-001, FR-AGT-LINK-EXT-002, FR-AGT-OPS-OBS-002, FR-AGT-PLAN-PLAN-001, FR-AGT-TOOL-MEDIA-001, FR-AGT-TOOL-SYS-002, FR-AGT-UX-CONV-001, FR-AGT-UX-SESS-001, FR-AGT-UX-SYNC-001, FR-NTS-NOTE-ORG-002, FR-STD-ALL-PLUG-005, NFR-ALL-GATE-COMP-002, NFR-ALL-GATE-COMP-003, NFR-ALL-GATE-LANG-001, NFR-ALL-GATE-UI-001
+# 另有 14 条上版遗留卡点（不在本版范围，仅列表可见）：FR-AGT-LINK-CHAN-003, FR-AGT-OPS-OBS-002, FR-AGT-PLAN-PLAN-001, FR-AGT-TOOL-MEDIA-001, FR-AGT-TOOL-SYS-002, FR-AGT-UX-CONV-001, FR-AGT-UX-SESS-001, FR-AGT-UX-SYNC-001, FR-NTS-NOTE-ORG-002, FR-STD-ALL-PLUG-005, NFR-ALL-GATE-COMP-002, NFR-ALL-GATE-COMP-003, NFR-ALL-GATE-LANG-001, NFR-ALL-GATE-UI-001
   - id: FR-NTS-NOTE-SEARCH-001
     goal: "列表与检索：按时间 / 标签 / 关键词 / 语义检索，**两种检索都在**，语义不可用时降级并说出来"
     done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-NTS-NOTE-SEARCH-001 | grep -q '✅'"
@@ -68,22 +68,6 @@ tasks:
     status: blocked
     evidence: ""
     next_try: "等真 QQ 凭据 + 官方网关：配置面 / 入站任务 / 官方 REST 外发三段已在盘，真 WS 握手与「手机派活→手机收结论」要真账号"
-  - id: FR-AGT-LINK-EXT-001
-    goal: "互操作接口（MCP 双向）：① 作为 host 接入外部 MCP 服务器"
-    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-AGT-LINK-EXT-001 | grep -q '✅'"
-    layer: "进阶可选"
-    prio: "低"
-    status: blocked
-    evidence: ""
-    next_try: "等主人给一个可连的 MCP server（命令或 URL）：`resources/read` 仍 0 命中、host 方向仍批处理式，无真对端可验"
-  - id: FR-AGT-LINK-EXT-002
-    goal: "MCP client（用户自配 server 面）：配置 name / transp"
-    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-AGT-LINK-EXT-002 | grep -q '✅'"
-    layer: "进阶可选"
-    prio: "低"
-    status: blocked
-    evidence: ""
-    next_try: "等主人装一个真 MCP server 并把配置面板点一遍：判据四族 8+20+15+23 例已全绿，余「真 server 端到端 + 面板观感」"
   - id: FR-AGT-OPS-OBS-002
     goal: "可配置：模型、工具白名单、审批策略、配额、通知规则都可配置，且改完立即生效并有据可查"
     done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-AGT-OPS-OBS-002 | grep -q '✅'"

@@ -39,6 +39,8 @@ public struct MCPClientServerConfig: Codable, Equatable, Sendable {
     public var name: String
     public var transport: MCPClientTransportKind
     /// `stdio` 的启动命令（**原样**起，不经过 shell）。
+    /// 裸名字（`npx` / `uvx`…）由 `MCPClientConfiguration.resolveExecutable` 按环境里的 `PATH` 找到
+    /// 可执行文件；带 `/` 的一律按用户写的路径起 —— 两条路都不拼 shell、不改参数。
     public var command: String
     /// 参数表（**原样**、**保序**；空串参数也照发 —— 那是用户写的，不是我们可以替他省的）。
     public var args: [String]
@@ -297,9 +299,28 @@ public struct MCPClientConfiguration: Equatable, Sendable {
         var environment = inheritedEnvironment
         for (key, value) in server.env { environment[key] = value }
         let timeout = server.timeoutSeconds > 0 ? server.timeoutSeconds : 20
-        return MCPStdioPlan(executable: server.command,
+        return MCPStdioPlan(executable: Self.resolveExecutable(server.command, environment: environment),
                             arguments: server.args,
                             environment: environment,
                             timeoutSeconds: timeout)
+    }
+
+    /// **裸命令名按 PATH 找**（`FR-AI-21` ② 的「环境变量原样生效」：PATH 也是环境变量）。
+    ///
+    /// 用户是从别人的文档里抄配置的，写的是 `npx` / `uvx` 这种**名字**，不是路径；而进程层
+    /// 是 `URL(fileURLWithPath:)` 起的（**不经 shell**）⇒ 裸名字被当相对路径，报
+    /// 「The file "npx" doesn't exist」—— 一条形同虚设的配置。这里只做一件事：按 `environment`
+    /// 里的 `PATH` 找到那个可执行文件。
+    ///
+    /// 刻意不做的事：不拼 shell（那会把参数当代码执行）、不改参数、不重排、不补默认值；
+    /// **找不到就原样返回** —— `spawnFailed` 里报的仍是用户写的那条命令，不拿我们猜的路径顶替。
+    public static func resolveExecutable(_ command: String, environment: [String: String]) -> String {
+        guard !command.isEmpty, !command.contains("/") else { return command }
+        let path = environment["PATH"] ?? "/usr/bin:/bin:/usr/sbin:/sbin"
+        for directory in path.split(separator: ":") where !directory.isEmpty {
+            let candidate = "\(directory)/\(command)"
+            if FileManager.default.isExecutableFile(atPath: candidate) { return candidate }
+        }
+        return command
     }
 }

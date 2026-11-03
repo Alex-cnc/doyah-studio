@@ -209,6 +209,44 @@ final class MCPClientTests: XCTestCase {
         XCTAssertEqual(plan.environment["PATH"], "/custom/bin", "配置压过继承（同一键）")
     }
 
+    // MARK: - ②b 裸命令名按 PATH 找（`npx` / `uvx` 这种从文档抄来的写法）
+
+    /// 用户从别人的文档里抄的是**名字**不是路径；进程层不经 shell ⇒ 裸名字被当相对路径。
+    /// 判据读的是**盘上真有没有那个文件**（不是 plan 里的字符串对不对）。
+    func testBareCommandNameIsResolvedThroughTheInheritedPath() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("mcp-path-\\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let executable = directory.appendingPathComponent("uvx")
+        try "#!/bin/sh\nexit 0\n".write(to: executable, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: executable.path)
+
+        let server = MCPClientServerConfig(name: "bare", command: "uvx", args: ["-y", "pkg"])
+        let configuration = MCPClientConfiguration(servers: [server])
+        guard let plan = configuration.plan(for: server, inheritedEnvironment: ["PATH": directory.path]) else {
+            return XCTFail("裸命令名不该让计划失败")
+        }
+        XCTAssertEqual(plan.executable, executable.path, "裸名字要按继承环境里的 PATH 解析成绝对路径")
+        XCTAssertEqual(plan.arguments, ["-y", "pkg"], "解析命令名不许改参数")
+        XCTAssertTrue(FileManager.default.isExecutableFile(atPath: plan.executable))
+    }
+
+    /// 负例：PATH 里没有这个名字时**原样保留用户写的那条命令** —— 报错里要出现的是他写的东西，
+    /// 不是我们猜的路径（`testMissingCommandFailsWithAReason` 判的就是这句话）。
+    func testUnknownBareCommandStaysExactlyAsTheUserWroteIt() {
+        let server = MCPClientServerConfig(name: "ghost", command: "definitely-not-here-xyz")
+        let configuration = MCPClientConfiguration(servers: [server])
+        guard let plan = configuration.plan(for: server, inheritedEnvironment: ["PATH": "/usr/bin:/bin"]) else {
+            return XCTFail("合法配置应当能出计划")
+        }
+        XCTAssertEqual(plan.executable, "definitely-not-here-xyz")
+        XCTAssertEqual(MCPClientConfiguration.resolveExecutable("/opt/homebrew/bin/npx",
+                                                                environment: ["PATH": "/usr/bin"]),
+                       "/opt/homebrew/bin/npx",
+                       "带 / 的一律按用户写的路径起，不二次解析")
+    }
+
     // MARK: - ③ enabled = false ⇒ 不发起任何连接
 
     func testDisabledServerNeverOpensATransport() {

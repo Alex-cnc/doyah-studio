@@ -1,5 +1,16 @@
 # 检查点
 
+## FR-AGT-LINK-EXT-001 / -002 双 ✅：MCP 真对端 = 本机的第三方 CloudBase MCP（队列 0 todo / 21 blocked）· 2026-11-03
+
+- **两条 blocked 的前提又过期一次**：`next_try` 写「无真 MCP 对端」，而本机 `~/.hermes/config.yaml` 里就配着一个第三方 stdio server（`npx -y @cloudbase/cloudbase-mcp@latest`）。真跑：对端自报 `server=cloudbase-mcp protocol=2024-11-05 tools=42`，`tools/call searchKnowledgeBase` 回 **3351 字节**真正文 ⇒ host 方向「握手 → 列工具 → 调用 → 取结果」在**外部实例**上成立（不是本仓假 server）。
+- **判据**：新 `Tests/MCPRealServerTests` **3 例**（握手列工具 / 调用取正文 / 用户 JSON 配置原样起进程）；默认 **跳过**，给 `DOYAH_MCP_REAL_SERVER` 才跑（联网 npx 不进默认路径；跳过 ≠ 通过，读数写在证据里）。反例：命令换 `/nonexistent/mcp-server-xyz` ⇒ 3 例全红。
+- **同批撞出并修掉一处真缺陷**：进程层 `URL(fileURLWithPath:)` 不经 shell ⇒ 用户从文档抄来的 `npx` / `uvx` 被当相对路径，报「The file “npx” doesn’t exist」。改 `MCPClientConfiguration.resolveExecutable`（按环境 `PATH` 找，不拼 shell / 不改参数 / 找不到原样报）+ `MCPClientTests` **+2 例**（解析 / 找不到原样）。
+- **读数**：`swift test` **Executed 5366 tests, with 16 tests skipped, 0 failures**（5361 → +5）· MCP 四族 **68 例** · 九道文档门禁 rc=0（numbers 三向 5366 · status 471 · version-scope 471 · plan-coverage ✅ 368 / 🟡 15 / ⬜ 4 / 未闭 19 / 未归堆 0）· 三件派生件重出后 `--check` 全 rc=0 · `check-board-parity` rc=0（macOS 312✅/13🟡/86⬜）。
+- **报数**：未闭 21 → **19**（🟡 17 → 15）· §2 ✅ 366 → **368** · §4.2 v0.5.0 10 → **8**（8 / 0）；台账 v1.0.160 → **v1.0.161**。
+- **未验证（≠ 通过）**：面板里真鼠标点「保存并连接」与观感未点（机械证据 = `AppState.saveAgentMCPConfiguration` → `connectAgentMCPNow` → `agentMCPReports` 同一条路）· GUI 启动继承 `PATH` 只有 `/usr/bin:/bin:/usr/sbin:/sbin`，`/opt/homebrew/bin` 要用户自己在配置 `env` 里给（自动补包管理器路径 = 另一条判定，本跳不做，记 next_try）· 只这一台机的 mcp 包 v2.36.2。
+- **下一项 ID：无**（0 todo / 21 blocked）。机器面新开的口子 = 「自动补包管理器路径」，属口径判断，不是读数。
+- 证据 `.agent/evidence/2026-11-03-FR-AGT-LINK-EXT-001-002.md`；提交号见下一条。
+
 ## SEARCH-001 阻塞前提量测：嵌入端点 404 + 本机离线模型 top-1 1/8（状态列未动）· 2026-11-03
 
 - **队列仍 0 todo**（`plan-batches --check` rc=0 / **0 待办 / 23 blocked**）。本跳不开实现、不开维护跳（预算仍按 `rules.md` 出口第 5 条用满），只做上一跳漏掉的那条**前提更正** —— `FR-NTS-NOTE-SEARCH-001` 的 next_try 还写着「本机无端点、无本地模型、`agent.json` 的 apiKey 为空」，与 2026-11-03 的实测相反。

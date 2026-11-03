@@ -21,8 +21,8 @@
 | FR-STD-WS-VCS-001 | Git 状态 | 常用增强 | ✅ | — | ⬜ |
 | FR-STD-WS-FS-001 | Home 页 | 常用增强 | ✅ | — | ✅ |
 | FR-AGT-LINK-CHAN-003 | IM 通道 | 常用增强 | 🟡 | — | ⬜ |
-| FR-AGT-LINK-EXT-001 | MCP | 进阶可选 | 🟡 | — | ⬜ |
-| FR-AGT-LINK-EXT-002 | MCP | 进阶可选 | 🟡 | — | ⬜ |
+| FR-AGT-LINK-EXT-001 | MCP | 进阶可选 | ✅ | — | ⬜ |
+| FR-AGT-LINK-EXT-002 | MCP | 进阶可选 | ✅ | — | ⬜ |
 | FR-NTS-ALL-DIST-001 | Notes 作为独立产品的形态（[产品特有]） | 常用增强 | ⬜ | — | ⬜ |
 | FR-NTS-ALL-LIC-001 | Notes 作为独立产品的形态（[产品特有]） | 常用增强 | ✅ | — | ⬜ |
 | FR-NTS-ALL-PARITY-001 | Notes 作为独立产品的形态（[产品特有]） | 常用增强 | ⬜ | — | ⬜ |
