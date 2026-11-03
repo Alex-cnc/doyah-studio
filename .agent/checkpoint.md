@@ -813,3 +813,12 @@
 - **下一项 ID：无**（0 todo / 21 blocked）。
 - **未验证（≠通过）**：第 11 项 menu-language —— 两次都是三次 ×120 s 等不到 dump，第二次后台复跑 9 分钟无进展（已杀，无残留进程）；本跳判为**无人值守会话的环境限制**，需主人图形会话里跑一次 `python3 Scripts/check-menu-language.py` · `FR-AGT-UX-CONV-001` / `FR-AGT-PLAN-PLAN-001` 的真模型端到端读数与界面入口点一次仍未做 · 其余 20 条 blocked 只按 next_try 粗筛，未复测。
 - 证据 `.agent/evidence/2026-11-03-blocker-table.md`
+
+## 队列空 · 全量验收复跑跳（HEAD 19 项全绿）· 2026-11-03
+
+- **队列口径（本跳实测）**：`plan-batches.py --version 0.7.0 --check` rc=0、`0 todo / 17 blocked`，判据 F 覆盖 17/17；17 条的 next_try 逐条读过，无一条能在无人值守下判完（真云端账号 / 真 QQ 凭据 / 另一台机器 / GBase 实例 / 主人拍板 / 人工点验）。
+- **本跳做的一件事 = 复跑全量验收**（上一跳那处红是「提交前未入库」，提交后只单跑过第 16 项）：`./Scripts/verify-all.sh --keep-going` **19 项全 ✅、失败 0 项 0 处、平台跳过 0、未执行 = 无，EXIT=0**；第 1 项 5368 例 16 skipped 0 失败、第 11 项菜单语言这次拿到读数、第 19 项 blocker-table 自测 5/5。⇒ **HEAD 192a375f 机器面零红**，不再有「待提交所以红」的假账。
+- **顺手更正一条过期指路**：上一节写「下一个能开的口子 = `AC-ALL-GATE-REL-004/005/006`」—— 台账里这三条 2026-11-03 已双 ✅（`ledger-row.py AC-ALL-GATE-REL-004` 读 ✅），该口子已闭，别再照着开。
+- **门禁**：`check-status-gap` rc=0（实扫 389 行、无「实现 ✅ 判据未跟上」）；文档门禁与 blockers 表均随第 19 项一起绿。
+- **未验证（≠通过）**：17 条 blocked 只读了 next_try，未复测前提（上一跳刚复测过，无新证据就不重复烧钱）· 界面人工项照旧不在本机能力内。
+- **下一项 ID：无**（0 todo / 17 blocked）。本跳无代码改动、无台账状态变更。
