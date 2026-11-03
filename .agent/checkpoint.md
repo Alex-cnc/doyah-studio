@@ -837,3 +837,12 @@
 - **门禁**：`check-status-gap` rc=0（实扫 389 行、无「实现 ✅ 判据未跟上」）；文档门禁与 blockers 表均随第 19 项一起绿。
 - **未验证（≠通过）**：17 条 blocked 只读了 next_try，未复测前提（上一跳刚复测过，无新证据就不重复烧钱）· 界面人工项照旧不在本机能力内。
 - **下一项 ID：无**（0 todo / 17 blocked）。本跳无代码改动、无台账状态变更。
+
+## 队列空 · HEAD 全量验收补跑（本跳无新工）· 2026-11-03
+
+- **队列口径（本跳实测）**：`plan-batches.py --version 0.7.0 --check` rc=0，**0 todo / 17 blocked**，判据 F 覆盖 17/17。无 todo ⇒ 按规约第四出口②阻塞退出，本跳不新开需求、不动台账状态列。
+- **补上一跳的读数缺口**：上一跳（`6de4c810`）只跑过 `05a35e44` 的全量验收，改台账后未复跑 ⇒ 本跳在 HEAD `6de4c810` 跑 `./Scripts/verify-all.sh --keep-going`：**19 项全 ✅、失败 0 项（共 0 处）、平台跳过 0、EXIT=0**；第 1 项 `Executed 5368 tests, with 16 skipped, 0 failures`；第 11 项菜单语言这次拿到读数判绿；第 19 项 blocker-table 自测 5/5。
+- **已知非红项**：第 6 项设计令牌仍有 323 处待迁移（棘轮判据要求「未比基线更差」，本条 ✅ 成立，不是待修红）。
+- **未验证（≠通过）**：17 条 blocked 只沿用上一跳的 next_try 读数，本跳未复测前提 · 界面人工点验项不在本机能力内。
+- **下一项 ID：无**（0 todo / 17 blocked）。`NFR-ALL-GATE-COMP-003` 仍只两条可执行路：主人跑 `DoyahCLI secret set --id B0A37FC3-4F87-4D84-820D-A41921A6E5B6 --stdin`，或把该自检搬进本体进程（代码活、须先排进队列）。
+- 证据 `.agent/evidence/2026-11-03-head-6de4c810-verify-all.md`
