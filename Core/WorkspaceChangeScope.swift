@@ -70,3 +70,38 @@ public enum WorkspaceChangeScope {
         return value
     }
 }
+
+/// **路径口径的唯一换算点**：把任意写法的路径换到 `FSEvents` 报上来的那一版。
+///
+/// ## 为什么必须统一在这里
+///
+/// `FSEvents` 报的是 `realpath(3)` 那一版：`/var/folders/…` 报成 `/private/var/folders/…`。
+/// 而页签 / 树里的路径来自 `URL.appendingPathComponent` 或用户打开时的写法，两边**逐字符串比**
+/// 会静默不命中 —— 症状是「外部改了文件，界面一动不动」，且没有任何报错。
+///
+/// Foundation 的 `URL.resolvingSymlinksInPath()` **解不掉 `/var` 这条系统链接**（实测
+/// 2026-11-01：它算出来还是 `/var/…`，与 FSEvents 报的对不上，于是比较恒不命中）。
+/// 所以这里直接用 `realpath(3)`：与 `fseventsd` 同一套口径。
+///
+/// 解析不出来（路径不存在 / 父目录没权限）时退回「只去重复斜杠」的原样，
+/// 不编一个看起来解析过的结果。
+public enum WorkspacePathIdentity {
+
+    /// 换成 `realpath(3)` 口径；解析不了就原样返回（去重复斜杠 / 结尾斜杠）。
+    public static func canonical(_ path: String) -> String {
+        guard !path.isEmpty else { return path }
+        var buffer = [CChar](repeating: 0, count: Int(PATH_MAX))
+        if let resolved = realpath(path, &buffer) {
+            return String(cString: resolved)
+        }
+        var value = path
+        while value.count > 1, value.hasSuffix("/") { value.removeLast() }
+        return value
+    }
+
+    /// 同一个口径的 URL 版本（给「页签打开的是哪一份文件」用）。
+    public static func canonicalURL(_ url: URL) -> URL {
+        URL(fileURLWithPath: canonical(url.path), isDirectory: false)
+    }
+}
+

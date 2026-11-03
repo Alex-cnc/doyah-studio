@@ -2614,6 +2614,10 @@ public enum LKey: String, CaseIterable, Sendable {
     case agentTestFailed
     case agentTestMisconfigured
     case workspaceReloadedFromDisk
+    /// `FR-STD-WS-FS-009`：脏页签上方那条提示里的动作（以磁盘为准重载）。
+    case workspaceReloadFromDiskAction
+    /// `FR-STD-WS-FS-009`：磁盘上那份读不出来（被移走 / 换成二进制）时的说明（%@ = 文件名）。
+    case workspaceReloadFailedHint
     case agentScheduleRunStarted
     case agentScheduleRunNotStarted
     case agentScheduleExecuted
@@ -5167,6 +5171,8 @@ public enum LocalizedStrings {
         .agentTestFailed: [.simplifiedChinese: "连接失败：%@", .english: "Connection failed: %@"],
         .agentTestMisconfigured: [.simplifiedChinese: "端点或模型还没填", .english: "Endpoint or model is empty"],
         .workspaceReloadedFromDisk: [.simplifiedChinese: "已按磁盘重载「%@」", .english: "Reloaded 「%@」 from disk"],
+        .workspaceReloadFromDiskAction: [.simplifiedChinese: "以磁盘为准重载", .english: "Reload from disk"],
+        .workspaceReloadFailedHint: [.simplifiedChinese: "磁盘上「%@」读不出来（可能已被移走）—— 页签里的内容没动", .english: "「%@」 can't be read from disk (maybe it was moved) — the tab's text was left as is"],
         .agentScheduleRunStarted: [.simplifiedChinese: "已起会话（这一跳；会话本身的成败见对话页签与审计）", .english: "Session started (this hop only — the session's own outcome lives in the chat tab and the audit)"],
         .agentScheduleRunNotStarted: [.simplifiedChinese: "没起来：没有可用会话（未打开工作区 / 端点未配 / 上一条还在跑）", .english: "Not started: no session was available (no workspace, no endpoint, or one is still running)"],
         .agentScheduleExecuted: [.simplifiedChinese: "执行了 %d 条", .english: "%d executed"],

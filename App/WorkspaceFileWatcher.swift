@@ -56,6 +56,9 @@ final class WorkspaceFileWatcher {
     private var onChanges: (([String]) -> Void)?
 
     private var stream: FSEventStreamRef?
+    /// 流是否真的在跑（`FSEventStreamStart` 的返回值）。只在成功后为真；
+    /// 「没起」必须能被读出来 —— 否则它与"磁盘没有改动"在界面上无法区分。
+    private(set) var isRunning = false
     /// FSEvents 上下文里那个「盒子」的指针 —— `stop()` 里成对 release。
     ///
     /// **为什么不是直接把 `self` 塞进去**：第一版用 `passRetained(self)` 看着对了，实机仍在
@@ -86,7 +89,12 @@ final class WorkspaceFileWatcher {
     // MARK: - 生命周期
 
     /// 开始监听一个工作区根（已开着就换根）。
-    func start(root: String, onChanges: @escaping ([String]) -> Void) {
+    ///
+    /// 返回 **流是否真的起来了**：`FSEventStreamCreate` / `FSEventStreamStart` 失败时这里只有
+    /// 一个 `nil` / `false` 可拿，界面上看不出任何异常 —— 调用方（`AppState`）必须拿到这个读数，
+    /// 否则「监听没起」会变成一个永远静默、永远不重试的状态（2026-11-03 真机缺陷的排查点之一）。
+    @discardableResult
+    func start(root: String, onChanges: @escaping ([String]) -> Void) -> Bool {
         stop()
         self.onChanges = onChanges
 
@@ -136,12 +144,23 @@ final class WorkspaceFileWatcher {
             // 建流失败 ⇒ 把上面的 retain 退回去，否则监听器永远不释放
             // 盒子不释放：它归 `WorkspaceWatcherBoxes` 所有
             streamContextPointer = nil
-            return
+            return false
         }
 
         self.stream = stream
         FSEventStreamSetDispatchQueue(stream, queue)
-        FSEventStreamStart(stream)
+        let started = FSEventStreamStart(stream)
+        // `FSEventStreamStart` 的返回值以前被忽略：失败时流对象在、回调永远不会来，
+        // 症状与"没有改动"完全一样（2026-11-03）。现在如实交回给调用方。
+        isRunning = started
+        if !started {
+            FSEventStreamInvalidate(stream)
+            FSEventStreamRelease(stream)
+            self.stream = nil
+            streamContextPointer = nil
+            self.onChanges = nil
+        }
+        return started
     }
 
     func stop() {
@@ -151,6 +170,7 @@ final class WorkspaceFileWatcher {
             FSEventStreamRelease(stream)
         }
         stream = nil
+        isRunning = false
         // 与 `start()` 的 passRetained 配对：先 invalidate（不再有回调），再 release
         // 盒子留在仓库里（见 `WorkspaceWatcherBoxes` 的注释），这里只清本地指针
         streamContextPointer = nil

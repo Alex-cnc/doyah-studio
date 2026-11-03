@@ -228,6 +228,12 @@ struct DoyahStudioApp: App {
                         }
                     }
                     appState.workspacePathProvider = { [workspace] in workspace.rootPath }
+                    // **磁盘改动 → 树 + 文件页签**（`FR-STD-WS-FS-009`）：接一次，两个消费者都在这一句里
+                    // （树归 `WorkspaceStore`，文件页签归 `WorkspaceTabsModel` —— `AppState` 一个都不持有，
+                    // 所以必须由宿主把它们交给同一个接线点，见 `WorkspaceDiskChangeWiring` 的注释）。
+                    WorkspaceDiskChangeWiring.attach(
+                        appState: appState, store: workspace, tabs: workspaceTabs
+                    )
                     // **工作区文件监听**（人类主人 2026-10-16 点名「工作区是实时加载或感知文件的修改重载的」）：
                     // 助手 / 外部编辑器 / git 改的是磁盘，编辑器手里是内存正文 —— 没有它屏幕上是旧内容。
                     if let root = workspace.rootPath, !root.isEmpty {
@@ -299,6 +305,13 @@ struct DoyahStudioApp: App {
                     // （下面那条 `willTerminate`）—— 工作区页签带内容，不跟着按键落盘。
                     workspaceTabs.restoreSession()
                     await workspace.load()
+                    // **`load()` 之后按当前根再对齐一次**（不依赖 `onWorkspaceChanged` 那条时序）：
+                    // 监听没起时界面没有任何症状，而 `startWorkspaceWatching` 对同一个根是幂等的。
+                    if let root = workspace.rootPath, !root.isEmpty {
+                        appState.startWorkspaceWatching(root: root)
+                    } else {
+                        appState.stopWorkspaceWatching()
+                    }
                     // IM 通道：配好就启动即连（见 AppState.startAgentIMIfConfigured 的由来）。
                     appState.startAgentIMIfConfigured()
                     // **Agent 那条 shell 的显示面**：第一次派活时在终端面板开一个「Agent」页签，

@@ -184,6 +184,8 @@ final class WorkspaceTabsModel: ObservableObject {
         let next = WorkspaceTabSet.selection(afterClosing: id, in: tabs, selected: selectedID)
         tabs = WorkspaceTabSet.closing(id: id, in: tabs)
         foldPresentations[id] = nil
+        // 页签没了，「磁盘已变」的标记也一并作废（留着会让下一份同路径的文件凭空带一个标记）。
+        diskChangedTabIDs.remove(id)
         selectedID = next ?? tabs.first?.id
     }
 
@@ -826,6 +828,73 @@ final class WorkspaceTabsModel: ObservableObject {
         case .noFormatter(let language):
             return L(.workspaceFormatRefusedNoFormatter, language.displayName)
         }
+    }
+
+    // MARK: 外部改动（`FR-STD-WS-FS-009`）
+
+    /// **磁盘已变、但这一页签有未保存改动**的那些页签。
+    ///
+    /// 界面据此弹一条提示问人（`WorkspaceAreaView.diskChangedBanner`），**不许悄悄覆盖**：
+    /// 丢数据不可逆，「编辑器看着没变」只是误会，两者不对等。
+    @Published private(set) var diskChangedTabIDs: Set<UUID> = []
+
+    /// 磁盘变了一批路径：**开着这些文件的干净页签按盘上新正文重载**；脏页签只记标记。
+    ///
+    /// 路径两侧都先过 `WorkspacePathIdentity.canonical`：`FSEvents` 报的是 `realpath` 那一版，
+    /// 而页签记的是用户打开时那个写法 —— 逐字符串比会静默漏判（看起来就是「外部改动没反映」）。
+    func reloadFromDisk(changedPaths: [String]) {
+        guard !changedPaths.isEmpty else { return }
+        let changed = Set(changedPaths.map(WorkspacePathIdentity.canonical))
+        for tab in tabs {
+            guard let path = tab.path, changed.contains(WorkspacePathIdentity.canonical(path)) else { continue }
+            reloadFromDisk(tabID: tab.id, force: false)
+        }
+    }
+
+    /// 重载一页的正文（`force` = 人已表态「以磁盘为准」）。
+    ///
+    /// 三条结局都要说清楚：
+    ///   · 内容与形态都没变（多半是**自己刚存的**触发的回调）⇒ 只清标记，不动正文；
+    ///   · 有未保存改动且没被授权覆盖 ⇒ 只记标记 + 说一句（`diskChangedTabIDs`）；
+    ///   · 读不出来（被移走 / 换成了二进制）⇒ 正文一个字不动，但要报出来 ——
+    ///     「静默保持旧内容」正是这条需求最初被报上来的症状。
+    @discardableResult
+    func reloadFromDisk(tabID: UUID, force: Bool) -> Bool {
+        guard let index = tabs.firstIndex(where: { $0.id == tabID }) else { return false }
+        // 图片页没有正文（`FR-STD-WS-FS-008` ①）：它的展示面每次重建都从盘上读，没有「重载正文」这回事。
+        guard tabs[index].kind == .file, let path = tabs[index].path else { return false }
+        let url = URL(fileURLWithPath: path)
+        guard let data = try? Data(contentsOf: url),
+              let decoded = try? TextFileFormat.decode(data) else {
+            diskChangedTabIDs.insert(tabs[index].id)
+            errorText = L(.workspaceReloadFailedHint, tabs[index].title)
+            return false
+        }
+        let id = tabs[index].id
+        if decoded.text == tabs[index].content, decoded.format == tabs[index].format {
+            diskChangedTabIDs.remove(id)
+            return false
+        }
+        if tabs[index].isDirty, !force {
+            diskChangedTabIDs.insert(id)
+            noticeText = L(.workspaceDiskChangedHint, tabs[index].title)
+            return false
+        }
+        tabs[index].content = decoded.text
+        // 形态也跟着盘上那一份走（`FR-STD-WS-EDIT-023`）：否则「状态栏说 UTF-8、正文是 GB18030」。
+        tabs[index].format = decoded.format
+        tabs[index].markSaved()
+        diskChangedTabIDs.remove(id)
+        // 内容全换了，折叠锚要重新对一次账（与「内容稳定」那条路同一个入口）。
+        refreshFolds(tabID: id)
+        noticeText = L(.workspaceReloadedFromDisk, tabs[index].title)
+        return true
+    }
+
+    /// 当前选中页签的「磁盘已变」标记（状态栏一句话用）。
+    var selectedTabChangedOnDisk: Bool {
+        guard let selectedID else { return false }
+        return diskChangedTabIDs.contains(selectedID)
     }
 
     // MARK: 最近打开（Home 用）

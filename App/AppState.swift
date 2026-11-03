@@ -8970,39 +8970,73 @@ final class AppState: ObservableObject {
     ///
     /// 根没变就什么都不做（`FSEvents` 一条流足够）；根变了先把旧流停掉再挂新的 ——
     /// 否则监听还挂在旧根上：新工作区的外部改动收不到，旧根的改动反而照报。
+    ///
+    /// **每一步都留一行 `startup.log`**（2026-11-03）：真机上「监听到底起没起」以前完全不可观测 ——
+    /// 起不来时界面没有任何症状（树不刷新 / 正文不重载和"没有改动"长得一模一样），
+    /// 只能靠猜。现在从 `~/Library/Application Support/<产品>/startup.log` 读得到：
+    /// 挂上了没有、挂在哪个根上、收到过几批什么路径。
     func startWorkspaceWatching(root: String) {
-        guard watchedWorkspaceRoot != root else { return }
+        guard watchedWorkspaceRoot != root else {
+            StartupLog.write("工作区监听：根未变，保持 root=\(root)")
+            return
+        }
         if watchedWorkspaceRoot != nil {
             workspaceWatcher?.stop()
             workspaceWatcher = nil
             // 旧工作区的「磁盘已变」标记对新工作区没有意义
             diskChangedTabIDs.removeAll()
+            StartupLog.write("工作区监听：换根，旧流已停")
         }
         let watcher = WorkspaceFileWatcher()
         workspaceWatcher = watcher
-        watchedWorkspaceRoot = root
-        watcher.start(root: root) { [weak self] paths in
+        let started = watcher.start(root: root) { [weak self] paths in
             Task { @MainActor in self?.handleDiskChanges(paths) }
         }
+        // **只在流真的起来之后才记根**：先记后起（旧写法）在建流失败的那一刻就把
+        // `guard watchedWorkspaceRoot != root` 变成永远命中 —— 之后再怎么调都直接 return，
+        // 「监听永远没起」这件事就彻底静默了。
+        watchedWorkspaceRoot = started ? root : nil
+        StartupLog.write(
+            started ? "工作区监听：已挂上 root=\(root)"
+                    : "工作区监听：**起不来**（FSEventStreamCreate / Start 失败）root=\(root)"
+        )
     }
 
+    /// 监听是不是真的在跑（判据与「监听没起」这类故障的读数口）。
+    var isWorkspaceWatching: Bool { workspaceWatcher?.isRunning == true }
+
     func stopWorkspaceWatching() {
+        if watchedWorkspaceRoot != nil || workspaceWatcher != nil {
+            StartupLog.write("工作区监听：停（root=\(watchedWorkspaceRoot ?? "-")）")
+        }
         workspaceWatcher?.stop()
         workspaceWatcher = nil
         watchedWorkspaceRoot = nil
     }
 
-    /// 磁盘变了一批路径：文件树刷新 + 开着这些文件的页签重载。
+    /// **磁盘改动（工作区根之内的一批路径）→ 宿主接出去**。
+    ///
+    /// 为什么不在 `AppState` 里自己刷树 / 重载文件页签：树归 `WorkspaceStore`、文件页签归
+    /// `WorkspaceTabsModel`，两者都不在它手里。原来那句 `WorkspaceStore.shared` 是藏起来的全局，
+    /// 页签那句打的是 SQL 页签 ⇒ 真机上文件页签永远不重载（`FR-STD-WS-FS-009` 根因，
+    /// 详见 `WorkspaceDiskChangeWiring` 的注释）。接线点在 `DoyahStudioApp`（生产）
+    /// 与 `WorkspaceExternalChangeProbeTests`（判据）各一处。
+    var onWorkspaceDiskChanges: (([String]) -> Void)?
+
+    /// 磁盘变了一批路径：交给宿主（树 + 文件页签），再处理**数据库那一侧自己的 SQL 页签**。
     private func handleDiskChanges(_ paths: [String]) {
-        // 只重列被改目录（不整树重来 —— `refresh()` 会清掉展开状态，见 `reloadDirectories` 注释）
-        WorkspaceStore.shared.reloadDirectories(forChangedPaths: paths)
-        // 路径口径要**先解析符号链接再比**：FSEvents 报的是 realpath（`/var/...` 报成 `/private/var/...`），
-        // 而页签记的是用户打开时那个写法。逐字符串比会漏判 ⇒ 外部改了盘、干净页签不重载，
-        // 看起来正是「外部改动没反映」（2026-11-01 由 `WorkspaceExternalChangeProbeTests` 实测抓出）。
-        let changed = Set(paths.map { URL(fileURLWithPath: $0).resolvingSymlinksInPath().path })
+        // 真机上「事件到底有没有到」的唯一可观测点（其余症状都长得像"没有改动"）。
+        StartupLog.write("工作区监听：收到 \(paths.count) 条改动（首条=\(paths.first ?? "-")）")
+        // 工作区那一侧：树重列 + 文件页签重载（接线见 `WorkspaceDiskChangeWiring`）
+        onWorkspaceDiskChanges?(paths)
+        // 数据库的 SQL 页签也可能开着一个文件（`AppState.openFile(at:)`）—— 那份列表归
+        // `AppState`，只有它知道哪个页签开着这个文件，所以在这一侧自己处理。
+        // 路径口径：两侧都先 `realpath` 再比（`FSEvents` 报的是 realpath；Foundation 的
+        // `resolvingSymlinksInPath()` 解不掉 `/var` 那条系统链接，2026-11-01 那版"修法"因此是空的）。
+        let changed = Set(paths.map(WorkspacePathIdentity.canonical))
         for index in tabs.indices {
             guard let url = tabs[index].fileURL,
-                  changed.contains(url.resolvingSymlinksInPath().path) else { continue }
+                  changed.contains(WorkspacePathIdentity.canonical(url.path)) else { continue }
             reloadTab(at: index, force: false)
         }
     }
@@ -9040,8 +9074,11 @@ final class AppState: ObservableObject {
     /// 工作区根**之外**的文件按单文件监听（根之内的由整根监听覆盖，不用重复挂）。
     private func noteOpenedFileForWatching(_ url: URL) {
         guard let watcher = workspaceWatcher else { return }
-        let root = WorkspaceStore.shared.rootPath ?? ""
-        if !root.isEmpty, url.path.hasPrefix(root) { return }
+        // 根取宿主给的那一份（不是 `WorkspaceStore.shared`：判据与宿主用同一口径）。
+        // 两侧都过 `WorkspacePathIdentity.canonical`：`/var` 与 `/private/var` 是同一个目录。
+        let root = WorkspacePathIdentity.canonical(workspacePathProvider?() ?? "")
+        let path = WorkspacePathIdentity.canonical(url.path)
+        if !root.isEmpty, path.hasPrefix(root + "/") { return }
         watcher.watch(file: url.path)
     }
 

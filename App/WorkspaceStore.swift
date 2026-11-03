@@ -81,7 +81,13 @@ final class WorkspaceStore: ObservableObject {
     }
 
     /// 工作区变化时通知外部（终端启动目录要跟着走）。
-    var onWorkspaceChanged: ((String?) -> Void)?
+    ///
+    /// **赋值那一刻就补一次当前根**：书签解析是异步的，`adopt` 可能发生在宿主赋值之前 ——
+    /// 那一次通知没人收，订阅方（文件监听）就静默地没起，而界面上看不出任何异常
+    /// （2026-11-03 真机「文件树零反应」的排查点之一）。
+    var onWorkspaceChanged: ((String?) -> Void)? {
+        didSet { onWorkspaceChanged?(rootURL?.path) }
+    }
 
     // MARK: 文件名搜索（FR-EDIT-32 / FR-EDIT-44）
     //

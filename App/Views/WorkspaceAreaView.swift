@@ -75,6 +75,7 @@ struct WorkspaceAreaView: View {
                 AgentChatView(model: agentChat)
             } else {
                 VStack(spacing: 0) {
+                    diskChangedBanner(tab: tab)
                     editorArea(tab: tab)
                     Divider()
                     hintBar(tab: tab)
@@ -313,6 +314,37 @@ struct WorkspaceAreaView: View {
                 .font(Theme.font(.caption))
                 .opacity(checked ? 1 : 0)
             Text(title)
+        }
+    }
+
+    /// **盘上改过、但这一页签有未保存改动**时的提示条（`FR-STD-WS-FS-009`）。
+    ///
+    /// 需求原话是「界面立即反映并**提示重新载入或对比**」：干净页签已经自动重载（`reloadFromDisk`），
+    /// 有未保存改动的这一页**不覆盖**用户敲的字 —— 只在这里问一句，由人决定。
+    /// 放在编辑区**上方**而不是只发一条底部消息：底部消息会被下一次提示冲掉，
+    /// 而这一格要一直站到人表态为止。
+    @ViewBuilder
+    private func diskChangedBanner(tab: WorkspaceTab) -> some View {
+        if tabs.diskChangedTabIDs.contains(tab.id) {
+            HStack(spacing: Spacing.xs) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(Theme.font(.caption))
+                    .foregroundStyle(Theme.status(.warning))
+                Text(L(.workspaceDiskChangedHint, tab.title))
+                    .font(Theme.font(.caption))
+                    .foregroundStyle(Theme.text(.secondary))
+                    .lineLimit(2)
+                    .textSelection(.enabled)
+                Spacer(minLength: Spacing.s)
+                Button(L(.workspaceReloadFromDiskAction)) {
+                    tabs.reloadFromDisk(tabID: tab.id, force: true)
+                }
+                .font(Theme.font(.caption))
+                .buttonStyle(.borderless)
+            }
+            .padding(.horizontal, Spacing.s)
+            .padding(.vertical, Spacing.xs)
+            .background(Theme.status(.warning).opacity(0.12))
         }
     }
 
