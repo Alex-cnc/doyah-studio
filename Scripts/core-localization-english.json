@@ -1269,6 +1269,13 @@
    "sites": [
     "Core/SessionMonitor.swift:153"
    ]
+  },
+  "Address already in use": {
+   "kind": "driverMessage",
+   "sites": [
+    "Core/SSHTunnelProcess.swift:217"
+   ],
+   "why": "ssh 退出诊断里的**系统错误原文**，我们拿它做 `contains` 归类（端口被占 ⇒ `.portInUse`），不是展示给用户的话 —— 人话由 `SSHTunnelError.describe(language:)` 给。"
   }
  }
 }
