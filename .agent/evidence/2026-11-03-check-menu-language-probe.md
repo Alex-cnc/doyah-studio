@@ -20,5 +20,5 @@ $ ./Scripts/verify-core.sh                             → Core 单测 5368 项�
 
 反例（真源码注入，非夹具）：把 `.common` 定时器换回 `DispatchQueue.main.asyncAfter` ⇒ 判红两条（「收起器又用回了 DispatchQueue…」「收起器没挂 .common 模式」）；还原后 `sha256` **04587f88…** 逐字节一致、2/2 复绿。
 
-提交：见 checkpoint（本次一并落库）
+提交：286c073e（已推送，local == origin/master）
 未验证：真鼠标在别人手势下点菜单未做（本判据靠 `popUp` 程序化展开，等价于用户展开那一刻的样子）；条件族「显示标签页栏 / 所有标签页」仍随窗口标签页状态浮动（两档都出现，但这是 AppKit 条件插入，不是本跳保证）；`verify-all` 全量读数见 checkpoint 的收尾行。

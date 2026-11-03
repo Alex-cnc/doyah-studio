@@ -12,7 +12,7 @@
 - **余 3 项红的归属（不是本片：逐条核过不在本片改动面上）**：① 第 4 项 `check-req-index`（`requirement-index.jsonl` 与正文不一致，派生件待重生成）；② 第 7 项 `gen-platform-parity / gen-studio-win-align / gen-platform-board / check-board-parity` 四道（派生看板相对台账过期）；③ 第 16 项 `check-path-ownership`（台账 `Docs/Doyah产品开发计划任务清单-macOS.md` 这一条共享面未在提交信息里登记理由）。三者都起自**同克隆里另一写者的 4 笔未推提交**（`ae878be6` ORG-002 收口 / `271f0ac4` ORG-002 口径再订正 / `6196d343` LANG-001 拍板 A / `8dfedbcf` UI-001 收窄，`local HEAD = 8dfedbcf`，`origin/master = c3dd2ac2`）—— 它们改了台账与需求书却**没有重出派生看板**、也没写 `shared-surface:`。
 - **本跳不代它重出那两块看板**：`gen-platform-parity` 会把 `FR-NTS-NOTE-ORG-002` 的判据格改写成「实现 ✅」，而 ORG-002 的口径正在被另一写者按主人令改写（`plan.yaml` 里它还是 blocked）⇒ 现在重出等于替别人的口径拍板。记在余账里，谁改台账谁重出。
 - **下一项 ID：无**（0 todo / 21 blocked）。机器面**已无**需要主人图形会话的红（上一跳那条「需主人跑 `check-menu-language`」作废）。
-- 证据 `.agent/evidence/2026-11-03-check-menu-language-probe.md`；提交见下一条落号记录。
+- 证据 `.agent/evidence/2026-11-03-check-menu-language-probe.md`；提交 **286c073e**（已推送，`local == origin/master == 286c073e`；该推送同时带上本克隆里另一写者那 4 笔未推提交）。
 
 ## `check-format-arguments` 收口：判据 D 预算口径归正 + 15 个新形状登记（队列 0 todo / 21 blocked）· 2026-11-03
 
