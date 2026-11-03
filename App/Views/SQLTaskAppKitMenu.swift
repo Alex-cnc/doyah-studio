@@ -147,6 +147,26 @@ struct SQLTaskMenuButton: NSViewRepresentable {
         button.setAccessibilityLabel(help)
     }
 
+    /// **尺寸必须自己报**（2026-11-03「数据库客户端界面又乱了」的根因就在这里）。
+    ///
+    /// macOS 上 `NSViewRepresentable` **默认按父级提出的尺寸铺满** —— 不按内在尺寸收敛
+    /// （`NSButton.intrinsicContentSize` 在 `updateNSView` 之前是 `(1, 1)`，之后才变成图标尺寸，
+    /// 所以即使它「有」内在尺寸也不能指望 SwiftUI 去问）。
+    /// 没有这个方法时，这枚按钮会被拉成 **540 × 302 pt**（离屏活宿主实测），
+    /// 于是整条工具条 `HStack` 变成**纵向可伸缩行**（实测 302.5 pt 高）：
+    /// 外层 `VStack` 把剩余高度在「工具条」与下面的 `GeometryReader`（编辑区 + 结果面）之间
+    /// **对半分**，工具条上下各留一片约 150 pt 的星空空白，编辑区与结果面一起被压扁。
+    ///
+    /// 报的就是工具条图标的同一套命中区令牌（`Metrics.toolbarButtonWidth × toolbarButtonHeight`，
+    /// 与 `ToolbarIcon` 逐字一致）—— 这一枚是工具条上的一枚图标按钮，不是一块画布。
+    func sizeThatFits(
+        _ proposal: ProposedViewSize,
+        nsView button: NSButton,
+        context: Context
+    ) -> CGSize? {
+        CGSize(width: Metrics.toolbarButtonWidth, height: Metrics.toolbarButtonHeight)
+    }
+
     final class Coordinator: NSObject {
         var menuProvider: () -> NSMenu
 
