@@ -11,7 +11,7 @@
 - **反例三段**（各判红后 `sha256` 逐字节还原 `ddb59193…` / `39d052bb…`）：模板 `%d` 改 `%@` ⇒ `[A] AgentSettingsSheet.swift:947` 两位数槽判红（新登记的 number 形状真被检查）· 删 `<renderedPageCount>` 登记 ⇒ `[C] ResultPagerBar.swift:175` · 预算 126→125 ⇒ `[D] 127 > 125`。
 - **未验证（≠ 通过）**：`verify-all.sh` 全量未跑（约 35 分钟）⇒ 第 11 项 `check-menu-language` 真启动取证、打包项未执行；`swift test` 本跳未跑（无 `App/**` `Core/**` 改动）；`self-test-counts` 用 `--no-run`（没真跑 57 族）。
 - **下一项 ID：无**（0 todo / 21 blocked）。机器面只剩一处要环境的红：`check-menu-language`（要图形会话，需主人终端跑一次 `python3 Scripts/check-menu-language.py`）。
-- 证据 `.agent/evidence/2026-11-03-format-arguments.md`。
+- 证据 `.agent/evidence/2026-11-03-format-arguments.md`；提交 `cc0f6354`（已推送，`local == origin/master`）。
 
 ## 按钮图标化收尾：a 类 7 → 0（`verify-all` 第 3 项少一处红）· 2026-11-03
 
