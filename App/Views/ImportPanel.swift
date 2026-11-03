@@ -63,14 +63,11 @@ struct ImportPanel: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.m) {
-            HStack(alignment: .firstTextBaseline) {
-                Text(L(.importTitle))
-                    .font(Theme.font(.title))
-                Spacer()
-                DialogActionButton(systemName: "xmark", title: L(.commonClose)) { dismiss() }
-                    .keyboardShortcut(.cancelAction)
-                    .disabled(appState.isImportRunning)
-            }
+            // 顶部**不放关闭键**（人类主人 2026-11-03 真机点验：「对话框上部又有一个 close 按钮」，
+            // 与 `AboutLicenseSheet` 头部同一件事）。关掉这个对话框的入口只有一处 = 下面 `footer`
+            // 那枚 —— 同一件事在屏幕上出现两次，用户会犹豫该点哪个。
+            Text(L(.importTitle))
+                .font(Theme.font(.title))
 
             Text(L(.importHint))
                 .font(Theme.font(.caption))
@@ -80,6 +77,16 @@ struct ImportPanel: View {
 
             HairlineView()
 
+            // **内容可滚动 + 底部动作区固定**（2026-11-03 真机点验：「执行导入的按钮快被遮住」）。
+            // 原写法把整块面板钉死成 780×760：sheet 不会自己缩，父窗口矮一点、或底部动作区
+            // 多长出几行（执行中会出现进度条 / 批量日志），多出来的部分**直接被裁掉** ——
+            // 被裁的正好是唯一的执行入口。
+            //
+            // 结构与口径：
+            //   · 面板根**只钉宽度**（与 `AccountSyncSheet` 同一条：高度由内容算）；
+            //   · 内容区给一段**有上下限的高度**：这一步的内容长度 = 文件/格式/目标表 + 列映射 +
+            //     写模式 + 预览 + 解析错误，不给上限它会把窗口顶爆，给了下限空态才不至于被压成一条缝；
+            //   · 底部动作区 `layoutPriority(1)` 且不许压缩 —— 内容是**滚动**的，动作区是**钉住**的。
             ScrollView {
                 VStack(alignment: .leading, spacing: Spacing.m) {
                     sourceSection
@@ -98,12 +105,20 @@ struct ImportPanel: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
+            .frame(
+                minHeight: Metrics.importContentMinHeight,
+                idealHeight: Metrics.importContentIdealHeight,
+                maxHeight: Metrics.importContentMaxHeight
+            )
 
             HairlineView()
             footer
+                // 动作区任何时候都在：VStack 要压就先压内容区（它是 ScrollView，压了还能滚）。
+                .layoutPriority(1)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .padding(Spacing.l)
-        .frame(width: 780, height: 760, alignment: .leading)
+        .frame(width: 780, alignment: .leading)
         .onAppear(perform: prepare)
         .onChange(of: format) { _, _ in invalidate() }
         .onChange(of: hasHeader) { _, _ in invalidate() }
@@ -401,6 +416,11 @@ struct ImportPanel: View {
                         .foregroundStyle(Theme.text(.secondary))
                 }
                 Spacer()
+                // **关闭入口只在这一处**（顶部那枚已删：2026-11-03 真机点验）。
+                // 导入在跑时禁用 —— 与原来顶部那枚同一条口径，不是新规矩。
+                DialogActionButton(systemName: "xmark", title: L(.commonClose), role: .cancel) { dismiss() }
+                    .keyboardShortcut(.cancelAction)
+                    .disabled(appState.isImportRunning)
             }
 
             if let error = appState.importError {

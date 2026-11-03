@@ -4,8 +4,8 @@
  "panelRootMinWidth": 400,
  "scannedFiles": 121,
  "totals": {
-  "frames": 46,
-  "panelRoots": 26,
+  "frames": 45,
+  "panelRoots": 25,
   "ornaments": 20
  },
  "intentVocab": {
@@ -213,16 +213,6 @@
    "intent": "content-stretches",
    "stretchProbe": "GeometryReader",
    "note": "画布区是 `GeometryReader`（按父级尺寸缩放平移）⇒ 高度吃满"
-  },
-  {
-   "file": "App/Views/ImportPanel.swift",
-   "symbol": "ImportPanel",
-   "frame": "width: 780, height: 760",
-   "count": 1,
-   "kind": "panel-root",
-   "intent": "explicit-alignment",
-   "alignment": ".leading",
-   "note": "源码显式写 `alignment: .leading` —— 导入向导是**左对齐的分步表单**，横向左对齐是有意的"
   },
   {
    "file": "App/Views/LockPanel.swift",

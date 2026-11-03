@@ -519,7 +519,7 @@ def self_test() -> int:
         # 7 台账谎报写了什么值
         views, led = fresh()
         mutate_ledger(led, lambda d: [x.update({"alignment": ".bottom"})
-                                      for x in d["items"] if x["file"].endswith("ImportPanel.swift")])
+                                      for x in d["items"] if x["file"].endswith("DataTaskVersionSheet.swift")])
         problems, _ = evaluate(views, led)
         record("台账与源码写的值不一致", problems, "台账记的是")
 

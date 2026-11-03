@@ -39,7 +39,8 @@ struct DebugPanelView: View {
                 .font(Theme.font(.caption))
                 .foregroundStyle(Theme.text(TextTone.secondary))
             Spacer()
-            Button(L(.commonClose), role: .cancel) { dismiss() }
+            // 顶部**不放关闭键**：关掉这个面板的入口只有 `footer` 那枚
+            // （2026-11-03 人类主人真机点验：同一件事在屏幕上出现两次）。
         }
         .padding(Spacing.m)
     }

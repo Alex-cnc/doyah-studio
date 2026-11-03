@@ -55,6 +55,17 @@ struct ObjectTreeView: View {
     // 迟早出现"面板开了、对象却是上一个"。
     /// 是否按类型分组显示（FR-META-15）。切换只重新聚合缓存，不重新查库。
     @State private var groupByType = false
+    /// 根节点失败之后**还要不要自己再试** —— 判定全在 `Core/ObjectTreeLoadRetry`
+    /// （同一把刷新键的自动取数有上限；用完之后自动路径一律空转，等用户手点）。
+    @State private var loadRetry = ObjectTreeLoadRetry()
+    /// 排队中的那一次自动重试（换连接 / 用户手点 / 视图消失，都要先把它掐掉）。
+    @State private var scheduledRetry: Task<Void, Never>?
+
+    /// 这一发刷新是谁发起的 —— 自动（`.task(id:)` / 排队中的重试）还是用户手点。
+    private enum ReloadTrigger {
+        case automatic
+        case manual
+    }
 
     var body: some View {
         Group {
@@ -74,16 +85,19 @@ struct ObjectTreeView: View {
                 VStack(alignment: .leading, spacing: Spacing.xs) {
                     Label(L(.treeLoadFailed), systemImage: "exclamationmark.triangle.fill")
                         .font(Theme.font(.caption))
-                        .foregroundStyle(Theme.status(.warning))
+                        .foregroundStyle(Theme.status(.danger))
+                    // 失败原因**用红字写在树上**（2026-11-03 真机点验：连不上的库要"停在这儿、
+                    // 说明原因"，而不是一轮一轮地自己再试）。
                     Text(rootError)
                         .font(Theme.font(.caption))
-                        .foregroundStyle(Theme.text(.secondary))
+                        .foregroundStyle(Theme.status(.danger))
                         .lineLimit(4)
                         .textSelection(.enabled)
-                    ToolbarIconButton(systemName: "arrow.clockwise", help: L(.commonRetry)) {
-                        Task { await reloadRoot() }
+                    // 出口只有一处、而且是**用户手点**：自动重试有上限（`ObjectTreeLoadRetry`），
+                    // 到点就停在这里 —— 点这一枚才再来一发。
+                    ObjectTreeRetryButton(title: L(.commonRetry)) {
+                        Task { await reloadRoot(trigger: .manual) }
                     }
-                    .controlSize(.small)
                 }
                 .padding(.vertical, Spacing.hair)
             } else if roots.isEmpty {
@@ -165,8 +179,16 @@ struct ObjectTreeView: View {
                 revision: appState.metadataRevision
             )
         ) {
-            await reloadRoot()
+            // **自动路径**（`FR-STD-DB-META-006` · 2026-11-03 真机点验）：
+            // 这一发可能被反复"重新出现"触发 —— 生产结构里这棵树住在
+            // `ConnectionListView` 的 `List` → `Section` 里，行会随内容变化被重建，
+            // 「加载中」↔「加载失败」翻一次就等于 `.task` 再跑一遍（键一个字没变）。
+            // 连不上的地址因此会一轮一轮地自己刷（实测 40 秒里 1 → 2 → 3，不停）。
+            // 所以自动路径先过 `ObjectTreeLoadRetry` 的预算闸：用完之后这里是空转，
+            // 树停在失败态，出口只剩失败那行上的「重试」（用户手点）。
+            await reloadRoot(trigger: .automatic)
         }
+        .onDisappear { scheduledRetry?.cancel() }
         // 诊断结论里点了对象名 → 展开路径并选中那个节点（`FR-STD-DB-DIAG-006` ②）。
         // 请求是**一次性**的：处理完就在 `revealObject` 里清掉，切连接 / 重建视图都不会重放。
         .onChange(of: appState.treeJumpRequest) { _, request in
@@ -213,7 +235,7 @@ struct ObjectTreeView: View {
             groupByType: $groupByType,
             isRefreshing: isLoadingRoot,
             onSearch: { appState.isObjectSearchPresented = true },
-            onRefresh: { Task { await reloadRoot() } }
+            onRefresh: { Task { await reloadRoot(trigger: .manual) } }
         )
     }
 
@@ -469,7 +491,7 @@ struct ObjectTreeView: View {
         return nodeSchema == schema
     }
 
-    private func reloadRoot() async {
+    private func reloadRoot(trigger: ReloadTrigger) async {
         guard appState.selectedConnection != nil else {
             roots = []
             childrenCache = [:]
@@ -479,6 +501,25 @@ struct ObjectTreeView: View {
             treeDatabaseType = nil
             appState.selectedTreeObject = nil
             return
+        }
+
+        // 这一发按哪把键算（与 `.task(id:)` / 闸门用的是**同一个类型、同一份取值**）。
+        let key = ObjectTreeRefreshKey(
+            connectionID: appState.selectedConnectionID,
+            revision: appState.metadataRevision
+        )
+        // **自动路径的预算闸**（`FR-STD-DB-META-006`，2026-11-03 真机点验）：
+        // 同一把键的自动取数只许「首连 + 一次重试」；用完之后这里直接返回、连状态都不动
+        // —— 树上是上一次的失败原因，「重试」等用户手点。
+        switch trigger {
+        case .automatic:
+            guard loadRetry.beginAutomatic(for: key) else { return }
+        case .manual:
+            // 用户手点：**恰好再发这一发**（判定见 `ObjectTreeLoadRetry.beginManual`），
+            // 并把自己排的那一发取消（不然会双发）。
+            scheduledRetry?.cancel()
+            scheduledRetry = nil
+            loadRetry.beginManual(for: key)
         }
 
         if !isLoadingRoot { isLoadingRoot = true }
@@ -519,6 +560,10 @@ struct ObjectTreeView: View {
             // 树的内容换了（换连接 / 新建立了对象），旧的选中项可能已经不存在：
             // 留着它会让 ⌘K 里的"浏览数据"作用在一个陈旧的节点上。
             appState.selectedTreeObject = nil
+            // 这一发成功 ⇒ 预算复位（下一次真失败仍从「首连 + 一次重试」算起）。
+            loadRetry.recordSuccess()
+            scheduledRetry?.cancel()
+            scheduledRetry = nil
         } catch {
             // 同上：`.task(id:)` 在连接切换 / 视图重建时会取消上一次加载，
             // 那不是"对象树加载失败"，不该把错误留在界面上。
@@ -531,6 +576,10 @@ struct ObjectTreeView: View {
             rootError = ErrorPresenter.message(for: error)
             treeDatabaseType = nil
             appState.selectedTreeObject = nil
+            // **失败不许变成无限自刷**（`FR-STD-DB-META-006` · 2026-11-03 真机点验）：
+            // 失败原因已经写在树上（红字 + 「重试」），这里只许再排**一次**自动重试；
+            // 预算用完 ⇒ `retryDelayAfterFailure()` 给 `nil` ⇒ 就地停下。
+            scheduleAutomaticRetryIfAllowed()
         }
         if isLoadingRoot { isLoadingRoot = false }
 
@@ -541,6 +590,35 @@ struct ObjectTreeView: View {
         // **再多加载一个层级**（懒加载预取）：把刚展开到的那一层（表）的下一层（列）静默取回来，
         // 用户点开某张表时直接用本地数据 —— 不再等一次往返。
         await prefetchChildren(of: deepestLoadedChildren())
+    }
+
+    /// 失败之后**至多**再排一次自动重试（等多久由 `Core/ObjectTreeLoadRetry` 给：现在是 2 秒）。
+    ///
+    /// 三条不许省：
+    /// 1. **先取消旧的那一发**：`reloadRoot` 可能被 `.task(id:)` 与这一发同时叫到，
+    ///    留着两个排队任务就是双发（真机上看到的就是"自己在那儿刷"）；
+    /// 2. **落地前再核一次键**：排队期间用户换了连接 / 元数据版本变了 ⇒ 这不是同一件事，
+    ///    交给 `.task(id:)` 走新的一轮，这一发直接作废；
+    /// 3. 预算用完 ⇒ `retryDelayAfterFailure()` 返回 `nil` ⇒ **什么都不排**，
+    ///    树停在失败态等用户点「重试」—— 这就是"它停在那儿"的那一半。
+    private func scheduleAutomaticRetryIfAllowed() {
+        scheduledRetry?.cancel()
+        scheduledRetry = nil
+        guard let delay = loadRetry.retryDelayAfterFailure() else { return }
+        let key = ObjectTreeRefreshKey(
+            connectionID: appState.selectedConnectionID,
+            revision: appState.metadataRevision
+        )
+        scheduledRetry = Task {
+            try? await Task.sleep(for: delay)
+            guard !Task.isCancelled else { return }
+            let current = ObjectTreeRefreshKey(
+                connectionID: appState.selectedConnectionID,
+                revision: appState.metadataRevision
+            )
+            guard current == key else { return }
+            await reloadRoot(trigger: .automatic)
+        }
     }
 
     /// 当前已加载层级里**最靠下**的那一层（预取它的下一层就是"多加载一个层级"）。

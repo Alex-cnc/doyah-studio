@@ -118,6 +118,17 @@ public enum Metrics {
     public static let planRawMinHeight: CGFloat = 48
     public static let planRawMaxHeight: CGFloat = 260
     public static let planRawLineHeight: CGFloat = 15
+
+    /// 导入向导（FR-STD-DB-IO-007）**内容区**的上下限。
+    ///
+    /// 2026-11-03 人类主人真机点验：「执行导入的按钮快被遮住」—— 根因是面板根原先把
+    /// 宽高一起钉死成 780×760（sheet 不会随父窗口缩），底部动作区被裁掉。
+    /// 现在面板根**只钉宽度**，内容区给这一段上下限：内容多了自己滚，动作区永远钉在下面。
+    /// 上限按「映射表 + 写模式 + 预览」大约一屏多一点取，再高就是让用户滚页面找按钮。
+    public static let importContentMinHeight: CGFloat = 240
+    /// 默认高度（panel 打开时内容区就这么高：映射表 + 写模式 + 预览刚好一屏，不用先滚两下）。
+    public static let importContentIdealHeight: CGFloat = 400
+    public static let importContentMaxHeight: CGFloat = 420
     /// 工具条上的图标按钮尺寸（**28 × 28** 命中区）。
     ///
     /// 2026-10-10（`FR-NOTEUI-21` · 派单 `T-20261010-166` §三.3 · 人类主人原话「**笔记左栏上面的
