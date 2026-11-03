@@ -269,10 +269,12 @@ BATCHES_V070: list[dict] = [
 # v0.7.0 的 10 条卡点：逐条都是本机读不出来的（实例 / 端点 / 另两端 / 主人拍板），
 # 与 v0.6.0 同一纪律 —— blocked 必须带 next_try，不许用「做不了」三个字交差。
 BLOCKED_V070: dict[str, str] = {
-    "FR-NTS-NOTE-SEARCH-001": "① 语义检索要嵌入模型：本机无端点、无本地模型"
-                             "（2026-11-02 实测 `grep -rn 'embedding|语义检索|向量' Plugins/Notes App Core` = 0 命中；"
-                             "`agent.json` 有模型名 `deepseek-v4-flash` 但 apiKey 为空）⇒ 「两种检索并列」无从成立；"
-                             "③ 万条检索性能读数要等 ① 的路定了才有意义",
+    "FR-NTS-NOTE-SEARCH-001": "① 语义检索要嵌入模型，本机两条路 2026-11-03 逐条量过、都不成立："
+                             "**端点**有（`agent.json` = `deepseek-v4-flash` + `https://api.deepseek.com/v1`，真密钥可用），"
+                             "但 `POST /v1/embeddings` 真密钥回 **HTTP 404**（与 `/definitely-not-a-path` 同码 ⇒ 该端点没有嵌入接口）；"
+                             "**本机离线模型**也有一条 —— macOS `NLEmbedding` zh-Hans 句向量（dim **640**，零联网），"
+                             "但 8 条同义改写查询对 8 条笔记语料 **top-1 仅 1/8**、平均余量 **−0.0151**（排错多于排对）⇒ 顶不了语义检索；"
+                             "② 关键词一路已有读数；③ 万条检索性能读数要等 ① 的路定了才有意义",
     "FR-NTS-NOTE-SYNC-001": "⑥ 云端全量还原要可连的云同步服务（本机无账号；`NoteSyncE2ETests` 11 例要真云端，"
                            "历轮记「未执行」）；⑦「关掉同步后本机功能一个不少」可单出读数，"
                            "但本条判据要求 ①–⑦ 全 ✅ ⇒ 只能停在 ⑥",
