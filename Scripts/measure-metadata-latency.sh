@@ -76,6 +76,15 @@ if not per_depth:
     print("✗ 一条冷加载读数都没采到 —— 记「未测到」，不是通过")
     sys.exit(2)
 
+# 判据覆盖范围声明（需求 ①「逐层首次展开」）：这两层都要有冷样本，
+# 缺一层就只能记「未知」——不许拿另一层的读数替它判通过。
+REQUIRED = {2: "database", 3: "schema"}
+missing = [f"depth={d}({k})" for d, k in REQUIRED.items() if not per_depth.get(d)]
+if missing:
+    print("✗ 覆盖不全：这些层零冷样本 —— " + " · ".join(missing))
+    print("  记「未知」，不是通过（缺层的读数不能由别的层代判）")
+    sys.exit(2)
+
 def p95(values):
     if len(values) == 1:
         return values[0]

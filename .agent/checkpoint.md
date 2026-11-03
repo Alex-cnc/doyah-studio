@@ -701,3 +701,15 @@
 - **队列口径（本片后实测）**：`plan.yaml` = **1 todo / 28 blocked**；`batches.yaml` 只剩 **D2（1 条）**。
 - **下一批 = D2 余一条**：`FR-STD-WS-FS-008`（工作区按文件类别呈现 —— ① 的另一半：图片等走各自视图，不许再一律 `openAsText` 当二进制拒绝）。
 - 证据 `.agent/evidence/2026-11-02-FR-NTS-NOTE-EXPORT-001.md`
+
+## v0.6.0 余账 · `NFR-ALL-GATE-PERF-004` 元数据懒加载真测（队列外，阻塞前提已消失）· 2026-11-03
+
+- **一条两列全 ✅**：`NFR-ALL-GATE-PERF-004`。队列里它原是 blocked，`next_try` 写「本机无局域网 DB、217 主机不在线」—— 该前提已过期：**主机改址 192.168.5.26 且 5432/3306 均通**（本跳 TCP 复测 0.06 s / 0.01 s，MySQL 握手 8.4.10），Keychain 口令非交互可取 ⇒ 真 PG 18.6 实测成立。阻塞原因消失即解阻塞，不需要新授权的动作。
+- **根因不在网速，在量测代码**：CLI `--timings` 原来拿 `metadataCache[database] != nil` 当冷热 ⇒ 一个库的 schema 首次展开时服务早建好 ⇒ schema 层**恒 cold=0**，而汇总脚本缺层时仍 `rc=0`（缺层报通过，违反「覆盖不全只许报未知」）。同批两处修：① 冷加载改按**节点**判（本进程内该节点子层首次展开）；② 量测脚本声明必需层 `depth=2/3`，缺一层 ⇒ `rc=2`。
+- **读数**：`measure-metadata-latency.sh` 12 次 → database 中位 **14.1** / P95 **24.0** ms、schema 中位 **18.6** / P95 **29.3** ms（server 12.0/18.5 · table 21.1/33.3）⇒ 四层全 ≤ 1000 ms，rc=0。反例：阈值 1 ms ⇒ rc=1 四层判红 · cold 退回旧口径 ⇒ schema 零冷样本 ⇒ rc=2 记未知；`sha256` 逐字节还原（`9417202f…` / `abda500b…`）。
+- **门禁**：九道文档门禁（plan-coverage / invariants / tables / numbers / status-consistency / version-scope / status-gap / doc-layout / agents-index）全 rc=0；报数归正 未闭 25 → **24**（🟡 19 → 18）· §2 ✅ 362 → **363** · v0.6.0 5（4/1）→ **4（3/1）**；台账版本 v1.0.157 → **v1.0.158**。
+- **未验证（≠通过）**：只这一台局域网实例 · 只走 CLI 对象树（界面手工展开未计时，记「未覆盖」）· 跨网段高延迟链路未测。
+- **顺带修派生队列一处真缺陷**：`plan-batches.py --emit-plan` 的「跨版携带」只判「不在本版范围」，已收口的条目因此被搬进「上版遗留卡点」**永久携带**（实测：PERF-004 / COMP-001 已双 ✅ 仍挂在队列里 ⇒ 队列读数永远 28 blocked）。加一行「台账 ✅ 不算卡点」⇒ 重出后 **28 → 26 blocked**，两条已闭条目从队列消失；`--check` rc=0。
+- **队列口径（本片后实测）**：`plan.yaml` = **0 todo / 26 blocked**；`batches.yaml` = 0 条待办。
+- **下一项 ID：无（0 todo）**。下一个能开的口子 = `AC-ALL-GATE-REL-004/005/006`（同一个新前提：真 PG 现在可连，端到端验收面待做）。
+- 证据 `.agent/evidence/2026-11-03-NFR-ALL-GATE-PERF-004.md`

@@ -3,7 +3,7 @@
 # 本文件只做「下一跳」排序，不许反向改台账；台账一改就跑 --emit-plan 重出，别手改。
 # 生成于 2026-11-03，源 = 台账里 FR-NTS-NOTE-FORMAT-001 / FR-NTS-NOTE-SEARCH-001 / FR-NTS-NOTE-ORG-001 / FR-NTS-NOTE-TRASH-001 / FR-NTS-NOTE-SYNC-001 / FR-NTS-NOTE-EXPORT-001 / FR-NTS-ALL-HOME-001 / FR-NTS-ALL-LIC-001 / FR-NTS-ALL-DIST-001 / FR-NTS-ALL-PARITY-001 / FR-STD-WS-FS-008 / FR-STD-WS-TOOL-001 / FR-STD-WS-AI-002 / AC-ALL-GATE-REL-004 / AC-ALL-GATE-REL-005 / AC-ALL-GATE-REL-006 / FR-STD-DB-META-002 未闭 10 条（5 🟡 / 4 ⬜ / 1 其他（挂起或带复核注））。
 tasks:
-# 另有 18 条上版遗留卡点（不在本版范围，仅列表可见）：FR-AGT-LINK-CHAN-003, FR-AGT-LINK-EXT-001, FR-AGT-LINK-EXT-002, FR-AGT-OPS-OBS-002, FR-AGT-PLAN-PLAN-001, FR-AGT-TOOL-MEDIA-001, FR-AGT-TOOL-SYS-002, FR-AGT-UX-CONV-001, FR-AGT-UX-SESS-001, FR-AGT-UX-SYNC-001, FR-NTS-NOTE-ORG-002, FR-STD-ALL-PLUG-005, NFR-ALL-GATE-COMP-001, NFR-ALL-GATE-COMP-002, NFR-ALL-GATE-COMP-003, NFR-ALL-GATE-LANG-001, NFR-ALL-GATE-PERF-004, NFR-ALL-GATE-UI-001
+# 另有 16 条上版遗留卡点（不在本版范围，仅列表可见）：FR-AGT-LINK-CHAN-003, FR-AGT-LINK-EXT-001, FR-AGT-LINK-EXT-002, FR-AGT-OPS-OBS-002, FR-AGT-PLAN-PLAN-001, FR-AGT-TOOL-MEDIA-001, FR-AGT-TOOL-SYS-002, FR-AGT-UX-CONV-001, FR-AGT-UX-SESS-001, FR-AGT-UX-SYNC-001, FR-NTS-NOTE-ORG-002, FR-STD-ALL-PLUG-005, NFR-ALL-GATE-COMP-002, NFR-ALL-GATE-COMP-003, NFR-ALL-GATE-LANG-001, NFR-ALL-GATE-UI-001
   - id: FR-NTS-NOTE-SEARCH-001
     goal: "列表与检索：按时间 / 标签 / 关键词 / 语义检索，**两种检索都在**，语义不可用时降级并说出来"
     done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py FR-NTS-NOTE-SEARCH-001 | grep -q '✅'"
@@ -180,14 +180,6 @@ tasks:
     status: blocked
     evidence: ""
     next_try: "Linux 端按平台口径归小河马（2026-10-22 令：Linux 归 babyhippo，WSL 能直接编）；本机是 macOS，装配与验收要点 ①③④ 不在这台机上做"
-  - id: NFR-ALL-GATE-COMP-001
-    goal: "支持 PostgreSQL 12–18 多版本回归"
-    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py NFR-ALL-GATE-COMP-001 | grep -q '✅'"
-    layer: "基线必备"
-    prio: "—"
-    status: blocked
-    evidence: ""
-    next_try: "等可连的 PostgreSQL 12–18 实例：本机无 postgres / pg_ctl / initdb / docker（2026-11-02 实测 `/opt/homebrew/bin` 无 pg 系、`command -v postgres` 空），217 主机不在线（2026-11-03 TCP 复测：5432 超时 5 s、22 `Host is down`，同网段网关 443 0.00 s 可连）⇒ 多版本回归无从跑"
   - id: NFR-ALL-GATE-COMP-002
     goal: "支持 GBase 最新版本，并向下兼容至 GBase 8a（版本窗口见下）"
     done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py NFR-ALL-GATE-COMP-002 | grep -q '✅'"
@@ -197,7 +189,7 @@ tasks:
     evidence: ""
     next_try: "等 GBase 最新版 + GBase 8a 实例：与 `FR-STD-DB-META-002` 同一个卡点（217 无 GBase，2026-11-02 复测整机不通）"
   - id: NFR-ALL-GATE-COMP-003
-    goal: "支持 MySQL 最新大版本，并向下兼容最近 5 个大版本（版本窗口见下）"
+    goal: "支持 MySQL **现场可得的版本**（当前实例 8.4.10 LTS）；不追求「最新大版本 + 向下兼容最近 5 个大版本」逐版实测（主人 2026-11-03 同令）"
     done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py NFR-ALL-GATE-COMP-003 | grep -q '✅'"
     layer: "常用增强"
     prio: "—"
@@ -212,14 +204,6 @@ tasks:
     status: blocked
     evidence: ""
     next_try: "① 与 `NFR-ALL-GATE-LANG-003` ② 互斥（前者要「首次启动默认简体中文」，后者要「默认跟随系统语言」，系统语言是英文的机器上两条不能同真）⇒ 要主人拍一句哪条算数；②③④ 已有机器读数（`LanguagePreferenceTests` 5 例、两档棘轮、菜单语言门禁），改口只需动 `Core/LanguagePreference.resolve` 一处"
-  - id: NFR-ALL-GATE-PERF-004
-    goal: "元数据单层懒加载在局域网内 ≤ 1 s"
-    done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py NFR-ALL-GATE-PERF-004 | grep -q '✅'"
-    layer: "基线必备"
-    prio: "—"
-    status: blocked
-    evidence: ""
-    next_try: "等可连的局域网数据库：本条量的是「元数据单层懒加载在局域网内 ≤ 1 s」，本机无局域网 DB（217 主机不在线：2026-11-03 TCP 复测 5432 超时 5 s、22 `Host is down`、ARP 无条目，同网段网关 443 0.00 s 可连）⇒ 只能量回环，不报通过"
   - id: NFR-ALL-GATE-UI-001
     goal: "界面设计语言统一：同一产品内各平台（macOS / Windows / iOS /"
     done_when: "cd ~/dev/doyah/lead/studio && python3 Scripts/ledger-row.py NFR-ALL-GATE-UI-001 | grep -q '✅'"

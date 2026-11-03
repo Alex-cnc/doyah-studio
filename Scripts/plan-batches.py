@@ -588,7 +588,12 @@ def render_plan(rows: list[dict], spec_version: dict) -> str:
         if r["id"] in blocked:
             lines.append(f"    next_try: {yaml_str(blocked[r['id']])}")
     # 跨版本携带：上一版留下的卡点（不在本版范围内）照样列出来，不许静默消失。
-    carry = {k: v for k, v in read_previous_plan_blocked().items() if k not in in_scope}
+    # 但**已收口的不算卡点**：台账那一行已是 ✅ 就必须从队列里消失 —— 旧码只判「不在本版范围」，
+    # 于是收口后的条目被搬进「上版遗留卡点」永久携带（2026-11-03 实测：PERF-004 / COMP-001 已双 ✅
+    # 仍挂在队列里，队列读数永远是 28 blocked ⇒ 每跳都看着「全卡住」）。卡点从台账来，也从台账走。
+    closed = {r["id"] for r in read_ledger() if r["status"].startswith("✅")}
+    carry = {k: v for k, v in read_previous_plan_blocked().items()
+             if k not in in_scope and k not in closed}
     if carry:
         ledger_goals = {r["id"]: r for r in read_ledger()}
         lines.insert(lines.index("tasks:") + 1,

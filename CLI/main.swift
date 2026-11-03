@@ -310,6 +310,11 @@ struct DoyahCLI {
             // 只打冷加载（cached=0）才算数 —— 命中缓存的时间不能拿去证明懒加载够快。
             let emitTimings = arguments.contains("--timings")
             var timingRows: [(depth: Int, kind: String, name: String, ms: Double, cold: Bool)] = []
+            // 冷加载 = **这个节点的子层在本进程里第一次展开**，不是「数据库服务建没建过」。
+            // 旧口径拿 `metadataCache[database] != nil` 当冷热，结果一个库里所有 schema 的首次
+            // 展开都被记成 cold=0（服务早在展开数据库那层就建好了）⇒ schema 层永远采不到冷样本，
+            // 而汇总脚本当时仍返回 0（缺层报通过）。节点粒度才对得上需求 ③「首次与二次分开计时」。
+            var expandedNodes = Set<String>()
             do {
                 let serverLabel = "\(username)@\(host):\(port)"
                 var extraServices: [String: any DatabaseService] = [:]
@@ -357,7 +362,8 @@ struct DoyahCLI {
 
                     let database = object.database ?? serverInfo.database
                     do {
-                        let cachedBefore = metadataCache[database] != nil
+                        let nodeKey = "\(database)\u{1F}\(object.kind.rawValue)\u{1F}\(object.name)"
+                        let expandedBefore = expandedNodes.contains(nodeKey)
                         let tree = try await metadata(for: database)
                         let children: [DatabaseObject]
                         if emitTimings {
@@ -368,10 +374,11 @@ struct DoyahCLI {
                             let ms = Double(elapsed.components.seconds) * 1000
                                 + Double(elapsed.components.attoseconds) / 1_000_000_000_000_000
                             timingRows.append((depth: depth + 1, kind: object.kind.rawValue,
-                                               name: object.name, ms: ms, cold: !cachedBefore))
+                                               name: object.name, ms: ms, cold: !expandedBefore))
                         } else {
                             children = try await tree.loadChildren(of: object)
                         }
+                        expandedNodes.insert(nodeKey)
                         for child in children.prefix(50) {
                             await printTree(child, depth: depth + 1)
                         }
