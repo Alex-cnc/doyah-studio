@@ -36,11 +36,22 @@ enum AgentNotificationPoster {
         let request = UNNotificationRequest(identifier: UUID().uuidString,
                                             content: content,
                                             trigger: nil)
+        // **兜底：Dock 角标**（人类主人 2026-11-03 实测：ad-hoc 签名的包里
+        // `requestAuthorization` 返回了但系统**不弹框、也不登记**，于是横幅永远不来）。
+        // 横幅这条路受签名主体限制，不是本端代码能保证的；Dock 角标不依赖任何授权，
+        // 切后台回来一眼就能看见「有结果了」。回到前台由 `clearDockBadge()` 清掉。
+        NSApp.dockTile.badgeLabel = "1"
         Task {
             // 首次会弹系统授权框；用户已决定过则是空操作（不会反复打扰）。
             _ = try? await center.requestAuthorization(options: [.alert, .sound])
             try? await center.add(request)
         }
+    }
+
+    /// 回到前台后清角标（谁在 `applicationDidBecomeActive` 里调一次）。
+    @MainActor
+    static func clearDockBadge() {
+        NSApp.dockTile.badgeLabel = nil
     }
 
     /// **启动即申请一次授权**（人类主人 2026-11-03 实测：任务跑完没弹框）。
