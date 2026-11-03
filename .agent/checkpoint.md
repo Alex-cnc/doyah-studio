@@ -1,5 +1,16 @@
 # 检查点
 
+## 自检「绿对照」族：真仓库红 8 族收口 + 2 条真缺陷（判据维护 · 无台账行）· 2026-11-03
+
+- **无台账行**（判据维护 · 本版最后一跳）。清的是上一跳点名的最后一族：自检的「绿对照」例要求「真仓库副本全过」，真仓库一红它就跟着红 —— 所以修法只能是**修真红**，不是改自检。
+- **8 族真红收口**：① `editor-surface-tokens` —— 快速捕获面的 `TextEditor` 漏挂 `.editorSurface()`、自己在修饰链上写 `.scrollContentBackground(.hidden)` 且容器底填系统色（**本跳之前那一版捕获功能带进来的**）⇒ 改回唯一出处 + 主题令牌，台账补登；② `agent-provider-presets` —— `Tests/AgentEndpointDiagnosisTests.swift` 面外命中 `api.openai.com` 未登记 ⇒ 逐条登记理由；③ `terminal-tabs` —— **30 份 10-24 后新落地的 Core 件**写中文字面量未登记 ⇒ 进先红基线（**30 处一处未修**，R-037 全局收口属别单；堵的是新增件再添债）；④ `result-scroll-ledger` —— 4 份探针写了用例却没接进 `FILTER=` ⇒ 接进去（单族实跑 21 例 0 失败）；⑤ `tri-repo-parity` —— `check-path-ownership.py` 在 `419acff8` 改过、台账没跟 ⇒ studio 那格跟版 + 写明另两仓不在盘、同源性未判；⑥ `note-module-isolation` + `plugin-assembly` —— `NoteArchive.swift` 两份清单都没登记 ⇒ 进 `NOTE_SOURCES`；⑦ `vendored-sqlite --self-test` —— 夹具写死 `==> 1/18`，闭环升到 19 项后锚点消失 ⇒ 改成**从盘上现读项数**；⑧ `note-storage-unity --self-test` —— 夹具写死 `NoteSchemaV14`，schema 升到 v15 后同病 ⇒ 改成现读 `supportedVersion`。
+- **另有 3 项判据自伤 + 1 条真缺陷**（同一手法）：`check-end-sheets` 的「把冻结件当上游」原来按**整段头部**匹配 ⇒ 把 Android 一单里「冻结基线」那一行（本来就该写冻结件文件名）判红 —— 改成只判**上游那一行** + 空跑防护，两向负例各判红 · `check-empty-action-buttons` 两条空守卫（`exportNotes` = explain / `purgeTrashBeyondLimits` = internal）补登记 · `check-sidebar-collapse-state` 把对话「过程块收起」登记为例外（阅读痕迹不是面板折叠态）· **真缺陷**：导出产物取 `LocalizationManager.shared.language` 而非 `effectiveLanguage`（宿主语境覆盖时导出文本与界面不同语言）。
+- **一条存量「抖动」查实为确定性**：`SSHTunnelRuntimeTests.testBusyPortFailsFastWithoutStartingAnything` 连跑三档都红（期望 `portInUse`，实测 `processExited(... OSError: [Errno 48] Address already in use)`）⇒ 按历轮 next_try 修掉：ssh 自己报「端口被占」归 `.portInUse`。`verify-core` **5361 项 / 13 skipped / 0 失败**。连带 `Address already in use` 这个匹配子被 Core 英文串棘轮抓到 ⇒ 按脚本给的处置进白名单，kind = `driverMessage`。
+- **读数**：全量 `verify-all.sh --keep-going` **项块 19 · 失败 4 项（7 处）· 平台跳过 0 · 未执行项 = 无**（上一跳 **9 项 / 26 处** ⇒ 净减 5 项 19 处；其中 2 处 `check-core-localization` 是本跳自己引入、当场登记修掉，**修后未重跑全量** ⇒ 账面 4 项 / 5 处，不按推算报绿）。
+- **三分标注（余红）**：确定性失败 4 项 / 5 处 —— `check-format-arguments`（230 > 预算 190）· `check-button-icon-only`（NotesPanel 22 处未登记差异）· `check-notes-offline`（22 份笔记源文件没进 `scope`/`outOfScope`；它一红，`check-self-test-counts` 也跟着红）· `check-menu-language`（真启动两档都等不到 dump，菜单文案未判）；抖动 0；未复现 0。
+- **维护跳预算用尽**：`rules.md` 出口第 5 条「一个版本收口后维护跳 ≤ 3 跳」⇒ v0.7.0 收口后已用满 3 跳（看板族 / 发布身份族 / 本族）。下一跳**不再开维护跳**；队列 **0 todo / 28 blocked（全卡外部）**，余下 5 处红属「真产品面债」（format-arguments 预算 / icon-only 22 处 / notes-offline 22 份登记 / 真启动取证），要动得先有派单或主人拍板。
+- 证据 `.agent/evidence/2026-11-03-self-test-green-baseline.md`；提交 `6abecaf5` + `b9e940e0` + `53a0f84f`（已推送，local = origin/master = 53a0f84f）。
+
 ## 发布身份族：派生值收进台账模型（判据不崩 + 台账不再落后于产物）· 2026-11-03
 
 - **无台账行**（判据维护 · 台账模型级）：本跳清上一跳点名的第 2 族 `check-release-version`。两件事：① 判据把**写对的脚本**读成错；② **真红** —— 发布身份早改成派生值，台账仍写 `0.3.0` / `3`。

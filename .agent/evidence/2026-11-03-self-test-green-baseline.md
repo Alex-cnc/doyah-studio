@@ -44,7 +44,7 @@ $ swift test --filter "NotesUndoAndLongDocumentProbeTests|WorkspaceFileOpenGuard
 ✅ 语言来源门禁通过：除例外（系统菜单 / 根视图重建 / 菜单勾选态）外，一律走 effectiveLanguage
 ```
 
-提交：`<sha>`
+提交：`6abecaf5`（8 族收口 + 3 项判据自伤 + 1 条真缺陷）· `b9e940e0`（ssh 端口占用误归 processExited → portInUse，verify-core 5361 项 0 失败）· `53a0f84f`（`Address already in use` 进 Core 英文串台账，kind = driverMessage）
 
 未验证（≠ 通过）：
 - R-037 存量债 **30 处 / 30 份 Core 文件**本跳**一处未修**，只登记进 `Scripts/terminal-tabs-han-baseline.json` 先红基线（R-037 全局收口属别单）；堵的是"新增件再悄悄添债"。
@@ -52,3 +52,30 @@ $ swift test --filter "NotesUndoAndLongDocumentProbeTests|WorkspaceFileOpenGuard
 - 4 份探针接进 `FILTER=` 后，只在**单族**里实跑过（21 例 0 失败）；整卷 `verify-ui-interactions` 的读数见全量那一行，未逐条核多出来的探针。
 - `check-end-sheets` 的负例是在临时副本上手跑的（两个方向），未进 `check-self-test-counts` 台账（该脚本仍无自检族）。
 - 真鼠标未点（本轮零界面新增，改的都是判据 / 台账 / 一处导出语言取值）。
+
+## 全量读数与三分标注（本跳实跑）
+
+```
+$ ./Scripts/verify-all.sh --keep-going    # 日志 .build/verify-20261103-072640.log
+   合计：项块 19 个 · 失败 4 项（共 7 处）· 平台跳过 0 项
+   · 第 3 项 check-core-localization.py / --self-test（本跳自己引入的英文串，事后已登记 ⇒ 单跑 rc=0 · 17/17）
+   · 第 3 项 check-format-arguments.py（230 处 > 预算 190）
+   · 第 3 项 check-button-icon-only.py（NotesPanel 22 处未过）
+   · 第 4 项 check-self-test-counts.py（2 族：cli-failure-readability / notes-offline）
+   · 第 10 项 check-notes-offline.py（22 处未登记）
+   · 第 11 项 check-menu-language.py（真启动 dump 等不到）
+```
+
+上一跳基线（`.build/verify-20261103-055409.log`）：**9 项 / 26 处** ⇒ 本跳 **4 项 / 7 处**
+（core-localization 那 2 处是本跳自己引入、已当场登记修掉 ⇒ 账面应为 **4 项 / 5 处**，
+**修后未重跑全量**，不按推算报绿）· **净减 5 项 / 19 处，新冒 1 处（已修）**。
+
+三分标注（余红，给下一跳）：
+- **确定性失败 4 项 / 5 处**：`check-format-arguments`（230 > 预算 190，25 条占位符对账）·
+  `check-button-icon-only`（`NotesPanel.swift` 22 处「既不是图标也没登记」）·
+  `check-notes-offline`（22 份笔记源文件没进 `scope`/`outOfScope`）· 连带 `check-self-test-counts`
+  的 2 族（cli-failure-readability 有 2 条自伤 + notes-offline runner 红）· `check-menu-language`
+  （真启动两档都等不到 dump —— 在「真启动取证」这一层，菜单文案未判）。
+- **抖动 0**：`SSHTunnelRuntimeTests` 那条本跳查实为**确定性**（连跑三档都红），已按 next_try 修掉
+  （ssh 的 `Address already in use` 归 `.portInUse`）。
+- **未复现 0**（没有一条给不出复现步骤）。
