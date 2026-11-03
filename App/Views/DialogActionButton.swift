@@ -20,12 +20,22 @@ struct DialogActionButton: View {
     let title: String
     var role: ButtonRole? = nil
     var isDisabled: Bool = false
+    /// 是否在文字前带图标。**默认不带** —— macOS 的对话框动作区是**纯文字按钮**
+    /// （系统「取消 / 好 / 存储」都没有图标）；原来这里一律 `.titleAndIcon`，
+    /// 于是每个 Sheet 的关闭按钮都长着 `✕`，与系统风格不一致
+    /// （人类主人 2026-11-03 真机点验：`FR-STD-WS-UI-014`「偏好设置的 close 按钮仍然带 X」）。
+    /// 少数确实需要图标的（如带破坏性提示的动作）显式传 `showsIcon: true`。
+    var showsIcon: Bool = false
     let action: () -> Void
 
     var body: some View {
         Button(role: role, action: action) {
-            Label(title, systemImage: systemName)
-                .labelStyle(.titleAndIcon)
+            if showsIcon {
+                Label(title, systemImage: systemName)
+                    .labelStyle(.titleAndIcon)
+            } else {
+                Text(title)
+            }
         }
         .buttonStyle(.bordered)
         .controlSize(.small)
