@@ -73,6 +73,14 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
     /// 不接 ⇒ **页内提示条照出**：发不出系统通知不代表这件事不该被看见，
     /// 两个出口是「与」不是「或」的替代关系（缺一个照样有话要说）。
     var notifySink: ((AgentNotification) -> Void)?
+    /// 宿主注入：**这一轮收尾了**（完成或失败；人自己按的停止不算）。`FR-AGT-UX-CONV-008` 的兜底出口。
+    ///
+    /// 与 `notifySink` 是两条判据，别合并：
+    /// · `notifySink` 判「**要不要打扰他**」—— 人正看着这一页就不弹，短任务也不弹；
+    /// · 这一条判「**有没有结果待看**」—— **不判前台后台**，收尾就叫一次。
+    /// 宿主拿它置 Dock 角标：ad-hoc 签名的包里系统横幅受签名主体限制来不了，
+    /// 而角标不依赖任何授权，切后台一眼就能看见「有结果了」（回到前台再清）。
+    var taskFinishedSink: (@MainActor () -> Void)?
     /// 宿主注入：人此刻是否正看着这一页（前台 + 当前页签）。
     /// 缺省 `true` = **保守**：没接这一格就当人正在看 ⇒ 不弹系统通知（宁少弹，不乱弹）。
     var paneIsVisible: () -> Bool = { true }
@@ -1110,6 +1118,9 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
             reason = nil
         }
         if let reason {
+            // **收尾即置角标**（不管前台后台）：这一格与「要不要弹通知」是两条判据，
+            // 放在 `plan` 之前 —— `post()` 那条路被 `paneIsVisible` 挡着，靠它出不来角标。
+            taskFinishedSink?()
             let plan = notifyPolicy.plan(reason,
                                         userIsLookingAtThisPane: paneIsVisible(),
                                         userIsIdle: false,

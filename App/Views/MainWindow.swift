@@ -118,69 +118,6 @@ struct MainWindow: View {
         )
     }
 
-    /// **下方面板（问题 / 输出 / 终端 / 调试控制台）在「工作区」与「数据库」两段之间共享**
-    /// （2026-09-30 需求提出者实测反馈：「数据库客户端界面的底部栏怎么只在数据库界面出现，到了工作区
-    /// 就没有了呢…要不然主工作区下方啥也没有，要打开 terminal 开始工作还要先点击 database 活动栏」）。
-    ///
-    /// 三条落法：
-    ///  ① **只有一个实例** —— 终端会话活在 `TerminalModel` 上（L-84 ㈠ 的契约），
-    ///     两段各画一份会让同一个会话被渲染两次（屏幕缓冲/选区就成两份了）；
-    ///  ② **查询页签可空** —— 数据库段传当前页签（「问题 / 输出」有上下文），
-    ///     工作区段传 nil（那两页如实显示空态，终端照常可用）；
-    ///  ③ **最大化仍覆盖整段** —— 判在段一级，所以两段行为一致。
-    @ViewBuilder
-    private func sectionWithLowerPane<Content: View>(@ViewBuilder content: () -> Content) -> some View {
-        // 折叠态的判定只在这里取一次，往下传给两处（面板自己 + 高度提示）——
-        // 免得「谁折叠」有两处口径。
-        let collapsed = !appState.isLowerPaneVisible
-        VStack(spacing: 0) {
-            if appState.isLowerPaneVisible, appState.isLowerPaneMaximized {
-                LowerPaneView(tab: appState.selectedTab)
-            } else {
-                // **星云皮肤用显式叠层**：`.background()` 是铺在内容**下层**，
-                // 只要内容里有任何一处不透明就会被整片盖住（2026-10-01 实测：侧栏能看到星云、
-                // 内容区看不到，根因就是 `QueryWorkspaceView` 自己铺了 `.background(.content)`）。
-                // 改成 `ZStack` 后**星云在下、内容在上**，且 `allowsHitTesting(false)` 不吃点击。
-                ZStack {
-                    Theme.surface(.content)
-                    NebulaBackground(layer: .content)
-                    content()
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                // 顶边**拖拽把手**（队列 `L-181`）：拖动改面板高度，拖出来的值持久化在 `AppState`。
-                // 为什么不是回到 `VSplitView`：它的子视图数必须在构建时固定，显示/隐藏之间切换会
-                // **重建编辑器子树**（`App/Views/SQLEditorView.swift:58` 有实测记录）—— 那会把正在
-                // 编辑的滚动位置与撤销栈一起弄丢。这条把手只改面板自身的高度，**层级不变**。
-                LowerPaneResizeHandle(
-                    height: appState.lowerPaneHeight,
-                    available: lowerPaneAvailableHeight,
-                    commit: { appState.lowerPaneHeight = $0
-                        // 拖得出高度 ⇒ 面板必须是展开的（折叠态从下面往上拖同样走这里）。
-                        appState.isLowerPaneVisible = true
-                    },
-                    collapse: { appState.isLowerPaneVisible = false }
-                )
-                LowerPaneView(tab: appState.selectedTab, isCollapsed: collapsed)
-                    // 高度提示**由面板自己那一层算**（`LowerPaneSizing`）：
-                    // 折叠态必须是「不设约束」，否则这里会留下一条比标题栏宽的空白带
-                    // （2026-09-30 需求提出者实测缺陷，队列 `L-121`—— 原来这里写死
-                    //  `.frame(minHeight: 90, idealHeight: 200)`，折叠后那 90pt 的框还在）。
-                    // **展开态钉死高度**（`FR-EDIT-29` 人工点验不过的修法）：原来这里是
-                    // `.frame(minHeight:idealHeight:)` 两个提示，而面板内部通篇
-                    // `maxHeight: .infinity` ⇒ 父级 VStack 按「两个可伸缩子视图」分配剩余高度，
-                    // 理想高度只是个愿望，拖出来的值落不到布局上，分隔条一动不动。
-                    // 折叠态给 `nil`：让面板按标题栏一行自量（`L-121` 的空白带口径不变）。
-                    .frame(height: LowerPaneResize.panelHeight(
-                        dragged: appState.lowerPaneHeight,
-                        collapsed: collapsed,
-                        available: lowerPaneAvailableHeight
-                    ))
-            }
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-
     var body: some View {
         HStack(spacing: 0) {
             // 活动栏在 `NavigationSplitView` **外面**：它是应用级 chrome，不属于可调宽的侧栏
@@ -215,9 +152,9 @@ struct MainWindow: View {
             // 需求提出者的原话是「点击工作区时，不应该还在数据库 SQL 查询界面，应该是新的 Tab 界面」。
             switch appState.selectedActivityItem {
             case .database:
-                sectionWithLowerPane { QueryWorkspaceView() }
+                LowerPaneSection(content: QueryWorkspaceView())
             case .workspace:
-                sectionWithLowerPane { WorkspaceAreaView() }
+                LowerPaneSection(content: WorkspaceAreaView())
             case .notes:
                 // **三栏**（队列 `L-184`）：左栏 = 侧栏里的两级树（可折叠），中栏 = 列表、
                 // 右栏 = 正文/编辑器、顶栏 = 搜索 + 新建 —— 都在 `NotesAreaView` 里一处装配。
@@ -620,7 +557,117 @@ struct ConnectionSwitchSheet: View {
     }
 }
 
-// MARK: - L-181 / FR-EDIT-29：下方面板顶边的拖拽把手
+// MARK: - L-181 / FR-EDIT-29 / FR-STD-WS-TOOL-001：下方面板这一段（内容 + 拖拽把手 + 面板）
+
+/// **下方面板（问题 / 输出 / 终端 / 调试控制台）在「工作区」与「数据库」两段之间共享**
+/// （2026-09-30 需求提出者实测反馈：「数据库客户端界面的底部栏怎么只在数据库界面出现，到了工作区
+/// 就没有了呢…要不然主工作区下方啥也没有，要打开 terminal 开始工作还要先点击 database 活动栏」）。
+///
+/// 三条落法（口径不变，只是从 `MainWindow` 的私有方法搬成独立视图）：
+///  ① **只有一个实例** —— 终端会话活在 `TerminalModel` 上（L-84 ㈠ 的契约），
+///     两段各画一份会让同一个会话被渲染两次（屏幕缓冲/选区就成两份了）；
+///  ② **查询页签可空** —— 数据库段传当前页签（「问题 / 输出」有上下文），
+///     工作区段传 nil（那两页如实显示空态，终端照常可用）；
+///  ③ **最大化仍覆盖整段** —— 判在段一级，所以两段行为一致。
+///
+/// ## 为什么必须是独立视图（2026-11-03 人类主人实机点验：「拖分隔条时明显闪烁」）
+///
+/// 原来这段长在 `MainWindow.sectionWithLowerPane(content:)` 里，`onChanged` 每帧写
+/// `appState.lowerPaneHeight`。一帧一次的后果是三重的：
+///  ① `@Published` ⇒ 窗口里**所有**观察 `AppState` 的视图每帧重算（编辑器 / 终端 / 侧栏 / 状态栏…）；
+///  ② 那个属性的 `didSet` 每帧落一次 `UserDefaults`；
+///  ③ `commit` 里还每帧写 `isLowerPaneVisible = true`（值没变也发 `objectWillChange`），
+///     拖过下限时与 `collapse` 每帧互翻 ⇒ 面板子树被反复拆建。
+///
+/// 现在：拖动中的高度**只活在这一层的 `@State`**（`Core/LowerPaneDragSession`），不碰模型、不落盘；
+/// **松手那一下**才写一次 `AppState`。上半区内容以 `Content` **值**传进来 ⇒ 这一层重算时
+/// 它不跟着重算（父级 `MainWindow` 也不再参与）—— 拖动中变的只有布局，没有重建。
+struct LowerPaneSection<Content: View>: View {
+    @EnvironmentObject private var appState: AppState
+
+    /// 上半区（编辑区）。**是值不是闭包**：拖动时这一层重算不带它一起重算。
+    let content: Content
+
+    /// 拖动过程账：一帧只更新它，**不写模型**（那是闪烁的根因）。
+    @State private var drag = LowerPaneDragSession()
+
+    /// 折叠态：以模型为准；但**拖动中**按临时高度画（从折叠态往上拖要立刻看见面板）。
+    /// 判定只在这一处取，往下传给两处（面板自己 + 高度提示）—— 免得「谁折叠」有两处口径。
+    private var isCollapsed: Bool { !appState.isLowerPaneVisible && drag.live == nil }
+
+    /// 布局高度：拖动中读临时值，松手后读模型。
+    private var height: CGFloat { drag.live ?? appState.lowerPaneHeight }
+
+    /// 可用高度：**窗口内容高度**当代理。
+    /// 刻意不引 `GeometryReader` —— 那一层裹上去会动到编辑器所在子树的结构（见 `SQLEditorView.swift:58`）。
+    private var available: CGFloat? {
+        (NSApp.keyWindow ?? NSApp.mainWindow)?.contentView?.frame.height
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            if appState.isLowerPaneVisible, appState.isLowerPaneMaximized {
+                LowerPaneView(tab: appState.selectedTab)
+            } else {
+                // **星云皮肤用显式叠层**：`.background()` 是铺在内容**下层**，
+                // 只要内容里有任何一处不透明就会被整片盖住（2026-10-01 实测：侧栏能看到星云、
+                // 内容区看不到，根因就是 `QueryWorkspaceView` 自己铺了 `.background(.content)`）。
+                // 改成 `ZStack` 后**星云在下、内容在上**，且 `allowsHitTesting(false)` 不吃点击。
+                ZStack {
+                    Theme.surface(.content)
+                    NebulaBackground(layer: .content)
+                    content
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                // 顶边**拖拽把手**（队列 `L-181`）：拖动改面板高度，拖出来的值持久化在 `AppState`。
+                // 为什么不是回到 `VSplitView`：它的子视图数必须在构建时固定，显示/隐藏之间切换会
+                // **重建编辑器子树**（`App/Views/SQLEditorView.swift:58` 有实测记录）—— 那会把正在
+                // 编辑的滚动位置与撤销栈一起弄丢。这条把手只改面板自身的高度，**层级不变**。
+                LowerPaneResizeHandle(
+                    onDrag: { translation in
+                        // **只动临时值**：不写模型、不落盘（每帧写一次就是「闪」的根因）。
+                        drag.update(height: appState.lowerPaneHeight,
+                                    translation: translation,
+                                    available: available)
+                    },
+                    onEnd: { commitDrag() }
+                )
+                LowerPaneView(tab: appState.selectedTab, isCollapsed: isCollapsed)
+                    // 高度提示**由面板自己那一层算**（`LowerPaneSizing`）：
+                    // 折叠态必须是「不设约束」，否则这里会留下一条比标题栏宽的空白带
+                    // （2026-09-30 需求提出者实测缺陷，队列 `L-121`—— 原来这里写死
+                    //  `.frame(minHeight: 90, idealHeight: 200)`，折叠后那 90pt 的框还在）。
+                    // **展开态钉死高度**（`FR-EDIT-29` 人工点验不过的修法）：原来这里是
+                    // `.frame(minHeight:idealHeight:)` 两个提示，而面板内部通篇
+                    // `maxHeight: .infinity` ⇒ 父级 VStack 按「两个可伸缩子视图」分配剩余高度，
+                    // 理想高度只是个愿望，拖出来的值落不到布局上，分隔条一动不动。
+                    // 折叠态给 `nil`：让面板按标题栏一行自量（`L-121` 的空白带口径不变）。
+                    .frame(height: LowerPaneResize.panelHeight(
+                        dragged: height,
+                        collapsed: isCollapsed,
+                        available: available
+                    ))
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    /// 松手：**整场拖动只有这一处写模型**（`didSet` 因此只落一次盘）——
+    /// 拖动中写模型的次数是 0，这是「不闪」的机械根据（判据 `Tests/LowerPaneDragTests`）。
+    private func commitDrag() {
+        switch drag.end() {
+        case .none:
+            break
+        case let .commit(next):
+            appState.lowerPaneHeight = next
+            // 拖得出高度 ⇒ 面板必须是展开的（折叠态从下面往上拖同样走这里）。
+            if !appState.isLowerPaneVisible { appState.isLowerPaneVisible = true }
+        case .collapse:
+            appState.isLowerPaneVisible = false
+        }
+    }
+}
 
 /// 下方面板顶边的**拖拽把手**（队列 `L-181`；`FR-EDIT-29` 人工点验不过后重做）。
 ///
@@ -630,25 +677,14 @@ struct ConnectionSwitchSheet: View {
 /// 子视图，**理想高度只是个愿望**：拖出来的值改不动真正的布局，分隔条自然一动不动。
 /// 现在：展开态**钉死**高度（`LowerPaneResize.panelHeight` 给的确定值），拖一下就是一下。
 ///
-/// 形态：一条发丝线 + 一个 8pt 高的命中区（2pt 的线谁也点不着）。拖动按**相对位移**算：
-/// 按下那一刻的高度记在引用盒里（不进 `@State` —— 父视图每帧重算时 `@State` 可能被换掉，
-/// 起点一丢就成了「越拖越快」）。
+/// **形态**：一条发丝线 + 一个 8pt 高的命中区（2pt 的线谁也点不着）。
+/// 这个视图**自己不记账、不写模型**：只把「本帧位移 / 松手」两条回调交出去，
+/// 起点与落点都在 `LowerPaneSection` 那一层（拖动中不碰 `AppState`，见那边的注释）。
 struct LowerPaneResizeHandle: View {
-    /// 当前高度（来自 `AppState`，持久化）。
-    let height: CGFloat
-    /// 可用高度：拿窗口内容高度当代理（`nil` ⇒ 由 Core 走兜底上限）。
-    let available: CGFloat?
-    /// 写回（已由 Core 夹过范围）。写回即视为「要看见面板」⇒ 由调用点负责展开。
-    let commit: (CGFloat) -> Void
-    /// 拖到最小高度以下 ⇒ 折叠（高度值**不改**，展开时原样恢复）。
-    let collapse: () -> Void
-
-    /// 拖拽起点（引用盒，见类型注释）。
-    @State private var origin = DragOrigin()
-
-    final class DragOrigin {
-        var height: CGFloat?
-    }
+    /// 本帧的**累计**竖向位移（`DragGesture.translation.height`；往上为负）。
+    let onDrag: (CGFloat) -> Void
+    /// 松手 —— 整场拖动的**唯一**落盘点。
+    let onEnd: () -> Void
 
     var body: some View {
         ZStack {
@@ -662,32 +698,13 @@ struct LowerPaneResizeHandle: View {
                 }
                 .gesture(
                     DragGesture(minimumDistance: 1)
-                        .onChanged { value in
-                            let base = origin.height ?? height
-                            origin.height = base
-                            switch LowerPaneResize.outcome(
-                                startHeight: base,
-                                translation: value.translation.height,
-                                available: available
-                            ) {
-                            case let .resize(next): commit(next)
-                            case .collapse: collapse()
-                            }
-                        }
-                        .onEnded { _ in origin.height = nil }
+                        .onChanged { value in onDrag(value.translation.height) }
+                        .onEnded { _ in onEnd() }
                 )
         }
         .frame(height: 8)
         // 判据 / 点验抓手：这一条是「面板能拖」的唯一入口，界面快照与探针都按它找。
         .accessibilityIdentifier("lower-pane-resize-handle")
-    }
-}
-
-private extension MainWindow {
-    /// 可用高度：**窗口内容高度**当代理。
-    /// 刻意不引 `GeometryReader` —— 那一层裹上去会动到编辑器所在子树的结构（见 `SQLEditorView.swift:58`）。
-    var lowerPaneAvailableHeight: CGFloat? {
-        (NSApp.keyWindow ?? NSApp.mainWindow)?.contentView?.frame.height
     }
 }
 

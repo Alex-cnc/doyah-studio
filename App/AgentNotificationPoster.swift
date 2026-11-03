@@ -37,11 +37,11 @@ enum AgentNotificationPoster {
         let request = UNNotificationRequest(identifier: UUID().uuidString,
                                             content: content,
                                             trigger: nil)
-        // **兜底：Dock 角标**（人类主人 2026-11-03 实测：ad-hoc 签名的包里
-        // `requestAuthorization` 返回了但系统**不弹框、也不登记**，于是横幅永远不来）。
-        // 横幅这条路受签名主体限制，不是本端代码能保证的；Dock 角标不依赖任何授权，
-        // 切后台回来一眼就能看见「有结果了」。回到前台由 `clearDockBadge()` 清掉。
-        NSApplication.shared.dockTile.badgeLabel = "1"
+        // **角标不在这里置**（2026-11-03 人类主人实机点验：「跑完 ⌘H 隐藏，Dock 没有角标」的根因）：
+        // 本方法只在这条通知**真该出**时才被调用（`plan.system != nil`），而那一格被
+        // `paneIsVisible`（= `NSApp.isActive`）那道闸拦住 ⇒ **App 在前台跑完时一次都不会走到这里**，
+        // 把角标写在这儿等于「只有后台完成才可能有角标」。现在角标跟着收尾回调走
+        // （`AgentChatModel.taskFinishedSink` → `markTaskFinished()`），与弹不弹通知无关。
         Task {
             // 首次会弹系统授权框；用户已决定过则是空操作（不会反复打扰）。
             _ = try? await center.requestAuthorization(options: [.alert, .sound])
@@ -49,10 +49,25 @@ enum AgentNotificationPoster {
         }
     }
 
-    /// 回到前台后清角标（谁在 `applicationDidBecomeActive` 里调一次）。
+    /// **回到前台后清角标**（谁在 `applicationDidBecomeActive` 里调一次）。
     @MainActor
     static func clearDockBadge() {
         NSApplication.shared.dockTile.badgeLabel = nil
+    }
+
+    /// **这一轮收尾了 ⇒ 置 Dock 角标**（`FR-AGT-UX-CONV-008` 的兜底出口）。
+    ///
+    /// 归口在「收尾」而不是「投通知」这一条回调里，是 2026-11-03 人类主人实机点验的直接结论：
+    /// 他跑完长任务 `⌘H` 隐藏应用，Dock 上**什么都没有**。根因不是权限也不是签名 ——
+    /// 是置角标那句原来写在 `post()` 里，而 `post()` 只在 `plan.system != nil` 时才被调用，
+    /// 那一格又被 `paneIsVisible`（= `NSApp.isActive`）挡住 ⇒ 在前台跑完时**一次都不走到**。
+    ///
+    /// 两条判据分开：`AgentNotifyPolicy` 判「要不要打扰他」（前台不弹、短任务不弹），
+    /// 这一格判「有没有结果待看」—— **不判前台后台**，置上就等着他回来。
+    /// 清角标在 `clearDockBadge()`（App 被激活时调）。
+    @MainActor
+    static func markTaskFinished() {
+        NSApplication.shared.dockTile.badgeLabel = "1"
     }
 
     /// **启动即申请一次授权**（人类主人 2026-11-03 实测：任务跑完没弹框）。

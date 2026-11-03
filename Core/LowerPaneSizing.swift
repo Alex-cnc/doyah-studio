@@ -95,3 +95,72 @@ public enum LowerPaneResize {
         return LowerPaneSizing.clamped(height: dragged, available: available)
     }
 }
+
+// MARK: 一次拖拽的「过程账」
+
+/// 一次拖分隔条的**过程账** —— 拖动中只动临时值，模型与磁盘只在松手那一下碰一次。
+///
+/// ## 为什么要有这一层（`FR-STD-WS-TOOL-001`，2026-11-03 真机点验「拖分隔条时明显闪烁」）
+///
+/// 拖动是**每一帧**都会回调的（60–120 次/秒）。原来视图在 `DragGesture.onChanged` 里
+/// 每帧写 `AppState.lowerPaneHeight`（`@Published`，`didSet` 里还落一次 `UserDefaults`）——
+/// 一次 `@Published` 写入 = 窗口里**所有**观察 `AppState` 的视图重算一遍（编辑器 / 终端 /
+/// 侧栏 / 状态栏…），每帧一轮；再叠上每帧写 `isLowerPaneVisible` 与拖过下限时
+/// 「折叠 / 展开」每帧互翻（面板子树反复拆建）⇒ 观感就是整块面板在闪。
+///
+/// 口径：**`update` 只回一个显示用的临时高度**（不落盘），`end` 才给出唯一一次落点。
+/// 纯逻辑、无 UI 依赖，判据在 `Tests/LowerPaneDragTests`。
+public struct LowerPaneDragSession: Equatable {
+
+    /// 一次拖拽的落点 —— 松手时**一次性**交给模型。
+    public enum Commit: Equatable {
+        /// 这一场没有可落的（只是点了一下，没有位移）。
+        case none
+        /// 面板高度定成这个值（已夹过范围）。
+        case commit(CGFloat)
+        /// 拖到最小高度以下 ⇒ 折叠（高度值不改，展开时原样恢复）。
+        case collapse
+    }
+
+    /// 本场已经过了几帧（判据用：验证「多帧只落一次盘」）。
+    public private(set) var frames = 0
+    /// 拖动中该显示的高度；`nil` = 还没开始 / 已收场。
+    public private(set) var live: CGFloat?
+    /// 拖到最小高度以下 —— **松手才真折叠**：拖动中就折叠会让面板子树反复拆建（那是闪的另一半）。
+    public private(set) var pendingCollapse = false
+    /// 按下那一刻的高度：一次手势只记一次，之后按**相对位移**算（不会越拖越快）。
+    private var base: CGFloat?
+
+    public init() {}
+
+    /// 一帧：`translation` 是 `DragGesture` 报的**累计**位移（往上为负 ＝ 面板变高）。
+    /// 返回值就是这一帧该显示的高度 —— **只回给视图，不碰模型**。
+    @discardableResult
+    public mutating func update(height: CGFloat, translation: CGFloat, available: CGFloat?) -> CGFloat? {
+        if base == nil { base = LowerPaneSizing.clamped(height: height, available: available) }
+        frames += 1
+        switch LowerPaneResize.outcome(startHeight: base ?? height, translation: translation, available: available) {
+        case let .resize(next):
+            pendingCollapse = false
+            live = next
+        case .collapse:
+            // 拖过下限：面板先**停在最小高度**（看得见「再往下就是收起」），折叠留到松手。
+            pendingCollapse = true
+            live = LowerPaneSizing.draggableMinHeight
+        }
+        return live
+    }
+
+    /// 松手：给出**整场唯一**一次要写进模型的落点，并把过程账清零。
+    public mutating func end() -> Commit {
+        defer {
+            base = nil
+            live = nil
+            pendingCollapse = false
+        }
+        if pendingCollapse { return .collapse }
+        guard let live else { return .none }
+        return .commit(live)
+    }
+}
+

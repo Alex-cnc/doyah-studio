@@ -118,6 +118,12 @@ struct DoyahStudioApp: App {
                 .environmentObject(workspace)
                 .environmentObject(workspaceTabs)
                 .environmentObject(agentChat)
+                // **回到前台就清 Dock 角标**（`FR-AGT-UX-CONV-008` 的收尾那一半）：
+                // 这是 `applicationDidBecomeActive` 在 SwiftUI 里的等价处 —— 通知由 AppKit
+                // 在 App 真被激活时发出。角标只在「有结果待看」期间挂着，人一回来就撤。
+                .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+                    Task { @MainActor in AgentNotificationPoster.clearDockBadge() }
+                }
                 .onAppear {
                     // 对话页签的接线（`FR-AI-25`）：端点状态取自智能体设置；循环与「兑现批准」都由 `AppState` 出。
                     agentChat.endpointProvider = { appState.agentChatEndpointState }
@@ -186,6 +192,10 @@ struct DoyahStudioApp: App {
                     agentChat.notifySink = { note in
                         AgentNotificationPoster.post(title: note.title, body: note.body)
                     }
+                    // **Dock 角标走「收尾」这条回调，不走 `notifySink`**（2026-11-03 人类主人实测：
+                    // 前台跑完 `⌘H` 隐藏，Dock 没角标）—— 那一条只在「人不在看」时才被调用。
+                    // 角标这里**不判前台后台**，回到前台由 `didBecomeActive` 那条清掉。
+                    agentChat.taskFinishedSink = { AgentNotificationPoster.markTaskFinished() }
                     agentChat.paneIsVisible = { NSApplication.shared.isActive }
                     // `FR-AI-22` ② 工作区现场读数（当前文件 / 选中范围 / 终端尾部）：
                     // 取数在界面（三样分属三个模型，`AppState` 不持有），换算是纯函数
