@@ -22,6 +22,11 @@ enum AgentNotificationPoster {
 
     /// 立刻投递一条（`trigger: nil` = 马上）。标识每次新起一个：智能体通知不是「可撤销的排期」，
     /// 撤不掉也不该被后一条覆盖。
+    ///
+    /// **投递前必须先要授权**（人类主人 2026-11-03 实测：「系统设置-通知列表里找不到 DoyahStudio」）：
+    /// 原来这里直接 `center.add(request)`，从未调过 `requestAuthorization` ⇒
+    /// ① 系统静默丢弃这条通知；② 应用**根本不会出现在「系统设置 → 通知」的列表里**
+    /// （macOS 只在应用请求过授权之后才登记它）。所以用户既收不到、也找不到开关去授权。
     static func post(title: String, body: String) {
         guard let center = center else { return }
         let content = UNMutableNotificationContent()
@@ -31,7 +36,11 @@ enum AgentNotificationPoster {
         let request = UNNotificationRequest(identifier: UUID().uuidString,
                                             content: content,
                                             trigger: nil)
-        center.add(request)
+        Task {
+            // 首次会弹系统授权框；用户已决定过则是空操作（不会反复打扰）。
+            _ = try? await center.requestAuthorization(options: [.alert, .sound])
+            try? await center.add(request)
+        }
     }
 
     /// 没有 bundle 标识的进程（`swift test` 宿主）里取中心会抛 ObjC 异常 ⇒ 先判。
