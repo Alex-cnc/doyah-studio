@@ -1,5 +1,18 @@
 # 检查点
 
+## `check-menu-language` 收口：探针收起器改挂 `.common` 定时器（`verify-all` 第 11 项转绿 · 队列 0 todo / 21 blocked）· 2026-11-03
+
+- **队列仍 0 todo / 21 blocked**（`plan-batches.py --version 0.7.0 --check` rc=0）⇒ 不开批次、不动台账状态列。本跳收的是 `verify-all` 第 11 项**最后一处机器面存量红**，上一跳记的是「要图形会话、需主人终端跑一次」—— 这条前提被测否。
+- **真缺陷（探针，不是判据松口）**：`MainMenuLocalizer.openEveryTopLevelMenu` 的收起器排的是 `DispatchQueue.main.asyncAfter`，而菜单跟踪期间 run loop 走 `NSEventTracking` 模式 ⇒ 主队列那一路一次没被抽 ⇒ `cancelTracking()` 从未触发 ⇒ 主线程在 `-[NSMenu popUpMenuPositioningItem:atLocation:inView:appearance:]` 里挂了 **40 分钟**（`sample` 栈，pid 46075 自 12:26 起；本轮已 kill），两档都「等了 120 秒没等到 dump」⇒ 台账只能记「未执行」。本机 `launchctl managername` = **Aqua**、`gui/501` 在线 ⇒ 「无人值守没有图形会话」不成立。
+- **改法**：收起器改挂 `RunLoop.main.add(timer, forMode: .common)`（`.common` 含 `NSEventTracking`），两枚仍在（0.6 s / 1.6 s 兜底）；`popUp` 前后各写一行 stderr 点名菜单（下次挂住直接看日志，不必 `sample`）。
+- **同批上判据**：新 `Tests/MainMenuProbeWiringTests` **2 例** —— ① 真源码：`openEveryTopLevelMenu` 体内零 `DispatchQueue.main.asyncAfter`、必须 `forMode: .common`、必须有 `menu-expand:` 点名；② 负例夹具：旧写法必判红、合规写法必判绿、注释里的历史记录不许判红（剥注释）。
+- **读数**：`check-menu-language` **rc=0**（两档 × A/C/B 三段：C 段条目 117 / 识别 113 / 停启动语言 0 / 未覆盖 0；展开族一条不少）· `--self-test` **19/19** · `swift test --filter MainMenuProbeWiringTests` **2 例 0 失败** · `verify-core` **5368 例 / 16 skipped / 0 失败**（5366 → +2）· 十道文档门禁 rc=0（numbers 三向 5368）。
+- **反例（真源码注入）**：把 `.common` 定时器换回 `DispatchQueue.main.asyncAfter` ⇒ 判红两条（「又用回了 DispatchQueue…」「没挂 .common 模式」）；还原后 `sha256` **04587f88…** 逐字节一致、2/2 复绿。
+- **`verify-all.sh --keep-going` 全量实跑（13:13→13:36，日志 `.build/verify-20261103-131317.log`）**：项块 19 · **失败 3 项 / 7 处** · 平台跳过 0 · **未执行 = 无**。第 1 项 `swift test` 5368 / 16 skipped / 0 失败；**第 11 项菜单语言 + 打包 ✅**（本轮真跑成）；第 18 项生成物一致性 ✅。
+- **余 3 项红的归属（不是本片：逐条核过不在本片改动面上）**：① 第 4 项 `check-req-index`（`requirement-index.jsonl` 与正文不一致，派生件待重生成）；② 第 7 项 `gen-platform-parity / gen-studio-win-align / gen-platform-board / check-board-parity` 四道（派生看板相对台账过期）；③ 第 16 项 `check-path-ownership`（台账 `Docs/Doyah产品开发计划任务清单-macOS.md` 这一条共享面未在提交信息里登记理由）。三者都起自**同克隆里另一写者的 4 笔未推提交**（`ae878be6` ORG-002 收口 / `271f0ac4` ORG-002 口径再订正 / `6196d343` LANG-001 拍板 A / `8dfedbcf` UI-001 收窄，`local HEAD = 8dfedbcf`，`origin/master = c3dd2ac2`）—— 它们改了台账与需求书却**没有重出派生看板**、也没写 `shared-surface:`。
+- **本跳不代它重出那两块看板**：`gen-platform-parity` 会把 `FR-NTS-NOTE-ORG-002` 的判据格改写成「实现 ✅」，而 ORG-002 的口径正在被另一写者按主人令改写（`plan.yaml` 里它还是 blocked）⇒ 现在重出等于替别人的口径拍板。记在余账里，谁改台账谁重出。
+- **下一项 ID：无**（0 todo / 21 blocked）。机器面**已无**需要主人图形会话的红（上一跳那条「需主人跑 `check-menu-language`」作废）。
+- 证据 `.agent/evidence/2026-11-03-check-menu-language-probe.md`；提交见下一条落号记录。
 
 ## `check-format-arguments` 收口：判据 D 预算口径归正 + 15 个新形状登记（队列 0 todo / 21 blocked）· 2026-11-03
 

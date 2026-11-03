@@ -418,14 +418,34 @@ enum MainMenuLocalizer {
             passes += 1
             for item in mainMenu.items {
                 guard let submenu = item.submenu else { continue }
-                // `popUp…` 是**阻塞**的（内含菜单跟踪循环）⇒ 先排一个定时收起器，
+                // `popUp…` 是**阻塞**的（内含菜单跟踪循环）⇒ 必须先排定时收起器，
                 // 否则探针就挂在这个循环里出不来（收起后 `popUp…` 返回，接着展开下一个）。
-                // **两个**收起定时器：实测偶发「第一次收起没生效 ⇒ `popUp…` 一直不回」，
-                // 第二个定时器把那一路兜住（探针挂住 = 这一档压根出不了 dump）。
+                //
+                // **收起器必须挂 run loop 的 `.common` 模式，不许用 `DispatchQueue.main.asyncAfter`**：
+                // 菜单跟踪期间 run loop 走的是 `NSEventTracking` 模式，主队列那一侧**不保证**被抽
+                // （2026-11-03 实测：`asyncAfter` 那一路在真 App 里一次没触发 ⇒ 主线程在
+                // `-[NSMenu popUpMenuPositioningItem:atLocation:inView:appearance:]` 里挂了 40 分钟，
+                // 而同一份逻辑在小探针里能回 —— 差别就在 App 的 run loop 已被 AppKit 收进跟踪模式）。
+                // `.common` 模式含 `NSEventTracking` ⇒ 定时器照常到点。
+                //
+                // **两个**收起器：实测偶发「第一次收起没生效 ⇒ `popUp…` 一直不回」，第二个兜住。
+                var cancellers: [Timer] = []
                 for delay in [0.6, 1.6] {
-                    DispatchQueue.main.asyncAfter(deadline: .now() + delay) { submenu.cancelTracking() }
+                    let timer = Timer(timeInterval: delay, repeats: false) { _ in
+                        submenu.cancelTracking()
+                    }
+                    RunLoop.main.add(timer, forMode: .common)
+                    cancellers.append(timer)
                 }
+                // 探针进度写 stderr：哪一天又挂住，日志能直接点名是哪个菜单（不必再 sample 进程）。
+                FileHandle.standardError.write(
+                    Data("menu-expand: pass=\(passes) popUp `\(item.title)`\n".utf8)
+                )
                 _ = submenu.popUp(positioning: nil, at: NSPoint(x: 30, y: 30), in: nil)
+                for timer in cancellers { timer.invalidate() }
+                FileHandle.standardError.write(
+                    Data("menu-expand: pass=\(passes) done `\(item.title)`\n".utf8)
+                )
             }
             if missingConditionalItems().isEmpty { break }
         }
