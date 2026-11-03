@@ -1,5 +1,17 @@
 # 检查点
 
+## 零网络出口台账补登 13 件 + 两处夹具漏带（判据面 · 无台账行）· 2026-11-03
+
+- **没有可认领的 todo**：`plan-batches --check` rc=0（0 条待办 / 28 blocked 全卡外部）。本跳不开「判据维护跳」（预算仍按 `rules.md` 出口第 5 条用满计数），做的是**上一跳留下的实红里两处「红在错误的原因上」**：夹具副本没跟台账同集合。
+- **① 零网络出口（`check-notes-offline`，上一跳判「22 份未登记」）**：`v0.4.0`–`v0.7.0` 落地的 13 件笔记/许可源文件从没登记进 `scope`（`Core/License{DeviceStore,Highlights,Scope,StatusLine}` + `Note{Archive,AttachmentStore,Capture,LandingPage,Privacy,Trash,Version}` + `TodoNoteLink` + `NoteSync/SyncConflictResolution`）。逐件核过：`import` 面只有 `Foundation`、18 项令牌 **0 命中** ⇒ 登记进 `scope` 是**记事实**，不是放宽判据；许可链 4 件按既有惯例同批进 `scopeBeyondIsolation` 并写理由。`minFiles` 36 → **51**（收紧）。
+- **② 夹具漏带（两族同病）**：`test-notes-offline-gate` 16/20 → **20/20**（少带 13 件 ⇒「干净副本」假红）；`test-cli-failure-readability` 32/34 → **34/34**（台账 `outputScan.files` 里有 `CLI/AgentIMCommand.swift`、副本没带 ⇒「扫描目标不存在」+ 入口 61 < 62）。**两处都不是产品缺陷，是判据自己红错了原因**。
+- **读数**：`check-notes-offline` rc=0（范围 **51** × 令牌 18 · 命中 **0**）· `test-notes-offline-gate` **20/20** · `test-cli-failure-readability` **34/34** · `check-self-test-counts` **✅ 全过**（族 56 / 例 1077 / 锚点 86；修前红 1 族 = `cli-failure-readability`）· `check-path-ownership` 提交后单跑 **PASS**（受检 8 条 / 未登记 0）。反例三段：往**新登记的** `NotePrivacy.swift:69` / `LicenseDeviceStore.swift:157` 各注入 `URLSession.shared` ⇒ 门禁 rc=1 点名该文件，两处还原后 rc=0（`/tmp/nog-neg` 副本）。
+- **全量（08:11 那趟，本跳实跑）**：`verify-all.sh --keep-going` 项块 **19** · 失败 **4 项（5 处）** · 未执行 **0** —— 第 3 项 `check-format-arguments`（230 > 预算 190）+ `check-button-icon-only`（NotesPanel 7 处文案 + 8 处未登记）· 第 4 项 `check-self-test-counts`（本跳修绿）· 第 11 项 `check-menu-language`（真启动等不到 dump）· 第 16 项 `check-path-ownership`（工作树未提交，提交后单跑 PASS）。
+- **⚠️ 修后未重跑全量**（只重跑了改动面那四族 + 第 16 项）⇒ 按 08:11 读数扣掉已单跑转绿的 4 / 16 两项，**推算余红 3 处 / 2 项**（第 3 项两处 + 第 11 项一处）；不按推算报绿。
+- **余红三分**：确定性 **3 处 / 2 项**（`format-arguments` 预算 · `icon-only` NotesPanel · `menu-language` 真启动取证）· 抖动 0 · 未复现 0。三处都是真产品面债（改法要动界面文案 / 逐处登记 / 真启动环境），**要动仍需派单或主人拍板**。
+- **提交**：`5b4a2d19`（5 文件：台账 + 两份夹具 + 证据 + decisions）。证据 `.agent/evidence/2026-11-03-notes-offline-register.md`。
+
+
 ## 自检「绿对照」族：真仓库红 8 族收口 + 2 条真缺陷（判据维护 · 无台账行）· 2026-11-03
 
 - **无台账行**（判据维护 · 本版最后一跳）。清的是上一跳点名的最后一族：自检的「绿对照」例要求「真仓库副本全过」，真仓库一红它就跟着红 —— 所以修法只能是**修真红**，不是改自检。
