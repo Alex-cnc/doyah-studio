@@ -51,8 +51,12 @@ struct WorkspaceExplorerView: View {
             ),
             presenting: pendingDeletion
         ) { entry in
-            ToolbarIconButton(systemName: "xmark.circle", help: L(.commonCancel), role: .cancel) { pendingDeletion = nil }
-            ToolbarIconButton(systemName: "checkmark", help: L(.workspaceDeleteConfirmAction), role: .destructive) {
+            // **必须是真按钮 + 看得见的文字**（2026-11-03 主人点验：原来这里用的是图标按钮
+            // `ToolbarIconButton(systemName:)`，在 `.alert` 的 actions 里渲染不成「取消 / 删除」
+            // 两个可选项，界面上只剩一个像 OK 的按钮，且点了也不走删除 —— 用户既选不了，
+            // 也看不懂它在问什么)。取消在前、破坏性动作在后，与 macOS 系统习惯一致。
+            Button(L(.commonCancel), role: .cancel) { pendingDeletion = nil }
+            Button(L(.workspaceDeleteConfirmAction), role: .destructive) {
                 if workspace.delete(entry), selectedPath == entry.relativePath { selectedPath = nil }
                 pendingDeletion = nil
             }
