@@ -86,10 +86,14 @@ struct LowerPaneView: View {
             )
         ) {
             TextField(L(.terminalTabRename), text: $terminal.renameDraft)
-            ToolbarIconButton(systemName: "checkmark", help: L(.commonOk)) {
+            // **必须真 `Button` + 可见文字**（人类主人 2026-11-03：「终端页签还是不能改名」）：
+            // 原来这两个是 `ToolbarIconButton(systemName:)`（✓ / ✕ 图标），在 `.alert` 的
+            // actions 里渲染不成「好 / 取消」，确认那一枚不落地 ⇒ 点了没反应、名字回默认值。
+            // 与 `WS-FS-006` 删除确认框、`WS-UI-014` 对话框按钮是同一族缺陷。
+            Button(L(.commonOk)) {
                 if let id = terminal.renamingTab { terminal.rename(id: id, to: terminal.renameDraft) }
             }
-            ToolbarIconButton(systemName: "xmark.circle", help: L(.commonCancel), role: .cancel) { terminal.renamingTab = nil }
+            Button(L(.commonCancel), role: .cancel) { terminal.renamingTab = nil }
         } message: {
             Text(L(.terminalTabRenameMessage))
         }
