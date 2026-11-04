@@ -288,7 +288,7 @@ BLOCKED_V070: dict[str, str] = {
     "FR-STD-DB-META-002": "GBase 8a 按 2026-11-02 主人令挂起（台账记 ➖）：无法安装部署、暂不支持；"
                          "解挂条件 = 主人给出可连的 GBase 实例",
     "NFR-NTS-ALL-DIST-001": "三端（安卓 / iOS / 鸿蒙）各要独立应用包与商店材料，本机只有 macOS ⇒ 分发与签名口径要主人定",
-    "FR-NTS-ALL-PARITY-001": "「安卓为基准端」是端间承诺：差异要逐条登记进《平台对齐-移动端-以安卓为基准》，"
+    "NFR-NTS-ALL-PARITY-001": "「安卓为基准端」是端间承诺：差异要逐条登记进《平台对齐-移动端-以安卓为基准》，"
                             "另两端不在场 ⇒ 登记表核不了，标「等价」也没人对着看",
 }
 
@@ -356,7 +356,7 @@ VERSION_SPECS: dict[str, dict] = {
                       "FR-NTS-NOTE-ORG-001", "FR-NTS-NOTE-TRASH-001",
                       "FR-NTS-NOTE-SYNC-001", "FR-NTS-NOTE-EXPORT-001",
                       "FR-NTS-ALL-HOME-001", "FR-NTS-ALL-LIC-001",
-                      "NFR-NTS-ALL-DIST-001", "FR-NTS-ALL-PARITY-001",
+                      "NFR-NTS-ALL-DIST-001", "NFR-NTS-ALL-PARITY-001",
                       "FR-STD-WS-FS-008", "FR-STD-WS-TOOL-001", "FR-STD-WS-AI-002",
                       "AC-ALL-GATE-REL-004", "AC-ALL-GATE-REL-005", "AC-ALL-GATE-REL-006",
                       "FR-STD-DB-META-002"),
