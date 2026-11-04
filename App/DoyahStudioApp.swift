@@ -287,7 +287,11 @@ struct DoyahStudioApp: App {
                     // —— 同一个 `AgentChatModel`、同一套审批（IM 不构成授权）。
                     // 三档如实回：没开工作区 ⇒ 起不来；停在审批上 ⇒ 说清等桌面批准；跑完了 ⇒ 取**这一轮新出的**
                     // 那条助手消息（不取历史里最后一条，否则会把上一轮的结论当成这一次的）。
-                    appState.agentIMTaskRunner = { task in
+                    // 逾期补发（那一轮先回过「还在跑」的）：收尾时把结论送回同一条聊天。
+                    agentChat.imLateDelivery = { text in
+                        appState.deliverAgentIMLateText(text)
+                    }
+                    appState.agentIMTaskRunner = { task, progress in
                         workspaceTabs.openAgentChat()
                         guard let root = workspace.rootPath, !root.isEmpty else {
                             return .unavailable(code: "noWorkspace")
@@ -295,10 +299,10 @@ struct DoyahStudioApp: App {
                         // 会话号由 Core 给（同一 chat 永远同一条）：接管它，两个 chat 才不会共用一份上下文。
                         agentChat.adoptSession(task.sessionID, workspacePath: root)
                         // **跑一轮的判定在 `AgentChatModel.runFromIM`**（真值对齐 / 忙就如实说忙 /
-                        // 收尾分五档）。2026-11-04 真机的「没有产出结论」正是旧实现把五种结局压成一档：
+                        // 收尾分档）。2026-11-04 真机的「没有产出结论」正是旧实现把五种结局压成一档：
                         // 面板没刷过端点 ⇒ 这一轮连请求都没发，手机那头只能拿到一句「没结论」。
-                        // 这里只把结局翻译成 Core 的三档 —— **真原因原样带出去**（码由语言表翻人话）。
-                        switch await agentChat.runFromIM(prompt: task.prompt) {
+                        // 这一轮的过程播报（第几步 / 在跑什么）也交给它：`progress` 是节流过的出口。
+                        switch await agentChat.runFromIM(prompt: task.prompt, progress: progress) {
                         case let .answered(text):
                             return .answered(text)
                         case .awaitingApproval:
@@ -307,11 +311,20 @@ struct DoyahStudioApp: App {
                             StartupLog.write("IM 跑一轮没开跑 code=\(code)")
                             return .unavailable(code: code)
                         case let .failed(detail):
-                            StartupLog.write("IM 跑一轮失败 detail=\(detail)")
+                            // **技术串必须落盘**（两处：日志 + 审计）。真机上这一句以前只进了
+                            // `startup.log`，还被 200 行上限挤掉 ⇒ 手机那头一句「跑到一半失败了」，
+                            // 桌面这边什么都查不到。
+                            let diagnostics = agentChat.imTurnDiagnostics
+                            await appState.recordAgentIMTurnFailure(detail: detail, diagnostics: diagnostics)
                             return .unavailable(code: "taskFailed")
                         case let .noText(steps):
                             StartupLog.write("IM 跑一轮跑完但没有正文 步数=\(steps)")
                             return .unavailable(code: "noText")
+                        case let .stillRunning(elapsed, hop, toolCalls, lastTool):
+                            // **不是失败**：桌面还在跑，手机那头先拿一句「还在跑，结论会补一条」。
+                            let diagnostics = "第 \(hop) 跳 / 模型请求 \(hop) 次 / 工具 \(toolCalls) 次 / 最后一条工具 \(lastTool ?? "-")"
+                            StartupLog.write("IM 轮次仍在跑：\(Int(elapsed)) 秒 · \(diagnostics)（结论收尾后补发）")
+                            return .timedOut(seconds: Int(elapsed), stillRunning: true)
                         }
                     }
                     // 工作区打开文件的路由（队列 `L-149` 剩余②）：登记表说「默认用浏览器打开」的
@@ -384,6 +397,14 @@ struct DoyahStudioApp: App {
 enum StartupLog {
     private static let lock = NSLock()
 
+    /// 留多少行。原来是 **200**：真机上「工作区监听」一次编译就能刷几百行，
+    /// 于是 IM 那一轮的唯一一行失败记录在几分钟内就被挤掉了 —— 查故障时日志里什么都没有
+    /// （2026-11-04 主人原话：「最烦的是日志里什么都没留下」）。现在 2000 行 + 重要行不参与计数淘汰。
+    private static let maxLines = 2_000
+
+    /// 重要行（IM 轮次结局 / 失败原因）在文件里带这个前缀的前半，淘汰时最后才动它。
+    private static let importantMarker = "【重要】"
+
     private static var fileURL: URL {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
             ?? URL(fileURLWithPath: NSTemporaryDirectory())
@@ -392,15 +413,30 @@ enum StartupLog {
             .appendingPathComponent("startup.log", isDirectory: false)
     }
 
-    static func write(_ message: String) {
+    static func write(_ message: String, important: Bool = false) {
         lock.lock()
         defer { lock.unlock() }
         let formatter = ISO8601DateFormatter()
-        let line = "\(formatter.string(from: Date())) \(message)\n"
+        let body = important ? importantMarker + message : message
+        let line = "\(formatter.string(from: Date())) \(body)\n"
         let url = fileURL
         var lines = (try? String(contentsOf: url, encoding: .utf8))?.split(separator: "\n").map(String.init) ?? []
         lines.append(line.trimmingCharacters(in: .newlines))
-        if lines.count > 200 { lines.removeFirst(lines.count - 200) }
+        if lines.count > maxLines {
+            // 先淘汰**不重要**的最旧行（就地删，**不打乱顺序** —— 时间线是这份日志的全部用处）；
+            // 全都重要才动最旧的（重要行也终有上限，不然文件无限长）。
+            var overflow = lines.count - maxLines
+            var index = 0
+            while overflow > 0, index < lines.count {
+                if lines[index].contains(importantMarker) {
+                    index += 1
+                } else {
+                    lines.remove(at: index)
+                    overflow -= 1
+                }
+            }
+            if lines.count > maxLines { lines.removeFirst(lines.count - maxLines) }
+        }
         try? FileManager.default.createDirectory(
             at: url.deletingLastPathComponent(),
             withIntermediateDirectories: true

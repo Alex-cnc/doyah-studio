@@ -50,6 +50,9 @@ public struct AgentStandardDispatcher: AgentToolDispatcher {
     public var web: AgentWebTools
     /// 只读 / 写审批的策略（`FR-AI-23` ⑥：只读模式下写类**连单都建不出来**）。
     public var guardPolicy: AgentGuardPolicy
+    /// **同一条只读调用不许一轮里反复做**（提示词第 5 条的机械落地）。
+    /// `nil` = 不装闸（既有测试与 CLI 那条路一字不变）。
+    public var repeatGuard: AgentRepeatGuard?
 
     public init(registry: AgentToolRegistry = .standard,
                 workspace: AgentWorkspaceTools? = nil,
@@ -59,7 +62,8 @@ public struct AgentStandardDispatcher: AgentToolDispatcher {
                 web: AgentWebTools = AgentWebTools(),
                 guardPolicy: AgentGuardPolicy = AgentGuardPolicy(readOnly: false,
                                                                  requireApprovalForHighRisk: true,
-                                                                 requireApprovalForWrites: true)) {
+                                                                 requireApprovalForWrites: true),
+                repeatGuard: AgentRepeatGuard? = nil) {
         self.registry = registry
         self.web = web
         self.workspace = workspace
@@ -67,6 +71,7 @@ public struct AgentStandardDispatcher: AgentToolDispatcher {
         self.commandRunner = commandRunner
         self.mcp = mcp
         self.guardPolicy = guardPolicy
+        self.repeatGuard = repeatGuard
     }
 
     /// **异步入口**（生产路径走这条）：`run_command` 要 await 真 shell 里的执行，
@@ -124,6 +129,9 @@ public struct AgentStandardDispatcher: AgentToolDispatcher {
         guard capability == .runCommand else {
             return dispatch(invocation, approvals: approvals)
         }
+        // 执行类会改磁盘：之前那些「读过了」的账本作废（写完再看一眼是正当行为）。
+        _ = repeatGuard?.admit(capability: .runCommand, tool: invocation.name,
+                               arguments: invocation.argumentsJSON)
         let definition = registry.definition(named: invocation.name)
         guard let workspace, let commandRunner else {
             return .refused(.unavailable, detail: invocation.name)
@@ -150,6 +158,15 @@ public struct AgentStandardDispatcher: AgentToolDispatcher {
         }
         guard let arguments = AgentToolArguments.parse(invocation.argumentsJSON) else {
             return .refused(.badArguments, detail: invocation.name)
+        }
+
+        // **同一轮里同一条只读调用反复做**（真机：一个文件被读 18 次）：
+        // 第 3 次开始不执行，回一句能照做的话（账本按 (工具, 参数) 记，写 / 执行会清账）。
+        if let repeatGuard,
+           let denial = repeatGuard.admit(capability: definition.capability,
+                                          tool: invocation.name,
+                                          arguments: invocation.argumentsJSON) {
+            return .refused(.unavailable, detail: denial)
         }
 
         switch definition.capability {

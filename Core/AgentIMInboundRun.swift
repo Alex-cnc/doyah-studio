@@ -20,6 +20,11 @@ public enum AgentIMTaskRunResult: Equatable, Sendable {
     case awaitingApproval
     /// 这一轮根本没跑起来（原因码，人话见语言表）。
     case unavailable(code: String)
+    /// **跑到一半、超过等待上限但还在跑**（`stillRunning` = 桌面那边确实还在继续）。
+    ///
+    /// 2026-11-04 真机：这条以前被压成「这次跑成失败」——一句话把「还在跑」说成「失败了」，
+    /// 而手机那头真正的处境是「还要等」，技术串还是那句误导的 `timeout`。
+    case timedOut(seconds: Int, stillRunning: Bool)
 }
 
 /// 一次入站处理的结局（宿主据此记读数 / 面板）。
@@ -52,7 +57,20 @@ public enum AgentIMReplyText {
         case .unavailable(let code):
             return LocalizedStrings.format(.agentIMReplyUnavailable, language: language,
                                            reasonLine(code, language: language))
+        case .timedOut(let seconds, let stillRunning):
+            // 超时**不是失败**：桌面那边还在跑，人话要说「多久 / 还在跑 / 结论会再发一条」。
+            let duration = AgentIMProgressText.durationText(TimeInterval(seconds), language: language)
+            let line = LocalizedStrings.format(.agentIMReplyStillRunning, language: language, duration)
+            return stillRunning ? line : line + "\n" + LocalizedStrings.text(.agentIMReplyTaskFailed, language: language)
         }
+    }
+
+    /// 收到消息**立刻**回的那一条（`FR-AGT-LINK-CHAN-003` 的可见性补齐）。
+    ///
+    /// 为什么要它：真机上这一轮跑了几分钟，而手机那头从头到尾只有一句结尾的失败文案 ——
+    /// 「还在处理」这句话说在前面，比任何日志都更有用（人据此决定要不要继续等）。
+    public static func acknowledgement(language: AppLanguage) -> String {
+        LocalizedStrings.text(.agentIMAck, language: language)
     }
 
     /// 超长结论：截到上限再补一句「去哪看全文」（截断本身要看得出来）。
@@ -193,20 +211,27 @@ public struct AgentIMInboundRunner {
     public var ledger: AgentIMInboundLedger
 
     /// 跑一轮（宿主给：接进既有的对话循环；**审批不放宽**由那条路自己保证）。
-    public var run: (AgentIMTask) async throws -> AgentIMTaskRunResult
+    ///
+    /// 第二个参数是**过程播报口**：宿主每跳 / 每个工具调一次 `report`，节流与串行都在
+    /// `AgentIMProgressReporter` 里，宿主不用管「多久推一条」。给 `nil` = 这一路不播报。
+    public var run: (AgentIMTask, AgentIMProgressReporter?) async throws -> AgentIMTaskRunResult
     /// 推一条已入队的结果（宿主给：`AgentIMTransport.send` + ack；返回是否推出去了）。
     public var deliver: (AgentIMResultQueue.Entry) async -> Bool
+    /// 进度行的节流参数（默认 25 秒 / 3 跳 / 封顶 6 条）。
+    public var cadence: AgentIMProgressCadence
 
     public init(channel: AgentIMChannelKind = .qq,
                 sessionMap: AgentIMSessionMap,
                 resultQueue: AgentIMResultQueue,
                 ledger: AgentIMInboundLedger,
-                run: @escaping (AgentIMTask) async throws -> AgentIMTaskRunResult,
+                cadence: AgentIMProgressCadence = AgentIMProgressCadence(),
+                run: @escaping (AgentIMTask, AgentIMProgressReporter?) async throws -> AgentIMTaskRunResult,
                 deliver: @escaping (AgentIMResultQueue.Entry) async -> Bool) {
         self.channel = channel
         self.sessionMap = sessionMap
         self.resultQueue = resultQueue
         self.ledger = ledger
+        self.cadence = cadence
         self.run = run
         self.deliver = deliver
     }
@@ -255,15 +280,28 @@ public struct AgentIMInboundRunner {
             return .failed(reason: "sessionMap: \(error)", delivered: delivered)
         }
 
-        // ④ 跑 + ⑤ 回话。
+        // ④ 收到即回一条 ack（**在跑之前**）：手机那头先拿到「活着」，再等结论。
+        //    推不出去不算这一轮失败 —— 结论那一推还会再报一次，aker 只是「先让人安心」。
+        let acknowledged = await push(AgentIMReplyText.acknowledgement(language: language),
+                                      message: message, now: now)
+
+        // ⑤ 进度播报口（节流 + 串行都在这一个类型里；发送走同一条 `push`）。
+        let reporter = AgentIMProgressReporter(cadence: cadence, language: language) { line in
+            await self.push(line, message: message, now: now)
+        }
+
+        // ⑥ 跑 + ⑦ 回话。
         do {
-            let result = try await run(task)
+            let result = try await run(task, reporter)
+            await reporter.drain()
             let delivered = await push(AgentIMReplyText.text(for: result, language: language),
                                        message: message, now: now)
             return .replied(delivered: delivered)
         } catch {
+            await reporter.drain()
             let delivered = await push(AgentIMReplyText.taskFailed(language: language),
                                        message: message, now: now)
+            _ = acknowledged
             return .failed(reason: "run: \(error)", delivered: delivered)
         }
     }
@@ -288,7 +326,10 @@ public struct AgentIMInboundRunner {
         }
         let delivered = await deliver(entry)
         if delivered {
-            try? resultQueue.ack(id: entry.id, at: now)
+            // **ack 盖的是真实推送时刻**（不是消息到达时刻）：队列里 `createdAt → ackedAt`
+            // 的差就是「这条让人等了多久」。2026-11-04 真机上这两个字段一直被写成同一个
+            // 秒（`at: now` 传的是到达时间），于是「等了几分钟」在账上完全看不出来。
+            try? resultQueue.ack(id: entry.id, at: Date())
         }
         return delivered
     }

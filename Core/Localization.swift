@@ -1496,6 +1496,8 @@ public enum LKey: String, CaseIterable, Sendable {
     case agentChatStopStepLimit
     /// `FR-AI-18` ③：到了令牌上限（%d）—— 停在发送之前。
     case agentChatStopTokenLimit
+    /// `FR-AGT-TOOL-SYS-002`：这一轮**预算到点**（子代理的 `budgetSeconds`）—— 带着已有结论收尾。
+    case agentChatStopDeadline
     /// §5.3.8「加载中」那一档：已经开始跑、正文还没吐出第一个字时的**占位行**。
     case agentChatStreamingPlaceholder
     /// §5.3.8「错误」那一档：这一轮没跑成（原因由界面拼在它后面，模板里不放占位符）。
@@ -2251,6 +2253,14 @@ public enum LKey: String, CaseIterable, Sendable {
     case agentIMReplyUnavailable
     case agentIMReplyTruncated
     case agentIMReplyTaskFailed
+    /// 收到即回的 ack（**先让人知道「活着」**，而不是对着空白等几分钟）。
+    case agentIMAck
+    /// 跑的中途那一行：等模型出话（第 %lld 步 · 已跑 %@）。
+    case agentIMProgressThinking
+    /// 跑的中途那一行：正在跑某个工具（第 %lld 步 · 正在 %@ · 已跑 %@）。
+    case agentIMProgressTool
+    /// 本轮超过等待上限**但还在跑**（不是失败，也不是没结论）。
+    case agentIMReplyStillRunning
     case agentIMReasonBusy
     case agentIMReasonNoWorkspace
     case agentIMReasonNoAnswer
@@ -5069,6 +5079,7 @@ public enum LocalizedStrings {
         // 界面此前把这三串机器码原样印出来（`stepLimit:3` / `cancelled`）⇒ 人看不懂，也不知道是不是自己按的停。
         .agentChatStopStepLimit: [.simplifiedChinese: "到了步数上限（%d 跳）—— 如实停在这里，不是说完。可以补一句更具体的要求再跑一轮。", .english: "Step limit reached (%d hops) — stopping honestly here, not finishing. Add a more specific instruction to run another round."],
         .agentChatStopTokenLimit: [.simplifiedChinese: "到了令牌上限（%d）—— 下一次请求没有发出就停了，不会半截继续烧。", .english: "Token limit reached (%d) — the next request was not sent, so nothing keeps burning."],
+        .agentChatStopDeadline: [.simplifiedChinese: "到了这一路的预算时间 —— 我把已经写出来的结论先交回来（没写完的部分算没做）。", .english: "This run hit its time budget — here is what I had already written (unfinished parts are not done)."],
         .agentChatStopSpinning: [.simplifiedChinese: "连续 %d 次同样的调用、同样的结果 —— 我停手了：再跑一遍只会是同一句话。换个说法，或者直接告诉我下一步做什么。", .english: "Stopped after %d identical calls returning the same result — another round would repeat itself. Rephrase, or tell me the next step."],
         .agentChatStopCancelled: [.simplifiedChinese: "这一轮已被你停止（已跑过的工具结果都留着）。", .english: "You stopped this run (results from tools already run are kept)."],
         // §5.3.8 的六态：加载中要有一行「开口之前的占位」，错误档要说清「这一轮没跑成」而不是印机器码。
@@ -5860,7 +5871,11 @@ public enum LocalizedStrings {
         .agentIMReplyAwaitingApproval: [.simplifiedChinese: "任务已停下，等你在桌面那台机器上批准（IM 不放宽审批）。批准之后结论会推到这条聊天里。", .english: "The task stopped and waits for your approval on the desktop (IM does not loosen approvals). Once approved, the result comes back to this chat."],
         .agentIMReplyUnavailable: [.simplifiedChinese: "这次没跑起来：%@。没有结论可报。", .english: "Could not start this run: %@. No result to report."],
         .agentIMReplyTruncated: [.simplifiedChinese: "（结论太长，这里只发前一段；完整内容在桌面那一条会话里）", .english: "(The result is long, so only the first part is sent here. The full text is in that session on the desktop.)"],
-        .agentIMReplyTaskFailed: [.simplifiedChinese: "这次没跑成，任务自己报了错。没有结论可报（详情留在桌面那台机器的日志里）。", .english: "This run failed with an error. There is no result to report (the details stay in the desktop logs)."],
+        .agentIMReplyTaskFailed: [.simplifiedChinese: "这次跑到一半失败了（技术原因已写进桌面日志 startup.log 与 agent-audit.jsonl）。没有结论可报。", .english: "This run failed partway through (the technical reason is in the desktop logs: startup.log and agent-audit.jsonl). There is no result to report."],
+        .agentIMAck: [.simplifiedChinese: "收到，正在处理。这一轮可能要几分钟，我会边跑边报进度，跑完再发结论。", .english: "Got it — working on it. This may take a few minutes; I will report progress as I go and send the result when it is done."],
+        .agentIMProgressThinking: [.simplifiedChinese: "第 %lld 步 · 在等模型出话 · 已跑 %@（还在跑）", .english: "Step %lld · waiting for the model · %@ in (still running)"],
+        .agentIMProgressTool: [.simplifiedChinese: "第 %lld 步 · 正在 %@ · 已跑 %@（还在跑）", .english: "Step %lld · running %@ · %@ in (still running)"],
+        .agentIMReplyStillRunning: [.simplifiedChinese: "这一轮已经跑了 %@ 还没收尾，还在继续跑（进度我会接着报）。有结论我再发一条；急的话可以在桌面点停止。", .english: "This turn has been running for %@ and is still going (I will keep reporting progress). I will send the result when it lands; you can stop it on the desktop if you need to."],
         .agentIMReasonBusy: [.simplifiedChinese: "上一轮还在跑", .english: "the previous run is still going"],
         .agentIMReasonNoWorkspace: [.simplifiedChinese: "没有打开工作区", .english: "no workspace is open"],
         .agentIMReasonNoAnswer: [.simplifiedChinese: "这一轮没有产出结论", .english: "this run produced no answer"],

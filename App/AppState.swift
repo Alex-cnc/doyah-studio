@@ -406,7 +406,7 @@ final class AppState: ObservableObject {
     @Published var agentIMOutboundLine: String?
     /// **跑一轮**的接线口（与 `agentScheduleRunner` 同形）：由 `DoyahStudioApp` 注入 ——
     /// `AppState` 不认识界面侧的 `AgentChatModel`，这条闭包是唯一通路。
-    var agentIMTaskRunner: ((AgentIMTask) async -> AgentIMTaskRunResult)?
+    var agentIMTaskRunner: ((AgentIMTask, AgentIMProgressReporter?) async -> AgentIMTaskRunResult)?
     /// 传输层本体：连上后由 AppState 持有（面板关掉不掉线）。
     private var agentIMTransport: AgentIMTransport?
     /// 取 token / 取网关的那一层（★0）。真实现走 REST；判据在 Core 直测（不碰网络）。
@@ -3995,13 +3995,15 @@ final class AppState: ObservableObject {
     /// 结论经结果队列推回原 chat（`FR-AGT-LINK-CHAN-003` 后半）。
     ///
     /// 顺序不在界面这一层定 —— `AgentIMInboundRunner.handle` 是唯一一条链
-    /// （策略 → 去重 → 建任务 → 跑 → 入队 → 推 → 推成才 ack）；这里只把两个闭包给它：
-    /// 一个跑（接进界面的对话模型，审批照旧）、一个推（传输层 send）。
+    /// （策略 → 去重 → 建任务 → ack → 跑（边跑边报进度）→ 入队 → 推 → 推成才 ack）；
+    /// 这里只把两个闭包给它：一个跑（接进界面的对话模型，审批照旧）、一个推（传输层 send）。
     private func acceptAgentIMInbound(_ frame: AgentIMInboundFrame) {
         guard case .message(let message) = frame else { return }
+        // 逾期补发要知道「回哪条聊天 / 回哪一条消息」—— 那一轮收尾时入站帧早就没在手上了。
+        agentIMLastInbound = message
         // 留痕（2026-10-30 主人「配置了但不能对话」）：整条链每一步都写一行，
         // 出问题能直接指着日志说卡在哪一步，不靠猜。
-        StartupLog.write("IM 收到消息 id=\(message.platformMessageID) chat=\(message.chatID) 字数=\(message.text.count)")
+        StartupLog.write("IM 收到消息 id=\(message.platformMessageID) chat=\(message.chatID) 字数=\(message.text.count)", important: true)
         let runner = makeAgentIMInboundRunner()
         Task { @MainActor [weak self] in
             guard let self else { return }
@@ -4010,7 +4012,7 @@ final class AppState: ObservableObject {
                                               readiness: self.agentIMReadiness,
                                               connection: self.agentIMConnectionState,
                                               language: self.agentIMLanguage)
-            StartupLog.write("IM 一轮结束 outcome=\(String(describing: outcome))")
+            StartupLog.write("IM 一轮结束 outcome=\(String(describing: outcome))", important: true)
             self.recordAgentIMInbound(outcome, message: message)
         }
     }
@@ -4020,9 +4022,9 @@ final class AppState: ObservableObject {
         AgentIMInboundRunner(sessionMap: AgentIMSessionMap(directory: AgentIMResultQueue.defaultDirectory),
                              resultQueue: agentIMResultQueue,
                              ledger: agentIMInboundLedger,
-                             run: { [weak self] task in
+                             run: { [weak self] task, progress in
                                  guard let self else { return .unavailable(code: "noRunner") }
-                                 return await self.runAgentIMTask(task)
+                                 return await self.runAgentIMTask(task, progress: progress)
                              },
                              deliver: { [weak self] entry in
                                  guard let self else { return false }
@@ -4048,7 +4050,8 @@ final class AppState: ObservableObject {
 
     /// 跑一轮：**同一时刻只跑一条**（同时进来两条时第二条如实回「上一轮还在跑」，
     /// 不排队、也不并行 —— 两条并行会互相盖上下文）。
-    private func runAgentIMTask(_ task: AgentIMTask) async -> AgentIMTaskRunResult {
+    private func runAgentIMTask(_ task: AgentIMTask,
+                                progress: AgentIMProgressReporter?) async -> AgentIMTaskRunResult {
         guard let runner = agentIMTaskRunner else {
             StartupLog.write("IM 跑一轮：没有注入 runner（noRunner）")
             return .unavailable(code: "noRunner")
@@ -4057,10 +4060,11 @@ final class AppState: ObservableObject {
         agentIMRunInFlight = true
         StartupLog.write("IM 跑一轮开始 chat=\(task.chatID) 会话=\(task.sessionID)")
         defer { agentIMRunInFlight = false }
-        // **硬超时**：一轮挂住（等审批 / 模型不返回）时，人在这边只会看到「没反应」——
-        // 超时就如实回一句，并把结局写进日志，不静默。
+        // **硬兜底**：真正的等待上限在 `AgentChatModel.runFromIM`（它知道「还在跑」和「真失败」
+        // 的区别）。这里只防「宿主自己的闭包挂死」这一种，超时也**如实说还在跑**，
+        // 不再把它说成「没有结论」。
         let result = await withTaskGroup(of: AgentIMTaskRunResult?.self) { group in
-            group.addTask { await runner(task) }
+            group.addTask { await runner(task, progress) }
             group.addTask {
                 try? await Task.sleep(nanoseconds: 180 * 1_000_000_000)
                 return nil
@@ -4070,11 +4074,67 @@ final class AppState: ObservableObject {
             return first
         }
         if let result {
-            StartupLog.write("IM 跑一轮结束 result=\(String(describing: result))")
+            StartupLog.write("IM 跑一轮结束 result=\(String(describing: result))", important: true)
             return result
         }
-        StartupLog.write("IM 跑一轮超时（180s，按超时回话）")
-        return .unavailable(code: "timeout")
+        StartupLog.write("IM 跑一轮超过 180 秒仍未返回（按「还在跑」回话）chat=\(task.chatID)", important: true)
+        return .timedOut(seconds: 180, stillRunning: true)
+    }
+
+    // MARK: - IM 那一轮的过程播报与逾期补发（2026-11-04 真机）
+
+    /// 最近一条入站消息（逾期补发与失败留痕都要它：那时帧早就不在手上了）。
+    private var agentIMLastInbound: AgentIMInboundMessage?
+
+    /// 逾期补发一条：那一轮收尾时把结论送回同一条聊天。
+    ///
+    /// 与 `deliverAgentIMResult` 同一出口（官方 REST / 自建中继都在里面分岔），
+    /// 推不出去则**留在队列里**（`flushAgentIMOutboundQueue` 重连补发）并留一行日志。
+    func deliverAgentIMLateText(_ text: String) {
+        guard let message = agentIMLastInbound else {
+            StartupLog.write("IM 补发：没有记下入站消息（跳过）")
+            return
+        }
+        let entry: AgentIMResultQueue.Entry
+        do {
+            entry = try agentIMResultQueue.enqueue(chatID: message.chatID,
+                                                   text: text,
+                                                   target: AgentIMOutboundTarget(kind: message.chatKind,
+                                                                                 openID: message.chatID),
+                                                   replyToMessageID: message.platformMessageID)
+        } catch {
+            StartupLog.write("IM 补发入队失败：\(error)")
+            return
+        }
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            let delivered = await self.deliverAgentIMResult(entry)
+            if delivered {
+                try? self.agentIMResultQueue.ack(id: entry.id)
+                StartupLog.write("IM 补发已推出 id=\(entry.id) 字数=\(text.count)")
+            } else {
+                StartupLog.write("IM 补发没推出去 id=\(entry.id)（留在队列里，重连补发）")
+            }
+        }
+    }
+
+    /// 记一条 **IM 轮次失败**：`startup.log` 一行 + `agent-audit.jsonl` 一条。
+    ///
+    /// 由头（2026-11-04 真机）：手机那头收到「跑到一半失败」，而桌面日志里**一行都没有**
+    /// —— `StartupLog` 只留 200 行，被「工作区监听」刷掉；技术串又只进了那一行。
+    /// 所以这里同时落两处：日志给人 grep，审计给面板与导出。
+    func recordAgentIMTurnFailure(detail: String, diagnostics: String) async {
+        let line = "IM 轮次失败：\(detail)\(diagnostics.isEmpty ? "" : " · \(diagnostics)")"
+        StartupLog.write(line, important: true)
+        let chat = agentIMLastInbound
+        let record = AgentActionRecord.makeDecision(
+            kind: "imTurnFailed",
+            subject: String((chat?.chatID ?? "-").prefix(8)),
+            digest: chat?.platformMessageID ?? "-",
+            outcome: .failed,
+            detail: line,
+            sessionID: chat?.platformMessageID)
+        await appendAgentAudit(record)
     }
 
     /// 推一条已入队的结果。
@@ -4618,7 +4678,10 @@ final class AppState: ObservableObject {
                                                                        origin: "智能体 · 联网检索",
                                                                        wrapped: URLSessionTransport()
                                                                    )),
-                                                guardPolicy: agentGuardPolicy)
+                                                guardPolicy: agentGuardPolicy,
+                                                // **同一条只读调用不许一轮里反复做**（真机：一个文件被读 18 次）。
+                                                // 账本每轮新起一份（makeLoop 每轮调一次）⇒「同一轮」就是它的作用域。
+                                                repeatGuard: AgentRepeatGuard())
         // 插件目录**先建出来**：用户要往里放东西，得先看得见这个位置（不存在就建，失败也不拦本轮）。
         // 扫描归口到 `rescanAgentExtensions()`：面板与循环读的是同一份台账（各读各的会造出
         // 「面板说装了、循环里没生效」这类最难查的假绿）。
@@ -8963,6 +9026,9 @@ final class AppState: ObservableObject {
     private var workspaceWatcher: WorkspaceFileWatcher?
     /// 当前监听挂在哪个根上（换工作区时据此判断要不要重挂）。
     private var watchedWorkspaceRoot: String?
+    /// 监听日志的节流账（30 秒至多一行，见 `handleDiskChanges`）。
+    private var watcherLogAt: Date?
+    private var watcherLogBatches = 0
     /// **磁盘已变、但页签里有未保存改动**的那些页签 —— 界面据此让人决定是否以磁盘为准（**不许悄悄覆盖**）。
     @Published var diskChangedTabIDs: Set<UUID> = []
 
@@ -9026,7 +9092,22 @@ final class AppState: ObservableObject {
     /// 磁盘变了一批路径：交给宿主（树 + 文件页签），再处理**数据库那一侧自己的 SQL 页签**。
     private func handleDiskChanges(_ paths: [String]) {
         // 真机上「事件到底有没有到」的唯一可观测点（其余症状都长得像"没有改动"）。
-        StartupLog.write("工作区监听：收到 \(paths.count) 条改动（首条=\(paths.first ?? "-")）")
+        // **但要有节流**：一次编译就是几百批事件，逐批写一行会把 `startup.log` 里真正的
+        // 故障行挤没（2026-11-04 实测：IM 那一轮的失败记录就是这么丢的）。
+        // 现在 30 秒至多一行，并带上这段时间累积的批数。
+        watcherLogBatches += 1
+        let now = Date()
+        if let last = watcherLogAt {
+            if now.timeIntervalSince(last) >= 30 {
+                StartupLog.write("工作区监听：收到 \(watcherLogBatches) 批改动（最近一批 \(paths.count) 条，首条=\(paths.first ?? "-")）")
+                watcherLogAt = now
+                watcherLogBatches = 0
+            }
+        } else {
+            StartupLog.write("工作区监听：收到 \(watcherLogBatches) 批改动（最近一批 \(paths.count) 条，首条=\(paths.first ?? "-")）")
+            watcherLogAt = now
+            watcherLogBatches = 0
+        }
         // 工作区那一侧：树重列 + 文件页签重载（接线见 `WorkspaceDiskChangeWiring`）
         onWorkspaceDiskChanges?(paths)
         // 数据库的 SQL 页签也可能开着一个文件（`AppState.openFile(at:)`）—— 那份列表归

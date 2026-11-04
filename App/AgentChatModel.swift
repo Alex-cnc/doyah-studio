@@ -151,6 +151,37 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
     /// `/queue` 排下的内容：本轮结束后按序发出，不打断当前回合。
     private var queuedPrompts: [String] = []
 
+    // MARK: - IM 那一轮的过程播报与逾期补发（2026-11-04 真机）
+
+    /// 进度出口（宿主装：`AgentIMProgressReporter`，节流与串行都在它里面）。
+    /// 跑完就置 `nil` —— 收尾之后不该再有进度行。
+    private var imProgressReporter: AgentIMProgressReporter?
+    /// 这一个 IM 轮次开跑的时刻 / 走了几跳 / 调了几次工具 / 最后一条工具（进度行与失败行都要）。
+    private var imTurnStartedAt: Date?
+    private var imTurnHops = 0
+    private var imTurnToolCalls = 0
+    private var imTurnLastTool: String?
+
+    /// 「这一轮 IM 已经先回过『还在跑』」的凭证：`finish()` 见到它就把结论补发出去。
+    struct IMTurnTicket: Equatable {
+        var startedAt: Date
+        var messageCountBefore: Int
+    }
+    private var imOutstanding: IMTurnTicket?
+    /// 逾期补发的出口（宿主装：入队 + 推送）；`nil` = 这一侧不走 IM。
+    var imLateDelivery: ((String) -> Void)?
+
+    /// 这一轮的过程读数（**失败要落盘的那一行**就靠它）：第几跳 / 几次工具 / 最后一条工具。
+    var imTurnDiagnostics: String {
+        var parts = ["第 \(max(imTurnHops, 0)) 跳"]
+        parts.append("工具 \(imTurnToolCalls) 次")
+        parts.append("最后一条工具 \(imTurnLastTool ?? "-")")
+        if let started = imTurnStartedAt {
+            parts.append("已跑 \(Int(Date().timeIntervalSince(started))) 秒")
+        }
+        return parts.joined(separator: " · ")
+    }
+
     /// 斜杠命令的「解析 → 要做什么」纯函数（`FR-AGT-UX-CONV-014`）。
     private let slashRuntime = AgentSlashCommandRuntime()
     /// 一条待批的配置变更（`/model` `/theme`）。`nil` = 没有在等审批的单。
@@ -401,6 +432,11 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
         case failed(detail: String)
         /// 跑完了但没有可读正文（工具轮没给结论）—— `ranSteps` 是这一轮走了几步。
         case noText(ranSteps: Int)
+        /// **还在跑**：等到了上限（`deadline`）它没停 —— 桌面那边继续跑，结论收尾后补发。
+        ///
+        /// 2026-11-04 真机：这条以前是 `.failed(detail: "timeout")`，于是手机那头收到一句
+        /// 「这次跑成失败 / Could not start this run」，而事实是**它一直在正常跑**。
+        case stillRunning(elapsed: TimeInterval, hop: Int, toolCalls: Int, lastTool: String?)
     }
 
     /// 跑一轮（IM 派活用）：**不依赖面板视图的任何副作用**，并等这一轮**真的收尾**。
@@ -411,11 +447,23 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
     ///    而任务稍后却在桌面偷偷跑起来）；
     /// ③ 收尾后**分清五种结局**：旧实现只认「新助手消息里有没有字」，
     ///    真原因（失败 / 没开跑 / 工具轮没正文）全被吞成 `noAnswer`。
-    func runFromIM(prompt: String, deadline: TimeInterval = 150) async -> IMRunOutcome {
+    ///
+    /// 第四条（2026-11-04 真机补）：**超过上限还在跑 ⇒ 说「还在跑」**，并把这一轮挂成
+    /// 「逾期补发」—— 桌面收尾时由 `finish()` 把结论补到同一条聊天里。
+    /// 旧实现在这里返回 `.failed("timeout")` 就撒手不管了：手机那头拿到一句「失败」，
+    /// 而桌面的循环还在跑（`egress-log` 每 13 秒一次模型请求），结论哪边都没到。
+    func runFromIM(prompt: String, deadline: TimeInterval = 150,
+                   progress: AgentIMProgressReporter? = nil) async -> IMRunOutcome {
         let trimmed = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return .refused(code: "emptyText") }
         guard !state.isRunning else { return .refused(code: "busy") }
         let before = state.messages.count
+        imProgressReporter = progress
+        imOutstanding = nil
+        imTurnStartedAt = Date()
+        imTurnHops = 0
+        imTurnToolCalls = 0
+        imTurnLastTool = nil
         await start(prompt: trimmed, intent: .newQuestion)
         // `start` 的几条早退（日配额 / 端点 / 门控 / 循环装配不出来）都**不进 `finish()`** ——
         // 这里把它们留下的原因翻成码，而不是一律「没有结论」。
@@ -429,7 +477,15 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
             try? await Task.sleep(nanoseconds: 200_000_000)
         }
         if hasPendingApproval { return .awaitingApproval }
-        guard !state.isRunning else { return .failed(detail: "timeout") }
+        // **还在跑**（不是失败）：挂成逾期补发，等 `finish()` 把结论送到同一条聊天里。
+        guard !state.isRunning else {
+            let elapsed = Date().timeIntervalSince(imTurnStartedAt ?? Date())
+            imOutstanding = IMTurnTicket(startedAt: imTurnStartedAt ?? Date(), messageCountBefore: before)
+            return .stillRunning(elapsed: elapsed,
+                                 hop: imTurnHops,
+                                 toolCalls: imTurnToolCalls,
+                                 lastTool: imTurnLastTool)
+        }
         let fresh = state.messages.dropFirst(before)
         if let text = fresh.last(where: { $0.role == .assistant })?
             .text.trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty {
@@ -1135,6 +1191,23 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
     func observe(_ event: AgentLoopEvent) async {
         if case let .hopStarted(index) = event { currentHop = index }
         state.apply(event)
+        // **IM 那一轮的过程播报**（`FR-AGT-LINK-CHAN-003` 可见性补齐）：节流与发送都在
+        // `AgentIMProgressReporter` 里，这里只把「第几跳 / 在跑哪个工具」喂进去。
+        // 不 `await` 它 —— 观察口是循环里的 `await`，让 QQ 接口的往返拖住模型轮次是本末倒置。
+        if let reporter = imProgressReporter {
+            switch event {
+            case let .hopStarted(index):
+                imTurnHops = max(imTurnHops, index + 1)
+                report(IMProgressSnapshot(hop: imTurnHops, tool: nil, summary: ""), to: reporter)
+            case let .toolStarted(name, summary):
+                imTurnToolCalls += 1
+                imTurnLastTool = summary.isEmpty ? name : "\(name)：\(summary)"
+                report(IMProgressSnapshot(hop: max(imTurnHops, currentHop + 1),
+                                          tool: name, summary: summary), to: reporter)
+            default:
+                break
+            }
+        }
         // **代签那一档（`FR-AI-34`）建单即已批** ⇒ 观测口立刻兑现。
         // `observe` 在循环里是 `await` 的 ⇒ 这次写盘落在**下一跳之前**，
         // 模型下一跳看到的是「文件已改」，而不是「还在等一个不会来的人」。
@@ -1145,10 +1218,55 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
         }
     }
 
+    private struct IMProgressSnapshot {
+        var hop: Int
+        var tool: String?
+        var summary: String
+    }
+
+    private func report(_ snapshot: IMProgressSnapshot, to reporter: AgentIMProgressReporter) {
+        let elapsed = Date().timeIntervalSince(imTurnStartedAt ?? Date())
+        let progress = AgentIMRunProgress(hop: max(1, snapshot.hop),
+                                          tool: snapshot.tool,
+                                          summary: snapshot.summary,
+                                          elapsed: elapsed,
+                                          toolCalls: imTurnToolCalls)
+        Task { await reporter.report(progress) }
+    }
+
+    /// **逾期补发**：IM 先回过「还在跑」的那一轮，收尾时把结论送回同一条聊天。
+    ///
+    /// 三条纪律：① 只取**这一轮新出的**助手消息（`messageCountBefore` 之后），不拿历史；
+    /// ② 超长照旧截断（`AgentIMReplyText.bounded`），不因为补发就把网关帧撑爆；
+    /// ③ 没正文时**如实说哪一档**（失败 / 跑完没正文），不静默 —— 补发一条空话比不补更糟。
+    private func deliverLateIMResult(_ result: AgentLoopResult) {
+        guard let ticket = imOutstanding else { return }
+        imOutstanding = nil
+        guard let sink = imLateDelivery else { return }
+        let language = languageProvider()
+        let fresh = state.messages.dropFirst(ticket.messageCountBefore)
+        let answer = fresh.last(where: { $0.role == .assistant })?
+            .text.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if !answer.isEmpty {
+            sink(AgentIMReplyText.bounded(answer, language: language))
+            return
+        }
+        if case .failed = result.outcome {
+            sink(AgentIMReplyText.text(for: .unavailable(code: "taskFailed"), language: language))
+            return
+        }
+        sink(LocalizedStrings.text(.agentIMReasonNoText, language: language))
+    }
+
     private func finish(_ result: AgentLoopResult) {
         stopWatchdog()
         state.finishRun()
         drainQueue()
+        // **逾期补发**（2026-11-04 真机）：IM 那一轮先回过「还在跑」的，收尾这一刻把结论
+        // 补到同一条聊天里 —— 否则手机那头永远等不到这条结论（旧实现在超时那一步就撒手了）。
+        deliverLateIMResult(result)
+        // 收尾之后不该再有进度行。
+        imProgressReporter = nil
         // 用量并进会话账（缺值不当 0 累加 —— 与 CLI 侧同一口径）。
         // **缓存读数一并记**（`FR-AI-25` 第二格）：端点没报 ⇒ `nil`，账上不算一次「命中率读数」。
         sessionUsage.add(prompt: result.usage.promptTokens,

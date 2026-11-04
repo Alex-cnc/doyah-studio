@@ -47,9 +47,14 @@ final class AgentIMInboundRunTests: XCTestCase {
             sessionMap: AgentIMSessionMap(directory: root),
             resultQueue: AgentIMResultQueue(directory: root),
             ledger: AgentIMInboundLedger(directory: root),
-            run: { task in
+            run: { task, reporter in
                 recorder.record(task)
                 if fails { throw Boom() }
+                // 进度播报口：宿主（`AgentChatModel`）在真机上每跳 / 每个工具喂一次；
+                // 夹具里给两条，验证「节流之后仍然会推」与「推在结论之前」。
+                // 一条进度：开跑 20 秒后（`firstPushAfter` = 12 秒，所以它过得去）。
+                await reporter?.report(AgentIMRunProgress(hop: 4, tool: "search",
+                                                          summary: "qq", elapsed: 20, toolCalls: 3))
                 return result ?? .answered(answer)
             },
             deliver: { entry in
@@ -85,7 +90,9 @@ final class AgentIMInboundRunTests: XCTestCase {
 
         // 入队的那一条：正文就是结论（**不是帧** —— 官方 REST 把它放进 content），
         // 并且带着「回哪个 chat / 私聊还是群 / 回哪一条消息」—— 断线补发时只认这一份。
-        let entry = try XCTUnwrap(recorder.delivered.first)
+        // 第一条是**收到即回的 ack**（2026-11-04 真机：几分钟空白），结论在它后面。
+        XCTAssertEqual(recorder.delivered.count, 3, "ack + 1 条进度 + 结论")
+        let entry = try XCTUnwrap(recorder.delivered.last)
         XCTAssertEqual(entry.text, "统计跑完了：3 张表，0 条异常")
         XCTAssertFalse(entry.text.contains(#""op":"reply""#), "官方那条路不许再往正文里塞本侧帧")
         XCTAssertEqual(entry.chatID, "chat-A")
@@ -94,7 +101,7 @@ final class AgentIMInboundRunTests: XCTestCase {
 
         // 推成才 ack：队列里留痕但不再待投递。
         XCTAssertTrue(queue().pending().isEmpty, "推成功的必须 ack，否则每次重连都重发")
-        XCTAssertEqual(queue().all().count, 1, "留痕不删")
+        XCTAssertEqual(queue().all().count, 3, "留痕不删（ack / 进度 / 结论都在）")
     }
 
     // MARK: - ①b 群聊：目标落在群那条端点、`msg_id` 是派活那条
@@ -111,7 +118,7 @@ final class AgentIMInboundRunTests: XCTestCase {
                                           connection: online, language: .simplifiedChinese)
 
         XCTAssertEqual(outcome, .replied(delivered: true))
-        let entry = try XCTUnwrap(recorder.delivered.first)
+        let entry = try XCTUnwrap(recorder.delivered.last)
         XCTAssertEqual(entry.target, AgentIMOutboundTarget(kind: .group, openID: "group-openid-9"),
                        "群里派活得回到群那条端点，不能发成私聊")
         XCTAssertEqual(entry.replyToMessageID, "g-1")
@@ -161,7 +168,7 @@ final class AgentIMInboundRunTests: XCTestCase {
         XCTAssertEqual(first, .replied(delivered: true))
         XCTAssertEqual(second, .duplicate(platformMessageID: "m1"))
         XCTAssertEqual(recorder.tasks.count, 1, "同一条平台消息号不许跑两遍")
-        XCTAssertEqual(queue().all().count, 1, "也不许推两遍")
+        XCTAssertEqual(queue().all().count, 3, "也不许推两遍（ack / 进度 / 结论各一条）")
 
         // 重启（换一个 runner 实例、新读盘）仍认得出 —— 去重台账是落盘的。
         let restarted = makeRunner(recorder: recorder)
@@ -181,7 +188,7 @@ final class AgentIMInboundRunTests: XCTestCase {
                                           connection: online, language: .simplifiedChinese)
 
         XCTAssertEqual(outcome, .replied(delivered: false))
-        XCTAssertEqual(queue().pending().count, 1, "没推出去的必须留在待投递里")
+        XCTAssertEqual(queue().pending().count, 3, "没推出去的（ack / 进度 / 结论）全留在待投递里")
         XCTAssertNil(queue().pending().first?.ackedAt)
     }
 
@@ -239,8 +246,8 @@ final class AgentIMInboundRunTests: XCTestCase {
         XCTAssertTrue(delivered)
         XCTAssertTrue(reason.contains("Boom"), "技术串只进日志：\(reason)")
 
-        let sent = try XCTUnwrap(recorder.delivered.first?.text)
-        XCTAssertTrue(sent.contains("没跑成"), sent)
+        let sent = try XCTUnwrap(recorder.delivered.last?.text)
+        XCTAssertTrue(sent.contains("跑到一半失败"), sent)
         XCTAssertFalse(sent.contains("Boom"), "异常类型名不许贴给手机那头：\(sent)")
     }
 
@@ -253,7 +260,7 @@ final class AgentIMInboundRunTests: XCTestCase {
                                           connection: online, language: .simplifiedChinese)
         XCTAssertEqual(outcome, .replied(delivered: true))
 
-        let sent = try XCTUnwrap(recorder.delivered.first?.text)
+        let sent = try XCTUnwrap(recorder.delivered.last?.text)
         XCTAssertTrue(sent.contains("等你在桌面那台机器上批准"), sent)
         XCTAssertFalse(sent.contains("统计跑完了"), "不许把别的结论贴上去")
     }
@@ -336,7 +343,8 @@ final class AgentIMInboundRunTests: XCTestCase {
         // 「没开跑 / 没正文」各有各的话 —— 新码没翻译就等于把机器码贴给人看）。
         let codes = ["busy", "noWorkspace", "noAnswer", "noRunner", "noText",
                      "notStarted", "endpointNotConfigured", "endpointUnreachable", "taskFailed"]
-        let kinds: [AgentIMTaskRunResult] = [.answered("done"), .awaitingApproval]
+        let kinds: [AgentIMTaskRunResult] = [.answered("done"), .awaitingApproval,
+                                             .timedOut(seconds: 150, stillRunning: true)]
             + codes.map { .unavailable(code: $0) }
         for kind in kinds {
             let zh = AgentIMReplyText.text(for: kind, language: .simplifiedChinese)
@@ -391,6 +399,89 @@ final class AgentIMInboundRunTests: XCTestCase {
             try? await Task.sleep(nanoseconds: 20_000_000)
         }
         return await condition()
+    }
+
+    // MARK: - ⑯ 收到即回 ack（2026-11-04 真机：手机那头对着空白等了几分钟）
+
+    func testInboundPushesAnAcknowledgementBeforeRunning() async throws {
+        let recorder = Recorder()
+        let runner = makeRunner(recorder: recorder)
+        _ = await runner.handle(frame(), receiveTasks: true, readiness: ready,
+                                connection: online, language: .simplifiedChinese)
+
+        let first = try XCTUnwrap(recorder.delivered.first?.text)
+        XCTAssertTrue(first.contains("收到，正在处理"), "第一条必须是 ack：\(first)")
+        // ack 不许把结论提前说出来（它只回答「还活着」）。
+        XCTAssertFalse(first.contains("统计跑完了"), first)
+    }
+
+    // MARK: - ⑰ 进度节流：一次长轮次不会把 QQ 刷爆
+
+    func testProgressIsThrottledToAHandfulOfLinesPerTurn() async throws {
+        let recorder = Recorder()
+        // 40 跳、每跳一个工具，时间只走 1 秒（纯步数条件都满足不了）⇒ 只有首条能出去。
+        let runner = AgentIMInboundRunner(
+            sessionMap: AgentIMSessionMap(directory: root),
+            resultQueue: AgentIMResultQueue(directory: root),
+            ledger: AgentIMInboundLedger(directory: root),
+            cadence: AgentIMProgressCadence(minInterval: 25, minHopDelta: 3, maxPushes: 6),
+            run: { _, reporter in
+                for hop in 1...40 {
+                    await reporter?.report(AgentIMRunProgress(hop: hop, tool: "read_file",
+                                                              summary: "Core/AgentIMChannel.swift",
+                                                              elapsed: TimeInterval(hop), toolCalls: hop))
+                }
+                return .answered("完了")
+            },
+            deliver: { entry in
+                recorder.record(delivery: entry)
+                return true
+            })
+        _ = await runner.handle(frame(), receiveTasks: true, readiness: ready,
+                                connection: online, language: .simplifiedChinese)
+
+        let progress = recorder.delivered.filter { $0.text.contains("还在跑") }
+        XCTAssertLessThanOrEqual(progress.count, 6, "封顶 6 条：40 跳不许推 40 条")
+        XCTAssertGreaterThanOrEqual(progress.count, 1, "再长的一轮也要有进度，不许一片空白")
+        XCTAssertTrue(progress.first?.text.contains("第 12 步") == true,
+                      "第一条进度要等 `firstPushAfter` 之后（别跟 ack 撞在一起）：\(progress.first?.text ?? "-")")
+    }
+
+    // MARK: - ⑱ 超时那一档：说「还在跑」，不许说成「没跑起来 / 失败」
+
+    func testTimeoutSaysStillRunningRatherThanFailedToStart() {
+        let kind = AgentIMTaskRunResult.timedOut(seconds: 150, stillRunning: true)
+        let zh = AgentIMReplyText.text(for: kind, language: .simplifiedChinese)
+        XCTAssertTrue(zh.contains("还在继续跑"), zh)
+        XCTAssertTrue(zh.contains("2 分 30 秒"), "要说清跑了多久：\(zh)")
+        XCTAssertFalse(zh.contains("这次没跑起来"), "超时不是「没跑起来」：\(zh)")
+        XCTAssertFalse(zh.contains("失败"), "超时不是失败：\(zh)")
+
+        let en = AgentIMReplyText.text(for: kind, language: .english)
+        XCTAssertTrue(en.contains("still going"), en)
+        XCTAssertFalse(en.contains("Could not start this run"), "那句英文是这次真机上的误导文案：\(en)")
+    }
+
+    func testCadenceAdmitsOnHopDeltaOrInterval() {
+        let cadence = AgentIMProgressCadence(minInterval: 25, minHopDelta: 3, maxPushes: 6)
+        let t0 = Date()
+        var track = AgentIMProgressCadence.Track()
+        XCTAssertFalse(cadence.admits(hop: 3, elapsed: 3, at: t0, track: track),
+                       "刚开跑就报 = 跟 ack 撞车，不许推")
+        XCTAssertTrue(cadence.admits(hop: 3, elapsed: 20, at: t0, track: track),
+                      "跑过 `firstPushAfter` 之后首条放行")
+
+        track = AgentIMProgressCadence.Track(pushes: 1, lastPushAt: t0, lastHop: 1)
+        XCTAssertFalse(cadence.admits(hop: 2, elapsed: 30, at: t0.addingTimeInterval(5), track: track),
+                       "5 秒后、只跳了 1 跳：不许推")
+        XCTAssertTrue(cadence.admits(hop: 4, elapsed: 30, at: t0.addingTimeInterval(5), track: track),
+                      "步数跳够了就推（跑得快时跟着步数报）")
+        XCTAssertTrue(cadence.admits(hop: 2, elapsed: 30, at: t0.addingTimeInterval(26), track: track),
+                      "时间到了就推（一跳卡很久时也要有动静）")
+
+        track = AgentIMProgressCadence.Track(pushes: 6, lastPushAt: t0, lastHop: 1)
+        XCTAssertFalse(cadence.admits(hop: 99, elapsed: 999, at: t0.addingTimeInterval(999), track: track),
+                       "封顶之后一条都不再推")
     }
 }
 
