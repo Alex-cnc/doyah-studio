@@ -13,6 +13,13 @@ struct AgentChatView: View {
     /// 会话已归档 ⇒ **只读**（详设 `§5.3.8` 的 Props）：输入框禁用、发送入口不出现。
     /// 归档流程还没做（`nil` 之外没有别的来源），所以缺省是假；接上之后由宿主传进来。
     var readOnly: Bool = false
+    /// 挂载时的**初始展开态**（缺省收起）。生产不传。
+    ///
+    /// 为什么要这个口：详单的展开态是 `@State`，从外面点不动（SwiftUI `Button` 在离屏宿主里
+    /// 不落 `NSButton`，见 `DialogActionRowProbeTests` 文件头的实测）—— 而「展开后把布局撑爆」
+    /// 这条缺陷恰恰只在展开态出现。不给口，判据就只能靠人点；给了口，探针能把
+    /// 「展开 + 300 步」这一面真挂起来量（`AgentChatStepListProbeTests`）。
+    var initialStepsExpanded: Bool = false
     /// 定时 agent 面板的入口（`FR-AI-27`）：面板本身读的是 `AppState` 里的条目与历史。
     @EnvironmentObject private var appState: AppState
     @FocusState private var inputFocused: Bool
@@ -29,6 +36,15 @@ struct AgentChatView: View {
     @State private var showArchivedSessions = false
     /// 待确认删除的那一条（`nil` = 没有待确认动作）—— 真删不可逆，必须二次确认。
     @State private var pendingDeleteSession: AgentSessionSummary?
+
+    /// 显式 init 只为下面这一件事：`@State` 的初始值必须在**挂载时**从 `initialStepsExpanded` 取
+    /// （成员缺省值会在属性初始化时就把状态钉成 `false`，探针那条口就成摆设了）。
+    init(model: AgentChatModel, readOnly: Bool = false, initialStepsExpanded: Bool = false) {
+        self.model = model
+        self.readOnly = readOnly
+        self.initialStepsExpanded = initialStepsExpanded
+        _stepsExpanded = State(initialValue: initialStepsExpanded)
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -802,70 +818,20 @@ struct AgentChatView: View {
 
     // MARK: - 任务清单（走到哪了）
 
+    /// 输入框上方那块（`AgentStepListPanel`）：表头 `▸ 任务清单 · N 步 (95/150)`，展开是**有高度上限、
+    /// 内部滚动**的步骤行。
+    ///
+    /// 2026-11-04 真机两处缺陷都落在这块上，所以整块搬进了 `AgentStepListPanel`：
+    /// ① 计数器分母写成 `model.steps.count`（本次运行已产生的步数）⇒ 分母跟着步数长；
+    /// ② 步骤行直接摊在页面的 `VStack` 里、无上限无滚动 ⇒ 几百步之后把对话区与输入框整体顶出屏幕。
+    /// 这个视图现在只负责**传值**（步数 / 计数器 / 展开态），不再自己排步骤行。
     @ViewBuilder
     private var taskList: some View {
-        if !model.steps.isEmpty {
-            VStack(alignment: .leading, spacing: Spacing.hair) {
-                // 表头就是 TUI 的 todo 面板那一行：`▸ 任务清单 (3/5)`，灰字带计数。
-                Button {
-                    stepsExpanded.toggle()
-                } label: {
-                    HStack(spacing: Spacing.s) {
-                        Text(stepsExpanded ? "▾" : "▸")
-                            .font(Self.transcriptFont)
-                            .foregroundStyle(Theme.accentColor)
-                        Text(L(.agentChatStepsTitle, "\(model.steps.count)"))
-                            .font(Self.transcriptFont)
-                        Text("(\(doneStepCount)/\(model.steps.count))")
-                            .font(Self.transcriptFont)
-                            .foregroundStyle(Theme.text(.secondary))
-                        if let seconds = model.lastElapsedSeconds {
-                            Text(L(.agentStatusElapsed, String(format: "%.1f", seconds)))
-                                .font(Self.transcriptFont)
-                                .foregroundStyle(Theme.text(.secondary))
-                        }
-                        Spacer(minLength: 0)
-                    }
-                }
-                .buttonStyle(.plain)
-
-                // **跑着**：只留最后 2 步（知道它此刻在干什么就够了）；**跑完**：收进折叠里。
-                if stepsExpanded || model.isRunning {
-                    let visible = model.isRunning && !stepsExpanded
-                        ? Array(model.steps.suffix(2))
-                        : model.steps
-                    ForEach(Array(visible.enumerated()), id: \.element.id) { index, step in
-                        stepRow(step, isLast: index == visible.count - 1)
-                    }
-                }
-            }
-            .padding(.horizontal, Spacing.m)
-            .padding(.vertical, Spacing.s)
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
-    }
-
-    private var doneStepCount: Int {
-        model.steps.filter { $0.status == .done }.count
-    }
-
-    @ViewBuilder
-    private func stepRow(_ step: AgentChatStep, isLast: Bool) -> some View {
-        HStack(spacing: Spacing.s) {
-            // 树轨：TUI 的 `├─` / `└─`
-            Text(isLast ? "└─" : "├─")
-                .font(Self.transcriptFont)
-                .foregroundStyle(Theme.text(.tertiary))
-            Text(stepMark(for: step))
-                .font(Self.transcriptFont)
-                .foregroundStyle(tint(for: step))
-            Text(step.tools.joined(separator: " · "))
-                .font(Self.transcriptFont)
-                .foregroundStyle(Theme.text(.secondary))
-                .lineLimit(1)
-            Spacer(minLength: 0)
-        }
-        .padding(.leading, Spacing.m)
+        AgentStepListPanel(steps: model.steps,
+                           counter: model.stepCounter,
+                           isRunning: model.isRunning,
+                           elapsedSeconds: model.lastElapsedSeconds,
+                           expanded: $stepsExpanded)
     }
 
     // MARK: - 整批撤回（`FR-STD-WS-EDIT-015`）
@@ -1175,24 +1141,6 @@ struct AgentChatView: View {
 
     /// 文案语言（与 `model.languageProvider` 同一来源 —— 界面与状态壳各写一份就会分叉）。
     private var language: AppLanguage { model.languageProvider() }
-
-    /// 状态字形照 TUI：跑着是旋转的那个（这里用静态 `◐`，转起来由 `currentActionRow` 负责），
-    /// 成了 `✓`、失败 `✗`。
-    private func stepMark(for step: AgentChatStep) -> String {
-        switch step.status {
-        case .running: return "◐"
-        case .done: return "✓"
-        case .failed: return "✗"
-        }
-    }
-
-    private func tint(for step: AgentChatStep) -> Color {
-        switch step.status {
-        case .running: return Theme.accentColor
-        case .done: return Theme.text(.secondary)
-        case .failed: return Theme.status(.warning)
-        }
-    }
 
     /// **当前动作**（输入框上方**一行**）—— dsh-tui 的 `🌙 … Firing a command … · 1s` 那一格。
     /// 命门是**就地更新、不追加**：跑一百跳也只占这一行（不刷屏）。

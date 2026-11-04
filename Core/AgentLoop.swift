@@ -125,6 +125,13 @@ public enum AgentToolSchemaValidator {
 
 /// 循环的限额（`FR-AI-18` ②③）。
 public struct AgentLoopLimits: Equatable, Sendable {
+    /// 步数上限的**默认值**（150）。
+    ///
+    /// 它不只是循环的默认值，**也是界面上步数计数器那个分母**（`AgentChatState.stepBudget`）——
+    /// 两处读同一个常量，才不会出现「循环在 150 步停、界面上分母却是 96」这种各说各话
+    /// （2026-11-04 真机：分母一度写成了「本次运行已产生的步数」，跟着步数一直跳）。
+    public static let defaultMaxSteps = 150
+
     /// 跳数上限（模型一回合一跳）。
     public var maxSteps: Int
     /// 令牌上限（累计，含外面已经花掉的）。
@@ -147,7 +154,7 @@ public struct AgentLoopLimits: Equatable, Sendable {
     /// **换路子**（同条 ①）：不可重试的失败发生时，按顺序换到这些模型再试；空了就只能如实失败。
     public var fallbackModels: [String]
 
-    public init(maxSteps: Int = 150, maxTotalTokens: Int = 262_144, tokensAlreadySpent: Int = 0,
+    public init(maxSteps: Int = AgentLoopLimits.defaultMaxSteps, maxTotalTokens: Int = 262_144, tokensAlreadySpent: Int = 0,
                 maxConsecutiveFailures: Int = 3, fallbackModels: [String] = []) {
         self.maxSteps = maxSteps
         self.maxTotalTokens = maxTotalTokens

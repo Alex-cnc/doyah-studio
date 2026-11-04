@@ -151,6 +151,35 @@ public struct AgentChatStep: Identifiable, Equatable, Sendable {
     }
 }
 
+/// 「任务清单」表头上那个计数器的读数（`N/M`）。
+///
+/// ## 为什么单拎一个值类型出来（2026-11-04 真机缺陷的回归面）
+///
+/// 分母曾经写的是 **`model.steps.count`（本次运行已经产生的步数）** ⇒ 分母跟着步数一起长，
+/// 屏幕上是 `1/1`、`2/2`、`3/3`…一个**永远等于 100% 的假进度**；人类主人现场看到的是
+/// 后半截数字一直在跳（「step 计数更新的地方不对，应该是 95/150，而不是一直更新后面这个数字」）。
+///
+/// 现在这两半各有各的来源、**都不随本次运行增长**：
+/// · 分子 = **已执行步数**（走完了的步：`done` / `failed`；还在跑的那最后一步不算）—— 会涨的只有它；
+/// · 分母 = 这一轮的**步数预算**（`AgentLoopLimits` 那一份上限，默认 150）—— 一轮之内是常量。
+///
+/// 单位是**步**（一次模型回合 = 一跳 = 界面上的一步），与停止原因里的 `stepLimit:150` 同一个数。
+public struct AgentStepCounter: Equatable, Sendable {
+    /// 已执行（走完）的步数 —— 分子。
+    public let executed: Int
+    /// 这一轮的步数预算 —— **固定上限**（分母），不随本次运行增长。
+    public let budget: Int
+
+    /// 表头上直接印的形态：`95/150`。
+    public var text: String { "\(executed)/\(budget)" }
+
+    public init(executed: Int, budget: Int) {
+        self.executed = max(0, executed)
+        // 预算是分母：0 / 负数会让读数变成 `95/0` 那种无意义的东西，最小按 1 算。
+        self.budget = max(1, budget)
+    }
+}
+
 /// 端点配置状态（`FR-AI-25` ⑤：**连不上就如实说，不假装在跑**）。
 public enum AgentChatEndpointState: Equatable, Sendable {
     /// 还没配端点 —— 界面如实说「没配」，且**不许发**。
@@ -262,6 +291,13 @@ public struct AgentChatState: Equatable, Sendable {
     public var cards: [AgentToolCard]
     /// 本次任务的步骤清单（输入框上方那块）。
     public var steps: [AgentChatStep]
+    /// 本轮**步数预算**（表头计数器的**分母**）：循环真正执行的那一份上限，一轮之内是常量。
+    ///
+    /// 为什么要存成一个字段而不是在视图里现算：旧实现的分母是 `steps.count`（本次运行已产生的步数）
+    /// ⇒ 分母跟着步数长，`95/150` 被印成了 `95/96`、`96/97`…（2026-11-04 真机缺陷）。
+    /// 分母只有两个来源：循环默认上限（`AgentLoopLimits.defaultMaxSteps`）或宿主显式钉进来的值
+    /// （`pinStepBudget`，给将来「把上限做成可配」留的口）；**绝不允许由步数推出来**。
+    public private(set) var stepBudget: Int = AgentLoopLimits.defaultMaxSteps
     /// **当前动作**（输入框上方那一行 —— 对齐 dsh-tui 的 `🌙 … Firing a command … · 1s`）。
     ///
     /// 命门在**就地更新、不追加**：开跑时写上，收尾时清掉 ⇒ 无论跑多少跳，这一行永远只占**一行**
@@ -313,6 +349,31 @@ public struct AgentChatState: Equatable, Sendable {
 
     /// 能不能发（不能就**如实说为什么**，不静默吞掉）。
     public var canSend: Bool { endpoint.canSend && !isRunning }
+
+    // MARK: - 步数计数器（`N/M`）
+
+    /// **已执行步数**（分子）：走完的步（`done` / `failed`）+ 已经不是最后一步的（异常情形兜底）。
+    ///
+    /// 为什么不直接数 `status == .done`：Core 只在 `finishRun` 时把最后一步标成 `done`，
+    /// 跑着的过程中**每一步都还是 `.running`** ⇒ 那样数出来全程是 `0/150`，比错的读数还糟。
+    /// 口径落成「**除当前在跑的那一步之外都算执行过**」：与循环的跳数一一对应，涨的是分子。
+    public var executedStepCount: Int {
+        steps.enumerated().filter { index, step in
+            step.status != .running || index != steps.count - 1
+        }.count
+    }
+
+    /// 表头那个读数：**分子 = 已执行步数 / 分母 = 步数预算**（会涨的只有分子；分母一轮之内是常量）。
+    public var stepCounter: AgentStepCounter {
+        AgentStepCounter(executed: executedStepCount, budget: stepBudget)
+    }
+
+    /// 宿主若要给循环自定义步数上限，就在造出循环之后把**同一个数**钉进来（分母跟着循环走）。
+    ///
+    /// 不给也能用：默认值与 `AgentLoopLimits` 的默认上限是同一个常量 —— 两边不会各自写一个 150。
+    public mutating func pinStepBudget(_ maxSteps: Int) {
+        stepBudget = max(1, maxSteps)
+    }
 
     public mutating func beginRun(prompt: String) {
         guard canSend else {
