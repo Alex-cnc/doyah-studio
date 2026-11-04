@@ -2255,6 +2255,10 @@ public enum LKey: String, CaseIterable, Sendable {
     case agentIMReasonNoWorkspace
     case agentIMReasonNoAnswer
     case agentIMReasonNoRunner
+    /// 这一轮**没开跑**（端点没配 / 门控挡下 / 配额用完）—— 真原因在桌面面板那一句里。
+    case agentIMReasonNotStarted
+    /// 跑完了但没有可读正文（工具轮没给结论）。
+    case agentIMReasonNoText
     case agentIMSendDelivered
     case agentIMSendNotReady
     case agentIMSendUnauthorized
@@ -5861,6 +5865,8 @@ public enum LocalizedStrings {
         .agentIMReasonNoWorkspace: [.simplifiedChinese: "没有打开工作区", .english: "no workspace is open"],
         .agentIMReasonNoAnswer: [.simplifiedChinese: "这一轮没有产出结论", .english: "this run produced no answer"],
         .agentIMReasonNoRunner: [.simplifiedChinese: "对话循环没有接上", .english: "the conversation loop is not wired"],
+        .agentIMReasonNotStarted: [.simplifiedChinese: "这一轮没能开跑（本地拦下：端点没配 / 同一句刚问过 / 日配额用完 —— 面板上那句话写着是哪一种）", .english: "this run never started (blocked locally: endpoint not configured, the same question was just asked, or the daily quota is used up — the desktop pane says which)"],
+        .agentIMReasonNoText: [.simplifiedChinese: "这一轮跑完了，但没有可读的正文（过程与步骤在桌面面板上）", .english: "this run finished but produced no readable text (the steps are on the desktop pane)"],
         .agentIMSendDelivered: [.simplifiedChinese: "结论已经发回聊天里了", .english: "The result was sent back to the chat."],
         .agentIMSendNotReady: [.simplifiedChinese: "这条结论没发出去（%@）：还没到发的那一步。", .english: "This result was not sent (%@): it never reached the sending step."],
         .agentIMSendUnauthorized: [.simplifiedChinese: "发不出去：AppID 或 Secret 不对（401）。重新填一次凭据再试。", .english: "Could not send: the AppID or Secret is wrong (401). Re-enter the credentials and try again."],

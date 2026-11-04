@@ -89,13 +89,95 @@ final class AgentNotificationBadgeTests: XCTestCase {
         XCTAssertGreaterThan(posted, 0, "人不在看 ⇒ 系统通知那一格还要走（角标不是它的替代品）")
     }
 
-    /// 兜底两格自身：置上 / 清掉（`applicationDidBecomeActive` 那条路调的就是 `clearDockBadge`）。
+    /// **真机序列复现**（2026-11-04 主人原话：「任务跑着 → ⌘H 隐藏 → 任务跑完，Dock 没角标」）：
+    /// App 在后台时面板视图没刷过端点 ⇒ 这一轮连跑都没跑 ⇒ `finish()` 不被调 ⇒ 角标不会置。
+    ///
+    /// 这条用例把「角标链路」与「IM 那条链路」的共同上游钉死：**两条都得先真的跑起来**。
+    @MainActor
+    func testShortHiddenTurnBackfillsTheBadgeEvenWithoutAPanelRefresh() async {
+        AgentNotificationPoster.clearDockBadge()
+        let model = AgentChatModel()
+        model.endpointProvider = { .ready(model: "m", endpoint: "https://example.invalid") }
+        // 故意不调 refreshEndpoint()：⌘H 之后面板从没重新出现，镜子还是旧的。
+        model.paneIsVisible = { false }     // 人不在看（App 被 ⌘H 收起）
+        model.taskFinishedSink = { AgentNotificationPoster.markTaskFinished() }
+        model.makeLoop = { _, _, _ in
+            (loop: AgentLoop(client: AnsweringClient(), dispatcher: QuietDispatcher()),
+             context: AgentLoopContext(systemPrompt: "你是助手。",
+                                       userPrompt: "跑一下",
+                                       baseRequest: LLMRequest(endpoint: URL(string: "http://127.0.0.1:9/v1")!,
+                                                               model: "fake",
+                                                               systemPrompt: "",
+                                                               userPrompt: ""),
+                                       sessionID: "s-badge-hidden",
+                                       workspace: "ws-badge"))
+        }
+        model.input = "跑一下"
+        await model.send()
+        await waitForBadge()
+
+        XCTAssertEqual(NSApplication.shared.dockTile.badgeLabel, "1",
+                       "⌘H 之后跑完也要有角标 —— 这一条不许依赖面板视图先刷过一次端点")
+    }
+
+    /// 兜底两格自身：置上 / 清掉（硬清只留给退出 / 测试这类「确定没人要看」的场合）。
     @MainActor
     func testBadgeCanBeSetAndCleared() {
         AgentNotificationPoster.markTaskFinished()
         XCTAssertEqual(NSApplication.shared.dockTile.badgeLabel, "1")
         AgentNotificationPoster.clearDockBadge()
         XCTAssertNil(NSApplication.shared.dockTile.badgeLabel, "回到前台要能清掉，否则角标会一直挂着")
+    }
+
+    /// **「激活」不等于「看见」**（2026-11-04 第二次点验：`⌘H` 后跑完，Dock 上什么都没有）。
+    ///
+    /// 角标代表「有一条结果没看」。`didBecomeActive` 会在很多和这条结果无关的时刻发出
+    /// （切回来拿文件、系统弹框把 App 顶到前台、通知授权框把窗口拎起来）——
+    /// 旧实现在这些时刻把角标**刚置上就抹掉**，人回来时 Dock 上干干净净。
+    @MainActor
+    func testBadgeSurvivesActivationUntilTheChatPaneIsActuallySeen() {
+        AgentNotificationPoster.clearDockBadge()
+        AgentNotificationPoster.markTaskFinished()
+        XCTAssertTrue(AgentNotificationPoster.hasUnseenResult)
+
+        // ① 激活了，但对话页不在眼前（人回来是去开文件的）⇒ 不许清。
+        AgentNotificationPoster.appDidBecomeActive(chatPaneOnScreen: false)
+        XCTAssertEqual(NSApplication.shared.dockTile.badgeLabel, "1",
+                       "激活但没看见结果 ⇒ 角标必须留着")
+        XCTAssertTrue(AgentNotificationPoster.hasUnseenResult)
+
+        // ② 人真的回到对话页 ⇒ 收讫。
+        AgentNotificationPoster.appDidBecomeActive(chatPaneOnScreen: true)
+        XCTAssertNil(NSApplication.shared.dockTile.badgeLabel, "人看见那一页了才清")
+        XCTAssertFalse(AgentNotificationPoster.hasUnseenResult)
+
+        // ③ 幂等：没有待看的再激活一次，什么都不做（不报错、也不把别的角标抹掉）。
+        AgentNotificationPoster.appDidBecomeActive(chatPaneOnScreen: true)
+        XCTAssertNil(NSApplication.shared.dockTile.badgeLabel)
+    }
+
+    /// 收讫之后**下一轮**跑完还要再置上（别把「已收讫」当成永久开关）。
+    @MainActor
+    func testANewResultAfterAcknowledgementRaisesTheBadgeAgain() {
+        AgentNotificationPoster.clearDockBadge()
+        AgentNotificationPoster.markTaskFinished()
+        AgentNotificationPoster.acknowledgeResultSeen()
+        XCTAssertNil(NSApplication.shared.dockTile.badgeLabel)
+
+        AgentNotificationPoster.markTaskFinished()
+        XCTAssertEqual(NSApplication.shared.dockTile.badgeLabel, "1", "又有一条结果 ⇒ 角标要回来")
+    }
+
+    /// 接线锚点：宿主**不许**再一激活就硬清（那正是本轮修的形态）。
+    func testHostAcknowledgesOnlyWhenTheChatPaneIsOnScreen() throws {
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        let app = try String(contentsOf: root.appendingPathComponent("App/DoyahStudioApp.swift"),
+                             encoding: .utf8)
+        XCTAssertTrue(app.contains("appDidBecomeActive("), "激活要交给海报那一层的判定")
+        XCTAssertTrue(app.contains("chatPaneOnScreen: workspaceTabs.selectedTab?.kind == .agentChat"),
+                      "「人正看着对话页」取页签真值")
+        XCTAssertFalse(app.contains("AgentNotificationPoster.clearDockBadge()"),
+                       "宿主不许在激活时硬清角标（不看有没有结果没看就抹掉，正是缺陷本体）")
     }
 
     /// 收尾可能落在一个 `Task` 里 ⇒ 给一点时间，别把「还没来得及置」读成「没置」。

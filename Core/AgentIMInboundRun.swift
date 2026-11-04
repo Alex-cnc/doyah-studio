@@ -74,6 +74,14 @@ public enum AgentIMReplyText {
         case "noWorkspace": return LocalizedStrings.text(.agentIMReasonNoWorkspace, language: language)
         case "noAnswer": return LocalizedStrings.text(.agentIMReasonNoAnswer, language: language)
         case "noRunner": return LocalizedStrings.text(.agentIMReasonNoRunner, language: language)
+        case "noText": return LocalizedStrings.text(.agentIMReasonNoText, language: language)
+        // 「没开跑」那一族：端点两档与其余本地拦下 —— 不再共用一个「没有结论」的码
+        // （2026-11-04 真机：手机那头看不出到底是哪一种，查起来只能靠猜）。
+        case "notStarted": return LocalizedStrings.text(.agentIMReasonNotStarted, language: language)
+        case "endpointNotConfigured":
+            return LocalizedStrings.text(.agentChatEndpointNotConfigured, language: language)
+        case "endpointUnreachable":
+            return LocalizedStrings.text(.agentChatEndpointUnreachable, language: language)
         case "taskFailed": return LocalizedStrings.text(.agentIMReplyTaskFailed, language: language)
         default:
             // 不认识的码原样贴出来（与 `AgentIMStatusText.reasonLine` 同一条纪律）。

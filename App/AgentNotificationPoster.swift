@@ -50,12 +50,48 @@ enum AgentNotificationPoster {
     }
 
     /// **回到前台后清角标**（谁在 `applicationDidBecomeActive` 里调一次）。
+    ///
+    /// ⚠️ 用 `acknowledgeResultSeen()` 更好：这一条是**硬清**（不看有没有结果没看），
+    /// 只留给退出 / 测试这类「确定没有人要看」的场合。
     @MainActor
     static func clearDockBadge() {
+        unseenResult = false
         let had = NSApplication.shared.dockTile.badgeLabel != nil
         NSApplication.shared.dockTile.badgeLabel = nil
-        if had { StartupLog.write("角标：已清（应用被激活）") }
+        if had { StartupLog.write("角标：已清（硬清）") }
     }
+
+    /// 有没有一条「结果还没被人看见」—— Dock 角标的语义就是这一位。
+    @MainActor
+    static var hasUnseenResult: Bool { unseenResult }
+
+    /// **App 被激活了一次**（宿主在 `didBecomeActive` 里调；`chatPaneOnScreen` = 人正看着对话页）。
+    ///
+    /// 判定放在这里而不是视图里，是为了「激活」与「看见」两个概念的差别**有判据可测**：
+    /// 激活但没把对话页摆到眼前 ⇒ 不动角标。
+    @MainActor
+    static func appDidBecomeActive(chatPaneOnScreen: Bool) {
+        guard chatPaneOnScreen else { return }
+        acknowledgeResultSeen()
+    }
+
+    /// **看见结果了 ⇒ 收讫**（宿主在「App 激活 **且** 人正看着对话页」时调）。
+    ///
+    /// 为什么不能像原来那样「一激活就清」（2026-11-04 主人第二次报「⌘H 后跑完没角标」）：
+    /// `didBecomeActive` 不等于「人看见那条结论」—— 切回来拿个文件、系统弹框把 App 顶到前台、
+    /// 通知授权框把窗口拎起来，都会发这条通知。旧写法在这些时刻把角标**刚置上就抹掉**，
+    /// 人回来时 Dock 上什么都没有。现在只有**真的把对话页摆到眼前**才算收讫。
+    @MainActor
+    static func acknowledgeResultSeen() {
+        guard unseenResult else { return }
+        unseenResult = false
+        NSApplication.shared.dockTile.badgeLabel = nil
+        StartupLog.write("角标：已清（人回到对话页，看过了）")
+    }
+
+    /// 「有一条结果还没被人看见」——置角标 / 收讫的唯一一位真值。
+    @MainActor
+    private static var unseenResult = false
 
     /// **这一轮收尾了 ⇒ 置 Dock 角标**（`FR-AGT-UX-CONV-008` 的兜底出口）。
     ///
@@ -66,13 +102,17 @@ enum AgentNotificationPoster {
     ///
     /// 两条判据分开：`AgentNotifyPolicy` 判「要不要打扰他」（前台不弹、短任务不弹），
     /// 这一格判「有没有结果待看」—— **不判前台后台**，置上就等着他回来。
-    /// 清角标在 `clearDockBadge()`（App 被激活时调）。
+    /// 清角标走 `acknowledgeResultSeen()`（人真的看见那一页才清）。
     @MainActor
     static func markTaskFinished() {
-        NSApplication.shared.dockTile.badgeLabel = "1"
-        // 留一条读数：用户说「看不到角标」时，先确认这句到底有没有被调到
-        // （`AgentChatModel.finish()` → sink → 这里；2026-11-04 加）
-        StartupLog.write("角标：置 1（任务收尾，前台=\(NSApplication.shared.isActive)）")
+        unseenResult = true
+        let app = NSApplication.shared
+        let tile = app.dockTile
+        tile.badgeLabel = "1"
+        // 留读数：主人说「看不到角标」时，先确认这句到底有没有被调到、以及置上读回来是什么
+        // （`AgentChatModel.finish()` → sink → 这里；2026-11-04 加）。
+        StartupLog.write("角标：置 1（前台=\(app.isActive) 隐藏=\(app.isHidden) "
+            + "策略=\(app.activationPolicy().rawValue) 读回=\(tile.badgeLabel ?? "nil")）")
     }
 
     /// **启动即申请一次授权**（人类主人 2026-11-03 实测：任务跑完没弹框）。

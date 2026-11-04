@@ -383,6 +383,78 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
         await start(prompt: prompt, intent: .newQuestion)
     }
 
+    // MARK: - IM 通道跑一轮（`FR-AGT-LINK-CHAN-003` 后半）
+
+    /// 一次 IM 派活的结局（**与界面文案无关**：宿主只把它翻成一条回话 / 一个原因码）。
+    ///
+    /// 为什么要分五档而不是「有 / 没有结论」：2026-11-04 真机上这五档最后被压成了
+    /// 一句「这一轮没有产出结论」—— 于是「端点没配」「上一轮还在跑」「模型连不上」
+    /// 「跑完了但没有正文」在手机那头长得一模一样，查起来只能靠猜。
+    enum IMRunOutcome: Equatable {
+        /// 跑完了，正文原文。
+        case answered(String)
+        /// 停在桌面审批上（IM 不放宽审批）。
+        case awaitingApproval
+        /// **没开跑**（端点没配 / 上一轮还在跑 / 被本地门控挡下）：码给回话翻人话。
+        case refused(code: String)
+        /// 跑起来了但抛了（技术串只进日志，不进回话）。
+        case failed(detail: String)
+        /// 跑完了但没有可读正文（工具轮没给结论）—— `ranSteps` 是这一轮走了几步。
+        case noText(ranSteps: Int)
+    }
+
+    /// 跑一轮（IM 派活用）：**不依赖面板视图的任何副作用**，并等这一轮**真的收尾**。
+    ///
+    /// 三条与 `send()` 不同的口径，都是真机缺陷逼出来的：
+    /// ① 开跑前对齐端点真值（见 `start` 里那一句）—— 面板没出现过也照跑；
+    /// ② 上一轮还在跑时**如实说忙**，不排队（排队 = 手机那头等一句永远不会来的结论，
+    ///    而任务稍后却在桌面偷偷跑起来）；
+    /// ③ 收尾后**分清五种结局**：旧实现只认「新助手消息里有没有字」，
+    ///    真原因（失败 / 没开跑 / 工具轮没正文）全被吞成 `noAnswer`。
+    func runFromIM(prompt: String, deadline: TimeInterval = 150) async -> IMRunOutcome {
+        let trimmed = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return .refused(code: "emptyText") }
+        guard !state.isRunning else { return .refused(code: "busy") }
+        let before = state.messages.count
+        await start(prompt: trimmed, intent: .newQuestion)
+        // `start` 的几条早退（日配额 / 端点 / 门控 / 循环装配不出来）都**不进 `finish()`** ——
+        // 这里把它们留下的原因翻成码，而不是一律「没有结论」。
+        guard state.isRunning else {
+            let notice = newNotices(after: before).last?.text
+            return .refused(code: Self.imRefusalCode(endpoint: state.endpoint, notice: notice))
+        }
+        let deadlineAt = Date().addingTimeInterval(deadline)
+        while state.isRunning, Date() < deadlineAt {
+            if hasPendingApproval { return .awaitingApproval }
+            try? await Task.sleep(nanoseconds: 200_000_000)
+        }
+        if hasPendingApproval { return .awaitingApproval }
+        guard !state.isRunning else { return .failed(detail: "timeout") }
+        let fresh = state.messages.dropFirst(before)
+        if let text = fresh.last(where: { $0.role == .assistant })?
+            .text.trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty {
+            return .answered(text)
+        }
+        // 没有正文：**先看是不是真失败**。`endStreaming()` 会把空正文那条助手消息删掉
+        // （`Core/AgentChat.swift:361`），真原因只剩一行 `failed:…` 的提示 —— 别再丢掉它。
+        if let failure = fresh.last(where: { $0.role == .notice && $0.text.hasPrefix("failed:") }) {
+            return .failed(detail: String(failure.text.dropFirst("failed:".count)))
+        }
+        return .noText(ranSteps: state.steps.count)
+    }
+
+    /// 新冒出来的提示行（「没开跑」时原因只在这里）。
+    private func newNotices(after index: Int) -> [AgentChatMessage] {
+        state.messages.dropFirst(index).filter { $0.role == .notice }
+    }
+
+    /// 「没开跑」的原因码：端点那一档有现成码；其余（门控 / 配额 / 装配）统一 `notStarted`
+    /// （面板上那句话才是带数字的原文 —— `notice` 留着给宿主记日志，不参与翻译）。
+    static func imRefusalCode(endpoint: AgentChatEndpointState, notice: String?) -> String {
+        _ = notice
+        return endpoint.blockerCode ?? "notStarted"
+    }
+
     // MARK: - 斜杠命令的落地（`FR-AGT-UX-CONV-014` / `FR-AGT-UX-CONV-015`）
 
     /// 把一条 effect 落成界面动作 + **一行**审计。
@@ -825,6 +897,16 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
     }
 
     private func start(prompt: String, intent: AgentTurnIntent, ignoringGate: Bool = false) async {
+        // **端点状态每次开跑前按真值对齐一次**（`FR-AGT-LINK-CHAN-003` 后半）。
+        //
+        // 由头（2026-11-04 真机：手机发消息回来「this run produced no answer」）：
+        // `state.endpoint` 只是一面**显示用的镜子**，唯一的刷新点是对话面板视图的
+        // `.onAppear`（`App/Views/AgentChatView.swift:54`）。IM 从后台进来、或页签一直
+        // 没选到对话页时，镜子还停在 `.notConfigured` ⇒ 下面 `beginRun` 的 `guard canSend`
+        // 直接把这一轮拒了 ⇒ **一句模型请求都没发**，而手机那头收到的是「这一轮没有产出结论」。
+        // 真值在 `endpointProvider`（宿主每轮现读配置）：开跑前读它一次，镜子不该挡在请求前面。
+        // 反过来，宿主若判「还是连不上」，`canSend` 仍会是 false —— 拒跑的口径没放宽。
+        refreshEndpoint()
         // **日配额闸**（`FR-AGT-OPS-OBS-002` 的「改完立即生效」之一）：额度用完就不再发请求。
         // 拦在「人按下发送」与「真的发出去」之间，并且**说清是哪两个数**（用掉多少 / 上限多少）——
         // 只回一句「超限」用户没法判断该调上限还是等明天。

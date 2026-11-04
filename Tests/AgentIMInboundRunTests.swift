@@ -332,8 +332,12 @@ final class AgentIMInboundRunTests: XCTestCase {
     // MARK: - ⑭ 两语言都要有话说（不许一条回话只有中文）
 
     func testEveryReplyKindHasBothLanguages() {
-        let kinds: [AgentIMTaskRunResult] = [.answered("done"), .awaitingApproval,
-                                             .unavailable(code: "busy")]
+        // 宿主现在会发的**每一个**码都过一遍（2026-11-04：`noAnswer` 不再兜底，
+        // 「没开跑 / 没正文」各有各的话 —— 新码没翻译就等于把机器码贴给人看）。
+        let codes = ["busy", "noWorkspace", "noAnswer", "noRunner", "noText",
+                     "notStarted", "endpointNotConfigured", "endpointUnreachable", "taskFailed"]
+        let kinds: [AgentIMTaskRunResult] = [.answered("done"), .awaitingApproval]
+            + codes.map { .unavailable(code: $0) }
         for kind in kinds {
             let zh = AgentIMReplyText.text(for: kind, language: .simplifiedChinese)
             let en = AgentIMReplyText.text(for: kind, language: .english)
@@ -341,6 +345,8 @@ final class AgentIMInboundRunTests: XCTestCase {
             XCTAssertFalse(en.isEmpty)
             XCTAssertFalse(en.unicodeScalars.contains { $0.value >= 0x4E00 && $0.value <= 0x9FFF },
                            "\(kind) 的英文回话里混了汉字：\(en)")
+            XCTAssertFalse(en.contains("endpointNotConfigured") || en.contains("notStarted"),
+                           "\(kind) 的英文回话漏译了（贴出来的是机器码）：\(en)")
         }
     }
 
@@ -364,8 +370,12 @@ final class AgentIMInboundRunTests: XCTestCase {
         let app = try source("App/DoyahStudioApp.swift")
         XCTAssertTrue(app.contains("appState.agentIMTaskRunner = {"), "宿主必须注入跑一轮的闭包")
         XCTAssertTrue(app.contains("agentChat.adoptSession("), "IM 的会话号要接管（两个 chat 不共用上下文）")
-        XCTAssertTrue(app.contains("hasPendingApproval"), "停在审批上要如实回，不许装成有结论")
-        XCTAssertTrue(app.contains("agentChat.send()"), "走手动那条路 ⇒ 同一套审批")
+        XCTAssertTrue(app.contains("agentChat.runFromIM("),
+                      "跑一轮要走进 `AgentChatModel.runFromIM`（端点真值 / 忙 / 收尾五档都在那里判）")
+        // 审批那一条的**判定**搬进了模型（`runFromIM` 等收尾时看 `hasPendingApproval`）——
+        // 宿主不再自己 polling 消息流，所以锚点也随判定一起搬。
+        let model = try source("App/AgentChatModel.swift")
+        XCTAssertTrue(model.contains("hasPendingApproval"), "停在审批上要如实回，不许装成有结论")
     }
 
     func testSettingsSheetShowsHandledAndRepliedApart() throws {

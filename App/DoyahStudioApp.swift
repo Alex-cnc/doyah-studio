@@ -118,11 +118,24 @@ struct DoyahStudioApp: App {
                 .environmentObject(workspace)
                 .environmentObject(workspaceTabs)
                 .environmentObject(agentChat)
-                // **回到前台就清 Dock 角标**（`FR-AGT-UX-CONV-008` 的收尾那一半）：
-                // 这是 `applicationDidBecomeActive` 在 SwiftUI 里的等价处 —— 通知由 AppKit
-                // 在 App 真被激活时发出。角标只在「有结果待看」期间挂着，人一回来就撤。
+                // **回到前台 ≠ 看见了结果**（`FR-AGT-UX-CONV-008` 的收尾那一半）：
+                // 角标识的是「有一条结果待看」，只有人真的把对话页摆到眼前才算收讫。
+                // 切回来拿个文件、系统弹框把 App 顶到前台、通知授权框把窗口拎起来 ——
+                // 这些都会发 `didBecomeActive`，旧写法在这些时刻把角标刚置上就抹掉
+                // （2026-11-04 主人第二次报「⌘H 后跑完没角标」的第二种可能）。
                 .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
-                    Task { @MainActor in AgentNotificationPoster.clearDockBadge() }
+                    Task { @MainActor in
+                        AgentNotificationPoster.appDidBecomeActive(
+                            chatPaneOnScreen: workspaceTabs.selectedTab?.kind == .agentChat)
+                    }
+                }
+                // 人自己在页签条上点回对话页（App 本来就在前台，不发激活通知）⇒ 同样算看见。
+                .onReceive(workspaceTabs.$selectedID.removeDuplicates()) { _ in
+                    Task { @MainActor in
+                        guard NSApplication.shared.isActive else { return }
+                        AgentNotificationPoster.appDidBecomeActive(
+                            chatPaneOnScreen: workspaceTabs.selectedTab?.kind == .agentChat)
+                    }
                 }
                 .onAppear {
                     // 对话页签的接线（`FR-AI-25`）：端点状态取自智能体设置；循环与「兑现批准」都由 `AppState` 出。
@@ -281,30 +294,25 @@ struct DoyahStudioApp: App {
                         }
                         // 会话号由 Core 给（同一 chat 永远同一条）：接管它，两个 chat 才不会共用一份上下文。
                         agentChat.adoptSession(task.sessionID, workspacePath: root)
-                        let before = agentChat.messages.count
-                        agentChat.input = task.prompt
-                        await agentChat.send()
-                        // **等这一轮真的跑完**（2026-10-31 06:26 实测：`send()` 只是把循环丢到
-                        // 后台就返回，紧接着取消息必然是空的 —— 于是每一条派活都秒回
-                        // `noAnswer`。这里等到「有新助手消息」或「不在跑了」，最多 150s）。
-                        let deadline = Date().addingTimeInterval(150)
-                        while Date() < deadline {
-                            if agentChat.hasPendingApproval { return .awaitingApproval }
-                            let text = agentChat.messages.dropFirst(before)
-                                .last(where: { $0.role == .assistant })?.text ?? ""
-                            if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                                return .answered(text)
-                            }
-                            if !agentChat.state.isRunning, agentChat.messages.count > before { break }
-                            try? await Task.sleep(nanoseconds: 400_000_000)
+                        // **跑一轮的判定在 `AgentChatModel.runFromIM`**（真值对齐 / 忙就如实说忙 /
+                        // 收尾分五档）。2026-11-04 真机的「没有产出结论」正是旧实现把五种结局压成一档：
+                        // 面板没刷过端点 ⇒ 这一轮连请求都没发，手机那头只能拿到一句「没结论」。
+                        // 这里只把结局翻译成 Core 的三档 —— **真原因原样带出去**（码由语言表翻人话）。
+                        switch await agentChat.runFromIM(prompt: task.prompt) {
+                        case let .answered(text):
+                            return .answered(text)
+                        case .awaitingApproval:
+                            return .awaitingApproval
+                        case let .refused(code):
+                            StartupLog.write("IM 跑一轮没开跑 code=\(code)")
+                            return .unavailable(code: code)
+                        case let .failed(detail):
+                            StartupLog.write("IM 跑一轮失败 detail=\(detail)")
+                            return .unavailable(code: "taskFailed")
+                        case let .noText(steps):
+                            StartupLog.write("IM 跑一轮跑完但没有正文 步数=\(steps)")
+                            return .unavailable(code: "noText")
                         }
-                        if agentChat.hasPendingApproval { return .awaitingApproval }
-                        let fresh = agentChat.messages.dropFirst(before)
-                            .last(where: { $0.role == .assistant })?.text ?? ""
-                        guard !fresh.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-                            return .unavailable(code: "noAnswer")
-                        }
-                        return .answered(fresh)
                     }
                     // 工作区打开文件的路由（队列 `L-149` 剩余②）：登记表说「默认用浏览器打开」的
                     // 那一类（`.html` / `.htm`）交给浏览器页签。**交接只在这里接一次** ——
