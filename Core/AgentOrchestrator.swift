@@ -26,6 +26,10 @@ public struct AgentSubtaskSpec: Equatable, Sendable {
 public struct AgentSubtaskResult: Equatable, Sendable {
     public enum Status: String, Equatable, Sendable {
         case completed, failed, timedOut, skipped, needsApproval
+        /// **到点收尾，成果按已有的给**（子代理预算 `budgetSeconds` 用完）：不再是 `timedOut`。
+        /// 为什么单列一档而不是塞进 `completed`：这份结论没跑完（没跑全），当成完成就是假绿；
+        /// 但也不该算失败 —— 正文是真拿到的，主控要能接着用。
+        case partial
     }
 
     public var subtaskID: String
@@ -58,6 +62,8 @@ public struct AgentOrchestrationReport: Equatable, Sendable {
     public var results: [AgentSubtaskResult]
 
     public var completedCount: Int { results.filter { $0.status == .completed }.count }
+    /// 到点收尾、成果按已有的给的那几路（`budgetSeconds` 用尽）。
+    public var partialCount: Int { results.filter { $0.status == .partial }.count }
     public var needsApproval: [AgentSubtaskResult] { results.filter { $0.status == .needsApproval } }
     public var failures: [AgentSubtaskResult] {
         results.filter { [.failed, .timedOut].contains($0.status) }

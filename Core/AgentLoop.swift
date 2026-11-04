@@ -58,6 +58,11 @@ public enum AgentLoopEvent: Equatable, Sendable {
 /// 进度观察口（界面实现它；**不改变循环的判定口径**，只是把过程如实说出来）。
 public protocol AgentLoopObserver: Sendable {
     func observe(_ event: AgentLoopEvent) async
+    /// **带来源**的一版（`FR-AGT-TOOL-SYS-002` ①）：主对话只收主循环的事件。
+    ///
+    /// 默认实现在 `AgentSubtaskEventChannel.swift`：非 `.mainLoop` 一律丢弃 ——
+    /// 观察口手里没有会话号，分不出这条是谁的，默认放行就等于给混流留后门。
+    func observe(_ event: AgentLoopEvent, origin: AgentSubtaskOrigin) async
 }
 
 /// 一次要执行的工具调用（模型给出的名字 + 参数 JSON）。
@@ -178,6 +183,10 @@ public enum AgentLoopStop: Equatable, Sendable {
     /// 每一跳都弹一张「等你批准」的单子 —— 人点了上百次。报警不停 = 没拦住。
     case spinning(Int)
     case cancelled
+    /// **预算到点**（子代理的 `budgetSeconds` 的落点）：停在**下一跳之前**，把已经产出的正文
+    /// 当 partial 交回 —— 不是杀在 `await` 里让成果整段丢掉（2026-11-04 真机：4 批子任务
+    /// `completed=0 / failed=3`，摘要只剩 `timeout`，就是这个落点缺失造成的）。
+    case deadline
 
     /// 供回灌 / 界面读的原因串（**机器形态**：带数值与档位，人话由渲染入口给）。
     public var reason: String {
@@ -187,6 +196,7 @@ public enum AgentLoopStop: Equatable, Sendable {
         case .quotaLimit(let detail): return "quotaLimit:\(detail)"
         case .spinning(let hops): return "spinning:\(hops)"
         case .cancelled: return "cancelled"
+        case .deadline: return "deadline"
         }
     }
 
@@ -198,6 +208,7 @@ public enum AgentLoopStop: Equatable, Sendable {
     /// 认不出 ⇒ `nil`，由调用方决定怎么兜（**不猜**、不把陌生码当取消）。
     public static func parse(reason: String) -> AgentLoopStop? {
         if reason == AgentLoopStop.cancelled.reason { return .cancelled }
+        if reason == AgentLoopStop.deadline.reason { return .deadline }
         if reason.hasPrefix("stepLimit:") {
             // 数值必须**整段**是整数（`stepLimit:3x` / 空串一律不认）。
             guard let value = Int(reason.dropFirst("stepLimit:".count)) else { return nil }
@@ -406,6 +417,21 @@ public struct AgentLoop: Sendable {
     /// 不给（`nil`）= 该能力**如实拒** `unavailable`，其余工具行为逐字不变。
     public var subagentPolicy: AgentSubagentPolicy?
 
+    /// **本循环事件的来源**（`FR-AGT-TOOL-SYS-002` ①）：主循环是 `.mainLoop`；
+    /// 子代理那一份循环是 `.subtask(id:delegatedAtStep:)`。
+    ///
+    /// 为什么放在循环上而不是事件里：事件枚举有三十来处产出点，逐处改等于逐处可能漏；
+    /// 来源是**这一份循环的身份**，一处赋值、`emit` 一处带出 —— 漏不了。
+    public var eventOrigin: AgentSubtaskOrigin
+
+    /// **本轮预算的截止时刻**（子代理 `budgetSeconds` 的落点）。`nil` = 没有截止（主循环默认）。
+    /// 到点在**下一跳之前**收尾并把已有正文交回（`AgentLoopStop.deadline`），不是杀在 `await` 里。
+    public var deadline: Date?
+
+    /// 子任务的事件账（`FR-AGT-TOOL-SYS-002` ①）：子路事件只进这里，**不进主对话**。
+    /// 派活时把这一本交给 `AgentLoopSubtaskRunner`，主控/界面只读快照。
+    public var subtaskEvents: AgentSubtaskEventStore
+
     public init(client: any LLMStreamingClient,
                 dispatcher: any AgentToolDispatcher,
                 registry: AgentToolRegistry = .standard,
@@ -423,7 +449,10 @@ public struct AgentLoop: Sendable {
                 quotaLedger: AgentQuotaLedger = .empty,
                 monitor: AgentRunMonitor? = nil,
                 limits: AgentLoopLimits = AgentLoopLimits(),
-                subagentPolicy: AgentSubagentPolicy? = nil) {
+                subagentPolicy: AgentSubagentPolicy? = nil,
+                eventOrigin: AgentSubtaskOrigin = .mainLoop,
+                deadline: Date? = nil,
+                subtaskEvents: AgentSubtaskEventStore = AgentSubtaskEventStore()) {
         self.client = client
         self.dispatcher = dispatcher
         self.registry = registry
@@ -442,6 +471,17 @@ public struct AgentLoop: Sendable {
         self.monitor = monitor
         self.limits = limits
         self.subagentPolicy = subagentPolicy
+        self.eventOrigin = eventOrigin
+        self.deadline = deadline
+        self.subtaskEvents = subtaskEvents
+    }
+
+    /// 报一条事件 —— **只有这一处**往观察口送，并带上本循环的来源。
+    ///
+    /// 子路（`.subtask`）的事件在观察口那侧被默认丢弃（`AgentLoopObserver.observe(_:origin:)`），
+    /// 所以「主对话只收主循环的事件」是**结构上**成立的，不靠三十来个调用点各自记得加判断。
+    private func emit(_ event: AgentLoopEvent) async {
+        await observer?.observe(event, origin: eventOrigin)
     }
 
     /// - Parameter requestedStep: 调用方**以为自己停在第几跳**（用于「如实报数」：实际回退了几跳）。
@@ -457,7 +497,8 @@ public struct AgentLoop: Sendable {
     /// 派出去的模型调用同样是这次会话的调用，主控不收这笔账就等于配额会被这条路绕过。
     private func runSubagentDispatch(invocation: AgentToolInvocation,
                                      context: AgentLoopContext,
-                                     baseLedger: AgentQuotaLedger) async -> (AgentToolOutcome, AgentQuotaLedger) {
+                                     baseLedger: AgentQuotaLedger,
+                                     batch: Int) async -> (AgentToolOutcome, AgentQuotaLedger) {
         guard let policy = subagentPolicy else {
             return (.refused(.unavailable, detail: "subagent-disabled"), .empty)
         }
@@ -476,9 +517,10 @@ public struct AgentLoop: Sendable {
         }
         let executor = AgentSubagentExecutor(
             policy: policy,
-            runner: AgentLoopSubtaskRunner(loop: self, template: context, baseLedger: baseLedger))
+            runner: AgentLoopSubtaskRunner(loop: self, template: context, baseLedger: baseLedger,
+                                           batch: batch, events: subtaskEvents))
         let report = await executor.run(specs)
-        let header = "completed=\(report.completedCount) failed=\(report.failures.count)"
+        let header = "completed=\(report.completedCount) partial=\(report.partialCount) failed=\(report.failures.count)"
         let text = header + "\n" + report.mergedSummary
         // 各路的账加总（`nil` = 那一路没记账，不计入；不当它花 0）。
         let spent = report.results.compactMap(\.quotaUsage).reduce(AgentQuotaLedger.empty) { $0.merged(with: $1) }
@@ -515,10 +557,12 @@ public struct AgentLoop: Sendable {
         var monitor = self.monitor
         // 配额账本：调用方交进来的是「本次运行**之前**已经用掉的」；本次运行里逐跳累加。
         var quotaLedger = self.quotaLedger
+        /// 本轮派过几批子代理（`FR-AGT-TOOL-SYS-002`：同 id 重派必须换子会话号 —— 第几批是它的一部分）。
+        var dispatchBatches = 0
 
         /// 报一条监控告警（事件给界面 + 会话留痕可查）。同类只报一次的去重在 `AgentRunMonitor` 里。
         func raise(_ alert: AgentRunAlert) async {
-            await observer?.observe(.monitorAlert(kind: alert.kind.rawValue,
+            await emit(.monitorAlert(kind: alert.kind.rawValue,
                                                   observed: alert.observed,
                                                   threshold: alert.threshold))
             recordTurn(context: context, kind: .approval, role: "system", text: alert.code, at: startedAt)
@@ -554,7 +598,7 @@ public struct AgentLoop: Sendable {
                 observations.append("resume: 已从第 \(checkpoint.stepIndex) 跳接上；"
                                     + "此前 \(checkpoint.completedSteps.count) 项已完成步骤不重放（内容见会话留痕）")
                 // 续跑**不许静默**（`R-63` ③）：过程面要能报出「从第几跳接上、跳过几跳、坏了几行」。
-                await observer?.observe(.resumed(fromStep: checkpoint.stepIndex,
+                await emit(.resumed(fromStep: checkpoint.stepIndex,
                                                  skippedSteps: skippedSteps,
                                                  skippedCheckpointLines: skippedCheckpointLines))
             }
@@ -568,7 +612,7 @@ public struct AgentLoop: Sendable {
                 let drained = inbox.drain(afterCompleting: steps)
                 if !drained.isEmpty {
                     if AgentInterventionQueue.stops(in: drained) {
-                        await observer?.observe(.stopped(.cancelled))
+                        await emit(.stopped(.cancelled))
                         recordStop(.cancelled, context: activeContext, at: startedAt)
                         return seal(AgentLoopResult(
                             outcome: .stopped(.cancelled), steps: steps,
@@ -596,7 +640,7 @@ public struct AgentLoop: Sendable {
                 }
                 let decision = quota.decision(ledger: quotaLedger, requestedOutputTokens: requested)
                 if !decision.isAllowed {
-                    await observer?.observe(.stopped(.quotaLimit(decision.message)))
+                    await emit(.stopped(.quotaLimit(decision.message)))
                     recordStop(.quotaLimit(decision.message), context: context, at: startedAt)
                     return seal(AgentLoopResult(
                         outcome: .stopped(.quotaLimit(decision.message)), steps: steps,
@@ -605,7 +649,7 @@ public struct AgentLoop: Sendable {
             }
             // ③ 令牌上限：**停在发送之前**（一次请求都不发）
             if limits.tokensAlreadySpent + usage.billableTokens >= limits.maxTotalTokens {
-                await observer?.observe(.stopped(.tokenLimit(limits.maxTotalTokens)))
+                await emit(.stopped(.tokenLimit(limits.maxTotalTokens)))
                 let stopped = AgentLoopResult(
                     outcome: .stopped(.tokenLimit(limits.maxTotalTokens)),
                     steps: steps, executedTools: executed, rejectedTools: rejected,
@@ -616,15 +660,25 @@ public struct AgentLoop: Sendable {
             }
             // ④ 取消：**在下一跳之前停**（已产生的工具结果已经在会话里留痕）
             if isCancelled() {
-                await observer?.observe(.stopped(.cancelled))
+                await emit(.stopped(.cancelled))
                 recordStop(.cancelled, context: context, at: startedAt)
                 return seal(AgentLoopResult(
                     outcome: .stopped(.cancelled), steps: steps,
                     executedTools: executed, rejectedTools: rejected, usage: usage, text: ""))
             }
+            // ⑤ **预算到点**（子代理 `budgetSeconds` 的落点）：同样停在下一跳之前，但**带着成果**退 ——
+            //    `text: lastText` 是已经成文的正文（上一跳的答复）。此前预算只在 `runOne` 那一层按闹钟掐，
+            //    掐下来只回一句 `timeout`、成果整段丢（真机 4 批全 `completed=0 / failed=3` 就是这么来的）。
+            if let deadline, Date() >= deadline {
+                await emit(.stopped(.deadline))
+                recordStop(.deadline, context: context, at: startedAt)
+                return seal(AgentLoopResult(
+                    outcome: .stopped(.deadline), steps: steps,
+                    executedTools: executed, rejectedTools: rejected, usage: usage, text: lastText))
+            }
             // ② 步数上限：模型还想跳也不给了，**如实报上限值**
             if steps >= limits.maxSteps {
-                await observer?.observe(.stopped(.stepLimit(limits.maxSteps)))
+                await emit(.stopped(.stepLimit(limits.maxSteps)))
                 let stopped = AgentLoopResult(
                     outcome: .stopped(.stepLimit(limits.maxSteps)), steps: steps,
                     executedTools: executed, rejectedTools: rejected, usage: usage, text: "")
@@ -639,13 +693,13 @@ public struct AgentLoop: Sendable {
             if let report = built.report, report.didCompress {
                 // 压缩**不许静默**（`R-63` ③）：累计读数 + 立刻报一行给过程面。
                 compression.absorb(report)
-                await observer?.observe(.contextCompressed(entries: report.compressedEntries,
+                await emit(.contextCompressed(entries: report.compressedEntries,
                                                           estimatedTokensSaved: report.estimatedTokensSaved,
                                                           kept: report.keptEntries,
                                                           earliest: report.droppedDigests.first ?? ""))
             }
             recordTurn(context: activeContext, kind: .model, role: "user", text: summarise(request.userPrompt), at: startedAt)
-            await observer?.observe(.hopStarted(index: steps))
+            await emit(.hopStarted(index: steps))
 
             let hopStarted = Date()
             var text = ""
@@ -664,13 +718,13 @@ public struct AgentLoop: Sendable {
                         text += piece
                         // 有增量 = 有进展（看门狗据此判「卡住」，`FR-AI-31` ③）。
                         monitor?.noteProgress()
-                        await observer?.observe(.delta(piece))
+                        await emit(.delta(piece))
                     case .reasoningDelta(let piece):
                         // 思考段**不进 `text`**（它是过程，不是答复）：只累计 + 交给观察者。
                         // 也算有进展 —— 模型正在想，界面不该在这时候报「卡住」。
                         reasoning += piece
                         monitor?.noteProgress()
-                        await observer?.observe(.reasoningDelta(piece))
+                        await emit(.reasoningDelta(piece))
                     case .usage(let reported, _):
                         usage = reported
                     case .toolCallDelta(let index, let id, let name, let fragment):
@@ -703,7 +757,7 @@ public struct AgentLoop: Sendable {
                     retries += 1
                     lastFailure = error.localizedDescription
                     let wait = retryPolicy.delayBeforeRetry(retries)
-                    await observer?.observe(.retrying(attempt: retries, after: wait,
+                    await emit(.retrying(attempt: retries, after: wait,
                                                       reason: error.localizedDescription))
                     // **反复重试要报出来**（`FR-AI-31` ③）：越过阈值就出一条告警，不让它悄悄耗到上限。
                     if var running = monitor {
@@ -713,7 +767,7 @@ public struct AgentLoop: Sendable {
                     }
                     if wait > 0 { try? await Task.sleep(nanoseconds: UInt64(wait * 1_000_000_000)) }
                     if isCancelled() {
-                        await observer?.observe(.failed("cancelled"))
+                        await emit(.failed("cancelled"))
                         return seal(AgentLoopResult(
                             outcome: .failed("cancelled"), steps: steps,
                             executedTools: executed, rejectedTools: rejected, usage: usage, text: text))
@@ -736,7 +790,7 @@ public struct AgentLoop: Sendable {
                 if failuresInARow >= limits.maxConsecutiveFailures {
                     // 带上分档（`transient` / `needsHuman` / `terminal`）—— 读日报时一眼看出是"网络抽风"还是"该找人"。
                     let detail2 = "consecutiveFailures:\(failuresInARow) · tier:\(triage.tier.rawValue) · last:\(error.localizedDescription)"
-                    await observer?.observe(.failed(detail2))
+                    await emit(.failed(detail2))
                     return seal(AgentLoopResult(
                         outcome: .failed(detail2), steps: steps,
                         executedTools: executed, rejectedTools: rejected, usage: usage, text: text,
@@ -749,11 +803,11 @@ public struct AgentLoop: Sendable {
                     request.model = next
                     retries = 0
                     lastFailure = error.localizedDescription
-                    await observer?.observe(.retrying(
+                    await emit(.retrying(
                         attempt: failuresInARow, after: 0,
                         reason: "routeSwitch:\(request.model)->\(next) · \(error.localizedDescription)"))
                     if isCancelled() {
-                        await observer?.observe(.failed("cancelled"))
+                        await emit(.failed("cancelled"))
                         return seal(AgentLoopResult(
                             outcome: .failed("cancelled"), steps: steps,
                             executedTools: executed, rejectedTools: rejected, usage: usage, text: text))
@@ -761,7 +815,7 @@ public struct AgentLoop: Sendable {
                     continue
                 }
                 let detail = "\(why) · retries:\(retries)\(lastFailure.map { " · last:\($0)" } ?? "")"
-                await observer?.observe(.failed(detail))
+                await emit(.failed(detail))
                 await audit?.record(AgentActionRecord.makeModelCall(
                     requestSummary: request.userPrompt,
                     model: request.model,
@@ -801,7 +855,7 @@ public struct AgentLoop: Sendable {
                     await raise(alert)
                     // **报警之后必须真的停**：只报不停等于没拦（见 `.spinning` 的注释）。
                     if alert.kind == .spinning {
-                        await observer?.observe(.stopped(.spinning(alert.observed)))
+                        await emit(.stopped(.spinning(alert.observed)))
                         recordStop(.spinning(alert.observed), context: context, at: startedAt)
                         return seal(AgentLoopResult(
                             outcome: .stopped(.spinning(alert.observed)), steps: steps,
@@ -838,7 +892,7 @@ public struct AgentLoop: Sendable {
                 if let verifier = completionVerifier {
                     let verdict = verifier.verify(text: text, evidence: evidence)
                     report = verdict
-                    await observer?.observe(.completionChecked(code: verdict.code,
+                    await emit(.completionChecked(code: verdict.code,
                                                                citations: verdict.citations.count))
                 }
                 // **结果自验**（`FR-AGT-QUAL-VERIFY-001`）：交付前把这一轮动过的每条都折成通过 / 没过；
@@ -882,9 +936,9 @@ public struct AgentLoop: Sendable {
                     let reason = AgentToolRefusal.unregistered.rawValue
                     rejected.append((invocation.name, reason))
                     observations.append("\(invocation.name): \(reason)")
-                    await observer?.observe(.toolStarted(name: invocation.name,
+                    await emit(.toolStarted(name: invocation.name,
                                                          summary: AgentToolSummary.line(fromArgumentsJSON: invocation.argumentsJSON)))
-                    await observer?.observe(.toolFinished(name: invocation.name, outcome: "denied", millis: nil))
+                    await emit(.toolFinished(name: invocation.name, outcome: "denied", millis: nil))
                     recordTurn(context: context, kind: .tool, role: "tool",
                                text: "\(invocation.name) => \(reason)",
                                toolName: invocation.name, toolCallID: invocation.callID, at: startedAt)
@@ -898,9 +952,9 @@ public struct AgentLoop: Sendable {
                                                                     against: definition) {
                     rejected.append((invocation.name, violation))
                     observations.append("\(invocation.name): \(violation)")
-                    await observer?.observe(.toolStarted(name: invocation.name,
+                    await emit(.toolStarted(name: invocation.name,
                                                          summary: AgentToolSummary.line(fromArgumentsJSON: invocation.argumentsJSON)))
-                    await observer?.observe(.toolFinished(name: invocation.name, outcome: "denied", millis: nil))
+                    await emit(.toolFinished(name: invocation.name, outcome: "denied", millis: nil))
                     recordTurn(context: context, kind: .tool, role: "tool",
                                text: "\(invocation.name) => \(violation)",
                                toolName: invocation.name, toolCallID: invocation.callID, at: startedAt)
@@ -951,9 +1005,9 @@ public struct AgentLoop: Sendable {
                         let reason = AgentToolRefusal.deniedByPolicy.rawValue
                         rejected.append((invocation.name, reason))
                         observations.append("\(invocation.name): \(reason)/\(policyDetail)")
-                        await observer?.observe(.toolStarted(name: invocation.name,
+                        await emit(.toolStarted(name: invocation.name,
                                                              summary: AgentToolSummary.line(fromArgumentsJSON: invocation.argumentsJSON)))
-                        await observer?.observe(.toolFinished(
+                        await emit(.toolFinished(
                             name: invocation.name,
                             outcome: "denied",
                             millis: nil))
@@ -985,8 +1039,9 @@ public struct AgentLoop: Sendable {
                 /// 已经推给界面的那张单（等审批时先推、再等；下方记录分支不要重复推一次）。
                 var approvalAnnounced: String?
                 if definition.capability == .dispatchSubtasks {
+                    dispatchBatches += 1
                     let dispatched = await runSubagentDispatch(invocation: invocation, context: context,
-                                                               baseLedger: quotaLedger)
+                                                               baseLedger: quotaLedger, batch: dispatchBatches)
                     outcome = dispatched.0
                     // **子代理的调用也进主账**（`NFR-ALL-GATE-AI-004` ①）：这一批各路自己花的加总，
                     // 立刻压回主控账本 —— 下一跳的配额判定、以及交回宿主的账本都算上它。
@@ -1002,7 +1057,7 @@ public struct AgentLoop: Sendable {
                     if case .needsApproval(let request) = outcome,
                        let decide = context.approvalDecision {
                         approvalAnnounced = request.fingerprint
-                        await observer?.observe(.approvalRequested(name: request.toolName,
+                        await emit(.approvalRequested(name: request.toolName,
                                                                    fingerprint: request.fingerprint,
                                                                    preview: request.payload,
                                                                    baseDigest: request.baseDigest))
@@ -1015,15 +1070,15 @@ public struct AgentLoop: Sendable {
                 let toolMillis = Int(Date().timeIntervalSince(toolStartedAt) * 1000)
                 // 工具开跑 = 有进展（看门狗据此判「卡住」）。
                 monitor?.noteProgress()
-                await observer?.observe(.toolStarted(name: invocation.name,
+                await emit(.toolStarted(name: invocation.name,
                                                      summary: AgentToolSummary.line(fromArgumentsJSON: invocation.argumentsJSON)))
                 switch outcome {
                 case .needsApproval(let request):
-                    await observer?.observe(.toolFinished(name: invocation.name, outcome: "pendingApproval", millis: toolMillis))
+                    await emit(.toolFinished(name: invocation.name, outcome: "pendingApproval", millis: toolMillis))
                     // **把单子交给界面**（`FR-AI-23` ④）：要改什么 / 指纹 / 基线，一次给全 ——
                     // 少任何一格，用户都点不出一次能兑现的批准。
                     if approvalAnnounced != request.fingerprint {
-                        await observer?.observe(.approvalRequested(name: request.toolName,
+                        await emit(.approvalRequested(name: request.toolName,
                                                                    fingerprint: request.fingerprint,
                                                                    preview: request.payload,
                                                                    baseDigest: request.baseDigest))
@@ -1038,7 +1093,7 @@ public struct AgentLoop: Sendable {
                         sessionID: context.sessionID, hopIndex: steps - 1, chainID: context.chainID, at: startedAt))
                 case .refused(let code, let detail):
                     // 拒因**带上机器码**（`FR-AI-31` ①：写冲突 / 基线过期要能被界面单独认出来）。
-                    await observer?.observe(.toolFinished(name: invocation.name,
+                    await emit(.toolFinished(name: invocation.name,
                                                           outcome: "denied:\(code.rawValue)", millis: toolMillis))
                     rejected.append((invocation.name, code.rawValue))
                     observations.append("\(invocation.name): \(code.rawValue)/\(detail)")
@@ -1057,7 +1112,7 @@ public struct AgentLoop: Sendable {
                                                               step: steps - 1) {
                         evidence.append(recorded)
                     }
-                    await observer?.observe(.toolFinished(name: invocation.name, outcome: "executed", millis: toolMillis))
+                    await emit(.toolFinished(name: invocation.name, outcome: "executed", millis: toolMillis))
                     let summary = Self.summary(of: outcome)
                     observations.append("\(invocation.name): \(summary)")
                     recordTurn(context: context, kind: .tool, role: "tool",

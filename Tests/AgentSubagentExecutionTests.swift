@@ -184,7 +184,12 @@ final class AgentSubagentExecutionTests: XCTestCase {
         XCTAssertEqual(report.results.map(\.summary), ["结论A", "结论B"])
         XCTAssertTrue(report.mergedSummary.contains("La#a"))
         XCTAssertTrue(report.mergedSummary.contains("Lb#b"))
-        XCTAssertEqual(client.requests.sorted(), ["做 a", "做 b"], "两路各发一次请求")
+        XCTAssertEqual(client.requests.sorted().count, 2, "两路各发一次请求")
+        XCTAssertTrue(client.requests.contains { $0.contains("做 a") })
+        XCTAssertTrue(client.requests.contains { $0.contains("做 b") })
+        // 子代理的提示词里必须写明预算（否则它会一路翻到被掐 —— 真机 4 批全 timedOut 的那条）
+        XCTAssertTrue(client.requests.allSatisfy { $0.contains("你只有 300 秒") },
+                      "子代理提示词缺预算：\(client.requests)")
     }
 }
 
@@ -199,7 +204,10 @@ private final class ScriptedStreamingClient: LLMStreamingClient, @unchecked Send
     func stream(_ request: LLMRequest) async throws -> AsyncThrowingStream<LLMStreamEvent, Error> {
         lock.lock()
         seen.append(request.userPrompt)
-        let text = replies[request.userPrompt] ?? "（脚本用尽）"
+        // 按**包含**匹配：子代理的提示词前面带一行预算 / 批次头（`你只有 N 秒…`），
+        // 不再是 `spec.prompt` 的逐字副本 ⇒ 精确字典查不到（2026-11-04 修预算那条时改的）。
+        let key = replies.keys.first { request.userPrompt.contains($0) } ?? request.userPrompt
+        let text = replies[key] ?? "（脚本用尽）"
         lock.unlock()
         return AsyncThrowingStream { continuation in
             continuation.yield(.textDelta(text))

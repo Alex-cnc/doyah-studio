@@ -1258,6 +1258,23 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
         sink(LocalizedStrings.text(.agentIMReasonNoText, language: language))
     }
 
+    /// 带来源的一版（`FR-AGT-TOOL-SYS-002` ①）：**主对话只收主循环自己的事件**。
+    ///
+    /// 由头（2026-11-04 真机）：子循环是 `var childLoop = loop` 复制出来的，观察口是同一个对象 ⇒
+    /// 三路子任务的 `delta` 逐字交错进主对话，`hopStarted` 把步数清单顶到 153（上限 150，主控只有 19 条审计）。
+    /// 现在子路事件在循环那一层就换了账（`AgentSubtaskEventObserver`），这里再挡一道：
+    /// **漏改一处也不再是「主对话被污染」，最多是「子路少一条进度」**。
+    func observe(_ event: AgentLoopEvent, origin: AgentSubtaskOrigin) async {
+        guard case .mainLoop = origin else {
+            droppedSubtaskEvents += 1
+            return
+        }
+        await observe(event)
+    }
+
+    /// 被挡在主对话外的子路事件条数（读数：>0 说明子路确实在跑，只是没混进来）。
+    private(set) var droppedSubtaskEvents = 0
+
     private func finish(_ result: AgentLoopResult) {
         stopWatchdog()
         state.finishRun()
