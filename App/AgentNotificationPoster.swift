@@ -52,7 +52,9 @@ enum AgentNotificationPoster {
     /// **回到前台后清角标**（谁在 `applicationDidBecomeActive` 里调一次）。
     @MainActor
     static func clearDockBadge() {
+        let had = NSApplication.shared.dockTile.badgeLabel != nil
         NSApplication.shared.dockTile.badgeLabel = nil
+        if had { StartupLog.write("角标：已清（应用被激活）") }
     }
 
     /// **这一轮收尾了 ⇒ 置 Dock 角标**（`FR-AGT-UX-CONV-008` 的兜底出口）。
@@ -68,6 +70,9 @@ enum AgentNotificationPoster {
     @MainActor
     static func markTaskFinished() {
         NSApplication.shared.dockTile.badgeLabel = "1"
+        // 留一条读数：用户说「看不到角标」时，先确认这句到底有没有被调到
+        // （`AgentChatModel.finish()` → sink → 这里；2026-11-04 加）
+        StartupLog.write("角标：置 1（任务收尾，前台=\(NSApplication.shared.isActive)）")
     }
 
     /// **启动即申请一次授权**（人类主人 2026-11-03 实测：任务跑完没弹框）。
