@@ -6,8 +6,9 @@ import SwiftUI
 ///
 /// ## 一句话口径
 ///
-/// 活动栏点 `Retro` ⇒ 右边出一台**真的只读阅读器**。视图代码**一个字都不复制进本仓**：
-/// 期次卡片列表与正文渲染都在 Retro 仓的 `DoyahRetroUI` 里（`FR-R-13`「视图归 Retro 仓」），
+/// 活动栏点 `Retro` ⇒ 右边出一台**真的只读阅读器**。视图代码**一个字都不复制**：
+/// 期次卡片列表与正文渲染都在本仓 `Plugins/Retro/Views`（模块 `DoyahRetroUI`，
+/// 2026-11-03 从 `DoyahRetro/platform/macos` 迁入）里（`FR-R-13`「视图归插件目录」），
 /// 本文件只做三件事 —— **建模型**、**把它们摆在一起**、**给「没选中」一个空态**。
 ///
 /// ## 三条不越界
@@ -15,7 +16,7 @@ import SwiftUI
 ///   · **扫描目录不另传参**：模型走 Retro 侧的唯一出处 `ReportListModel.fixed()`
 ///     （= `ReportReader.fixedScanRootPath`）。本仓**不出现那个盘上路径的第二份字面量** ——
 ///     宿主另传一个根，就是「两处真值」，迟早对不上（判据 ②：那个路径串在本仓 `Core/` `App/` 零命中）。
-///   · **只读**：本文件不打开、不写任何包目录；Retro 侧 `Tools/check-readonly.py` 已钉住视图层那一半。
+///   · **只读**：本文件不打开、不写任何包目录；`Plugins/Retro/Tools/check-readonly.py` 已钉住视图层那一半。
 ///   · **不扩许可模型**：Retro 是「报告阅读器」，不在三档卖点矩阵里 ⇒ **不新增能力位**
 ///     （见 `ActivityBarItem.retro` 的注释）。
 ///
@@ -25,12 +26,13 @@ import SwiftUI
 /// 拆到 Studio 的左栏 / 右栏两处，模型就会被两侧各建一份（两次扫描，选中项也对不上）——
 /// 所以装配收在这一个文件里（与 `NotesAreaView` 的三栏同一形状）。
 ///
-/// ## 装配面只取一个产品
+/// ## 装配面只取一个模块
 ///
-/// 依赖里只声明 `DoyahRetroUI`（`.product(name: "DoyahRetroUI", package: "macos")`）——
-/// 包内领域层 `DoyahRetroCore` 是它的**传递**依赖，所以本文件**不命名**那边任何类型：
+/// 依赖里只声明本包的 `DoyahRetroUI`（`Package.swift` 里是 target 依赖，**不再是跨包
+/// `.product(..., package: "macos")`** —— 那条绝对路径本地包依赖 2026-11-03 已删）——
+/// `DoyahRetroCore` 是它的**传递**依赖，所以本文件**不命名**那边任何类型：
 /// 「选中那一期」全程用**类型推断**传下去（`model.selectedPackage` ⇒ `ReportDetailView(package:)`）。
-/// 这样依赖面就正好是前门给的那一个 product，不夹带第二个。
+/// 这样依赖面就正好是那一个模块，不夹带第二个。
 struct RetroHostView: View {
 
     /// 阅读器模型（Retro 侧 `@MainActor` 类型）。用 `@StateObject` ⇒ **同一实例跨重绘**：

@@ -27,20 +27,10 @@ let package = Package(
         // Core 要保持平台中立（同一个 Core 将来要给 Doyah Notes 的 Windows / 安卓 / 鸿蒙版复用）。
         // 它本来就在依赖树里（NIO SSL 用），这里只是**显式声明**，不新增依赖树。
         .package(url: "https://github.com/apple/swift-crypto.git", from: "4.0.0"),
-        // **周报（Retro）阅读器的装配面**（片 `M7-HOST` · 派单 `T-20261009-080`）：
-        // Retro 的视图层 `DoyahRetroUI` 走**本地路径依赖**取（前门口径：两锚仓在本机并列 ——
-        // `~/dev/doyah/lead/{studio,retro}`）。这里必须是**绝对路径**：Studio 的每个卡片都在
-        // worktree 里（`.worktrees/<卡号>/`，离 Retro 锚仓 6 层上溯、离主仓 1 层）⇒
-        // 相对路径一合回主仓就断。
-        //
-        // Pinned Retro commit: 592b1bcd27ffa023ba3c7890426a2c9a1f31fa0b
-        //   · 该提交（`合入 wt/m7-ui-prod`）起，Retro 的 `platform/macos/Package.swift` 的
-        //     `products:` 才有 `DoyahRetroUI`（前置片 `M7-UI-PROD` 的那一笔）；
-        //   · 指向前门线克隆 `~/.dsh/projects/DoyahRetro`（`master` @ `b057b18`）会报
-        //     `product 'DoyahRetroUI' … not found in package 'macos'` —— 那条路走不通（已实测）。
-        //   · 路径依赖本身**钉不住 commit**（SwiftPM 的 path 依赖吃的是工作树），所以这里
-        //     用一行注释把「本机盘上那份应当是哪一笔」写下来；换锚仓 / 推进锚仓时**同时改这一行**。
-        .package(path: "/Users/alex/dev/doyah/lead/retro/platform/macos")
+        // 周报（Retro）的 macOS 代码**2026-11-03 起随本仓走**（人类主人拍板：Retro 的 macOS
+        // 实现与 Notes 同构、一并进 Studio 仓）⇒ 原先那条指向 `lead/retro/platform/macos`
+        // 的**绝对路径本地包依赖已删除**（它让别人 clone 下来编不过）。代码现在在
+        // `Plugins/Retro/`，由下面三个 target 直接编译，不再有第二个包。
     ],
     targets: [
         // SQLite 的 vendored C 目标（FR-PLUG-08 / Q23 拍板：桌面各端笔记存储统一到本地 SQLite）。
@@ -98,9 +88,9 @@ let package = Package(
             dependencies: [
                 "DoyahCore",
                 "DoyahPlatform",
-                // 周报阅读器（片 `M7-HOST`）：路径依赖的 identity 是**末段目录名** `macos`
-                // （不是包名 `DoyahRetroCore`）—— 写成包名会报 unknown package。
-                .product(name: "DoyahRetroUI", package: "macos")
+                // 周报阅读器（片 `M7-HOST`，装配面自 2026-11-03 起）：同一包内的 target，
+                // 不再是跨包 product ⇒ 模块名 `DoyahRetroUI` 不变，外部 import 一个字不用改。
+                "DoyahRetroUI"
             ],
             path: ".",
             // Resources 由 Scripts/build-app.sh 装进 .app；SwiftPM 不处理 .icns/.png，
@@ -139,9 +129,55 @@ let package = Package(
                 "DoyahPlatform",
                 // 宿主装配探针（片 `M7-HOST`）要**直接**读 Retro 侧的真值
                 // （`ReportListModel.fixed()` 的扫描读数，判据 ④）—— 不靠传递依赖转一手。
-                .product(name: "DoyahRetroUI", package: "macos")
+                "DoyahRetroUI"
             ],
             path: "TestsUISnapshot"
+        ),
+        // ------------------------------------------------------------------
+        // 周报（Retro）· macOS 实现（2026-11-03 从 `lead/retro/platform/macos` 迁入）
+        //
+        // 为什么是**三个独立 target**、而不是照 Notes 那样并进 `DoyahCore`：
+        //   · **模块名不许碎**：`DoyahRetroCore` 被同包的 `DoyahRetroUI` / 测试 / 命令入口
+        //     直接 `import`，也被 `Plugins/Retro/plugin.json` 的 `entryTarget` 认作装配面。
+        //     并进 `DoyahCore` 就要改十来处 import，收益为零。
+        //   · **有一处真冲突**：Retro 的 `MarkdownBlock`（周报正文块）与 Core 的
+        //     `MarkdownBlock`（笔记 Markdown AST，`Core/MarkdownDocument.swift:80`）同名同形
+        //     不同义 ⇒ 同模块编译直接红。改名属于「顺手改产品 API」，迁移不该夹带。
+        // 文件布局仍与 Notes 同构（`Plugins/<插件>/Sources` + `Views`），差别只在「谁编译它」。
+        // ------------------------------------------------------------------
+        // 领域层：周报包（`IR-05`）模型 + 解析 + 扫描 + 触发 + 记账。**零 GUI 符号**，
+        // 只碰 Foundation ⇒ 可被命令入口与将来的别端复用。
+        .target(
+            name: "DoyahRetroCore",
+            path: "Plugins/Retro/Sources"
+        ),
+        // 视图层（R-04）：左期次卡片列表 + 右只读渲染 + 本地视频内联 + 外链按钮。
+        // **只有这一层可以 import GUI 框架**（SwiftUI / AppKit / AVKit）；判定「只读」的
+        // 机械判据 = `Plugins/Retro/Tools/check-readonly.py`。
+        .target(
+            name: "DoyahRetroUI",
+            dependencies: ["DoyahRetroCore"],
+            path: "Plugins/Retro/Views"
+        ),
+        // 命令入口（R-05）：扫一个根 ⇒ 逐期读数打成确定性 JSON 到 stdout。只依赖领域层。
+        .executableTarget(
+            name: "DoyahRetroCLI",
+            dependencies: ["DoyahRetroCore"],
+            path: "Plugins/Retro/CLI"
+        ),
+        // Retro 的两套测试原样搬进来（target 名与目录名都沿用）：
+        // `--filter "Retro"` 能选中（SwiftPM 的匹配串含 target 名）。
+        .testTarget(
+            name: "DoyahRetroCoreTests",
+            dependencies: ["DoyahRetroCore"],
+            path: "Plugins/Retro/Tests/DoyahRetroCoreTests"
+        ),
+        // 视图层的「不崩」自检（`FR-R-13-08` 判据 ④）：空扫描根 / 缺 index.json / 坏 JSON /
+        // 缺 report.md ⇒ 空态或逐条报告，不崩。
+        .testTarget(
+            name: "DoyahRetroUITests",
+            dependencies: ["DoyahRetroCore", "DoyahRetroUI"],
+            path: "Plugins/Retro/Tests/DoyahRetroUITests"
         ),
         // 平台适配层的测试单独一个 target：真实书签这类用例必须跑在**真实实现**上，
         // 放在 Core 测试里就只能测假实现，等于把最有价值的一条覆盖丢掉。

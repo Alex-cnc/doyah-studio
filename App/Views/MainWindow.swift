@@ -161,7 +161,7 @@ struct MainWindow: View {
                 NotesAreaView()
             case .retro:
                 // **周报（Retro · 片 `M7-HOST` · 派单 `T-20261009-080`）**：右边这一整块交给
-                // Retro 仓的 `DoyahRetroUI` —— 本仓只负责装配，视图代码一个字都不复制（`FR-R-13`）。
+                // 本仓 `Plugins/Retro/Views`（模块 `DoyahRetroUI`）—— 本仓只负责装配，视图代码一个字都不复制（`FR-R-13`）。
                 RetroHostView()
             }
             }
