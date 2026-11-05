@@ -4,7 +4,7 @@ import XCTest
 /// `FR-AI-22`（上下文供给与边界）的机械判据 —— 验收要点 ①②③④。
 final class AgentContextTests: XCTestCase {
 
-    private let secret = "sk-abcdefghijklmnopqrstuvwxyz012345"
+    private let secret = "sk-test-placeholder-not-a-real-key"
 
     // MARK: - ① 六类各自成段，且**外发正文与预览是同一份**
 

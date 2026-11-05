@@ -80,7 +80,7 @@ final class AgentMemoryWriteGateTests: XCTestCase {
     }
 
     func testSecretFragmentIsRefusedBeforeAnyTriggerCheck() throws {
-        let result = try store.record(draft("api key sk-abcdefghijklmnopqrstuvwxyz012345"),
+        let result = try store.record(draft("api key sk-test-placeholder-not-a-real-key"),
                                       trigger: .userConfirmation, at: now)
         XCTAssertFalse(result.accepted)
         XCTAssertTrue(result.rejections.contains { if case .secretFragment = $0 { return true }; return false })

@@ -118,7 +118,7 @@ final class AgentAuditCostTests: XCTestCase {
 
     func testExportsCarryTheCostFieldsAndNeverLeakSecrets() async throws {
         let log = AgentAuditLog(directoryURL: directory)
-        let secret = "sk-abcdefghijklmnopqrstuvwxyz012345"
+        let secret = "sk-test-placeholder-not-a-real-key"
         let modelRecord = AgentActionRecord.makeModelCall(
             requestSummary: "改一下 \(secret)", model: "m-1", durationMilliseconds: 42,
             outcome: .generated, endpoint: "http://127.0.0.1:11434/v1/chat/completions",
