@@ -105,6 +105,19 @@ def main() -> int:
         return 1
     print(f"基线：macOS §3 共 {len(bases['macOS'])} 节 · Android §3 共 {len(bases['Android'])} 节")
     docs = sorted(p for p in DOCS.glob("Doyah产品详细设计说明书-*.md") if p != BASE)
+    # `--changed`：只看本次改动到的平台详设（提交钩子用）。未改的既有红不挡提交 ——
+    # 它仍然会在全量 verify-all 里红，不许拿它冒充通过。
+    if "--changed" in sys.argv:
+        import subprocess
+        out = subprocess.run(["git", "diff", "--cached", "--name-only"], cwd=DOCS.parent,
+                             capture_output=True, text=True)
+        changed = {l.split("-")[-1].removesuffix(".md") for l in out.stdout.splitlines()
+                   if l.startswith("Docs/Doyah产品详细设计说明书-")}
+        if not changed:
+            print("⏭️ 本次改动不含平台详设，跳过派生判据（全量 verify-all 仍会判）")
+            return 0
+        docs = [d for d in docs if PLATFORM.match(d.name) and PLATFORM.match(d.name).group(1) in changed]
+        print(f"只判本次改动的平台详设：{'、'.join(sorted(changed))}")
     bad = 0
     for doc in docs:
         matched = PLATFORM.match(doc.name)

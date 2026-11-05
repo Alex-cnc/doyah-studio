@@ -36,44 +36,40 @@ ROOT = Path(__file__).resolve().parent.parent
 PY = sys.executable or "python3"
 
 # ── 最小清单：动作是有限闭集，新增动作必须同时给出判据（否则等于没规则）──
+# 口径（2026-11-05 主人纠）：四书一单 = 需求规格 + 能力规划 + 概要设计 + 详细设计（平台多本）+ 任务清单，
+# 平台详设是「四书」里的详细设计，**不是另一个动作**；版本步进也是改文档的副产品，不单列。
 ACTIONS: dict[str, dict] = {
-    "改版本号": {
-        "read": ["Docs/通用开发规范.md §3（活书 v1.0.NNN 末位递增，999 冻结）"],
-        "checks": [("check-doc-versions.py", []), ("check-doc-versions.py", ["--self-test"])],
-    },
-    "改四书一单": {
-        "read": ["Docs/通用开发规范.md §2 四书一单", "Docs/通用开发规范.md §4 门禁清单"],
+    "改文档": {
+        "read": [
+            "AGENTS.md §0 四条红线",
+            "Docs/通用开发规范.md §2 四书一单 · §3 版本纪律 · §4 门禁清单",
+            "Docs/通用开发规范.md §2「平台详设按基准书移植」（动平台详设时）",
+        ],
         "checks": [
+            ("check-doc-versions.py", []),
             ("check-doc-tables.py", []),
             ("check-doc-numbers.py", []),
             ("check-doc-invariants.py", []),
             ("check-doc-layout.py", []),
             ("check-plan-coverage.py", []),
+            ("check-agents-index.py", []),
+            ("check-platform-derivation.py", ["--changed"]),
             ("gen-req-index.py", ["--check"]),
         ],
     },
-    "改平台详设": {
-        "read": ["Docs/通用开发规范.md §2 平台详设按基准书移植", "本文件 §0.2 处置表口径"],
-        "checks": [
-            ("check-platform-derivation.py", []),
-            ("check-doc-tables.py", []),
-            ("check-doc-layout.py", []),
-        ],
-    },
     "改判据脚本": {
-        "read": ["Docs/通用开发规范.md §1 铁律 13/14/15（覆盖范围 / 必红负例 / 独立验收）"],
+        "read": ["Docs/通用开发规范.md §1 铁律 13/14/15（覆盖范围 / 必红负例 / 独立验收层）"],
         "checks": [("check-doc-numbers.py", [])],
     },
     "改代码": {
-        "read": ["AGENTS.md §0 四条红线"],
-        "checks": [("__swift_test__", [])],       # 重判据：钩子里不跑
-    },
-    "加菜单项": {
-        "read": ["Core/MenuLocalization.swift（menuKeys 必须同批登记）"],
+        "read": [
+            "AGENTS.md §0 四条红线",
+            "新增菜单项时必须同批登记 Core/MenuLocalization.swift 的 menuKeys，并跑全量 swift test（禁只跑 --filter）",
+        ],
         "checks": [("__swift_test__", [])],
     },
     "改前端": {
-        "read": ["Platform/windows/App/src 的测试约定"],
+        "read": ["Platform/windows/App/src 的测试约定（视图要带 mount 用例）"],
         "checks": [("__npm_test__", [])],
     },
     "动凭据或用户数据": {
@@ -90,15 +86,9 @@ HEAVY = {"__swift_test__", "__npm_test__", "__verify_all__"}
 
 # ── 改动路径 → 动作（判据：一条改动可命中多个动作，宁多勿漏）──
 ROUTES: list[tuple[str, str]] = [
-    (r"^Docs/Doyah产品需求规格说明书\.md$", "改四书一单"),
-    (r"^Docs/Doyah产品能力规划说明书\.md$", "改四书一单"),
-    (r"^Docs/Doyah产品概要设计说明书\.md$", "改四书一单"),
-    (r"^Docs/Doyah产品开发计划任务清单", "改四书一单"),
-    (r"^Docs/Doyah产品详细设计说明书-", "改平台详设"),
-    (r"^Docs/通用开发规范\.md$|^Docs/项目管理规范\.md$", "改四书一单"),
-    (r"^Scripts/.*\.py$|^Scripts/.*\.sh$", "改判据脚本"),
-    (r"^AGENTS\.md$", "改判据脚本"),
-    (r"^Core/MenuLocalization\.swift$|^App/DoyahStudioCommands\.swift$", "加菜单项"),
+    (r"^Docs/.*\.md$", "改文档"),
+    (r"^AGENTS\.md$|^Docs/通用开发规范\.md$|^Docs/项目管理规范\.md$", "改文档"),
+    (r"^Scripts/.*\.(py|sh)$|^Scripts/hooks/", "改判据脚本"),
     (r"\.swift$", "改代码"),
     (r"^Platform/windows/App/src/.*\.(vue|ts)$", "改前端"),
     (r"^App/Resources/|\.secrets|credentials", "动凭据或用户数据"),
@@ -149,11 +139,11 @@ def run_check(script: str, extra: list[str], fast: bool) -> tuple[bool, str]:
 
 def self_test() -> int:
     cases = [
-        (["Docs/Doyah产品详细设计说明书-Linux.md"], ["改平台详设"]),
-        (["Docs/Doyah产品需求规格说明书.md"], ["改四书一单"]),
+        (["Docs/Doyah产品详细设计说明书-Linux.md"], ["改文档"]),
+        (["Docs/Doyah产品需求规格说明书.md"], ["改文档"]),
+        (["AGENTS.md"], ["改文档"]),
         (["Scripts/check-doc-versions.py"], ["改判据脚本"]),
-        (["App/DoyahStudioCommands.swift"], ["加菜单项", "改代码"]),
-        (["Core/Localization.swift"], ["改代码"]),
+        (["App/DoyahStudioCommands.swift"], ["改代码"]),
         (["Platform/windows/App/src/views/DatabaseView.vue"], ["改前端"]),
         (["Platform/linux/README.md"], []),
     ]
