@@ -60,6 +60,8 @@ public enum MenuLocalization {
         .menuViewRetro,
         // 「版本与许可证…」（FR-LIC-02）：住在应用菜单里，同属自有菜单项。
         .menuAboutLicense,
+        // 「产品功能介绍」（FR-STD-WS-HELP-003）：应用菜单里替掉系统「关于」，同属自有菜单项。
+        .menuProductOverview,
         // 「账户与同步…」（片 `云F` · 契约 §6.4「账号与同步界面（最小集）」）：同样住在应用菜单里
         // （账户是**应用级**的东西、不属于任何活动栏区，见 `MenuAreaPolicy` 的表外兜底）。
         .menuAccountSync,
