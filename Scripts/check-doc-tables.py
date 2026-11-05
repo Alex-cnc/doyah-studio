@@ -99,6 +99,7 @@ DEFAULT_TARGETS = [
     "Docs/Doyah产品开发计划任务清单-Linux.md",
     "Docs/Doyah产品开发计划任务清单-Windows.md",
     "Docs/规范/界面设计节-写作规范.md",
+    "Docs/design/Linux界面设计参考.md",   # 2026-11-05 新增：Linux 端界面设计参考（表格即规格，必须受列数校验）
     "Docs/archive/root-20261026/人工点验清单-20261018.md",
     "Docs/archive/root-20261026/人工点验清单-20261018-重分版.md",
     "Docs/Doyah产品能力规划说明书.md",
@@ -865,6 +866,7 @@ SELF_TEST_TRACKED = [
     "Docs/archive/root-20261026/模板-人工测试清单-alpha.md",
     "Docs/archive/root-20261026/人工测试清单-alpha2-macOS.md",
     "Docs/archive/store-copy-20261101/产品能力说明-Notes与Tuner.md",
+    "Docs/design/Linux界面设计参考.md",
 ]
 
 # 2026-10-26：按盘上事实重算（规范合并为一份 + 25 份过程件归档后，口径跟着变）

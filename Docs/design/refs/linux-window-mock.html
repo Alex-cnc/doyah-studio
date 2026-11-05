@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="zh-Hans">
+<head>
+<meta charset="utf-8">
+<title>Doyah Studio · Linux 主窗格版式样张（深色 · 按令牌绘制）</title>
+<style>
+  /* 数值全部来自 Core/DesignTokens.swift 与 terminal-palette.json（深海·夜） */
+  :root{
+    --bg:#14171E; --fg:#D6DBE4; --fg-dim:#9AA3B2; --line:#2B303C;
+    --sel:#24304A; --accent:#6E8BFF; --ok:#5FC98C; --warn:#E3BF63; --bad:#F0716F;
+    --s:8px; --xs:4px; --m:12px; --l:16px; --r6:6px; --r8:8px; --r10:10px;
+    --row:26px; --grid-row:20px; --tab:30px; --toolbar:44px; --status:24px;
+    --activity:46px; --side:248px; --detail:320px;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:#0d0f14;color:var(--fg);
+       font:12px/18px Inter,"Noto Sans","Noto Sans CJK SC",sans-serif;
+       padding:24px;display:flex;flex-direction:column;align-items:center;gap:12px}
+  .caption{color:var(--fg-dim);font-size:12px}
+  .win{width:1120px;height:720px;background:var(--bg);border:1px solid var(--line);
+       border-radius:var(--r10);overflow:hidden;display:flex;flex-direction:column;
+       box-shadow:0 8px 24px rgba(0,0,0,.35)}
+  .toolbar{height:var(--toolbar);border-bottom:1px solid var(--line);display:flex;
+           align-items:center;gap:var(--s);padding:0 var(--m);flex:0 0 auto}
+  .body{flex:1;display:flex;min-height:0}
+  .activity{width:var(--activity);border-right:1px solid var(--line);display:flex;
+            flex-direction:column;align-items:center;padding:var(--s) 0;gap:var(--s)}
+  .icon{width:20px;height:20px;border-radius:var(--r6);background:#242A36}
+  .icon.on{background:var(--sel);outline:2px solid var(--accent)}
+  .side{width:var(--side);border-right:1px solid var(--line);display:flex;flex-direction:column;flex:0 0 auto}
+  .side h4{margin:0;height:var(--tab);display:flex;align-items:center;padding:0 var(--m);
+           font-size:12px;font-weight:600;border-bottom:1px solid var(--line)}
+  .tree{padding:var(--xs) 0;overflow:hidden}
+  .node{height:var(--row);display:flex;align-items:center;gap:var(--s);padding:0 var(--m);
+        color:var(--fg-dim);white-space:nowrap}
+  .node.sel{background:var(--sel);color:var(--fg)}
+  .node .dot{width:6px;height:6px;border-radius:2px;background:var(--fg-dim)}
+  .main{flex:1;display:flex;flex-direction:column;min-width:0}
+  .tabs{height:var(--tab);display:flex;border-bottom:1px solid var(--line);flex:0 0 auto}
+  .tab{height:var(--tab);line-height:var(--tab);padding:0 var(--m);color:var(--fg-dim);
+       border-right:1px solid var(--line);position:relative}
+  .tab.on{color:var(--fg)}
+  .tab.on::after{content:"";position:absolute;left:0;right:0;bottom:0;height:2px;background:var(--accent)}
+  .code{flex:1;display:flex;font:12px/20px "JetBrains Mono","Noto Sans Mono","Noto Sans Mono CJK SC",monospace;
+        overflow:hidden}
+  .gutter{width:48px;text-align:right;padding:var(--s) var(--s) 0 0;color:#5A6272;flex:0 0 auto}
+  .lines{padding:var(--s) 0;flex:1;overflow:hidden;white-space:pre}
+  .lines .k{color:#6E8BFF}.lines .s{color:#5FC98C}.lines .c{color:#5A6272}.lines .n{color:#E3BF63}
+  .status{height:var(--status);border-top:1px solid var(--line);display:flex;align-items:center;
+          gap:var(--l);padding:0 var(--m);color:var(--fg-dim);flex:0 0 auto;font-size:12px}
+  .dot-g{width:6px;height:6px;border-radius:50%;background:var(--ok)}
+  .spacer{flex:1}
+  .btn{height:var(--row);border:1px solid var(--line);border-radius:var(--r6);
+       display:flex;align-items:center;padding:0 var(--m);color:var(--fg)}
+  .btn.primary{border-color:var(--accent);color:var(--accent)}
+  .focus{outline:2px solid var(--accent);outline-offset:1px}
+  .term{height:180px;border-top:1px solid var(--line);display:flex;flex-direction:column;flex:0 0 auto}
+  .term .tabs{border-bottom:1px solid var(--line)}
+  .term pre{margin:0;padding:var(--s) var(--m);font:12px/18px "JetBrains Mono","Noto Sans Mono",monospace;
+            color:var(--fg-dim);overflow:hidden}
+  .ann{position:relative}
+  .note{font-size:12px;color:#8A93A6}
+</style>
+</head>
+<body>
+<div class="caption">Doyah Studio · Linux 主窗格版式样张（1120×720 · 深色 · 全部数值取自令牌）</div>
+
+<div class="win">
+  <div class="toolbar">
+    <div class="icon"></div><div class="icon"></div>
+    <div style="width:8px"></div>
+    <div class="btn">新建查询</div>
+    <div class="btn primary">连接</div>
+    <div class="spacer"></div>
+    <div class="btn focus">Ctrl+K 命令面板</div>
+  </div>
+
+  <div class="body">
+    <div class="activity">
+      <div class="icon on"></div><div class="icon"></div><div class="icon"></div>
+      <div class="spacer"></div><div class="icon"></div>
+    </div>
+
+    <div class="side">
+      <h4>工作区 · doyah-studio</h4>
+      <div class="tree">
+        <div class="node"><span class="dot"></span>src</div>
+        <div class="node sel"><span class="dot"></span>main.rs</div>
+        <div class="node"><span class="dot"></span>lib.rs</div>
+        <div class="node"><span class="dot"></span>Cargo.toml</div>
+        <div class="node"><span class="dot"></span>README.md</div>
+      </div>
+      <div style="border-top:1px solid var(--line)">
+        <h4>数据库 · demo</h4>
+        <div class="tree">
+          <div class="node"><span class="dot"></span>public</div>
+          <div class="node"><span class="dot"></span>notes</div>
+          <div class="node"><span class="dot"></span>retro</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="main">
+      <div class="tabs">
+        <div class="tab on">main.rs</div><div class="tab">query.sql</div><div class="tab">终端</div>
+      </div>
+      <div class="code">
+        <div class="gutter">1<br>2<br>3<br>4<br>5<br>6<br>7<br>8</div>
+        <div class="lines"><span class="c">// 令牌：间距 4/8/12/16/24/32 · 圆角 1/4/6/8/10</span>
+<span class="k">fn</span> <span class="n">main</span>() {
+    <span class="k">let</span> rows = <span class="s">"20.0"</span>;   <span class="c">// 网格行高</span>
+    <span class="k">let</span> toolbar = <span class="s">"44.0"</span>; <span class="c">// 工具栏</span>
+    <span class="k">let</span> side = <span class="s">"248.0"</span>;   <span class="c">// 侧栏（最大 420）</span>
+    <span class="n">boot</span>(rows, toolbar, side);
+}</div>
+      </div>
+      <div class="term">
+        <div class="tabs"><div class="tab on">终端 1</div><div class="tab">终端 2</div></div>
+        <pre>$ cargo run --release
+   Compiling doyah-studio v0.3.0
+    中文文件名不乱码 · 宽字符对齐 · 颜色由前端渲染</pre>
+      </div>
+    </div>
+  </div>
+
+  <div class="status">
+    <span class="dot-g"></span><span>已连接 · demo@192.168.x.x/postgres</span>
+    <span>·</span><span>UTF-8</span><span>·</span><span>12 ms</span>
+    <div class="spacer"></div>
+    <span>行 8 · 列 34</span><span>·</span><span>LF</span>
+  </div>
+</div>
+
+<div class="note">说明：着色、行高、栏宽、状态栏位置均按《Linux 端界面设计参考》§1–§2 的令牌绘制；字体回退链已写全（Inter / Noto Sans / Noto Sans CJK SC；等宽 JetBrains Mono / Noto Sans Mono）。</div>
+</body>
+</html>
