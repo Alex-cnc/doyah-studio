@@ -49,6 +49,11 @@ if [ "$RAN" = 0 ]; then
   exit 0
 fi
 
+if [ -n "$PY" ] && [ -f Scripts/action-router.py ]; then
+  echo "[pre-commit] 动作路由（总入口）：$PY Scripts/action-router.py --changed --check --fast"
+  $PY Scripts/action-router.py --changed --check --fast || FAIL=1
+fi
+
 if [ "$FAIL" != 0 ]; then
   echo ""
   echo "[pre-commit] ✗ 检查未通过，提交已阻止。（确认无误时可用 git commit --no-verify，慎用）"
