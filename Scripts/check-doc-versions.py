@@ -90,6 +90,55 @@ def check_rollover(rel: str, stem: str, three: re.Match, frozen_dir: pathlib.Pat
     ]
 
 
+
+def previous_version(path: pathlib.Path) -> str | None:
+    """读 HEAD 里同一份文件的版本号（不在 HEAD 里 = 新书，返回 None）。"""
+    import subprocess
+    try:
+        rel = path.relative_to(ROOT).as_posix()
+    except ValueError:
+        return None
+    out = subprocess.run(["git", "show", f"HEAD:{rel}"], cwd=ROOT,
+                         capture_output=True, text=True)
+    if out.returncode != 0:
+        return None
+    return header_version(out.stdout.split("\n"))
+
+
+
+def step_problem(old: str, new: str) -> str | None:
+    """两段版本号之间是否违规（None = 合规）。纯函数，便于自检。"""
+    o, n = VERSION_THREE.fullmatch(old), VERSION_THREE.fullmatch(new)
+    if not o or not n:
+        return None            # 格式问题由 check_doc 报
+    om, on, ol = map(int, o.groups())
+    nm, nn, nl = map(int, n.groups())
+    if (om, on, ol) == (nm, nn, nl):
+        return None            # 没升（同批次多次保存）
+    if (nm, nn) == (om, on) and nl == ol + 1:
+        return None            # 正常末位递增
+    if (nm, nn) == (om, on + 1) and nl == 0 and ol == ROLLOVER_AT:
+        return None            # 999 满段滚动（冻结件由 check_rollover 管）
+    return (f"版本跳跃 `v{om}.{on}.{ol}` → `v{nm}.{nn}.{nl}` —— 活书只许末位 +1"
+            f"（到 {ROLLOVER_AT} 冻结后再转下一段），不跳段、不降段")
+
+
+def check_step(path: pathlib.Path, current: str | None) -> list[str]:
+    """活书版本只许「不变」或「末位 +1」；滚动只许 999→下一段 .0。
+
+    为什么加这条（2026-11-05 人类主人两次纠正）：Linux 详设从 v1.0.12 被我直接写成 v2.0.0，
+    判据当时只检查「是不是三段式、≤999」，于是一路绿灯 —— 规则写在书里、写在规范里，
+    却在真正动笔时没人拦。规矩靠记忆守不住，只能靠判据拦。
+    """
+    old = previous_version(path)
+    if old is None or current is None:
+        return []
+    try:
+        rel = path.relative_to(ROOT).as_posix()
+    except ValueError:
+        rel = path.name
+    return [f"{rel}: {msg}"] if (msg := step_problem(old, current)) else []
+
 def check_doc(path: pathlib.Path, frozen_dir: pathlib.Path | None = None) -> list[str]:
     try:
         rel = path.relative_to(ROOT).as_posix()
@@ -114,6 +163,7 @@ def check_doc(path: pathlib.Path, frozen_dir: pathlib.Path | None = None) -> lis
             )
         else:
             problems.extend(check_rollover(rel, path.stem, three, frozen_dir or FROZEN_DIR, path))
+            problems.extend(check_step(path, version))
 
     for index, line in enumerate(lines, 1):
         if CHANGELOG_HEADING.match(line):
@@ -202,6 +252,26 @@ def self_test() -> int:
                 ok = False
             detail = "" if passed else f" ← {found[0][:70]}"
             print(f"  {mark} 样本「{name}」：{'绿' if passed else '红'}{detail}")
+        # 版本步进规则（2026-11-05 加）：活书只许末位 +1，跳段 / 降段必红。
+        # 为什么单列一组：这组不依赖临时文件，只测纯函数 step_problem —— 它守的是
+        # 「Linux 详设从 v1.0.12 被我写成 v2.0.0、而当时判据全绿」那次真实踩坑。
+        step_cases = [
+            ("v1.0.12", "v1.0.13", False, "正常末位递增"),
+            ("v1.0.12", "v2.0.0", True, "跳主版本（真实踩坑）"),
+            ("v1.0.12", "v1.0.12", False, "同批次未升"),
+            ("v1.0.999", "v1.1.0", False, "999 满段滚动"),
+            ("v1.0.13", "v1.0.11", True, "降段"),
+        ]
+        step_ok = 0
+        for old, new, should_red, why in step_cases:
+            red = step_problem(old, new) is not None
+            good = red == should_red
+            step_ok += 1 if good else 0
+            if not good:
+                ok = False
+            print(f"  {'✓' if good else '✗'} 步进 {old} → {new}（{why}）⇒ {'红' if red else '绿'}，应为 {'红' if should_red else '绿'}")
+        print(f"步进 {step_ok}/{len(step_cases)} 达到预期")
+
     total = len(cases) + 1          # + 「999已冻结」
     # 例数必须**自己报出来**并且是计数的（2026-11-02）：`Scripts/self-test-counts.json` 的
     # `countRegex` 读的是这一行 —— 2026-10-26 废止「变更记录」时 self_test 被整段重写，尾巴只剩
