@@ -849,6 +849,9 @@ final class AppState: ObservableObject {
     /// 「版本与许可证」页的呈现开关。
     @Published var isAboutLicensePresented = false
 
+    /// 产品功能介绍（`FR-STD-WS-HELP-003`）：关于菜单与帮助菜单共用同一页。
+    @Published var isProductOverviewPresented = false
+
     /// 当前档位的能力位（没许可证 = Standard，见 `LicenseGate`）。
     var licenseCapabilities: LicenseCapabilities { licenseLoad.entitlements.capabilities }
 

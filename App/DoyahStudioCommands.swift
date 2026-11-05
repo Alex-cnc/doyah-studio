@@ -38,6 +38,18 @@ struct DoyahStudioCommands: Commands {
     @ObservedObject private var localization = LocalizationManager.shared
 
     var body: some Commands {
+        // 「关于 Doyah Studio」不再交给系统面板（那个只印名字与版本），改为打开功能介绍页
+        // （FR-STD-WS-HELP-003，主人 2026-11-04 令）。帮助菜单里也放一枚，两处同一页。
+        CommandGroup(replacing: .appInfo) {
+            Button(L(.menuProductOverview)) {
+                appState.isProductOverviewPresented = true
+            }
+        }
+        CommandGroup(after: .help) {
+            Button(L(.menuProductOverview)) {
+                appState.isProductOverviewPresented = true
+            }
+        }
         // **主菜单「编辑」里的「格式化代码」**（内测清单 `#2` 复测打回：原话「**编辑下无格式化菜单**」）。
         //
         // 在此之前它只长在工作区页签条那枚「格式化」下拉里（`WorkspaceTabStrip.editMenu`），

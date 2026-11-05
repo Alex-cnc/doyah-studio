@@ -329,6 +329,12 @@ struct MainWindow: View {
             AboutLicenseSheet()
                 .environmentObject(appState)
         }
+        // 产品功能介绍（FR-STD-WS-HELP-003）：主人 2026-11-04 指出「关于」与「帮助」里都没有
+        // 对产品的完整功能描述 —— 这一页补上，两处入口共用。
+        .sheet(isPresented: $appState.isProductOverviewPresented) {
+            ProductOverviewSheet()
+                .environmentObject(appState)
+        }
         // 外部调用审批（FR-AI-10 界面那一半）：外部智能体的写调用在这里等人点。
         .sheet(isPresented: $appState.isMCPApprovalPresented) {
             MCPApprovalPanel()
