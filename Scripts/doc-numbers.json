@@ -42,7 +42,7 @@
       },
       {
         "script": "Scripts/check-platform-derivation.py",
-        "reason": "2026-11-05 新立（主人定法：平台详设以 macOS 为基准派生）。现在只有 Linux 一本表过态（30/30），Windows / Android / HarmonyOS / iOS 仍是 0/30 —— 接进 verify-all 会让收尾恒红，把一个「还没干完的活」伪装成「门禁失败」。故先按台账登记：每轮手动跑并把读数报给主人，四本全表过态那一轮再接进 `Scripts/verify-all.sh`，同时删掉本条豁免。"
+        "reason": "2026-11-05 新立（主人定法：平台详设按族派生 —— PC 族基准 macOS、移动族基准 Android）。现状：Linux 30/30、Windows 30/30、iOS 9/9 均过，Android 按令跳过（移动族基准本体、端上已开发完），只剩鸿蒙 0/9 未表态。只剩一本时不接进 verify-all 是为了不让收尾被单本卡红（本书单列为待办、每轮手跑报读数）；鸿蒙表过态那一轮接进 `Scripts/verify-all.sh` 并删本条豁免。"
       }
     ],
     "testGlob": "Scripts/test-*.py",

@@ -31,14 +31,30 @@ from pathlib import Path
 
 DOCS = Path(__file__).resolve().parent.parent / "Docs"
 BASE = DOCS / "Doyah产品详细设计说明书-macOS.md"
+BASE_ANDROID = DOCS / "Doyah产品详细设计说明书-Android.md"
+
+# 基准按「族」定（主人 2026-11-05）：PC 族以 macOS 为基准；移动族以 Android 为基准（安卓已开发完，
+# 已完工端不再回头补自己的详设，只当基准本体）。iOS 参考 Android 做详设 —— 不是参考 macOS。
+BASELINE = {
+    "macOS": None,      # 基准本体
+    "Windows": "macOS",
+    "Linux": "macOS",
+    "Android": None,    # 移动族基准本体（已开发完，不再补）
+    "iOS": "Android",
+    "HarmonyOS": "Android",
+}
+SKIP_REASON = {
+    "macOS": "基准本体（其余平台的派生源）",
+    "Android": "移动族基准本体；端上已开发完（148 个 Kotlin 文件、gate.py 在跑），按主人 2026-11-05 令不再回头补详设",
+}
 SECTION = re.compile(r"^### (3\.\d+)\b")
 PLATFORM = re.compile(r"Doyah产品详细设计说明书-(.+)\.md$")
-DERIVE = re.compile(r"派生自[^\n]{0,60}详细设计说明书-macOS\.md[^\n]{0,20}v(\d+\.\d+\.\d+)")
+DERIVE = re.compile(r"派生自[^\n]{0,60}详细设计说明书-(?P<base>[A-Za-z]+)\.md[^\n]{0,20}v(?P<version>\d+\.\d+\.\d+)")
 DECLARED = re.compile(r"^\|\s*`?§?(3\.\d+)`?\s*\|(.+)$")
 
 
-def base_sections() -> list[str]:
-    text = BASE.read_text(encoding="utf-8")
+def base_sections(doc: Path) -> list[str]:
+    text = doc.read_text(encoding="utf-8")
     return [m.group(1) for m in (SECTION.match(l) for l in text.splitlines()) if m]
 
 
@@ -65,7 +81,7 @@ def audit(doc: Path, base: list[str]) -> tuple[list[str], dict[str, str], str | 
     text = doc.read_text(encoding="utf-8")
     head = "\n".join(text.splitlines()[:40])
     m = DERIVE.search(head)
-    version = m.group(1) if m else None
+    version = m.group("version") if m else None
     table = declared(text)
     missing = [s for s in base if s not in table]
     weak = []
@@ -80,29 +96,41 @@ def audit(doc: Path, base: list[str]) -> tuple[list[str], dict[str, str], str | 
 def main() -> int:
     if "--self-test" in sys.argv:
         return self_test()
-    base = base_sections()
-    if not base:
-        print("❌ 读不到 macOS 详设的 §3 节清单（基线文件缺失或被改名）")
+    bases = {
+        "macOS": base_sections(BASE),
+        "Android": base_sections(BASE_ANDROID) if BASE_ANDROID.exists() else [],
+    }
+    if not bases["macOS"] or not bases["Android"]:
+        print("❌ 读不到基准详设的 §3 节清单（基线文件缺失或被改名）")
         return 1
-    print(f"基线：macOS 详设 §3 共 {len(base)} 节（{base[0]} … {base[-1]}）")
+    print(f"基线：macOS §3 共 {len(bases['macOS'])} 节 · Android §3 共 {len(bases['Android'])} 节")
     docs = sorted(p for p in DOCS.glob("Doyah产品详细设计说明书-*.md") if p != BASE)
     bad = 0
     for doc in docs:
         matched = PLATFORM.match(doc.name)
         name = matched.group(1) if matched else doc.stem
+        baseline = BASELINE.get(name, "macOS")
+        if baseline is None:
+            print(f"  ⏭️  {name:10} 跳过 —— {SKIP_REASON.get(name, '基准本体')}")
+            continue
+        base = bases[baseline]
         missing, table, version, weak = audit(doc, base)
+        dm = DERIVE.search("\n".join(doc.read_text(encoding="utf-8").splitlines()[:40]))
+        declared_base = dm.group("base") if dm else None
         status = []
         if version is None:
-            status.append("缺「派生自 macOS 详设 vX」声明")
+            status.append(f"缺「派生自 {baseline} 详设 vX」声明")
+        elif declared_base != baseline:
+            status.append(f"声明派生自 {declared_base}，但基准应是 {baseline}")
         if missing:
             status.append(f"未表态 {len(missing)} 节：{'、'.join(missing[:6])}{' …' if len(missing) > 6 else ''}")
         if weak:
             status.append(f"处置列空/过短 {len(weak)} 行")
         if status:
             bad += 1
-            print(f"  ❌ {name:10} 已表态 {len(table):2}/{len(base)}  —  " + "；".join(status))
+            print(f"  ❌ {name:10} 基准 {baseline:8} 已表态 {len(table):2}/{len(base)}  —  " + "；".join(status))
         else:
-            print(f"  ✅ {name:10} 已表态 {len(table):2}/{len(base)}  派生自 v{version}")
+            print(f"  ✅ {name:10} 基准 {baseline:8} 已表态 {len(table):2}/{len(base)}  派生自 v{version}")
     if bad:
         print(f"\n❌ {bad} 本平台详设没做到「逐节表态」。要补的是差异登记表，不是把文档写长。")
         return 1
