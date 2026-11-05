@@ -1,6 +1,6 @@
 # Doyah产品详细设计说明书 · Windows
 
-> **版本** v1.0.4（2026-11-05 加 §0.2 差异登记 30 行 + 头部「派生自 macOS 详设 v1.0.22」）｜ v1.0.3（（2026-10-26 编号改为「冻结段 + 流水」三段式：`v1.0.NNN`，NNN 上限 999，满了冻结为 v1.1）；承接历史流水 v1.2；原条目：2026-10-21 扫差补齐：补 Retro 章（本端有真实现 `plugins/retro/*` + `retro_library.rs`），矩阵补 §15/§16 两行）｜ v1.1（2026-10-21 订正：Windows 与 macOS / Linux 同为 **PC 全量端**（Studio + Notes + Retro）；上游契约 = `Docs/Doyah产品概要设计说明书.md` v0.6）
+> **版本** v1.0.5（2026-11-05 正文重写：§2 分层按 136 条命令 / 53 模块 / 801 测试实读重写，§3 由 4 节扩到 14 节七段契约，§4–§11 全量重写）｜ v1.0.4（2026-11-05 加 §0.2 差异登记 30 行 + 头部「派生自 macOS 详设 v1.0.22」）｜ v1.0.3（（2026-10-26 编号改为「冻结段 + 流水」三段式：`v1.0.NNN`，NNN 上限 999，满了冻结为 v1.1）；承接历史流水 v1.2；原条目：2026-10-21 扫差补齐：补 Retro 章（本端有真实现 `plugins/retro/*` + `retro_library.rs`），矩阵补 §15/§16 两行）｜ v1.1（2026-10-21 订正：Windows 与 macOS / Linux 同为 **PC 全量端**（Studio + Notes + Retro）；上游契约 = `Docs/Doyah产品概要设计说明书.md` v0.6）
 
 > **派生自**：`Docs/Doyah产品详细设计说明书-macOS.md` v1.0.22 —— 主人 2026-11-05 定法：平台详设以 macOS 为基准派生、按平台差异调整。
 > 差异登记见 §0.2（macOS §3 逐节表态）；判据 = `Scripts/check-platform-derivation.py`。
@@ -65,13 +65,15 @@
 | §4.2 连接删除 | 连带清凭据 | 3.2 | 同上 + 凭据存储 | `T-3.2-01` |
 | §4.3 语句执行 | 选区判定、逐条上报 | 3.3 | `Db` crate 执行面 | `T-3.3-01` |
 | §4.4 执行取消 | 服务端真取消 | 3.4 | `Db` 取消路径 | `T-3.4-01` |
-| §4.5 元数据列举 | 层级按类型 | 3.5 | `Db` 元数据查询 | `T-3.5-01` |
-| §4.6–§4.8 行编辑/结构/导入导出 | 预览闸、流式写 | 3.6–3.8 | `Db` + `App/src-tauri` 命令 | `T-3.6-01` |
-| §15 笔记域（14 节） | 捕获/附件/检索/私密/回收站/待办 | 8.1 | Notes 端实现（契约同 §15） | `T-9.1-01` |
-| §16 复盘域（18 节） | 行情/特征/回测/复盘稿/周报 | 8.2 | `App/src/plugins/retro/*` + `App/src-tauri/src/retro_library.rs` | `T-16.1-01` |
-| §5 数据契约 | 连接配置/记录/任务/审批 | 4.1、4.2 | `Core`（`dataset.rs` / `result_set.rs`） | `T-4.1-01` |
-| §6 状态机 | 连接/执行/审批/页签闭集 | 4.4 | `Core` 状态类型 | `T-4.4-01` |
-| §7 关键流程 | 查询全链 | 4.3 | 外壳编排 | `T-3.3-02` |
+| §4.5 元数据列举 | 层级按类型 | 3.2 | `Db` 元数据查询 | `T-3.5-01` |
+| §4.6 行编辑 | 主键保护、原值条件、冲突不覆盖 | 3.5 | `edits_to_dml` / `db_write_batch` | `T-3.5-01`、`T-3.5-02` |
+| §4.7 结构变更 | 预览闸、危险动作确认 | 3.6 | `generate_ddl` / `db_run_ddl` | `T-3.6-01`、`T-3.6-02` |
+| §4.8 导入导出 | 流式写、计划先行 | 3.7 | `export_to_file` / `preview_import` | `T-3.7-01`、`T-3.7-02` |
+| §15 笔记域（14 节） | 捕获/附件/检索/私密/回收站/待办 | 3.13 | Notes 端实现（契约同 §15） | `T-9.1-01` |
+| §16 复盘域（18 节） | 行情/特征/回测/复盘稿/周报 | 3.13 | `App/src/plugins/retro/*` + `App/src-tauri/src/retro_library.rs` | `T-16.1-01` |
+| §5 数据契约 | 连接配置/记录/任务/审批 | 4.1 | `Core`（`dataset.rs` / `result_set.rs`） | `T-4.1-01` |
+| §6 状态机 | 连接/执行/审批/页签闭集 | 4.2 | `Core` 状态类型 | `T-4.4-01` |
+| §7 关键流程 | 查询全链 | 3.2、3.5 | 外壳编排 | `T-3.3-02` |
 | §8 界面契约 | 六态/导航/动作映射 | 5.1–5.4 | `App/src`（Vue：`App.vue` `grid/` `sql/`） | `UI-5.3-01` |
 | §9 错误（21 码） | 逐码落点 | 6.1 | 外壳错误映射 + 前端呈现 | `T-6.1-01` |
 | §10 被拒方案（12） | 不得引入 | 1.1 | — | 静态检查 |
@@ -106,141 +108,371 @@
 
 ## 2. 分层与模块
 
-| 层 | 目录 | 职责 |
-|---|---|---|
-| 前端（表示层） | `App/src/**`（Vue + `ipc.ts`） | 渲染、快捷键、命令面板；只经 IPC 拿值 |
-| 外壳（装配层） | `App/src-tauri/src/*.rs` | IPC 命令、会话与窗口、权限、把值序列化给前端 |
-| 领域层 | `Core/src/**` | 与端无关的类型与规则（`dataset.rs` `result_set.rs`） |
-| 数据库域 | `Db/**` | 驱动与方言、执行与取消、元数据 |
-| 无界面入口 | `Cli/**` | 命令行自检与执行（对应概设 §19.1） |
+### 2.1 四层与真实规模（2026-11-05 实读）
 
-调用规则：前端 → IPC → 外壳 → 领域 / 数据库域；**禁止**前端直连数据库、禁止领域层依赖 Tauri。
+| 层 | 落点 | 规模 | 职责 | 禁止 |
+|---|---|---|---|---|
+| 表示层（前端） | `App/src/**`（Vue 3 + TS） | 87 个 `*.test.ts`（含 mount 用例） | 视图、六态、动作映射、i18n | 不直连驱动、不写业务规则、不做日期/金额算术 |
+| 外壳层（IPC） | `App/src-tauri/src/*.rs`（19 个模块） | **136 条 `#[tauri::command]`** | 命令边界、状态持有（`ShellState`）、子进程（PTY / 备份）、路径校验 | 不复制 `Db` 的判定；不绕过凭据入口 |
+| 能力层 | `Db/src/*.rs`（53 个模块） | **801 个 `#[test]`**（`agent_generate.rs` 44 · `retro_library.rs` 36 · `tree.rs` 30 · `fs.rs` 28 · `config.rs` 27 · `agent_nl2sql.rs` 27 · `retro_package.rs` 25 · `workspace.rs` 21 …） | SQL 方言、数据集、元数据、导入导出、Agent 纯逻辑、复盘包 | 不碰 UI、不读环境变量以外的宿主状态 |
+| 领域层 | `Core` | 数据集 / 结果集 / 状态类型 | 跨端同源的纯类型与算法 | 零平台依赖 |
 
-## 3. 关键函数契约
+- 本端**同时是 PC 族基准的「实现宿主」**：Linux 的外壳直接依赖 `App/src-tauri`（`doyah-studio-shell`），
+  所以这一端的命令边界一旦松动，Linux 会跟着松。改动命令签名 = 跨端变更，必须两侧同批。
+- 判据：`T-2.1-01`（四层边界静态检查）、`T-2.1-02`（命令总数与登记表一致）。
 
-### 3.1 连接 IPC（`connections.rs`）
+### 2.2 命令族（136 条，按族归并）
 
-- 前置：`dbType` ∈ {postgresql, mysql, gbase8a}；host 非空；port 1…65535
-- 后置：返回连接句柄 id 与生效库名；凭据只存凭据库，**不回传前端**
-- 错误：参数非法 / 凭据缺失 / 不可达 / 认证失败 → 四类分别返回，禁静默成功
-- 测试：`T-3.1-01`（正例）/ `T-3.1-02`（非法）
+| 族 | 条数 | 代表命令 | 对应契约 |
+|---|---:|---|---|
+| `workspace_*` | 27 | `workspace_read_file` · `workspace_save` · `workspace_check_staleness` · `workspace_replace_preview/apply` · `workspace_search` | §3.9 |
+| `db_*` | 19 | `db_connect` · `db_query` · `db_run_batch` · `db_cancel` · `db_browse_sessions` · `db_write_batch` · `db_run_ddl` | §3.2–§3.6 |
+| `agent_*` | 18 | `agent_chat_send` · `agent_chat_tool_resume` · `agent_write_preview/undo` · `agent_key_save/clear` · `agent_audit_list/export` | §3.10–§3.12 |
+| `retro_*` | 8 | `retro_packages` · `retro_report` · `retro_import_batch` · `retro_export` | §3.14 |
+| `connection_*` | 5 | `connection_save` · `connection_delete` · `connection_validate` · `connection_import_url` | §3.1 |
+| `restore_*` | 5 | `restore_plan` · `restore_run` · `restore_cancel` · `restore_plan_sections` | §3.7 |
+| `backup_*` | 4 | `backup_plan` · `backup_run` · `backup_cancel` · `backup_progress` | §3.7 |
+| `terminal_*` | 4 | `terminal_open` · `terminal_write` · `terminal_read` · `terminal_close` | §3.8 |
+| `sql_*` / `saved_*` / `archive_*` / `export_*` / `admin_*` / `command_*` | 3+3+3+3+3+3 | `sql_format` · `saved_query_save` · `archive_write` · `export_to_file` · `admin_sessions` · `command_history_record` | §3.3–§3.6、§3.13 |
+| `schema_*` / `appearance_*` | 2+2 | `schema_snapshot` · `schema_diff_plan` · `appearance_set` | §3.6 |
+| 单条（24 族） | 24 | `app_info` · `plugins_manifest` · `dataset_summary` · `grid_window` · `explain_statement` · `statement_risk` · `edits_to_dml` · `preview_import` · `run_import` · `xlsx_to_csv` · `terminate_sql` … | 各自契约节 |
 
-### 3.2 执行 IPC（`Db` + 外壳命令）
+- 判据：`T-2.2-01`（`generate_handler!` 清单与本节族表逐条对账；新增命令必须同时改本节）。
 
-- 前置：SQL 非空；已过只读与高危判定
-- 后置：事件流逐条回报（第 N 条 / 结果集 / 完成 / 失败）；多结果集全保留；行数只累加一次
-- 禁止：并发打乱顺序；写语句自动重试；失败后返回成功
-- 测试：`T-3.3-01` / `T-3.3-02`
+### 2.3 注入点与可替换依赖
 
-### 3.3 取消
+| 注入点 | 生产实现 | 替身（测试用） | 不许注入什么 |
+|---|---|---|---|
+| 数据库驱动 | `Db` 内的方言实现 | 内存替身（`Db` 单测） | 不许在命令层注入第二套驱动 |
+| 凭据 | Windows 凭据管理器（`CredRead` / `CredWrite`） | 内存替身 | 不许注入明文文件后端 |
+| 时钟 / ID | 系统 | 固定值 | 不许在界面层取当前时间做业务判定 |
+| 子进程（PTY / 备份 / 恢复） | 真进程 | 假进程脚本 | 不许在测试里真调 `pg_dump` |
 
-- 前置：句柄属于当前连接
-- 后置：服务端真取消；连接仍可用；之后不再收结果集
-- 错误：句柄非法 → 带原因失败（禁「尽力取消」）
-- 测试：`T-3.4-01`
+- 判据：`T-2.3-01`（替身全部生效且不改生产代码）。
 
-### 3.4 导出 / 导入
+### 2.4 目录与命名约束
 
-- 前置：目标路径可写；格式 ∈ 支持集合
-- 后置：流式写，内存不随结果集线性增长；部分失败逐项列出
-- 禁止：目标已存在静默覆盖；导出含口令或连接串
-- 测试：`T-3.8-01`
+- `App/src-tauri/src/lib.rs` 只放**命令注册与薄适配**；业务逻辑进 `Db`。`lib.rs` 已 3200+ 行 —— 新增命令必须带 `#[tauri::command]` 与登记行，否则 `T-2.2-01` 判红。
+- 前端：视图在 `App/src/views/*.vue`，插件在 `App/src/plugins/{notes,retro}`；**不许**在视图里写方言关键字。
+- 数据家：一律 `paths::app_path(...)`，不许手拼 `%APPDATA%`。
+
+## 3. 关键契约
+
+> 体例：每节 = 落点 / 用途 / 前置 / 后置 / 错误契约 / 禁止行为 / 并发·幂等 / 日志 / 测试 ID。
+> 与 macOS 同语义的节只写**本端差异**并注明基准节，不把 macOS 的正文抄一遍（抄一遍就一定会漂）。
+
+### 3.1 连接与凭据：`connection_save` · `connection_delete` · `connection_validate` · `db_connect` · `db_disconnect`
+
+- 落点：`App/src-tauri/src/connections.rs`（IPC）+ Windows 凭据管理器（`CredRead` / `CredWrite`）｜ 基准：macOS §3.1 / §3.2
+- 用途：保存连接（凭据进凭据管理器、配置进 `connections.json`）、连接 / 断开、校验可达性。
+- 前置：连接标识稳定；类型 ∈ 支持的方言闭集；未保存的连接不许被 `db_connect` 直接使用。
+- 后置：
+  - 口令**只进凭据管理器**，`connections.json` 里只有引用；保存成功后重开应用仍能连（凭据可恢复）
+  - 删除连接**先清凭据再删配置**；清凭据失败 ⇒ 报 `CRED_PURGE_FAILED` 并明说残留位置（不许只删列表项）
+  - `db_disconnect` 幂等：未连接时返回成功，不报错
+  - `connection_validate` 只做可达性与认证判定，不建长连接、不缓存结果
+- 错误契约
+
+| 场景 | 错误码 | 可重试 | 禁止行为 |
+|---|---|---|---|
+| 主机解析不了 / 端口不通 | `CONN_UNREACHABLE` | 是（改配置后） | 禁止把「解析失败」当成「口令错」 |
+| 认证失败 | `CONN_AUTH_FAILED` | 是（改口令） | 禁止回显口令 |
+| 凭据管理器不可用 | `CONN_NO_CREDENTIAL` | 是（修系统后） | 禁止回落明文文件 |
+| 无此连接 | `CONN_NOT_FOUND` | 否 | 禁止静默新建一条同名连接 |
+| 删除时清凭据失败 | `CRED_PURGE_FAILED` | 是（重试删除） | 禁止先删配置再清凭据（反了会留下孤儿凭据） |
+
+- 禁止：把口令写进 `connections.json`、日志、IPC 返回值；用「测试连接成功」当保存成功的替代。
+- 并发·幂等：保存与删除串行（同一连接）；`db_connect` 同一连接重复调用返回同一服务对象。
+- 日志：`connection_id`、`dialect`、`duration_ms`、`result`；禁记口令与连接串原文。
+- 测试 ID：`T-3.1-01`（存→重启→可连）、`T-3.1-02`（删连接先清凭据，失败即报残留）、`T-3.1-03`（配置里无口令）
+
+### 3.2 语句执行：`db_query` · `db_run_batch` · `statement_risk` · `db_read_only`
+
+- 落点：`App/src-tauri/src/query.rs` + `Db` 执行面 ｜ 基准：macOS §3.3
+- 用途：执行一段 SQL（可能多语句），逐条上报结果；执行前给风险判定。
+- 前置：连接已建立；SQL 去空白后非空；只读连接上的写语句在执行前就被拒。
+- 后置：
+  - **按文本顺序逐条执行**，多结果集按序返回；单条失败即停并上报已执行条数（不续跑后续）
+  - 只读连接的判定结果与 `db_read_only` 一致（同一处口径，不许界面自判）
+  - `statement_risk` 给四类（读 / 写 / DDL / 未知）+ 风险点；**未知一律按需确认**处理
+  - 结果集超 `grid_window` 上限时按窗口取，界面滚动再取，不整表进内存
+- 错误契约
+
+| 场景 | 错误码 | 可重试 | 禁止行为 |
+|---|---|---|---|
+| 空语句 | `EXEC_EMPTY_SQL` | 否 | 禁止当成功 |
+| 只读连接写操作 | `EXEC_READONLY_DENIED` | 否 | 禁止提供「仍然执行」 |
+| 需二次确认 | `EXEC_CONFIRM_REQUIRED` | 等确认 | 禁止白名单静默放行 |
+| 连接中途断开 | `EXEC_CONNECTION_LOST` | 是（重连后重跑） | 禁止自动重跑写语句 |
+| 服务端报错 | `EXEC_SERVER_ERROR` | 依错误码 | 禁止改写服务端原文当自造错误 |
+
+- 禁止：对写语句自动重试；把多语句拆到多个线程并发；在界面层拼 SQL。
+- 并发·幂等：一个连接上执行串行；读语句可重复，写语句非幂等。
+- 日志：`connection_id`、`statements`、`rows`、`duration_ms`、`outcome`；禁记 SQL 原文（原文进 `queries/<date>.sql` 归档）。
+- 测试 ID：`T-3.2-01`（三条语句按序、第二条失败即停）、`T-3.2-02`（只读连接拒写）、`T-3.2-03`（窗口取数不整表）
+
+### 3.3 取消：`db_cancel`
+
+- 落点：`Db` 取消路径（服务端取消请求）｜ 基准：macOS §3.4
+- 用途：真取消正在跑的服务端语句，而不是只把界面转圈停掉。
+- 前置：有正在执行的语句且拿到了其后端进程标识（连接级）。
+- 后置：服务端语句被取消；界面收到取消结局；**执行中的客户端连接不被关闭**（可继续跑下一条）。
+- 错误契约
+
+| 场景 | 错误码 | 可重试 | 禁止行为 |
+|---|---|---|---|
+| 没有在跑的语句 | `EXEC_CANCEL_ILLEGAL` | 否 | 禁止把「没得取消」当取消成功 |
+| 取消请求发不出去 | `EXEC_CANCEL_FAILED` | 是（再点一次） | 禁止悄悄关连接当取消 |
+| 语句已结束 | 成功（无副作用） | — | 禁止报错打断用户 |
+
+- 禁止：用「关闭连接」实现取消；取消后把已取到的部分结果当完整结果。
+- 并发·幂等：同一语句重复取消幂等；取消与执行同连接串行进入驱动。
+- 日志：`connection_id`、`cancel_requested_at`、`outcome`。
+- 测试 ID：`T-3.3-01`
+
+### 3.4 会话与终止：`db_browse_sessions` · `db_session_close` · `admin_sessions` · `terminate_sql`
+
+- 落点：`Db` 会话监控 + `lib.rs` 命令 ｜ 基准：macOS §3.13
+- 用途：看当前库上的活动会话；终止某个后端进程（危险动作，二次确认）。
+- 前置：连接可执行查询；终止需用户确认（`confirm` 类命令）。
+- 后置：会话列表含 `pid` / 用户 / 状态 / 起始时间 / 当前语句摘要；**终止只影响目标 pid**；终止后列表刷新一次。
+- 错误契约
+
+| 场景 | 错误码 | 可重试 | 禁止行为 |
+|---|---|---|---|
+| 未确认就终止 | `SESS_KILL_REQUIRED_CONFIRM` | 等确认 | 禁止默认勾选确认 |
+| 无权限终止 | `SESS_KILL_DENIED` | 否 | 禁止改写为「已终止」 |
+| 目标已结束 | `SESS_NOT_FOUND` | 否 | 禁止当成功 |
+
+- 禁止：批量终止不带确认；把其他用户的会话信息当自己的数据展示（只展示有权限读的字段）。
+- 并发·幂等：终止请求幂等（对已结束 pid 报 `SESS_NOT_FOUND`）。
+- 日志：`pid`、`target_user`、`confirmed`、`outcome`。
+- 测试 ID：`T-3.4-01`
+
+### 3.5 行编辑：`edits_to_dml` · `db_write_batch` · `db_primary_key` · `db_table_shape` · `inspect_row`
+
+- 落点：`Db`（DML 生成与批量写）+ `lib.rs` ｜ 基准：macOS §3.9
+- 用途：把界面上的单元格编辑换算成 DML，按批提交；没有主键的表拒写。
+- 前置：目标表有主键（`db_primary_key` 非空）；编辑前记录了原值（乐观锁）。
+- 后置：
+  - 一批编辑 → 一批 DML；**逐条带原值条件**（`WHERE pk = ? AND 原值`），影响行数 0 ⇒ 判冲突
+  - 冲突时不静默覆盖：返回冲突行清单，界面标红
+  - 写入不触发结构变更；不改主键
+- 错误契约
+
+| 场景 | 错误码 | 可重试 | 禁止行为 |
+|---|---|---|---|
+| 无主键 | `DATA_NO_PK` | 否 | 禁止用「全部列当主键」凑一个 |
+| 行被他人改过 | `DATA_WRITE_CONFLICT` | 是（刷新后再改） | 禁止强写 |
+| 写入失败 | `DATA_WRITE_FAILED` | 依原因 | 禁止部分成功后报全成功 |
+| 类型不兼容 | `DATA_WRITE_FAILED` + 字段明细 | 是（改值） | 禁止隐式转换后写入 |
+
+- 禁止：整表替换式写；把「影响 0 行」当成功；在界面里拼 DML。
+- 并发·幂等：一批一个事务；同一行并发编辑以原值条件串行化。
+- 日志：`table`、`rows`、`conflicts`、`duration_ms`；禁记单元格原值。
+- 测试 ID：`T-3.5-01`（无主键拒写）、`T-3.5-02`（并发改同一行 ⇒ 冲突不覆盖）
+
+### 3.6 结构与差异：`generate_ddl` · `db_run_ddl` · `schema_snapshot` · `schema_diff_plan` · `confirm_drop_database`
+
+- 落点：`Db` 结构面 + `lib.rs` ｜ 基准：macOS §3.10
+- 用途：生成 DDL、预览差异、执行结构变更；删库这类动作必须二次确认。
+- 前置：DDL 执行前必须走「预览 → 确认」；`confirm_drop_database` 需要用户输入库名确认。
+- 后置：
+  - 预览与实际执行**用同一份 DDL 文本**（预览过的和跑的是同一串，不许重新生成）
+  - 差异计划列出新增 / 修改 / 删除三档，删除项单独标出
+  - 执行结果逐语句上报；失败即停
+- 错误契约
+
+| 场景 | 错误码 | 可重试 | 禁止行为 |
+|---|---|---|---|
+| 未预览直接执行 | `DDL_PREVIEW_REQUIRED` | 否 | 禁止「先跑了再补预览」 |
+| 危险 DDL 未确认 | `DDL_CONFIRM_REQUIRED` | 等确认 | 禁止默认确认 |
+| 执行失败 | `DDL_FAILED` | 依原因 | 禁止回滚后报「已撤销」（服务端可能已部分生效） |
+
+- 禁止：把 `DROP DATABASE` 放进批量脚本静默执行；用差异计划直接改库（差异是给人看的）。
+- 并发·幂等：结构变更串行；同一 DDL 重跑由服务端报错决定（本端不加幂等包装）。
+- 日志：`object`、`kind`、`statements`、`outcome`。
+- 测试 ID：`T-3.6-01`（未预览执行被拒）、`T-3.6-02`（删库需输名确认）
+
+### 3.7 导出与导入：`export_to_file` · `export_table_copy` · `export_schema_copy` · `preview_import` · `run_import` · `xlsx_to_csv`
+
+- 落点：`Db` 导入导出 + `lib.rs` ｜ 基准：macOS §3.11 / §3.12
+- 用途：把结果 / 整表 / 整库流式导出成文件；把文件导入表（先出计划再执行）。
+- 前置：导出目录可写；导入前目标表结构已取到。
+- 后置：
+  - **流式写**：不整表进内存；中断留下的是半份文件，且明确告知「未完成」
+  - 导入前给计划：行数估算（取不到写「未接」，不写 0）、列映射、冲突策略
+  - `xlsx_to_csv` 只做格式转换，不改内容
+- 错误契约
+
+| 场景 | 错误码 | 可重试 | 禁止行为 |
+|---|---|---|---|
+| 目标文件已存在 | `IO_TARGET_EXISTS` | 是（换名/覆盖确认） | 禁止静默覆盖 |
+| 半途失败 | `IO_PARTIAL` | 是 | 禁止报成功 |
+| 格式不支持 | `IO_FORMAT_UNSUPPORTED` | 否 | 禁止「尽力而为」写坏文件 |
+
+- 禁止：整表读进内存再写；把估算行数当真实行数展示。
+- 并发·幂等：一个导出任务一个文件；同任务重复启动拒绝。
+- 日志：`format`、`rows`、`bytes`、`partial`。
+- 测试 ID：`T-3.7-01`（大表导出内存不涨）、`T-3.7-02`（中断留半份并如实报）
 
 ## 4. 数据与状态
 
-| 概设实体 | Windows 落点 | 序列化 | 写入方 |
+### 4.1 存储落点（唯一清单）
+
+| 存储 | 路径（`paths::app_path` 之下） | 权限 | 写入方 | 崩溃后语义 |
+|---|---|---|---|---|
+| 连接清单 | `connections.json` | 用户目录 | 连接管理 | 损坏 ⇒ 读成空清单并**保留原文件** |
+| 凭据 | Windows 凭据管理器（`CredRead` / `CredWrite`） | 系统托管 | `connection_save` / `agent_key_save` | 取不到 ⇒ 报缺凭据，不回落明文 |
+| 查询归档 | `queries/<YYYY-MM-DD>.sql` | 用户目录 | 执行路径 | 只增不改 |
+| 保存的查询 | `saved-queries.json` | 用户目录 | 保存 / 删除 | 原子替换 |
+| 工作区历史 | `workspace-history.json` | 用户目录 | 打开 / 关闭 | 原子替换 |
+| 外观 | `appearance.json` | 用户目录 | 设置面板 | 损坏 ⇒ 默认值 + 保留原文件 |
+| 命令历史 | `command-history.json` | 用户目录 | 面板 | 有上限，超出丢最旧 |
+| Agent 会话 | `chat/` | 用户目录 | `agent_chat_save` | 读坏 ⇒ 空会话 + 保留原文件 |
+| Agent 撤销凭据 | `agent-undo/` | 用户目录 | 写盘 | 哈希不符 ⇒ 拒撤 |
+| Agent 审计 | `agent-audit.json` | 用户目录 | 调用收口 | 读坏 ⇒ 空账 + 如实报 |
+| 复盘包 | `retro/packages/` | 用户目录 | 导入 | 按包原子落盘 |
+
+- 序列化契约：JSON 字段名 = 结构体字段名；时间一律 ISO8601；空值 `null`、空集合 `[]`；布尔显式 `true`/`false`。
+- 禁止：手拼 `%APPDATA%`；把手写的临时路径写进任何配置文件；把口令/令牌放进上表任何一份 JSON。
+
+### 4.2 状态机（四台，闭集）
+
+| 状态机 | 合法流转 | 触发 | 禁止 |
 |---|---|---|---|
-| 连接配置 | 外壳配置库（JSON） | 字段名与服务端一致；口令不入结构 | 连接 IPC |
-| 凭据 | 系统凭据存储（Windows Credential Manager） | 键 = 连接 id | 凭据模块 |
-| 结果集 | `Core/result_set.rs` | 列名 + 类型 + 行数组 | 执行路径 |
-| 审批与回执 | 外壳审批存储 | 追加式 | 审批模块 |
+| 连接 | 未连接 → 连接中 → 已连接 / 失败 | `db_connect` | 跳过「连接中」直接置已连接 |
+| 执行 | 空闲 → 执行中 → 完成 / 失败 / 已取消 | `db_query` / `db_cancel` | 已取消再置完成；把取消当失败上报给用户 |
+| 审批 | 待确认 → 已确认 / 已拒绝 | 用户点 | 默认确认；拒绝后翻回确认 |
+| 页签 | 打开 → 脏 → 保存 → 关闭 | 编辑 / 保存 | 脏页签直接关（必须先问） |
 
-状态机：连接（未连接→连接中→已连接 / 失败）、执行（待发→执行中→完成/取消/失败）、审批（待审→批准/拒绝/过期）、页签（脏/净/关闭可恢复）。**禁止**新增状态；非法流转返回错误，不静默。
+- 新增状态或新增流转 = 改概设并同批改本节；`match` 必须穷尽，`_ =>` 兜住枚举即判红。
 
-查询全链（对应概设 §7.1）：前端取显示中编辑器 → 选区判定 → 只读/高危判定 → 执行 → 逐条回报 → 结果渲染 + 写历史 → 审计一条。
+### 4.3 事务与幂等边界
+
+- 一次写动作（行编辑批 / DDL 脚本 / 导入）一个事务；**归档与审计属动作后置**，失败只报「记录未落盘」，不回滚已成功的业务。
+- 删除连接：先清凭据、再删配置（顺序反了会留孤儿凭据）。
+- 备份 / 恢复的子进程产物：取消后标记不完整，不参与「最近一份可用备份」的判定。
 
 ## 5. 界面
 
-| 概设视图 | Windows 落点 | 备注 |
-|---|---|---|
-| 查询页签 | `App/src/sql/` + `App/src/grid/` | 执行/停止互换；虚拟表格承载大结果 |
-| 连接表单 | 连接相关视图 | 类型切换联动默认端口与 SSL |
-| 对象树 | 侧栏树视图 | 刷新不清选中 |
-| 命令面板 | 命令目录 + 面板视图 | 全局搜索唯一输入面 |
-| 下方面板 | 问题 / 输出 / 终端 / 调试 | 终端须真 PTY |
+### 5.1 视图落点
 
-六态（加载/空/错误/权限不足/提交中/部分失败）逐视图实现；**禁止**只做正常态、禁止用空数据冒充成功。视觉参数取 `Tools/check-design-tokens.ps1` 守的令牌，不手写色值。
+| 面 | 落点 | 关键约束 |
+|---|---|---|
+| 主壳 | `App/src/App.vue` + `shell/` | 分栏与导航；不在组件里做业务判定 |
+| 数据库面 | `views/DatabaseView.vue` + `grid/` | 结果网格窗口取数、编辑乐观锁、页签脏态 |
+| 工作区面 | `workspace/` 视图族 | 文件树、编辑区、外部改动提示 |
+| 终端面 | 终端视图 + `pty` 命令 | 真 PTY；宽字符与颜色由前端渲染 |
+| 笔记 / 复盘 | `plugins/notes` · `plugins/retro` | 插件挂载；清单由 `plugins_manifest` 决定 |
+| 设置与关于 | 设置视图 / 关于面板 | 版本读构建产物；功能清单按 `FR-STD-WS-HELP-003` 同口径 |
+
+### 5.2 六态（每面必齐）
+
+空态（说清「还没有」而不是空白）· 载入态（骨架或逐段，禁假进度）· 失败态（机器码 → 人话 + 可重试）· 只读态（禁用动作并说明原因）· 越权态（入口不出现，不是灰掉）· 满态（长列表虚拟滚动）。
+
+- 判据：`UI-5.2-01`（六态齐）、`UI-5.2-02`（禁止渲染项：假进度、灰掉冒充越权、空容器）。
+
+### 5.3 IPC 边界与 CSP
+
+- 前端只能调 `generate_handler!` 里登记的命令；命令参数与返回值是**唯一的跨界契约**，改签名 = 跨端变更（Linux 复用本端外壳）。
+- CSP 现为 `default-src 'self'; img-src 'self' data: blob:; media-src 'self' blob:; style-src 'self' 'unsafe-inline'; connect-src ipc: http://ipc.localhost` —— 新增外部域名必须同批改本节与 `tauri.conf.json`。
+- 判据：`T-5.3-01`（前端 ipc 调用集合 ⊆ 命令清单）、`T-5.3-02`（CSP 与本节逐字一致）。
+
+### 5.4 界面测试面
+
+- 87 个 `*.test.ts`（含 mount 用例）：`DatabaseView.*` 20+ 个（编辑、撤销、诊断、导入导出、分屏、状态栏…）、`App.mount.test.ts`、`ipc.test.ts`。
+- 判据：`npm test` 全绿；新增视图必须带 mount 用例（否则六态判据无依据）。
 
 ## 6. 错误映射
 
-| 概设错误码 | Windows 落点 | 状态 |
+| 概设 21 码 | 本端落点 | 状态 |
 |---|---|---|
-| `CONN_INVALID_CONFIG` / `CONN_NO_CREDENTIAL` / `CONN_UNREACHABLE` / `CONN_AUTH_FAILED` | 连接 IPC 四类返回 | 已有 |
-| `CRED_PURGE_FAILED` | 凭据清理路径 | 已有 |
-| `EXEC_EMPTY_SQL` / `EXEC_NO_CONNECTION` | 前端 + 外壳前置 | 已有 |
-| `EXEC_READONLY_DENIED` / `EXEC_CONFIRM_REQUIRED` | 只读与高危判定 | 已有 |
-| `EXEC_SERVER_ERROR` / `EXEC_CONNECTION_LOST` | 执行错误映射 | 已有 |
-| `EXEC_CANCEL_ILLEGAL` | 取消路径 | 已有 |
-| `META_UNSUPPORTED` | 元数据查询 | 已有 |
-| `DATA_NO_PK` / `DATA_WRITE_CONFLICT` / `DDL_PREVIEW_REQUIRED` / `IO_*` / `SESS_KILL_DENIED` / `LIC_NO_CAPABILITY` | 对应模块 | 未实现（§10.1） |
+| `CONN_INVALID_CONFIG` | 连接表单校验（`connection_validate` 前置） | 已实现 |
+| `CONN_UNREACHABLE` / `CONN_AUTH_FAILED` | `connections.rs` 失败分类 | 已实现 |
+| `CONN_NO_CREDENTIAL` | 凭据管理器取不到 | 已实现 |
+| `CONN_NOT_FOUND` | 连接清单查找 | 已实现 |
+| `CRED_PURGE_FAILED` | 删除连接时清凭据失败 | 已实现 |
+| `EXEC_EMPTY_SQL` / `EXEC_NO_CONNECTION` / `EXEC_READONLY_DENIED` / `EXEC_CONFIRM_REQUIRED` | 执行前判定（`query.rs` + `Db`） | 已实现 |
+| `EXEC_CANCEL_ILLEGAL` / `EXEC_CANCEL_FAILED` | `db_cancel` | 已实现 |
+| `EXEC_CONNECTION_LOST` / `EXEC_SERVER_ERROR` | 驱动错误分类 | 已实现 |
+| `DATA_NO_PK` / `DATA_WRITE_CONFLICT` / `DATA_WRITE_FAILED` | `edits_to_dml` / `db_write_batch` | 已实现 |
+| `DDL_PREVIEW_REQUIRED` / `DDL_CONFIRM_REQUIRED` / `DDL_FAILED` | 结构面 | 已实现 |
+| `IO_TARGET_EXISTS` / `IO_PARTIAL` / `IO_FORMAT_UNSUPPORTED` | 导出导入 | 已实现 |
+| `SESS_KILL_REQUIRED_CONFIRM` / `SESS_KILL_DENIED` / `SESS_NOT_FOUND` | 会话终止 | 已实现 |
+| `META_UNSUPPORTED` / `META_FAILED` | 元数据面 | 已实现 |
+| `LIC_NO_CAPABILITY` | 授权降级（入口不出现） | 已实现 |
 
-## 7. 并发与安全
+本端独有码（概设没有、只在这一端出现）：`TOOL_MISSING`（缺备份工具）、`PROCESS_FAILED`（子进程失败带退出码）、`SHELL_MISSING` / `TERM_NOT_FOUND`（终端）、`PATH_OUTSIDE_WORKSPACE` / `FILE_STALE` / `FILE_TOO_LARGE`（工作区）、`RETRO_PACKAGE_INVALID`（复盘包）。
 
-- 前端不持连接句柄；执行串行按连接；取消走句柄。
-- 权限：Tauri 能力白名单最小化；禁前端-only 判定。
-- 凭据只经系统凭据存储；口令不进日志、不进 IPC 响应、不进导出。
-- 网络出口：仅数据库连接与已授权同步；禁止其他外发。
+- 禁止：把本端独有码写成界面文案（文案由语言表按码映射）；把服务端原文改写成自造错误。
 
-## 8. Notes 与 Retro（Windows）
+## 7. 并发与线程
 
-### 8.1 Notes（§15 笔记域，`FR-STD-ALL-PLUG-*`）
+| 场景 | 模型 | 禁止 |
+|---|---|---|
+| 命令调用 | Tauri 异步运行时；重活进 `spawn_blocking`（Agent 对话、备份、导入） | 在异步线程里做阻塞 IO |
+| 一个连接上的语句 | 串行 | 同一连接并发执行 |
+| 终端 | 一条会话一个读线程 + 写入队列 | 用事件循环轮询读 |
+| 备份 / 恢复 | 独立子进程 + 进度通道 | 在 UI 线程 join 子进程 |
+| 取消 | 信号传给驱动 / 子进程，等待真退出 | 「标记取消」后当已取消 |
+| 文件保存 | 按路径串行 + 原子替换 | 并发写同一文件 |
 
-- 现状实读：Notes 仓 `platform/windows/` 仅 5 件（`gate.py` `gate.cmd` `README.md` `实现依据与验收对照表-20260928.md` `tools/check-basis-coverage.py`）—— 判据骨架在，**功能本体不在本克隆**。
-- 契约（概设 §15 十四节）在本端同样生效：捕获即编辑 / 无标题可存 / 断网可记；附件只存引用、原件不改写、同内容一份；检索按字符偏移、覆盖标题正文标签；私密条目任何出口排除；删除进回收站、彻底清除二次确认；待办写入口唯一。
-- 数据归属：笔记数据家与工程数据家**平级独立**；宿主只单向传上下文（文本与标识），行数据须确认并留痕。
-- 判据：`platform/windows/gate.py` 全绿；跨端一致性以 `Docs/平台对齐-移动端-以安卓为基准.md` 为基准逐条对拍。
-- 禁止：把 Notes 做成 Studio 的子面板（它是同一产品内的独立能力面）；在 Windows 侧另写一份数据契约。
+- 判据：`T-7.1-01`（长任务期间 UI 心跳不中断）、`T-7.1-02`（取消后资源真释放）。
 
-### 8.2 Retro（§16 复盘域）
+## 8. 安全
 
-- **本端有真实现**：界面 `App/src/plugins/retro/`（`RetroView.vue`、`cardSort.ts`、`outline.ts`、`periodIndex.ts`、`cardMeta.ts`），后端 `App/src-tauri/src/retro_library.rs`，装配在 `lib.rs`。
-- 契约口径：概设 §16 十八节（行情接入 / 特征 / 回测 / 复盘稿 / 周报）在本端生效；取值、算式、阈值照契约搬，不改口径（1e-6、6 位小数逢半进位、恒等式、左闭右开区间等）。
-- 数据归属：Retro 数据家在 Studio 数据家之外；宿主只单向传上下文；禁止反向依赖 Studio 装配层。
-- 禁止：把复盘算式写在 Vue 组件里（算法在 Rust 侧）；周报直写对方库（只走交换面）。
-- 判据：`T-16.1-01`（本端用例 + 复盘仓共用样例对拍）。
+- 凭据：只经 Windows 凭据管理器；日志与 IPC 返回**永不**含口令；删除连接先清凭据。
+- 路径：工作区外一律拒（绝对路径、`..`、符号链接逃逸）；Agent 写盘与用户编辑共用同一份校验。
+- 进程：PTY / 备份子进程用参数数组启动，不经 shell 拼接；禁止把用户输入拼进命令行。
+- 网络出口：只有 Agent 端点（受配置门约束）与数据库连接；无其他外部域名（CSP 白名单为零）。
+- 日志脱敏：连接串、口令、令牌、文件正文一律不进日志。
+- 判据：`T-8.1-01`（日志扫描无凭据）、`T-8.2-01`（子进程无 shell 注入面）。
 
 ## 9. 测试与判据
 
-| 测试 ID | 覆盖 | 落点 |
+| 面 | 规模（2026-11-05 实读） | 命令 |
 |---|---|---|
-| `T-2.1-01` | 四层边界 | `Tools/check-core-boundary.ps1` |
-| `T-3.1-01/02` | 连接 IPC | 连接用例 |
-| `T-3.3-01/02` | 执行顺序 / 流中断 | 执行用例 |
-| `T-3.4-01` | 取消 | 取消用例 |
-| `T-3.8-01` | 导出流式 | 导出用例 |
-| `T-4.4-01` | 状态机 | 状态用例 |
-| `T-6.1-01` | 错误映射 | 错误用例 |
-| `T-7.1-01` | 并发 | 并发用例 |
-| `UI-5.3-01` | 六态 | 人工点验 |
+| Rust 单测 | **801** 个 `#[test]`（`agent_generate` 44 · `retro_library` 36 · `tree` 30 · `fs` 28 · `config` 27 · `agent_nl2sql` 27 · `retro_package` 25 · `workspace` 21 …） | `cargo test`（`App/src-tauri` + `Db`） |
+| 前端测试 | **87** 个 `*.test.ts`（含 20+ 个 `DatabaseView.*` mount 用例） | `npm test` |
+| 层边界 | `Tools/check-core-boundary.ps1` | PowerShell 脚本 |
+| 命令对账 | `T-2.2-01`（`generate_handler!` ↔ §2.2 族表） | 静态检索 |
 
-判据命令：`Tools/build.ps1`（出包）· `Tools/*.ps1`（各判据）· `Tools/check-platform-parity.ps1`（对 macOS 派生索引）。
+### 9.2 本轮新增契约的用例
 
-## 10. 未实现位点与自检
+| 用例 ID | 对应契约 | Given | When | Then |
+|---|---|---|---|---|
+| `T-3.1-03` | §3.1 后置 | 保存一条连接 | 读 `connections.json` | 文件里无口令，只有引用；重启后可连 |
+| `T-3.2-03` | §3.2 后置 | 10 万行结果 | 打开网格 | 按窗口取数，内存不随行数线性上涨 |
+| `T-3.5-02` | §3.5 错误表 | 同一行被两处同时编辑 | 后提交者保存 | 报 `DATA_WRITE_CONFLICT`，不覆盖先提交者 |
+| `T-3.7-02` | §3.7 错误表 | 导出大表途中取消 | 查产物 | 报 `IO_PARTIAL`，留下半份且不标成功 |
+| `T-3.8-03` | §3.8 错误表 | 未确认就执行恢复 | 调 `restore_run` | 被拒，目标库未变 |
+| `T-3.9-03` | §3.9 后置 | 终端输出 10 MB | 读输出 | 按窗口返回并标 `truncated` |
+| `T-3.10-01` | §3.10 错误表 | 文件被外部改过 | 在编辑器保存 | 报 `FILE_STALE`，不覆盖 |
+| `T-5.3-01` | §5.3 | 前端 ipc 调用集合 | 与命令清单比对 | 差集为空 |
+| `T-8.1-01` | §8 | 全量日志 | 扫描凭据模式 | 命中 0 |
 
-| 位点 | 现状 | 契约 |
+- 负例：以上每条都必须有一条「故意违规就变红」的样本（例如把口令写进 JSON 时 `T-3.1-03` 必须红）。
+
+## 10. 未实现位点（代码现状，不是文档缺口）
+
+| 位点 | 现状 | 影响 |
 |---|---|---|
-| 行编辑错误两码 | 未实现 | 概设 §4.6 |
-| DDL 预览闸 | 未实现 | 概设 §4.7 |
-| 导入导出部分失败 | 未实现 | 概设 §4.8 |
-| 会话终止权限码 | 未实现 | 概设 §4.9 |
-| 授权能力位 | 未实现 | 概设 §3 |
-| Notes 功能本体 | 不在本端 | 概设 §15（宿主承载） |
-
-自检：四层边界 0 违规 · 12 条禁止项 0 命中 · 21 码全有落点或标未实现 · 六态齐 · 测试 ID 无悬空。
+| Agent 命令执行 / 代码执行 / 工具目录 / 编排 / 压缩 / 注册表 / 钩子 / 记忆 / 联网工具 | 同源 Rust 面**没有**（`is_known_chat_tool` 只认 `read_file` / `write_file`） | 对话里不出现这些工具；与 macOS 的差距在同源面 |
+| DAP 调试 | `Platform/windows` 内检索 DAP 命中 0 | 不提供调试会话 |
+| 计划行数预估 | 无 `Plan Rows` 解析 | 审批卡显示「未接」，不显示 0 |
+| IM 通道 | 只在 macOS 侧实现 | 不出现通道设置 |
+| 笔记 / 复盘业务判据 | 在 `notes` / `retro` 仓的测试里 | 本端只承接宿主装配（§3.13） |
 
 ## 11. 偏离处理
 
-`DETAIL_GAP`（本文件未覆盖 → 最小假设 + 登记）· `DETAIL_CONFLICT`（与代码冲突 → 停工报人）· `CONTRACT_DEVIATION`（等确认）· `PLATFORM_CHANGE`（停工）· `DESIGN_CONFLICT`（以概设禁止为准）。
+| 信号 | 触发 | 动作 |
+|---|---|---|
+| `DETAIL_GAP` | 本节未覆盖的公开行为 | 取最小假设继续，并登记到本节表 |
+| `DETAIL_CONFLICT` | 与代码现状冲突 | 停工，报人类主人 |
+| `CONTRACT_DEVIATION` | 偏离 §3 契约 | 等确认 |
+| `PLATFORM_CHANGE` | 需要换基线（Tauri 2 / WebView2 / Rust editions） | 停工 |
+| `DESIGN_CONFLICT` | 与概设冲突 | 以概设「禁止」为准，不自行裁决 |
 
 ## 12. 已知坑
 
