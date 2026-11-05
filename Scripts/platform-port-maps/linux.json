@@ -1,0 +1,35 @@
+{
+  "target": "Linux",
+  "base": "macOS",
+  "note": "路径级正则映射（按顺序、先长后短）。Linux 端不复制 macOS 的 Swift 文件，它复用同源实现，所以落到「同源能力层 / 同源前端 / 本端外层」三类，不编造不存在的 Linux 文件。",
+  "path_rules": [
+    ["Platform/macOS/KeychainSecretStore\\.swift", "Platform/linux/src/secrets.rs"],
+    ["Platform/macOS/[A-Za-z]+\\.swift", "Platform/linux/src/"],
+    ["Platform/macOS/", "Platform/linux/"],
+    ["App/Views/([A-Za-z]+)\\.swift", "同源前端 `\\1.vue`"],
+    ["App/([A-Za-z]+)\\.swift", "`Platform/windows/App/src-tauri`（\\1）"],
+    ["TestsUISnapshot/([A-Za-z]+)\\.swift", "同源前端快照测（\\1）"],
+    ["Tests/([A-Za-z]+)\\.swift", "`cargo test`（\\1）"],
+    ["Core/([A-Za-z]+)\\.swift", "同源能力层 `\\1`"],
+    ["Package\\.swift", "`Platform/linux/Cargo.toml`"],
+    ["([A-Za-z]+)Service\\.swift", "同源 `\\1` 方言实现"]
+  ],
+  "prose_rules": [
+    ["KeychainSecretStore", "SecretStore"],
+    ["Keychain", "SecretStore（系统密钥环）"],
+    ["AgentApprovalGate", "agent::Approval"],
+    ["AppState", "ShellState"],
+    ["DatabaseService", "doyah_studio_db"],
+    ["NSVisualEffectView", "GTK 容器"],
+    ["NavigationSplitView", "分栏骨架"],
+    ["@MainActor", "阻塞线程池"],
+    ["⌘⇧P", "Ctrl+Shift+P"],
+    ["⌘S", "Ctrl+S"],
+    ["⌘K", "Ctrl+K"],
+    ["⌘W", "Ctrl+W"],
+    ["⌘", "Ctrl+"],
+    ["swift test", "cargo test"],
+    ["~/Library/Application Support", "$XDG_DATA_HOME"],
+    ["Xcode", "系统工具链"]
+  ]
+}
