@@ -89,6 +89,8 @@ struct AgentChatView: View {
     /// **显式展开**过的长消息（`FR-AGT-UX-CONV-012` ⑥ 预览）：点过 `… 展开` 就记下来，
     /// 否则下一次重绘又折回去，等于点不动。
     @State private var expandedPreview: Set<UUID> = []
+    /// **显式展开**过的「已应用」摘要组（按组 id）。同一条纪律：点开过就不再收回去。
+    @State private var expandedAppliedGroups: Set<String> = []
 
     private var transcript: some View {
         // **跟着最新内容走**（人类主人 2026-10-17 实机反馈：「对话框不自动滚动到最新位置，要手工拖动」）。
@@ -125,8 +127,8 @@ struct AgentChatView: View {
                         }
                         .id(message.id)
                     }
-                    ForEach(model.cards) { card in
-                        toolCard(card)
+                    ForEach(cardItems) { item in
+                        cardRow(item)
                     }
                     Color.clear.frame(height: 1).id(Self.bottomAnchor)
                 }
@@ -638,6 +640,68 @@ struct AgentChatView: View {
         }
     }
 
+    // MARK: - 卡片行（连续的「已应用」合并成一行摘要）
+
+    /// 对话区里的一条卡片行：普通工具卡**一张一条**，连续的 `.applied` 卡合并成**一条摘要**。
+    ///
+    /// 为什么合并：每张 `.applied` 卡原本在对话区占三行（`✓ ▸ 命令` / `⎿ applied` /
+    /// `Applied ⟲`），一次批量写入 20 个文件就是 60 行，页面又自动滚到底 ⇒
+    /// thinking / 正文的可视高度被挤没（人类主人 2026-11-06 原话：「Applied 三行是什么东西，
+    /// 而且占用的区域越来越多，让 thinking 区域越来越少」）。
+    /// 合并后默认只占**一行**（`AgentAppliedSummaryRow.summaryHeight`），点开才看明细。
+    private enum CardRow: Identifiable {
+        case card(AgentToolCard)
+        case applied(id: String, cards: [AgentToolCard])
+
+        var id: String {
+            switch self {
+            case .card(let card): return "card-" + card.id.uuidString
+            case .applied(let id, _): return id
+            }
+        }
+    }
+
+    /// 把 `model.cards` 按「连续同态」压成行：一段连续的 `.applied` 合成一条（组 id 取段首卡片的 id，
+    /// 卡片增删时不会把已展开的组错配到别的段上）。
+    private var cardItems: [CardRow] {
+        var items: [CardRow] = []
+        var pending: [AgentToolCard] = []
+        func flush() {
+            guard let first = pending.first else { return }
+            items.append(.applied(id: "applied-" + first.id.uuidString, cards: pending))
+            pending = []
+        }
+        for card in model.cards {
+            if case .applied = card.outcome {
+                pending.append(card)
+            } else {
+                flush()
+                items.append(.card(card))
+            }
+        }
+        flush()
+        return items
+    }
+
+    @ViewBuilder
+    private func cardRow(_ item: CardRow) -> some View {
+        switch item {
+        case .card(let card):
+            toolCard(card)
+        case .applied(let id, let cards):
+            AgentAppliedSummaryRow(
+                cards: cards,
+                expanded: Binding(
+                    get: { expandedAppliedGroups.contains(id) },
+                    set: { isOpen in
+                        if isOpen { expandedAppliedGroups.insert(id) } else { expandedAppliedGroups.remove(id) }
+                    }
+                ),
+                onUndo: { model.undo($0) }
+            )
+        }
+    }
+
     /// 这张卡是不是**在等人点**（只有这种才值得用强调色与描边）。
     private func pendingApproval(_ card: AgentToolCard) -> Bool {
         if case .pendingApproval = card.outcome { return true }
@@ -695,16 +759,22 @@ struct AgentChatView: View {
                 .foregroundStyle(Theme.text(.tertiary))
                 .padding(.leading, Spacing.l)
             if card.expanded, let preview = card.approvalPreview {
-                Text(preview)
-                    .font(Self.transcriptFont)
-                    .textSelection(.enabled)
-                    .padding(Spacing.s)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: Radius.badge)
-                            .strokeBorder(Theme.hairline(colorScheme), lineWidth: 1)
-                    )
-                    .padding(.leading, Spacing.l)
+                // **预览也要有上限**（2026-11-06）：这是一段差异 / 命令原文，长度由文件决定 ——
+                // 摊开就是「一张卡占满一屏」，把同一轮里别的卡片与 thinking 全推到屏幕外。
+                // 上限取与步骤详单同一个常量，超出在内部滚。
+                ScrollView(.vertical) {
+                    Text(preview)
+                        .font(Self.transcriptFont)
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(Spacing.s)
+                }
+                .frame(maxHeight: AgentStepListPanel.maxHeight)
+                .overlay(
+                    RoundedRectangle(cornerRadius: Radius.badge)
+                        .strokeBorder(Theme.hairline(colorScheme), lineWidth: 1)
+                )
+                .padding(.leading, Spacing.l)
             } else if card.expanded, !card.arguments.isEmpty {
                 Text(card.arguments)
                     .font(Self.transcriptFont)
@@ -734,17 +804,9 @@ struct AgentChatView: View {
                         .controlSize(.small)
                 }
             }
-            if case .applied = card.outcome {
-                HStack(spacing: Spacing.s) {
-                    Text(L(.agentChatApprovalApplied)).font(Self.transcriptFont).foregroundStyle(Theme.text(.secondary))
-                    // **一步撤销**（`FR-AI-25` ⑤）：点了就把这次写入退回去，文件逐字节回到应用前。
-                    // 只出现在「已应用」这一档 —— 别的状态没有可撤的东西。
-                    ToolbarIconButton(systemName: "arrow.uturn.backward", help: L(.agentChatUndo)) {
-                        model.undo(card.id)
-                    }
-                    .controlSize(.small)
-                }
-            }
+            // `.applied` 不再走这张卡（2026-11-06）：同一段连续的「已应用」在 `cardItems` 里
+            // 已合并成一行摘要（`AgentAppliedSummaryRow`），跑到这里就是漏了 —— 所以这里
+            // 刻意**不留**那份「✓ 命令 / ⎿ applied / Applied ⟲」三行，免得哪天又长出 60 行。
             if case .undone = card.outcome {
                 Text(L(.agentChatUndone)).font(Self.transcriptFont).foregroundStyle(Theme.text(.secondary))
             }

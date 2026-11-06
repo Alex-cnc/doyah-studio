@@ -2574,6 +2574,12 @@ public enum LKey: String, CaseIterable, Sendable {
     case menuAgentSchedule
     case agentChatStepsDone
     case agentChatStepsTitle
+    /// 对话区「已应用」摘要行（`App/Views/AgentAppliedSummaryRow.swift`）：%@ = 处数。
+    ///
+    /// 2026-11-06 真机：一次批量写入的每张 `.applied` 卡各占三行（`✓ ▸ 命令` / `⎿ applied` /
+    /// `Applied ⟲`），20 个文件就是 60 行，把 thinking 区挤没。现在**一行摘要 + 计数**，点开看明细 ——
+    /// 「几处」这个读数由 Core 的卡片数给，视图不自己编。
+    case agentChatAppliedCount
     case agentChatRunning2
     case agentStatusModel
     case agentStatusContext
@@ -5145,6 +5151,7 @@ public enum LocalizedStrings {
         .agentTestConnection: [.simplifiedChinese: "测试连接", .english: "Test connection"],
         .agentChatStepsDone: [.simplifiedChinese: "已执行 %@ 步 · 点开看明细", .english: "%@ steps · click for detail"],
         .agentChatStepsTitle: [.simplifiedChinese: "本次任务 · %@ 步", .english: "This task · %@ steps"],
+        .agentChatAppliedCount: [.simplifiedChinese: "已应用 %@ 处", .english: "Applied %@"],
         .agentStatusModel: [.simplifiedChinese: "模型 %@", .english: "Model %@"],
         .agentChatRunning2: [.simplifiedChinese: "跑着呢", .english: "running"],
         .agentStatusContext: [.simplifiedChinese: "上下文 %@ token（上次请求输入）", .english: "ctx %@ tokens (last request in)"],
