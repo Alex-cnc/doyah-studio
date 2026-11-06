@@ -61,13 +61,18 @@ final class AgentToolObservationTests: XCTestCase {
         XCTAssertTrue(observation.contains("a.swift"), "命中文件名要进观察")
     }
 
-    /// 超长正文：**截断必须标注**（原文多大、留了多少），不许静默少字。
+    /// 超长正文：**截断必须标注**（原文多大、留了多少、下一段怎么读），不许静默少字。
+    ///
+    /// 2026-11-06 起 `read_file` **按行开窗**（一次一屏，可 `offset` 续读）：截断的标注因此是
+    /// `[window: lines a-b of N · next: read_file {"offset": b}]` —— 比原先多说了「有办法读全」。
     func testOversizedPayloadIsAnnotatedNotSilentlyCut() throws {
         let big = String(repeating: "行内容\n", count: 4_000)   // 约 16KB，超过 8,000 字符上限
         try big.write(to: root.appendingPathComponent("big.txt"), atomically: true, encoding: .utf8)
         let tools = AgentWorkspaceTools(root: root)
         let observation = AgentLoop.summary(of: tools.readFile(path: "big.txt"))
-        XCTAssertTrue(observation.contains("[truncated:file:"), "截断要带标注，不许静默")
+        XCTAssertTrue(observation.contains("[window: lines "), "截断要带标注，不许静默")
+        XCTAssertTrue(observation.contains("of 4001"), "要报出文件一共多少行")
+        XCTAssertTrue(observation.contains("\"offset\":"), "要告诉模型下一段怎么读")
         XCTAssertLessThan(observation.count, AgentLoop.maxObservationCharacters + 200)
     }
 }

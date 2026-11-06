@@ -15,13 +15,18 @@ import Foundation
 public struct AgentContextCompressionBudget: Equatable, Sendable {
 
     /// 提示词字符预算（含系统提示词 + 用户原话 + 观察段）。**超过它才动手**。
+    ///
+    /// 2026-11-06 由 24,000 提到 48,000（≈12k token）：观察段现在先过一遍**折叠**
+    /// （`AgentObservationDigester`：最近几条原样 + 台账一行一路径），常态落在 40k 以内，
+    /// 这条预算退成**外层保险**（网页正文 / 命令大段输出这类真超长的东西才由它兜）。
+    /// 留在 24k 会把「最近那几条正在用的结果」也压掉 —— 那等于把当下要用的东西删掉去省空间。
     public var maxPromptCharacters: Int
     /// 最近这么多个条目**一律不动**（当下的执行结果是下一跳最要紧的输入）。
     public var keepRecentEntries: Int
     /// 条目少于这个数**不动**（刚起头的对话压掉就是净损失）。
     public var minimumEntries: Int
 
-    public init(maxPromptCharacters: Int = 24_000,
+    public init(maxPromptCharacters: Int = 48_000,
                 keepRecentEntries: Int = 4,
                 minimumEntries: Int = 6) {
         self.maxPromptCharacters = maxPromptCharacters

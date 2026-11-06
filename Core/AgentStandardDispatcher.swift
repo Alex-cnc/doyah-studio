@@ -176,11 +176,15 @@ public struct AgentStandardDispatcher: AgentToolDispatcher {
         case .readFile:
             guard let workspace else { return .refused(.unavailable, detail: definition.capability.rawValue) }
             let path = arguments["path"] ?? ""
+            // **按行开窗**（`offset` 0 起 / `limit` 行数）：长文件读指定段，不必整篇重读。
+            let offset = AgentToolArguments.int(arguments, "offset")
+            let limit = AgentToolArguments.int(arguments, "limit")
             // 工作区内直接读；越界会回一张单（§3.26）—— 批了就带指纹再读一次。
-            let read = workspace.readFile(path: path)
+            let read = workspace.readFile(path: path, offset: offset, limit: limit)
             guard case .needsApproval(let request) = read else { return read }
             guard approvals.contains(request.fingerprint) else { return read }
-            return workspace.readFile(path: path, fingerprint: request.fingerprint, granted: approvals)
+            return workspace.readFile(path: path, offset: offset, limit: limit,
+                                      fingerprint: request.fingerprint, granted: approvals)
 
         case .listDirectory:
             guard let workspace else { return .refused(.unavailable, detail: definition.capability.rawValue) }

@@ -144,9 +144,9 @@ public struct AgentToolRegistry: Sendable {
     public static var standard: AgentToolRegistry {
         AgentToolRegistry(definitions: [
             AgentToolDefinition(name: "read_file",
-                                summary: "读工作区里的一个文件（只读）",
+                                summary: "读工作区里的一个文件（只读）。默认只给一屏（约 160 行 / 6KB）；更长的文件用 offset（起始行，0 起）/limit（行数）读指定段，不要整篇重读",
                                 capability: .readFile,
-                                parameters: ["path": "string"],
+                                parameters: ["path": "string", "offset": "integer", "limit": "integer"],
                                 required: ["path"],
                                 level: .readOnly, approval: .none),
             AgentToolDefinition(name: "list_dir",

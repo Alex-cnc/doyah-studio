@@ -144,8 +144,9 @@ public struct LLMStreamDecoder: Sendable {
                     let fragment = function?["arguments"] as? String ?? ""
 
                     if let position = toolCalls.firstIndex(where: { $0.index == index }) {
-                        if let id { toolCalls[position].id = id }
-                        if let name { toolCalls[position].name = name }
+                        // 空串**不许覆盖**已拿到的 id/name（有的网关后续每块都带 `"name": ""`）。
+                        if let id, !id.isEmpty { toolCalls[position].id = id }
+                        if let name, !name.isEmpty { toolCalls[position].name = name }
                         toolCalls[position].arguments += fragment
                     } else {
                         toolCalls.append(ToolCallAccumulator(index: index, id: id, name: name, arguments: fragment))

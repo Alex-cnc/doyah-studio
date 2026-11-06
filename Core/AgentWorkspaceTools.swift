@@ -38,6 +38,31 @@ public enum AgentToolRefusal: String, Codable, Equatable, Sendable {
     case mcpNotConfigured
     /// **配了但连不上**（`FR-AI-21` ⑤）：`detail` 带机器码与原因（`spawnFailed/...` / `timeout/...`）。
     case mcpUnreachable
+    /// **超出这一跳的工具预算**（2026-11-06）：不执行、如实说，并告诉模型「先给结论」。
+    /// 与 `unavailable` 分开：那条是"这侧没有"，这条是"这跳的名额用完了，下一跳还可以做"。
+    case hopBudget
+}
+
+/// 一次读的**窗口**（2026-11-06 起 `read_file` 按行开窗）：给了就说明「这次只给了第几行到第几行」。
+///
+/// 为什么单拎一个结构而不是把提示句塞进 `text`：`text` 是**文件原文**（会被当成资料包进不可信边界、
+/// 会被判据按字节比对）；「这次给了哪一段」是**我们的事实**，必须能在边界之外单独说、单独断言。
+public struct AgentToolFileWindow: Equatable, Sendable {
+    /// 起始行（0 起）。
+    public var startLine: Int
+    /// 结束行（**不含**，0 起）。
+    public var endLine: Int
+    /// 文件总行数。
+    public var totalLines: Int
+
+    public init(startLine: Int, endLine: Int, totalLines: Int) {
+        self.startLine = startLine
+        self.endLine = endLine
+        self.totalLines = totalLines
+    }
+
+    /// 这一段之后从哪一行接着读（`nil` = 已经到文件尾）。
+    public var nextOffset: Int? { endLine < totalLines ? endLine : nil }
 }
 
 /// 读文件的输出（结构化 ⇒ 截断**可被断言**，不必靠人话里那句提示）。
@@ -46,6 +71,17 @@ public struct AgentToolFileOutput: Equatable, Sendable {
     public var text: String
     public var truncated: Bool
     public var totalBytes: Int
+    /// 按行开窗时的窗口；`nil` = 整篇都在（小文件 / 旧路径）。
+    public var window: AgentToolFileWindow?
+
+    public init(path: String, text: String, truncated: Bool, totalBytes: Int,
+                window: AgentToolFileWindow? = nil) {
+        self.path = path
+        self.text = text
+        self.truncated = truncated
+        self.totalBytes = totalBytes
+        self.window = window
+    }
 }
 
 /// 列目录的输出。
@@ -190,8 +226,16 @@ public struct AgentWorkspaceTools: Sendable {
     public var root: URL
     /// 工具声明的出处（`FR-AI-19`：唯一出处）。默认取标准表；工具实现**不自己命名工具**，按等级来这里取。
     public var registry: AgentToolRegistry
-    /// 读文件的上限（超出即截断并**如实标记**，不静默）。
+    /// 一次读回的**字节**上限（超出即截断并**如实标记**，不静默）。
+    ///
+    /// 2026-11-06 由 262,144 收到 6,000：整篇进上下文是那一轮 19 分钟的 74% 来源
+    /// （每跳都把历史正文重发一遍）。6KB ≈ 一屏代码，够模型判断下一步；
+    /// 要后面几段就用 `offset` 续读 —— 续读只花一段的钱，重读整篇要花整篇的钱。
+    /// 这个数还必须**小于**回灌段的单条上限（`AgentLoop.maxObservationCharacters` = 8,000），
+    /// 否则截断提示（「下一段用 offset=…」）会被回灌那一层再截掉，模型就看不见续读的办法了。
     public var maxReadBytes: Int
+    /// 一次读回的**行数**上限（与字节上限一起生效，谁先到算谁）。
+    public var maxReadLines: Int
     /// 列目录的上限。
     public var maxDirectoryEntries: Int
     /// 停手记录（`FR-AI-34`）：给了就把每次刹停留痕；不给（单测）就不写文件。
@@ -201,12 +245,13 @@ public struct AgentWorkspaceTools: Sendable {
     public var writes: AgentWriteCoordinator
 
     public init(root: URL, registry: AgentToolRegistry = .standard,
-                maxReadBytes: Int = 262_144, maxDirectoryEntries: Int = 500,
+                maxReadBytes: Int = 6_000, maxReadLines: Int = 160, maxDirectoryEntries: Int = 500,
                 harmStopLog: AgentHarmStopLog? = nil,
                 writes: AgentWriteCoordinator = .shared) {
         self.root = root
         self.registry = registry
         self.maxReadBytes = maxReadBytes
+        self.maxReadLines = maxReadLines
         self.maxDirectoryEntries = maxDirectoryEntries
         self.harmStopLog = harmStopLog
         self.writes = writes
@@ -237,7 +282,16 @@ public struct AgentWorkspaceTools: Sendable {
 
     // MARK: - read_file
 
+    /// 读文件（`FR-AI-20`；**按行开窗**，2026-11-06）。
+    ///
+    /// 由头：整篇进上下文会把一轮里 74% 的时间花在重发历史正文上；而**整篇截断**又让模型看不见后半段，
+    /// 只能一遍遍重读同一个文件（真机：同一文件读了 22 次）。所以改成「**窗口 + 可续读**」：
+    /// · 默认给前 `maxReadLines` 行（约一屏），超过 `maxReadBytes` 再按字节收口；
+    /// · 被截断时**明说**：文件共几行、这次给了第几行到第几行、下一段用 `offset` 怎么读。
+    ///   「怎么读下一段」这句必须在正文里 —— 模型看不见它就只能整篇重读。
     public func readFile(path: String,
+                         offset: Int? = nil,
+                         limit: Int? = nil,
                          fingerprint: String? = nil,
                          granted: Set<String> = []) -> AgentToolOutcome {
         let resolved = AgentWorkspaceSandbox.resolve(path, in: root)
@@ -266,36 +320,63 @@ public struct AgentWorkspaceTools: Sendable {
             return .refused(.unreadable, detail: url.lastPathComponent)
         }
 
-        // **截断要按字符安全**：文件比上限大时，先多读 4 字节（一个 UTF-8 序列最长 4 字节），
-        // 再最多回退 3 字节找能解码的边界 —— 否则「按字节切」会切断多字节字符，
-        // 把一个好好的文本文件误判成二进制（判据当场抓过这个缺陷）。
-        // 文件**没超上限**时按整段判：那时二进制与文本的界线是确定的（回退会放走真二进制）。
-        let truncated = data.count > maxReadBytes
-        let text: String
-        if truncated {
-            var slice = data.prefix(maxReadBytes + 4)
-            var decoded: String?
-            for _ in 0..<4 {
-                if let candidate = String(data: slice, encoding: .utf8) { decoded = candidate; break }
-                guard !slice.isEmpty else { break }
-                slice = slice.dropLast()
-            }
-            guard let decoded else {
-                return .refused(.binaryFile, detail: url.lastPathComponent)
-            }
-            text = decoded
-        } else {
-            guard let whole = String(data: data, encoding: .utf8) else {
-                // 二进制：解码不出来就**如实拒**，不塞一堆乱码给模型
-                return .refused(.binaryFile, detail: url.lastPathComponent)
-            }
-            text = whole
+        // **二进制判据只能整段判**：按字节回退会把「恰好以多字节字符开头被切断」的垃圾也解出来，
+        // 那等于把真二进制当文本塞给模型（判据当场抓过这个缺陷）。
+        guard let whole = String(data: data, encoding: .utf8) else {
+            return .refused(.binaryFile, detail: url.lastPathComponent)
         }
 
+        let lines = whole.split(separator: "\n", omittingEmptySubsequences: false)
+        let totalLines = max(1, lines.count)
+        let startLine = min(max(0, offset ?? 0), totalLines - 1)
+        let wanted = max(1, limit ?? maxReadLines)
+        var endLine = min(totalLines, startLine + wanted)
+        var text = lines[startLine..<endLine].joined(separator: "\n")
+
+        // 字节上限：按**整行**收口（不切半行）；单行本身超上限才按字节安全边界切。
+        var bytesClamped = false
+        if text.utf8.count > maxReadBytes {
+            var kept = startLine
+            var used = 0
+            while kept < endLine {
+                let lineBytes = lines[kept].utf8.count + (kept > startLine ? 1 : 0)
+                if used + lineBytes > maxReadBytes { break }
+                used += lineBytes
+                kept += 1
+            }
+            endLine = max(startLine + 1, kept)
+            text = lines[startLine..<endLine].joined(separator: "\n")
+            if text.utf8.count > maxReadBytes {
+                let head = Data(text.utf8.prefix(maxReadBytes))
+                text = Self.decodeUTF8(head) ?? String(decoding: head, as: UTF8.self)
+            }
+            bytesClamped = true
+        }
+
+        let truncated = endLine < totalLines || bytesClamped
         return .file(AgentToolFileOutput(path: relativePath(url),
                                         text: text,
                                         truncated: truncated,
-                                        totalBytes: data.count))
+                                        totalBytes: data.count,
+                                        window: truncated
+                                            ? AgentToolFileWindow(startLine: startLine, endLine: endLine,
+                                                                  totalLines: totalLines)
+                                            : nil))
+    }
+
+    /// UTF-8 解码（**字符安全**）：末尾最多回退 3 字节找能解码的边界。
+    ///
+    /// **只用于「已经按字节切过」的那一段**（切点可能落在多字节字符中间）；
+    /// 整段解码请直接用 `String(data:encoding:)` —— 回退会放走真二进制。
+    static func decodeUTF8(_ data: Data) -> String? {
+        if let whole = String(data: data, encoding: .utf8) { return whole }
+        var slice = data
+        for _ in 0..<4 {
+            guard !slice.isEmpty else { return nil }
+            slice = slice.dropLast()
+            if let candidate = String(data: slice, encoding: .utf8) { return candidate }
+        }
+        return nil
     }
 
     // MARK: - list_dir

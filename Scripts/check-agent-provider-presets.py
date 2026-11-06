@@ -76,6 +76,10 @@ EXCLUDE_DIR_PARTS = (".git", ".build", ".build-agent", ".backups", ".worktrees",
 # 面外命中台账（路径 → 理由）。三条棘轮：① 盘上命中不在表里 ⇒ 判红 ② 表里的路径不在盘上 ⇒ 判红（死登记）
 # ③ 表里的路径已不再命中 / 已被收进面内 ⇒ 判红（陈旧登记，请销账）。清空整表也判红。
 OUT_OF_FACE_LEDGER = {
+    "Tests/AgentTurnCostProbeTests.swift": (
+        "真机量尺：这张表量的是「一轮的真实花费」（请求数 / token / 耗时 / 工具次数），"
+        "必须打真端点才有的量 —— 夹具换成假地址就量不到任何东西（默认跳过，不设 "
+        "AGENT_PROBE_REAL 不进 CI）"),
     "Tests/AgentProviderPresetTests.swift": (
         "单测夹具：判「端点匹配 / 模型下拉内容 / 本地判定同源」必须拿真端点当输入，"
         "没有真地址这条单测判不了（= 老 :34 那条豁免的落地形态）"),
