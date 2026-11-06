@@ -33,6 +33,8 @@ BOOKS = [
     ("Docs/Doyah产品能力规划说明书.md", "Doyah产品能力规划说明书"),
     ("Docs/Doyah产品详细设计说明书-macOS.md", "Doyah产品详细设计说明书-macOS"),
     ("Docs/Doyah产品详细设计说明书-Android.md", "Doyah产品详细设计说明书-Android"),
+    # 冻结口径（主人 2026-11-05）：「只有 Linux 版本的冻结，其他平台都还没大规模开发，也可能不会开发，暂时不考虑冻结」⇒ Windows / iOS / 鸿蒙 不纳入冻结集。
+    ("Docs/Doyah产品详细设计说明书-Linux.md", "Doyah产品详细设计说明书-Linux"),
     ("Docs/Doyah产品开发计划任务清单-macOS.md", "Doyah产品开发计划任务清单-macOS"),
 ]
 

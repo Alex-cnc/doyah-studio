@@ -3,6 +3,7 @@
 > **当前基线：v1.1（20261106）**。活书是从这里复制出来干活的；漂移变大时由 `Scripts/check-frozen-sync.py` 提示人类「是否冻结成新版本」，他同意才跑 `Scripts/freeze-books.py`。冻结件是**快照**，不承担版本号唯一/头部版本格纪律（见 `Scripts/check-doc-versions.py` 的 `COVERAGE_EXEMPT`）。
 
 ## v1.1（20261106）— 当前基线
+- `Doyah产品详细设计说明书-Linux-v1.1-20261106.md` ← `Docs/Doyah产品详细设计说明书-Linux.md` · **2007 行** · sha256 `0e2bc18ed2af28ea` · 相对 v1.0（首版）新增
 
 冻结说明：beta1 里程碑基线（主人 2026-11-05 令：betaN ⟷ 冻结 v1.N 四书；beta2 冻结 v1.2.0）
 
