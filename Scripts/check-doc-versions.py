@@ -53,12 +53,42 @@ def targets() -> list[pathlib.Path]:
 
 
 def header_version(lines: list[str]) -> str | None:
+    """首条「版本」行里的版本号（= 文件头的自称版本）。"""
     for line in lines[:HEAD_SCAN_LINES]:
         if "版本" not in line:
             continue
         match = VERSION_ANY.search(line)
         if match:
             return match.group(0)
+    return None
+
+
+def versions_all(lines: list[str]) -> list[str]:
+    """文件头区所有「版本」行里出现的版本号（版本历史可能有多条）。"""
+    found: list[str] = []
+    for line in lines[:HEAD_SCAN_LINES]:
+        if "版本" not in line:
+            continue
+        # 每条只取**第一个**版本号：版本身份是本行的首个版本，
+        # 行内后出现的（如「派生自 macOS 详设 v1.0.22」）是引用，不是本文件的版本。
+        match = VERSION_ANY.search(line)
+        if match:
+            found.append(match.group(0))
+    return found
+
+
+def max_version(versions: list[str]) -> str | None:
+    def key(v: str) -> tuple[int, ...]:
+        return tuple(int(x) for x in VERSION_THREE.fullmatch(v).groups())
+    valid = [v for v in versions if VERSION_THREE.fullmatch(v)]
+    return max(valid, key=key) if valid else None
+
+
+def order_problem(lines: list[str]) -> str | None:
+    """文件头第一条「版本」必须是最新号；插乱了就判红（否则步进判据会看错基准）。"""
+    first, top = header_version(lines), max_version(versions_all(lines))
+    if first and top and first != top:
+        return f"版本历史乱序：首条写 {first}，最新是 {top}（最新的必须在最前）"
     return None
 
 
@@ -102,7 +132,9 @@ def previous_version(path: pathlib.Path) -> str | None:
                          capture_output=True, text=True)
     if out.returncode != 0:
         return None
-    return header_version(out.stdout.split("\n"))
+    head_lines = out.stdout.split("\n")
+    # 版本历史行可能被插乱：判「有没有前进」要用 HEAD 里的**最大号**，不是第一条
+    return max_version(versions_all(head_lines)) or header_version(head_lines)
 
 
 
@@ -147,7 +179,9 @@ def check_doc(path: pathlib.Path, frozen_dir: pathlib.Path | None = None) -> lis
     lines = path.read_text(encoding="utf-8").split("\n")
     problems: list[str] = []
 
-    version = header_version(lines)
+    # 版本历史可能有多条（活书头部逐轮追加）：步进对比两侧一律取**最大号**，
+    # 否则头部旧行排在前面时会把「没动过」误判成降段。
+    version = max_version(versions_all(lines)) or header_version(lines)
     if version is None:
         problems.append(f"{rel}: 头部 {HEAD_SCAN_LINES} 行内读不出版本号（应为 `v1.0.NNN`）")
     else:
@@ -164,6 +198,9 @@ def check_doc(path: pathlib.Path, frozen_dir: pathlib.Path | None = None) -> lis
         else:
             problems.extend(check_rollover(rel, path.stem, three, frozen_dir or FROZEN_DIR, path))
             problems.extend(check_step(path, version))
+            disorder = order_problem(lines)
+            if disorder:
+                problems.append(f"{rel}: {disorder}")
 
     for index, line in enumerate(lines, 1):
         if CHANGELOG_HEADING.match(line):

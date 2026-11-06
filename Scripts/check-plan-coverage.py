@@ -64,7 +64,7 @@ MILESTONES: list[tuple[str, tuple[str, ...]]] = [
     ("v0.6.0", ("FR-STD-ALL-LIC-00", "FR-STD-WS-LIC-001", "FR-STD-ALL-PLUG-005",
                 "FR-STD-ALL-PLUG-008", "NFR-ALL-GATE-PERF-", "NFR-ALL-GATE-COMP-",
                 "NFR-ALL-GATE-UI-001", "NFR-ALL-GATE-USE-005", "NFR-ALL-GATE-SEC-008",
-                "NFR-ALL-GATE-LANG-001")),
+                "NFR-ALL-GATE-LANG-001", "NFR-ALL-GATE-REL-006")),
     ("v0.9.0", ("AC-ALL-GATE-REL-00", "NFR-NTS-ALL-DIST-001", "NFR-NTS-ALL-PARITY-001",
                 "FR-NTS-ALL-LIC-001")),
 ]
