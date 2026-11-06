@@ -51,10 +51,12 @@ final class ActivityBarTests: XCTestCase {
         XCTAssertNil(ActivityBarItem.shortcutIndex(of: .workspace, in: [.notes]))
     }
 
-    func testResolveFallsBackToDatabase() {
-        XCTAssertEqual(ActivityBarItem.resolve(id: nil), .database)
-        XCTAssertEqual(ActivityBarItem.resolve(id: ""), .database)
-        XCTAssertEqual(ActivityBarItem.resolve(id: "no-such-view"), .database)
+    /// **没有记录 / 未知值时落在工作区**（人类主人 2026-11-06：「一个 beta1 几乎无法使用」——
+    /// 全新安装走的就是这一支，默认落到数据库 ⇒ 首屏是空库页，看着像功能没了）。
+    func testResolveFallsBackToWorkspace() {
+        XCTAssertEqual(ActivityBarItem.resolve(id: nil), .workspace)
+        XCTAssertEqual(ActivityBarItem.resolve(id: ""), .workspace)
+        XCTAssertEqual(ActivityBarItem.resolve(id: "no-such-view"), .workspace)
         XCTAssertEqual(ActivityBarItem.resolve(id: "workspace"), .workspace)
         XCTAssertEqual(ActivityBarItem.storageKey, "ui.activityBarItem")
     }

@@ -57,11 +57,16 @@ public enum ActivityBarItem: String, CaseIterable, Sendable, Identifiable {
     /// 持久化键：与工程内其它 UI 偏好同一套 `ui.` 前缀。
     public static let storageKey = "ui.activityBarItem"
 
-    /// 由持久化的 id 解析；**未知值一律回退到数据库视图**而不是报错
+    /// 由持久化的 id 解析；**未知值一律回退到工作区视图**而不是报错
     /// （配置被手改、或将来删掉某个视图时，界面都必须照常起来）。
     public static func resolve(id: String?) -> ActivityBarItem {
-        guard let id, !id.isEmpty else { return .database }
-        return ActivityBarItem(rawValue: id) ?? .database
+        // **没有记录时落在「工作区」，不是「数据库」**（人类主人 2026-11-06 真机报：
+        // 「这个版本怎么只有 Notes 和 Retro 了」「一个 beta1 几乎无法使用」）。
+        // 全新安装 / 换 bundle id 的 rc 包都没有 UserDefaults 记录，走的就是这一支；
+        // 默认落到 `.database` 会让首屏显示数据库空态（连不上库时更是一片空），
+        // 用户第一眼看到的就是「功能没了」。工作区是本产品的入口，必须是默认。
+        guard let id, !id.isEmpty else { return .workspace }
+        return ActivityBarItem(rawValue: id) ?? .workspace
     }
 
     /// 菜单快捷键：⌘1 / ⌘2 / ⌘3（与 VS Code 的"按序号切视图"同一习惯）。
