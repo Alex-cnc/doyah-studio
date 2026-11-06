@@ -38,34 +38,49 @@ final class ReportReaderFixedRootTests: XCTestCase {
 
     // MARK: - 判据 ②：两包实跑（列表 2 条倒序 + 右侧渲染）
 
-    /// 按固定目录建模型 ⇒ 列表 **2 条** · **倒序**（`2026-W41` → `2026-W40`）；选中新期 ⇒
-    /// 右侧块模型 **≥1 条**且**首块 = `report.md` 的首个标题文本**。
+    /// 判据 ②：**两包装进一个临时扫描根** ⇒ 列表 2 条 · 严格倒序；选中新期 ⇒ 右侧块模型 ≥1 条且首块 = `report.md` 首个标题。
+    ///
+    /// 2026-11-05 改（主人令「Retro 基本能力都不具备，beta1 只是个里程碑」）：
+    /// 这条判据原来直接读**本机固定扫描根**（前门投放的真包），并断言「恰好 W41 / W40」——
+    /// 而真包会一周一周往下长（现在已有 W40–W45），断言必然红，且红的原因是**数据变了**、不是能力坏了。
+    /// 现在改成：**判据自带两个合成包**（在临时目录里现建），判据与被测对象的距离拉回确定性；
+    /// 「真目录里现在有多少包」不再由判据断言（那是前门的产出，不是阅读器的契约）。
     @MainActor
-    func testFixedScanRootListsFrontDoorPackagesInReverseOrderAndRendersBody() throws {
-        let root = ReportReader.fixedScanRootURL
-        var isDirectory: ObjCBool = false
-        guard FileManager.default.fileExists(atPath: root.path, isDirectory: &isDirectory),
-              isDirectory.boolValue else {
-            throw XCTSkip("本机没有固定扫描目录（\(root.path)）—— 真包由前门投放，如实跳过，不造夹具顶替")
+    func testScanRootListsPackagesInReverseOrderAndRendersBody() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("retro-fixture-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        func makePackage(_ id: String, title: String, body: String) throws -> URL {
+            let dir = root.appendingPathComponent(id, isDirectory: true)
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            let meta = """
+            {
+              "id": "\(id)",
+              "title": "\(title)",
+              "published": "2026-10-05",
+              "summary": "合成夹具：判据自带，不依赖前门投放的真包。",
+              "media_count": 0
+            }
+            """
+            try meta.write(to: dir.appendingPathComponent("index.json"), atomically: true, encoding: .utf8)
+            try body.write(to: dir.appendingPathComponent("report.md"), atomically: true, encoding: .utf8)
+            return dir
         }
 
-        let model = ReportListModel.fixed()
-        let names = model.state.packages.map(\.directoryName)
-        let titles = model.state.packages.map(\.metadata.title)
-        print("READING list.count=\(names.count) order=[\(names.joined(separator: " , "))] titles=[\(titles.joined(separator: " | "))]")
-        XCTAssertEqual(names, ["2026-W41", "2026-W40"], "列表应为 2 条且倒序（新期在前）")
-        XCTAssertTrue(model.state.issues.isEmpty, "两包都该是成包的，逐条报告应为空")
+        _ = try makePackage("2026-W40", title: "夹具 W40", body: "# 夹具 W40 首标题\n\n正文一。\n")
+        _ = try makePackage("2026-W41", title: "夹具 W41", body: "# 夹具 W41 首标题\n\n正文二。\n")
 
-        // 右侧：选中列表首条（新期）⇒ 块模型 ≥1 条且首块是 `report.md` 的第一个标题。
+        let model = ReportListModel(root: root)
+        let names = model.state.packages.map(\.directoryName)
+        XCTAssertEqual(names, ["2026-W41", "2026-W40"], "2 条且倒序（新期在前）")
+
         let newest = try XCTUnwrap(model.state.packages.first)
         model.selectedDirectoryName = newest.directoryName
         XCTAssertEqual(model.selectedPackage?.metadata.id, newest.metadata.id)
 
-        let expectedHeading = try XCTUnwrap(firstHeadingText(of: newest.reportMarkdown),
-                                            "report.md 应有首个标题")
+        let expectedHeading = try XCTUnwrap(firstHeadingText(of: newest.reportMarkdown))
         let detail = ReportDetailView(package: newest)
-        print("READING detail.period=\(newest.directoryName) title=\(newest.metadata.title) blocks=\(detail.rendered.blocks.count) firstHeading=\(expectedHeading)")
-
         XCTAssertGreaterThanOrEqual(detail.rendered.blocks.count, 1, "右侧块模型至少 1 条")
         guard case .heading(let level, let text)? = detail.rendered.blocks.first else {
             return XCTFail("首块应为标题，实际 \(String(describing: detail.rendered.blocks.first))")
