@@ -137,7 +137,7 @@ public struct AgentHarmStopLog: Sendable {
     public static var defaultDirectory: URL {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
             ?? URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("Library/Application Support")
-        return base.appendingPathComponent("DoyahStudio", isDirectory: true)
+        return base.appendingPathComponent(DoyahIdentity.applicationSupportDirectoryName, isDirectory: true)
     }
 
     public static var `default`: AgentHarmStopLog { AgentHarmStopLog(directory: defaultDirectory) }

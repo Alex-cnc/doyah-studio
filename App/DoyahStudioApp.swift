@@ -58,6 +58,16 @@ struct DoyahStudioApp: App {
                 "检测到实例 pid=\(existing.processIdentifier) 但激活失败（可能正在退出）→ 继续启动自己"
             )
         }
+        // **rc 变体的首次启动继承**（2026-11-06 主人要的版本累进节奏：`beta1.0` 常装并一直开着，
+        // 开发中的包出在 `dist/` 叫 `beta1.1-rc1/rc2/…`）。两份进程各有各的数据目录，
+        // 但「怎么连库、模型怎么配」只该配一遍 ⇒ rc 首次启动时从日常版目录拷那两个配置文件。
+        //
+        // **位置很讲究**：必须在**任何 `StartupLog.write` 之前 —— 继承的判据就是「rc 数据目录为空」，
+        // 而 `startup.log` 正写在那个目录里（见 `VariantConfigInheritance` 的注释）。
+        // 不拷贝会话 / IM 收件箱 / 审计日志：那是日常版此刻的运行状态，rc 继承过来会相互踩。
+        if let inherited = VariantConfigInheritance.launchLogLine(for: VariantConfigInheritance.runOnLaunch()) {
+            StartupLog.write(inherited, important: true)
+        }
         StartupLog.write("正常启动 pid=\(ProcessInfo.processInfo.processIdentifier)")
         // **图标按钮的"名字"必须即时出现**（2026-09-27 人工点验发现）。
         //

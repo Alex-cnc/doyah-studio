@@ -87,7 +87,7 @@ public struct AgentCheckpointStore: Sendable {
     public static var defaultDirectory: URL {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
             ?? URL(fileURLWithPath: NSTemporaryDirectory())
-        return base.appendingPathComponent("DoyahStudio", isDirectory: true)
+        return base.appendingPathComponent(DoyahIdentity.applicationSupportDirectoryName, isDirectory: true)
     }
 
     /// 存储文件（追加式 JSONL）。

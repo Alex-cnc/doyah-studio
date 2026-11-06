@@ -165,7 +165,7 @@ public struct AgentSessionStore: Sendable {
     public static var defaultDirectory: URL {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
             ?? URL(fileURLWithPath: NSTemporaryDirectory())
-        return base.appendingPathComponent("DoyahStudio", isDirectory: true)
+        return base.appendingPathComponent(DoyahIdentity.applicationSupportDirectoryName, isDirectory: true)
             .appendingPathComponent("agent-sessions", isDirectory: true)
     }
 

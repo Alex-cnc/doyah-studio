@@ -32,7 +32,9 @@ public struct FileAgentSecretStore: AgentKeyStore, AgentIMSecretStore {
     public static func defaultDirectory() -> URL {
         let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
             ?? URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("Library/Application Support")
-        return support.appendingPathComponent("DoyahStudio", isDirectory: true)
+        // 目录名走 `DoyahIdentity`：rc 变体（`--variant rc`）必须有自己的 `secrets.json` ——
+        // 与 `agent.json` / `connections.json` 同一条口径（两份进程各写各的，不抢同一个文件）。
+        return support.appendingPathComponent(DoyahIdentity.applicationSupportDirectoryName, isDirectory: true)
     }
 
     // MARK: - 一次性迁移（从钥匙串搬过来，之后永不读钥匙串）

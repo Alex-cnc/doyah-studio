@@ -9,7 +9,9 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-APP_NAME="DoyahStudio-beta1.0.app"
+# 装哪一份：默认仍是 `DoyahStudio-beta1.0.app`（行为不变）；`build-app.sh` 现在把
+# **这一次的产物名**当第一个参数传进来（`--label beta1.1` 发的正式版也能直接装上）。
+APP_NAME="${1:-DoyahStudio-beta1.0.app}"
 SRC="dist/${APP_NAME}"
 DEST_ROOT="${DOYAH_INSTALL_DIR:-$HOME/Applications}"
 DEST="${DEST_ROOT}/${APP_NAME}"
@@ -18,6 +20,15 @@ if [[ ! -d "${SRC}" ]]; then
   echo "错误：找不到 ${SRC}；先跑 Scripts/build-app.sh" >&2
   exit 1
 fi
+
+# 变体包（rc / 开发中的包）**不进** `~/Applications`：那里只放主人天天在用的日常版，
+# 装一个还没验过的包进去等于把他的工具换掉。装之前再挡一道（构建侧已经挡了）。
+case "${APP_NAME}" in
+  *-rc*.app | *.rc.app)
+    echo "拒绝安装变体包：${APP_NAME}（rc 只留在 dist/ 验 bug，不进 ~/Applications）" >&2
+    exit 1
+    ;;
+esac
 
 mkdir -p "${DEST_ROOT}"
 

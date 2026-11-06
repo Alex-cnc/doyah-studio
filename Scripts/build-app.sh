@@ -11,6 +11,25 @@ set -euo pipefail
 #
 #   DOYAH_SANDBOX=1 ./Scripts/build-app.sh      # 带 App 沙箱（**上架那一天才用**）
 #
+# ── 构建变体：让「日常版」与「开发中的包」同时存在一台机器上 ────────────────────────
+#
+#   ./Scripts/build-app.sh --no-install                                  # 只出 dist/，不动 ~/Applications
+#   ./Scripts/build-app.sh --no-install --label beta1.1-rc1 --variant rc # 出 rc 包（可与装机版同时跑）
+#   ./Scripts/build-app.sh --label beta1.1                               # 发正式版（照旧安装）
+#
+# **为什么 rc 必须有自己的一套身份**（2026-11-06 实测，不是推理）：同一个 `CFBundleIdentifier`
+# 的两份 `.app` **根本无法同时运行** —— 装机版在跑时，`open dist/…app` 与 `open -n` 都只是
+# 把已有实例调到前台（`ps aux` 里进程数始终为 1）。所以 `--variant rc` 做三件事：
+#   ① `CFBundleIdentifier` 追加 `.rc`（系统才认它们是两个 App）；
+#   ② 写 `DoyahDataDirectoryName=DoyahStudio-rc`（**数据目录也隔离** —— 否则两版抢同一份
+#      `agent.json` / `connections.json` / 审计日志，比覆盖安装更危险：两份进程各写各的）；
+#   ③ app 名用 `--label` 那个名字（`dist/DoyahStudio-beta1.1-rc1.app`）。
+# rc 包**默认不安装**：它是拿来验具体 bug / 功能的，不进 `~/Applications`（那里只放日常版）。
+# 首次启动时 rc 会从日常版目录继承 `agent.json` / `connections.json`（见 Core/DoyahIdentity.swift
+# 的 `VariantConfigInheritance`）—— 配置只配一遍，会话与 IM 状态各写各的。
+#
+# **不带任何参数时行为一字不变**：`beta1.0` / 原包标识 / 原数据目录 / 仍然安装到 `~/Applications`。
+#
 # 为什么需要架构选项（NFR-ALL-GATE-COMP-005）：默认产物是**单架构 arm64**，
 # 实测 `lipo -info` 为 `Non-fat file … arm64` —— 在 Intel 机上**根本起不来**。
 # 需求要求"支持 Apple Silicon 与 Intel"，所以构建侧必须能产出 x86_64 / universal。
@@ -45,12 +64,49 @@ set -euo pipefail
 # 由头：静默回退把「一个治不好的缺陷」伪装成「构建成功」，而症状要等用户下次启动才出现。
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd -P)"
-CONFIGURATION="${1:-debug}"
+CONFIGURATION="debug"
 DEVELOPER_DIR="${DEVELOPER_DIR:-/Applications/Xcode.app/Contents/Developer}"
 SWIFT="${DEVELOPER_DIR}/Toolchains/XcodeDefault.xctoolchain/usr/bin/swift"
 SCRATCH="${ROOT}/.build"
 SCRATCH_X86="${ROOT}/.build-x86"
 CACHE="${ROOT}/.build-cache"
+
+# ── 参数（2026-11-06：加 `--no-install` / `--label` / `--variant`）──────────────────
+# 位置参数仍然只认 `debug` / `release`（历史用法 `./Scripts/build-app.sh release` 不变）；
+# **不带参数**时下面三个变量全为空 ⇒ 走原来的那条路，行为与产物路径一字不变。
+NO_INSTALL=0
+LABEL_OVERRIDE=""
+VARIANT=""
+usage() {
+  cat <<'USAGE'
+用法：Scripts/build-app.sh [debug|release] [--no-install] [--label <名字>] [--variant rc]
+
+  --no-install       只出 dist/，**不动** ~/Applications（日常版在用的那份不碰）
+  --label <名字>      这一次构建叫什么（进 app 名与 DoyahReleaseLabel），如 beta1.1-rc1
+  --variant rc       构建变体：包标识追加 `.rc` + 数据目录改 `DoyahStudio-rc` + app 名用 label
+                     （必须同时给 --label；rc 包默认不安装 —— 它不进 ~/Applications）
+USAGE
+}
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --no-install) NO_INSTALL=1; shift ;;
+    --label) LABEL_OVERRIDE="${2:-}"; shift 2 ;;
+    --label=*) LABEL_OVERRIDE="${1#*=}"; shift ;;
+    --variant) VARIANT="${2:-}"; shift 2 ;;
+    --variant=*) VARIANT="${1#*=}"; shift ;;
+    -h|--help) usage; exit 0 ;;
+    debug|release) CONFIGURATION="$1"; shift ;;
+    *)
+      echo "错误：不认识的参数「$1」" >&2
+      usage >&2
+      exit 64
+      ;;
+  esac
+done
+if [ -z "${LABEL_OVERRIDE}" ] && [ -n "${VARIANT}" ]; then
+  echo "错误：--variant ${VARIANT} 必须配 --label（否则会覆盖日常版的同名产物）" >&2
+  exit 64
+fi
 
 # ── 发布标签（**唯一出处**）──────────────────────────────────────────────────────
 # 产物名（`dist/DoyahStudio-<发布标签>.app`）与 Info.plist 的 `DoyahReleaseLabel`**都从这一个值派生**，
@@ -75,6 +131,55 @@ BUILD_STAMP="${BUILD_COUNT}.${SHORT_SHA} · $(date +%m-%d\ %H:%M)"
 APP="${ROOT}/dist/DoyahStudio-${RELEASE_LABEL}.app"
 LATEST_LINK="${ROOT}/dist/DoyahStudio.app"
 DOYAH_ARCH="${DOYAH_ARCH:-}"
+
+# ── 这一次构建的**实际身份**（默认 = 上面那几个派生值，一字不改）────────────────────
+# 门禁 `Scripts/check-release-version.py` 钉住三件事，这里刻意都不动：
+#   ① `RELEASE_LABEL="…"` 只许**一处**字面量定义（发布标签的唯一定义仍在上面）；
+#   ② `MARKETING_VERSION="$(…)"` 那行派生式逐字不动；
+#   ③ `APP="${ROOT}/dist/DoyahStudio-${RELEASE_LABEL}.app"` 这行产物名派生式逐字不动。
+# 变体构建（`--label` / `--variant`）改写的是**下面这一层的「这一次叫什么」**——
+# 也就是「默认值 + 本次覆盖」，而不是给发布标签再开第二处定义。
+APPLIED_LABEL="${RELEASE_LABEL}"
+APPLIED_MARKETING_VERSION="${MARKETING_VERSION}"
+BUNDLE_IDENTIFIER="studio.doyah.DoyahStudio"
+VARIANT_KEY=""            # 空 = 日常版（Info.plist **不写** DoyahBuildVariant / DoyahDataDirectoryName）
+DATA_DIRECTORY_NAME=""
+
+if [ -n "${LABEL_OVERRIDE}" ]; then
+  APPLIED_LABEL="${LABEL_OVERRIDE}"
+  # 面向用户的版本号仍从标签派生，但**只取开头的数字段**：
+  #   `beta1.0` → `1.0` → `1.0.0`（与上面那一行同结果）；
+  #   `beta1.1-rc1` → `1.1` → `1.1.0`（`-rc1` 后缀不进版本号 —— 系统「关于」要的是 `x.y.z`）。
+  MV_NUMERIC="$(printf '%s' "${APPLIED_LABEL}" | sed -E 's/^(alpha|beta|rc)//' | grep -oE '^[0-9]+(\.[0-9]+)*' || true)"
+  if [ -z "${MV_NUMERIC}" ]; then
+    echo "错误：--label「${APPLIED_LABEL}」里取不到版本号（期望形如 beta1.1-rc1 / beta1.1）" >&2
+    exit 64
+  fi
+  APPLIED_MARKETING_VERSION="$(printf '%s' "${MV_NUMERIC}" | awk -F. '{ if (NF>=3) print $1"."$2"."$3; else print $1"."$2".0" }')"
+  # 产物名跟着这一次的标签走（`dist/DoyahStudio-<本次标签>.app`），并且**不碰**那条软链别名
+  # —— 别名是「当前发布标签那一份」的入口，rc 包不许把它指歪（门禁第 18 项会判）。
+  APP="${ROOT}/dist/DoyahStudio-${APPLIED_LABEL}.app"
+fi
+
+case "${VARIANT}" in
+  "")
+    ;;
+  rc)
+    # 包标识加后缀：同一个 id 的第二份 .app **起不来**（只会把已有实例调到前台），
+    # 这一个是「两版同时跑」的唯一开关。
+    BUNDLE_IDENTIFIER="${BUNDLE_IDENTIFIER}.rc"
+    VARIANT_KEY="rc"
+    DATA_DIRECTORY_NAME="DoyahStudio-rc"
+    ;;
+  *)
+    echo "错误：--variant「${VARIANT}」不认识（目前只支持 rc）" >&2
+    exit 64
+    ;;
+esac
+
+if [ -n "${VARIANT_KEY}" ]; then
+  echo "==> 构建变体：${VARIANT_KEY}（包标识 ${BUNDLE_IDENTIFIER} · 数据目录 ${DATA_DIRECTORY_NAME} · 标签 ${APPLIED_LABEL} · **不安装到 ~/Applications**）"
+fi
 
 export DEVELOPER_DIR
 export CLANG_MODULE_CACHE_PATH="${SCRATCH}/clang-module-cache"
@@ -221,14 +326,31 @@ cat > "${APP}/Contents/Info.plist" <<PLIST
 </plist>
 PLIST
 
+# 变体构建：**写盘之后**再把这三样改成本次的身份（默认路径一个字都不动 —— 模板里那两个键
+# 就是发布标签的默认值，门禁逐字钉着它们只许一处）。
+# 为什么不用 heredoc 变量：`DoyahReleaseLabel` / `CFBundleShortVersionString` 在模板里
+# 必须逐字是 `${RELEASE_LABEL}` / `${MARKETING_VERSION}`（`Scripts/check-release-version.py`
+# 的 B1/B4 两族判据），而 rc 的标签是「这一次」的覆盖值、不是发布标签的第二处定义。
+if [ -n "${VARIANT_KEY}" ]; then
+  /usr/libexec/PlistBuddy \
+    -c "Set :CFBundleIdentifier ${BUNDLE_IDENTIFIER}" \
+    -c "Set :DoyahReleaseLabel ${APPLIED_LABEL}" \
+    -c "Set :CFBundleShortVersionString ${APPLIED_MARKETING_VERSION}" \
+    -c "Add :DoyahBuildVariant string ${VARIANT_KEY}" \
+    -c "Add :DoyahDataDirectoryName string ${DATA_DIRECTORY_NAME}" \
+    "${APP}/Contents/Info.plist"
+  echo "==> 变体身份已写入 Info.plist（${BUNDLE_IDENTIFIER} / ${DATA_DIRECTORY_NAME}）"
+fi
+
 # 版本身份**写盘后立刻读回来核**（2026-11-03）。
 # 为什么在构建脚本里也要判一次：`check-release-version.py` 只能判「模板与台账」——
 # 它判不到**这一次构建**真写进了什么；而构建号是 `git rev-list --count HEAD` 的派生值，
 # 每次提交都变，台账里根本存不住一个字面量去逐字比。所以「写进包里的三个值 == 这次算出来的三个值」
 # 这一步只能在构建那一刻自证；读回不一致就直接失败（不出一个身份不对的包）。
-for PAIR in "CFBundleShortVersionString:${MARKETING_VERSION}" \
+# 2026-11-06：比对基准从「发布标签」换成「**这一次**的标签」（默认路径下两者 **逐字相同**）。
+for PAIR in "CFBundleShortVersionString:${APPLIED_MARKETING_VERSION}" \
             "CFBundleVersion:${BUILD_COUNT}" \
-            "DoyahReleaseLabel:${RELEASE_LABEL}"; do
+            "DoyahReleaseLabel:${APPLIED_LABEL}"; do
   PLIST_KEY="${PAIR%%:*}"
   PLIST_WANT="${PAIR#*:}"
   PLIST_GOT="$(/usr/libexec/PlistBuddy -c "Print :${PLIST_KEY}" "${APP}/Contents/Info.plist" 2>/dev/null || echo '<读不到>')"
@@ -237,6 +359,21 @@ for PAIR in "CFBundleShortVersionString:${MARKETING_VERSION}" \
     exit 1
   fi
 done
+
+# 变体构建再多核两样：包标识与数据目录必须真的进了包（否则两版要么起不来、要么抢同一份数据）。
+if [ -n "${VARIANT_KEY}" ]; then
+  for PAIR in "CFBundleIdentifier:${BUNDLE_IDENTIFIER}" \
+              "DoyahBuildVariant:${VARIANT_KEY}" \
+              "DoyahDataDirectoryName:${DATA_DIRECTORY_NAME}"; do
+    PLIST_KEY="${PAIR%%:*}"
+    PLIST_WANT="${PAIR#*:}"
+    PLIST_GOT="$(/usr/libexec/PlistBuddy -c "Print :${PLIST_KEY}" "${APP}/Contents/Info.plist" 2>/dev/null || echo '<读不到>')"
+    if [ "${PLIST_GOT}" != "${PLIST_WANT}" ]; then
+      echo "错误：变体产物 Info.plist 的 ${PLIST_KEY} 读回 = ${PLIST_GOT}，期望 ${PLIST_WANT}" >&2
+      exit 1
+    fi
+  done
+fi
 
 # 应用图标（法斗 Doyah）：App/Resources/AppIcon.icns。
 # 用 sips/iconutil 校验过含全部 10 个尺寸；缺了它 Dock 与访达里就是白纸图标。
@@ -384,27 +521,33 @@ echo "    结果：$(codesign -dv "${APP}" 2>&1 | grep -E 'Signature=|Identifier
 # 身份 = **带版本号的实物**（`DoyahStudio-${RELEASE_LABEL}.app` 自身）；别名只是一个软链，
 # 方便工具与习惯路径（`Scripts/check-menu-language.py` 等）继续能用。
 # 历史上那个**真目录**（不带版本号）**不删** —— 挪进 `dist/历史/` 留档（交付面文档写明以带版本号的实物为准）。
-if [ -e "${LATEST_LINK}" ] && [ ! -L "${LATEST_LINK}" ]; then
-  mkdir -p "${ROOT}/dist/历史"
-  LEGACY_NAME="DoyahStudio-遗留-$(date +%Y%m%dT%H%M%S).app"
-  echo "==> ${LATEST_LINK} 是旧的真目录（不带版本号）⇒ 挪到 dist/历史/${LEGACY_NAME} 留档"
-  mv "${LATEST_LINK}" "${ROOT}/dist/历史/${LEGACY_NAME}"
+if [ -n "${VARIANT_KEY}" ]; then
+  # 变体包**不许**动别名：别名是「当前发布标签那一份」的入口（门禁第 18 项逐字判它指向
+  # `DoyahStudio-<发布标签>.app`）。rc 只是在 dist/ 里多放一份，不动任何既有身份。
+  echo "==> 变体构建：不改 dist/DoyahStudio.app 别名（它仍指向日常版那一份）"
+else
+  if [ -e "${LATEST_LINK}" ] && [ ! -L "${LATEST_LINK}" ]; then
+    mkdir -p "${ROOT}/dist/历史"
+    LEGACY_NAME="DoyahStudio-遗留-$(date +%Y%m%dT%H%M%S).app"
+    echo "==> ${LATEST_LINK} 是旧的真目录（不带版本号）⇒ 挪到 dist/历史/${LEGACY_NAME} 留档"
+    mv "${LATEST_LINK}" "${ROOT}/dist/历史/${LEGACY_NAME}"
+  fi
+  ln -sfn "$(basename "${APP}")" "${LATEST_LINK}"
+  echo "==> 别名：dist/DoyahStudio.app -> $(readlink "${LATEST_LINK}")（身份以带版本号的实物为准）"
 fi
-ln -sfn "$(basename "${APP}")" "${LATEST_LINK}"
-echo "==> 别名：dist/DoyahStudio.app -> $(readlink "${LATEST_LINK}")（身份以带版本号的实物为准）"
 
 # ---- 交付回执（身份留痕：四项 = 目录 / 标签 / sha256 / 构建时刻；三项 = 含片 / 未含 / 验法）----
 # 人类主人据此回答「我手上这份是不是最新的」。**历史包只增不删**：每个发布标签一个独立目录，
 # 重建只覆盖**同名**的那一个 ⇒ 保留最近 ≥3 个历史包是结构保证，不靠额外的清理步骤。
 BIN_FILE="${APP}/Contents/MacOS/DoyahStudio"
-NOTES_FILE="${ROOT}/dist/发布说明-${RELEASE_LABEL}.md"
+NOTES_FILE="${ROOT}/dist/发布说明-${APPLIED_LABEL}.md"
 BUILD_TIME="$(date +%Y-%m-%dT%H:%M:%S%z)"
 BIN_SHA="$(shasum -a 256 "${BIN_FILE}" | cut -d' ' -f1)"
 echo ""
 echo "==== 交付回执 ===="
 echo "产物名：$(basename "${APP}")"
 echo "目录：${APP}"
-echo "标签：${RELEASE_LABEL}"
+echo "标签：${APPLIED_LABEL}"
 echo "构建时间：${BUILD_TIME}（UTC $(date -u +%Y-%m-%dT%H:%M:%SZ)）"
 echo "sha256（前 8 位）：$(shasum -a 256 "${BIN_FILE}" | cut -c1-8)（二进制 ${BIN_FILE##*/} · $(stat -f %z "${BIN_FILE}") 字节）"
 # 「本版包含」= 发布说明里**以 `本版包含：` 开头的那一行**（该行自带前缀也认，剥掉一个，
@@ -412,14 +555,14 @@ echo "sha256（前 8 位）：$(shasum -a 256 "${BIN_FILE}" | cut -c1-8)（二�
 # （`# …发布说明…`），取它会把标题当成「本版包含」印出来（alpha3.1 实测踩到）。
 if [ -f "${NOTES_FILE}" ]; then
   NOTES_LINE="$(grep -m1 -E '^\*{0,2}本版包含\*{0,2}[：:]' "${NOTES_FILE}" | sed -e 's/^\*\*本版包含\*\*[：:]//' -e 's/^本版包含[：:]//')"
-  [ -n "${NOTES_LINE}" ] || NOTES_LINE="（未登记 —— 在 dist/发布说明-${RELEASE_LABEL}.md 里写一行「本版包含：…」）"
+  [ -n "${NOTES_LINE}" ] || NOTES_LINE="（未登记 —— 在 dist/发布说明-${APPLIED_LABEL}.md 里写一行「本版包含：…」）"
   echo "本版包含：${NOTES_LINE}"
 else
   # `set -euo pipefail` 下 `NOTES_LINE` 必须有值 —— 这条分支此前没赋值，
   # 而收尾那行 `含片=${NOTES_LINE}` 会以 `unbound variable` 让整脚本退出 1
   # （实测 2026-10-13：本机克隆的 dist/ 里没有发布说明文件 ⇒ 必炸，且炸在**打包成功之后**，
   #  看着像打包失败）。口径与 `NOTES_EXCLUDED` 那条一致：**缺了就如实写未登记，不猜**。
-  NOTES_LINE="（未登记 —— 在 dist/发布说明-${RELEASE_LABEL}.md 里写一行「本版包含：…」，或从交付面文档取）"
+  NOTES_LINE="（未登记 —— 在 dist/发布说明-${APPLIED_LABEL}.md 里写一行「本版包含：…」，或从交付面文档取）"
   echo "本版包含：${NOTES_LINE}"
 fi
 # 「未含」= 同一个发布说明里以 `未含：` 开头的那一行；缺了就**如实写未登记**，不猜。
@@ -427,14 +570,14 @@ NOTES_EXCLUDED=""
 if [ -f "${NOTES_FILE}" ]; then
   NOTES_EXCLUDED="$(grep -m1 -E '^\*{0,2}未含\*{0,2}[：:]' "${NOTES_FILE}" | sed -e 's/^\*\*未含\*\*[：:]//' -e 's/^未含[：:]//')"
 fi
-[ -n "${NOTES_EXCLUDED}" ] || NOTES_EXCLUDED="（未登记 —— 在 dist/发布说明-${RELEASE_LABEL}.md 里写一行「未含：…」）"
+[ -n "${NOTES_EXCLUDED}" ] || NOTES_EXCLUDED="（未登记 —— 在 dist/发布说明-${APPLIED_LABEL}.md 里写一行「未含：…」）"
 echo "未含：${NOTES_EXCLUDED}"
 echo "验法：shasum -a 256 \"${APP}/Contents/MacOS/DoyahStudio\" ｜ /usr/libexec/PlistBuddy -c 'Print :DoyahReleaseLabel' \"${APP}/Contents/Info.plist\""
 # **交付身份留痕**（基本法第三十五条 · 人类主人 2026-10-11 裁）：四项（目录 / 标签 / sha256 /
 # 构建时刻）+ 三项（含哪些片 / 未含 / 怎么验），一行可**整行粘进提交信息**（载体 (a)）。
 # 卡面 `done` 与「分支已合」都**不算**身份留痕；`sha256` 是**全量**，与 `Contents/MacOS/` 下
 # 那份二进制逐字节对得上（《交付物身份留痕》判据将来由脚本核）。
-echo "交付: 目录=${APP} 标签=${RELEASE_LABEL} sha256=${BIN_SHA} 构建时刻=${BUILD_TIME} 含片=${NOTES_LINE} 未含=${NOTES_EXCLUDED} 验法=shasum -a 256 <目录>/Contents/MacOS/DoyahStudio + PlistBuddy Print :DoyahReleaseLabel"
+echo "交付: 目录=${APP} 标签=${APPLIED_LABEL} sha256=${BIN_SHA} 构建时刻=${BUILD_TIME} 含片=${NOTES_LINE} 未含=${NOTES_EXCLUDED} 验法=shasum -a 256 <目录>/Contents/MacOS/DoyahStudio + PlistBuddy Print :DoyahReleaseLabel"
 echo "目录里的历史包：$(ls -d "${ROOT}"/dist/DoyahStudio-*.app 2>/dev/null | wc -l | tr -d ' ') 个（含本次）"
 echo "=================="
 echo ""
@@ -442,8 +585,19 @@ echo "完成：${APP}"
 # **装到人真的会点开的地方**（主人 2026-10-30：「QQ 扫码配置也没有」—— 包只进 dist，
 # `~/Applications` 停在三天前，于是新功能一次都没被看见）。默认自动安装，可用
 # `DOYAH_SKIP_INSTALL=1` 只打包。
-if [[ "${DOYAH_SKIP_INSTALL:-0}" != "1" ]]; then
-  bash "${ROOT}/Scripts/install-app.sh" || echo "⚠️ 已打包装好 dist，但安装到 ~/Applications 失败（见上面的原因）"
+#
+# 2026-11-06 加两条**不安装**的路（都是「日常版正在被用着，别把它换掉」）：
+#   · `--no-install`：只出 dist/，**不碰** `~/Applications`（本脚本对它零写操作）；
+#   · 变体构建（`--variant rc`）：rc 是拿来验 bug 的，**永远不装**（不给开关 —— 装进
+#     `~/Applications` 就等于把主人的日常工具换成一个还没验过的包）。
+if [ "${NO_INSTALL}" = "1" ] || [ -n "${VARIANT_KEY}" ]; then
+  if [ -n "${VARIANT_KEY}" ]; then
+    echo "（变体构建 ${VARIANT_KEY}：只出 dist/，未安装到 ~/Applications —— 那里只放日常版）"
+  else
+    echo "（--no-install：只打包，未安装到 ~/Applications）"
+  fi
+elif [[ "${DOYAH_SKIP_INSTALL:-0}" != "1" ]]; then
+  bash "${ROOT}/Scripts/install-app.sh" "$(basename "${APP}")" || echo "⚠️ 已打包装好 dist，但安装到 ~/Applications 失败（见上面的原因）"
 else
   echo "（DOYAH_SKIP_INSTALL=1：只打包，未安装到 ~/Applications）"
 fi
