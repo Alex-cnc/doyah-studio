@@ -95,9 +95,18 @@ ROUTES: list[tuple[str, str]] = [
 ]
 
 
+def _unquote(path: str) -> str:
+    """把 git 的 quoted path（"Docs/\344\272\247..."）解回 UTF-8。"""
+    if not (path.startswith('"') and path.endswith('"')):
+        return path
+    body = path[1:-1].encode("latin-1", "backslashreplace").decode("unicode_escape")
+    return body.encode("latin-1", "ignore").decode("utf-8", "ignore") or path
+
+
 def actions_for(paths: list[str]) -> list[str]:
     """改动文件 → 命中动作（保序去重）。"""
     import re
+    paths = [_unquote(p) for p in paths]
     hit: list[str] = []
     for p in paths:
         for pat, act in ROUTES:
@@ -108,13 +117,16 @@ def actions_for(paths: list[str]) -> list[str]:
 
 
 def staged_paths(base: str | None) -> list[str]:
-    args = ["git", "diff", "--cached", "--name-only"]
+    # `-c core.quotepath=false`：否则中文文件名会被 git 转成 "Docs/Doyah\344\272..." 带引号的八进制形式，
+    # 路由正则全部落空 —— 本仓绝大多数文档都是中文名，这个坑会让总入口对它们完全不触发。
+    common = ["git", "-c", "core.quotepath=false"]
+    args = common + ["diff", "--cached", "--name-only"]
     if base:
-        args = ["git", "diff", "--name-only", base]
+        args = common + ["diff", "--name-only", base]
     out = subprocess.run(args, cwd=ROOT, capture_output=True, text=True)
     paths = [l for l in out.stdout.splitlines() if l.strip()]
     if not paths:                                   # 没有暂存区改动就看工作区
-        out = subprocess.run(["git", "diff", "--name-only", "HEAD"], cwd=ROOT,
+        out = subprocess.run(common + ["diff", "--name-only", "HEAD"], cwd=ROOT,
                              capture_output=True, text=True)
         paths = [l for l in out.stdout.splitlines() if l.strip()]
     return paths
@@ -146,6 +158,7 @@ def self_test() -> int:
         (["App/DoyahStudioCommands.swift"], ["改代码"]),
         (["Platform/windows/App/src/views/DatabaseView.vue"], ["改前端"]),
         (["Platform/linux/README.md"], []),
+        (['"Docs/Doyah\\344\\272\\247\\345\\223\\201\\350\\257\\246\\346\\230\\216.md"'], ["改文档"]),
     ]
     bad = 0
     for paths, expect in cases:
