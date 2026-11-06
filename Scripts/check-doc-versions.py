@@ -138,6 +138,16 @@ def previous_version(path: pathlib.Path) -> str | None:
 
 
 
+def is_segment_roll(old: str, new: str) -> bool:
+    """是不是「冻结后升一段」的形状：vX.Y.NNN → vX.(Y+1).0。"""
+    o, n = VERSION_THREE.fullmatch(old), VERSION_THREE.fullmatch(new)
+    if not o or not n:
+        return False
+    om, on, _ = map(int, o.groups())
+    nm, nn, nl = map(int, n.groups())
+    return (nm, nn, nl) == (om, on + 1, 0)
+
+
 def step_problem(old: str, new: str) -> str | None:
     """两段版本号之间是否违规（None = 合规）。纯函数，便于自检。"""
     o, n = VERSION_THREE.fullmatch(old), VERSION_THREE.fullmatch(new)
@@ -151,11 +161,16 @@ def step_problem(old: str, new: str) -> str | None:
         return None            # 正常末位递增
     if (nm, nn) == (om, on + 1) and nl == 0 and ol == ROLLOVER_AT:
         return None            # 999 满段滚动（冻结件由 check_rollover 管）
+    # 手动冻结升段（主人令 betaN ⟷ 冻结 v1.N 四书）：vX.Y.NNN → vX.(Y+1).0，
+    # 证据 = 该段已有冻结件（在 check_step 里查盘，纯函数这里只放形状）。
+    if (nm, nn, nl) == (om, on + 1, 0):
+        return None
     return (f"版本跳跃 `v{om}.{on}.{ol}` → `v{nm}.{nn}.{nl}` —— 活书只许末位 +1"
             f"（到 {ROLLOVER_AT} 冻结后再转下一段），不跳段、不降段")
 
 
-def check_step(path: pathlib.Path, current: str | None) -> list[str]:
+def check_step(path: pathlib.Path, current: str | None,
+               frozen_dir: pathlib.Path | None = None) -> list[str]:
     """活书版本只许「不变」或「末位 +1」；滚动只许 999→下一段 .0。
 
     为什么加这条（2026-11-05 人类主人两次纠正）：Linux 详设从 v1.0.12 被我直接写成 v2.0.0，
@@ -169,6 +184,15 @@ def check_step(path: pathlib.Path, current: str | None) -> list[str]:
         rel = path.relative_to(ROOT).as_posix()
     except ValueError:
         rel = path.name
+    # 冻结升段（vX.Y.NNN → vX.(Y+1).0）必须有证据：该段的冻结件在盘上。
+    # 没有冻结件就升段 = 跳段，照旧判红。
+    if is_segment_roll(old, current):
+        seg = ".".join(current.split(".")[:2])          # v1.1
+        if not frozen_baselines(frozen_dir or FROZEN_DIR, path.stem, seg):
+            return [f"{rel}: 升段到 {seg} 但没有该段冻结件 —— 先跑 "
+                    f"`python3 Scripts/freeze-books.py --version {seg}`，再改活书版本；"
+                    f"没有冻结件的升段就是跳段"]
+        return []
     return [f"{rel}: {msg}"] if (msg := step_problem(old, current)) else []
 
 def check_doc(path: pathlib.Path, frozen_dir: pathlib.Path | None = None) -> list[str]:
@@ -197,7 +221,7 @@ def check_doc(path: pathlib.Path, frozen_dir: pathlib.Path | None = None) -> lis
             )
         else:
             problems.extend(check_rollover(rel, path.stem, three, frozen_dir or FROZEN_DIR, path))
-            problems.extend(check_step(path, version))
+            problems.extend(check_step(path, version, frozen_dir))
             disorder = order_problem(lines)
             if disorder:
                 problems.append(f"{rel}: {disorder}")

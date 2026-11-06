@@ -33,6 +33,7 @@ BOOKS = [
     ("Docs/Doyah产品能力规划说明书.md", "Doyah产品能力规划说明书"),
     ("Docs/Doyah产品详细设计说明书-macOS.md", "Doyah产品详细设计说明书-macOS"),
     ("Docs/Doyah产品详细设计说明书-Android.md", "Doyah产品详细设计说明书-Android"),
+    ("Docs/Doyah产品开发计划任务清单-macOS.md", "Doyah产品开发计划任务清单-macOS"),
 ]
 
 

@@ -396,7 +396,10 @@ def coverage_problems() -> list[str]:
     这份管「有表格的文档」）—— **两份清单都是手抄的，所以两份都要有自洽判据**。
     `COVERAGE_EXEMPT` 里的前缀**豁免但留痕**（理由写在常量里，不静默跳过）。
     """
-    listed = set(DEFAULT_TARGETS)
+    repo_root = pathlib.Path(__file__).resolve().parent.parent
+    frozen = [p.relative_to(repo_root).as_posix()
+              for p in sorted((repo_root / 'Docs/frozen').glob('*.md'))]
+    listed = set(DEFAULT_TARGETS) | set(frozen)
     problems: list[str] = []
     for pattern in DISCOVERY_GLOBS:
         for path in sorted(pathlib.Path(".").glob(pattern)):
@@ -801,6 +804,10 @@ def main() -> int:
 # 「文档被删或路径写错」而假红。口径出处 = `AGENT-SPEC.md` §9 第 147 条 ④（本机台账类判据
 # 一律「不在盘上就跳过 + 高声提示」，`--require-all` 才判红）。跳过的只是**这两例**，其余各例照跑；
 # 例数仍是 17（跳过不改总数、也不许静默）。
+
+# 冻结件是四书的快照：每冻结一次就多一份，**按 glob 自动纳入**，不手工登记
+# （否则每次 beta 冻结后门禁都要改两处清单，漏一处就是「表格列数一直全绿」）。
+FROZEN_GLOB = "Docs/frozen/*.md"
 
 SELF_TEST_TRACKED = [
     "AGENTS.md",
