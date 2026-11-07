@@ -204,3 +204,57 @@ final class AgentAnswerSplitTests: XCTestCase {
         XCTAssertNil(state.manual(for: first), "旧轮次的手动态不许再被读到")
     }
 }
+
+// MARK: - 结论不带标签壳（详设 §3.37 契约③）
+
+/// 判据：给一段带壳的结论 ⇒ 渲染前的文本**不以**「结论 / Conclusion / 📌」开头；
+/// 反例 = 壳没剥掉的原文，用**同一个**判定函数必须判红。
+final class AgentAnswerLabelTests: XCTestCase {
+
+    /// 判定函数：正文（去掉行首空白后）不许以这些壳开头。
+    static let shells = ["结论", "Conclusion", "conclusion", "Answer", "回答", "📌", "🧾", "✅", "##"]
+
+    static func shellViolations(_ rendered: String) -> [String] {
+        let head = rendered.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let shell = shells.first(where: { head.hasPrefix($0) }) else { return [] }
+        return ["渲染文本仍以「\(shell)」开头：\(head.prefix(24))"]
+    }
+
+    func testConclusionPrefixesAreStripped() {
+        let cases: [(raw: String, expected: String)] = [
+            ("结论：口令错了，先改连接配置。", "口令错了，先改连接配置。"),
+            ("结论: 口令错了。", "口令错了。"),
+            ("**结论**：口令错了。", "口令错了。"),
+            ("## 结论\n\n口令错了。", "口令错了。"),
+            ("Conclusion: the password is wrong.", "the password is wrong."),
+            ("📌 结论：口令错了。", "口令错了。"),
+            ("✅ 已改好：口令换成了新的。", "已改好：口令换成了新的。"),
+        ]
+        for item in cases {
+            let rendered = AgentAnswerLabel.stripping(item.raw)
+            let issues = Self.shellViolations(rendered)
+            print("🧪 ③ 「\(item.raw.prefix(14))」⇒「\(rendered.prefix(20))」"
+                  + (issues.isEmpty && rendered == item.expected ? " ✅" : " ⇒ \(issues)"))
+            XCTAssertTrue(issues.isEmpty, issues.joined(separator: "；"))
+            XCTAssertEqual(rendered, item.expected, "剥完的文本不对：\(item.raw)")
+        }
+
+        // 反例：不剥的原文喂同一套判定 ⇒ 必须判红（判据有牙齿）。
+        let red = Self.shellViolations("结论：口令错了。")
+        print("🧪 反例③（壳没剥）⇒ " + (red.isEmpty ? "假绿 ❌" : "判红 ✅"))
+        XCTAssertFalse(red.isEmpty, "带壳的原文判据仍然绿 ⇒ ③ 没有牙齿")
+    }
+
+    /// 正文里的「结论」是内容，一个字都不许动；句子式「结论是：…」也不是壳。
+    func testNonShellTextIsUntouched() {
+        let untouched = [
+            "这次排查的结论：索引缺失。",        // 不在行首
+            "结论是：索引缺失。",                // 标签后面不是分隔符 ⇒ 不是壳
+            "数据库连不上的原因：口令错。",       // 压根没有壳
+        ]
+        for text in untouched {
+            XCTAssertEqual(AgentAnswerLabel.stripping(text), text, "把正文当成壳剥了：\(text)")
+        }
+        print("🧪 ③b 正文不动：\(untouched.count) 例原样返回 ✅")
+    }
+}

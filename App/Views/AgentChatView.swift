@@ -1713,11 +1713,16 @@ struct AgentChatView: View {
     /// **结论段**：默认整段呈现（含代码块）。`longPreview` 是**显式 opt-in** ——
     /// 它折的正是结论本身，所以默认必须是 `off`（§3.33；旧机器盘上的 `2+2` 由
     /// `AgentDisplayPreferencesFile` 的一次性迁移改掉）。
+    ///
+    /// **开头那层标签壳在这里剥**（§3.37 契约③）：`结论：…` / `## 结论` / `📌 …` 一律
+    /// 剥掉，首行直接是答案内容。**只动显示**：`message.text` 一个字节不改（会话记录、
+    /// 复制、IM 转发、审计指纹读的都是原文），剥壳实现在 `AgentAnswerLabel.stripping(_:)`。
     @ViewBuilder
     private func conclusionBody(_ text: String, message: AgentChatMessage) -> some View {
+        let displayText = AgentAnswerLabel.stripping(text)
         let split = expandedPreview.contains(message.id)
             ? nil
-            : AgentDisplayProjection.previewSplit(text: text,
+            : AgentDisplayProjection.previewSplit(text: displayText,
                                                   preferences: appState.agentDisplayPreferences)
         if let split {
             VStack(alignment: .leading, spacing: Spacing.hair) {

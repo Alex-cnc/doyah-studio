@@ -100,21 +100,26 @@ public struct AgentStreamCoalescer: Sendable {
     }
 }
 
-// MARK: - 思考区视口（详设 §3.33.2）
+// MARK: - 思考区视口（详设 §3.33.2 ② / §3.37）
 
-/// 思考区的**固定视口**与「两档高度」常量（详设 §3.33.2）。
+/// 思考区的**上限**与「高度 = min(内容实测高, 上限)」的量化规则（详设 §3.37）。
 ///
-/// 改前：内容那一格是 `.frame(maxHeight: 178)` —— 上限而不是定高。`ScrollView` 在
-/// 内容比 178pt 短的时候会缩到内容高，于是**运行中思考区的高度跟着字数长**：
-/// 每来一段增量整块高度就变一次，它下面的正文整块往下推一次 —— 主人看到的
-/// 「闪」有一半是这一条（滚动条只是跟着重算的那个零件）。
+/// ## 两轮反例各修了一半，本轮才是正解
 ///
-/// 现在的口径：**运行中与手动展开都是 200pt 定高**（抬头 20 + 发丝 2 + 视口 178），
-/// 内容只在视口**内部**滚。整块高度对外恒为常量 ⇒ 探针 200 次采样
-/// max == min == 200pt（方差 0），下面的正文一寸不动。
+/// · beta1.0.4 之前：内容格是 `.frame(maxHeight: 178)` —— 纯上限，`ScrollView` 在内容
+///   比 178pt 短时缩到内容高 ⇒ **高度一个 token 变一次**，下面的正文被一遍遍往下推（「闪」）；
+/// · beta1.0.4~1.0.7：改成**恒 200pt 定高**压住了抖动，但内容只有一两行时下面空出
+///   一大块（beta1.0.8 主人原话：「固定高度，中间空一个大空白区域」）；
+/// · 本轮：**高度 = min(内容实测高, 200)**，且内容高**按整行向上取**（`lineHeight` = 一行
+///   等宽字）—— 一行的思考就只占一行，超上限才卡在 200 + 内部滚动；高度只在**跨过行高
+///   倍数**时变，所以不会退回「一个 token 抖一次」。
+///
+/// 量化（而不是直接用实测 pt）是这套口径的关键：实测高是连续量，每来半个字就可能
+/// 多出 0.3pt ⇒ 状态写一次、正文被推 0.3pt。按行取整之后，一次上屏最多把一个区
+/// 往前推**一整行**，而推的总量 = 内容真的长出来的高度（判据④⑤）。
 public enum AgentThinkingViewport {
 
-    /// 整块高度（运行中 / 手动展开：**恒为 200pt**）。
+    /// 展开态**上限**（不是定高）：内容再长也到 200pt 停，超出部分在视口里滚。
     public static let totalHeight: CGFloat = 200
 
     /// 折叠态 = 一行摘要。
@@ -123,14 +128,59 @@ public enum AgentThinkingViewport {
     /// 抬头的发丝间距（`VStack` 的 `spacing`）。
     public static let hairGap: CGFloat = Spacing.hair
 
-    /// 内容视口高度 = 200 − 20 − 2 = **178pt**。
+    /// 上限对应的内容视口高 = 200 − 20 − 2 = **178pt**。
     public static var viewportHeight: CGFloat {
         totalHeight - collapsedHeight - hairGap
     }
 
-    /// 展开态取哪一档高度：**只有两档，没有中间值**（§3.33.2 ④）。
-    public static func height(expanded: Bool) -> CGFloat {
-        expanded ? totalHeight : collapsedHeight
+    /// 量化步长 = **一行等宽字**（`Metrics.listRowHeight`，与列表行、折叠行同档）。
+    public static var lineHeight: CGFloat { Metrics.listRowHeight }
+
+    /// 内容实测高 → **按整行向上取**。
+    ///
+    /// `0` / 负值 / 非有限值一律归 0（还没量到 ⇒ 视口先不占高度，等实测落定）。
+    public static func quantizedContentHeight(_ raw: CGFloat) -> CGFloat {
+        guard raw.isFinite, raw > 0 else { return 0 }
+        return (raw / lineHeight).rounded(.up) * lineHeight
+    }
+
+    /// 展开态**内容视口**高 = min(量化后的实测高, 178)。
+    public static func expandedViewportHeight(contentHeight raw: CGFloat) -> CGFloat {
+        min(quantizedContentHeight(raw), viewportHeight)
+    }
+
+    /// 展开态**整块**高 = 抬头 + 间距 + 视口（≤ 200）。
+    public static func expandedHeight(contentHeight raw: CGFloat) -> CGFloat {
+        collapsedHeight + hairGap + expandedViewportHeight(contentHeight: raw)
+    }
+
+    /// 内容是否已经顶到上限（⇒ 内部滚动生效、按 §3.33.2 ⑤ 的指示器策略走）。
+    public static func isOverflowing(contentHeight raw: CGFloat) -> Bool {
+        quantizedContentHeight(raw) >= viewportHeight
+    }
+
+    /// 展开态对外高度：实现里 `expanded` 由 `AgentThinkingFold` 判，这里只兜折叠态。
+    public static func height(expanded: Bool, contentHeight raw: CGFloat = 0) -> CGFloat {
+        expanded ? expandedHeight(contentHeight: raw) : collapsedHeight
+    }
+}
+
+// MARK: - 过程行体的自适应高度（详设 §3.37）
+
+/// 工具块 / `Tool calls` 行体：**行数是整数、行高是常量** ⇒ 高度可直接算，不用实测。
+///
+/// 与思考区同一口径（`min(内容高, 上限)`），但不走量化：这里的「一行」本来就是
+/// 一次调用 / 一条工具条目（各 `Metrics.listRowHeight`），天然只在整行边界变化。
+public enum AgentProcessBody {
+
+    /// 一行条目高。
+    public static var rowHeight: CGFloat { Metrics.listRowHeight }
+
+    /// 行体高 = min(行数 × 行高 + (行数−1) × 间距, 上限)；0 行 ⇒ 0（不留空壳）。
+    public static func height(rows: Int, spacing: CGFloat, cap: CGFloat) -> CGFloat {
+        guard rows > 0 else { return 0 }
+        let natural = CGFloat(rows) * rowHeight + CGFloat(rows - 1) * max(0, spacing)
+        return min(natural, cap)
     }
 }
 

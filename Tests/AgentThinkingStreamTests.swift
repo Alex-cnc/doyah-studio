@@ -263,7 +263,8 @@ final class AgentThinkingStreamTests: XCTestCase {
     // MARK: - ④ 两档高度（没有中间值）
 
     func testTriStateHeightsAreOnlyTwoValues() {
-        let running = AgentThinkingViewport.height(expanded: true)
+        // 内容撑满 ⇒ 顶到上限 200pt（旧口径的读数一个字不变）。
+        let running = AgentThinkingViewport.height(expanded: true, contentHeight: 1000)
         let collapsed = AgentThinkingViewport.height(expanded: false)
         print("🧪 ④ 两档高度：展开 \(running)pt / 折叠 \(collapsed)pt / 视口 \(AgentThinkingViewport.viewportHeight)pt")
         XCTAssertEqual(running, 200, accuracy: 0.001, "展开态整块不是 200pt")
@@ -275,5 +276,66 @@ final class AgentThinkingStreamTests: XCTestCase {
         XCTAssertEqual(AgentThinkingZone.collapsedHeight, collapsed, accuracy: 0.001)
         XCTAssertEqual(AgentThinkingZone.contentMaxHeight, AgentThinkingViewport.viewportHeight,
                        accuracy: 0.001)
+
+        // §3.37：一行的内容 ⇒ 区高 ≈ 一行（明显 < 200；反例「固定 200」在这里就判红）。
+        let oneLine = AgentThinkingViewport.expandedHeight(contentHeight: 15)
+        print(String(format: "🧪 ④b 一行内容（实测 15pt）：整块 %.1fpt（折叠 %.1fpt / 上限 %.1fpt）",
+                     oneLine, collapsed, running))
+        XCTAssertLessThan(oneLine, 200, "一行内容的思考区仍占满 200pt ⇒ 又回到固定高度")
+        XCTAssertEqual(oneLine, 42, accuracy: 0.001, "一行内容应 = 抬头 20 + 发丝 2 + 一行 20")
+    }
+
+    // MARK: - ④c 量化 / 限高 / 过程行体（§3.37 的五条判据的纯函数部分）
+
+    /// 量化：内容高按**整行向上取**，只在跨过行高倍数时变。
+    func testContentHeightQuantizesToOneRowStep() {
+        let step = AgentThinkingViewport.lineHeight
+        XCTAssertEqual(step, 20, accuracy: 0.001, "量化步长不是一行 20pt")
+        let samples: [CGFloat] = [0, 1, 15, 19.9, 20, 20.1, 39.9, 40, 178, 179, 1000]
+        let quantized = samples.map { AgentThinkingViewport.quantizedContentHeight($0) }
+        let rawText = samples.map { String(format: "%.1f", $0) }.joined(separator: " / ")
+        let quantizedText = quantized.map { String(format: "%.0f", $0) }.joined(separator: " / ")
+        print("🧪 ④c 量化：" + rawText + " ⇒ " + quantizedText)
+        XCTAssertEqual(quantized, [0, 20, 20, 20, 20, 40, 40, 40, 180, 180, 1000])
+        for (raw, q) in zip(samples, quantized) where raw > 0 {
+            XCTAssertGreaterThanOrEqual(q, raw, String(format: "量化把内容截短了（%.1f → %.1f）", raw, q))
+            XCTAssertLessThan(q - raw, step, String(format: "量化多留了一整行空白（%.1f → %.1f）", raw, q))
+        }
+    }
+
+    /// 限高：超上限恰为 200pt；未超上限时区高 − 内容高 < 一个行高（无空白）。
+    func testExpandedHeightIsContentBoundedAndCapped() {
+        var issues: [String] = []
+        for raw in [15.0, 40.0, 100.0, 175.0] as [CGFloat] {
+            let height = AgentThinkingViewport.expandedHeight(contentHeight: raw)
+            let blank = height - (AgentThinkingViewport.collapsedHeight
+                                  + AgentThinkingViewport.hairGap + raw)
+            if blank >= AgentThinkingViewport.lineHeight {
+                issues.append(String(format: "内容 %.1fpt 留了 %.1fpt 空白", raw, blank))
+            }
+        }
+        let capped = AgentThinkingViewport.expandedHeight(contentHeight: 60 * AgentThinkingViewport.lineHeight)
+        let verdict = (issues.isEmpty && capped == AgentThinkingViewport.totalHeight) ? " ⇒ 卡上限 ✅" : " ⇒ ❌"
+        print(String(format: "🧪 ④d 限高：60 行内容 ⇒ %.1fpt（上限 %.1fpt）",
+                     capped, AgentThinkingViewport.totalHeight) + verdict)
+        XCTAssertTrue(issues.isEmpty, issues.joined(separator: "；"))
+        XCTAssertEqual(capped, AgentThinkingViewport.totalHeight, accuracy: 0.001,
+                       "60 行内容没卡在 200pt")
+        XCTAssertTrue(AgentThinkingViewport.isOverflowing(contentHeight: 60 * 20))
+        XCTAssertFalse(AgentThinkingViewport.isOverflowing(contentHeight: 40))
+    }
+
+    /// 过程行体：两条调用就两行高（不先占满 216），超过上限卡在 216。
+    func testProcessBodyHeightFollowsRowCount() {
+        let cap = 216.0
+        let one = AgentProcessBody.height(rows: 1, spacing: 2, cap: cap)
+        let three = AgentProcessBody.height(rows: 3, spacing: 2, cap: cap)
+        let many = AgentProcessBody.height(rows: 60, spacing: 2, cap: cap)
+        print(String(format: "🧪 ④e 过程行体：1 行 %.1fpt / 3 行 %.1fpt / 60 行 %.1fpt（上限 %.1fpt）",
+                     one, three, many, cap))
+        XCTAssertEqual(one, 20, accuracy: 0.001, "1 行不该先占满 216pt")
+        XCTAssertEqual(three, 64, accuracy: 0.001, "3 行 = 60 + 间距 4")
+        XCTAssertEqual(many, cap, accuracy: 0.001, "60 行没卡在 216pt")
+        XCTAssertEqual(AgentProcessBody.height(rows: 0, spacing: 2, cap: cap), 0, accuracy: 0.001)
     }
 }

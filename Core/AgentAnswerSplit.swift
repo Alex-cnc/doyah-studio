@@ -50,6 +50,119 @@ public struct AgentAnswerSplit: Equatable, Sendable {
     }
 }
 
+// MARK: - 展示层的标签壳（详设 §3.37 契约③）
+
+/// **结论正文开头的标签壳**：`结论：` / `Conclusion:` / `📌` / `## 结论` 这一层。
+///
+/// ## 为什么在显示层剥
+///
+/// 主人 2026-11-07（beta1.0.8）：「结论不要带『结论』二字前缀，首行直接就是答案内容」。
+/// 这句壳是三处来源之一，**原文不许动**：
+/// · 模型自己按「先结论后细节」的习惯写出来的 `结论：…`；
+/// · markdown 标题 `## 结论`（渲染出来就是一行大标题，正文从下一行才开始）；
+/// · 早前版本把结论段塞进模板时留下的前缀（现在代码里已无该键，见 §3.37 的审计表）。
+///
+/// 所以剥的位置只能在**渲染前**：`AgentChatView.conclusionBody` 调一次本函数，
+/// 存的还是模型原文（会话记录、复制、IM 转发、审计指纹**一个字节都不变**）。
+///
+/// ## 剥的规则（小、可复述、可判红）
+///
+/// 1. 只看**第一行非空文本** —— 正文中间的「结论」两个字是内容，不许动；
+/// 2. 先剥 markdown 记号（`#` 标题、`**` 粗体、`>` 引用、`-`/`*` 列表符）与行首装饰
+///    （`📌` / `🧾` / `✅` 这类在文本里的符号）；
+/// 3. 剥标签词（`结论` / `Conclusion` / `Answer` / `回答` / `答`，英文不分大小写），
+///    但**标签后面必须是分隔符**（`：: ：,，.。—-`、空格、行尾）才算壳 ——
+///    「结论是：…」这种句子不是壳，原样留着（少剥一次比吃掉一个字的正文好）；
+/// 4. 剥完这一行若是空的（标题行），整行连同其后的空行一起去掉；
+/// 5. 最多重复 3 次（`📌 **结论**：` 这种叠了两层壳的写法一次剥干净）。
+public enum AgentAnswerLabel {
+
+    /// 紧跟在标签词之后**允许**出现的分隔符（出现在这里才算「壳」）。
+    private static let separators: Set<Character> = [
+        "：", ":", "，", ",", "。", ".", "—", "-", " ", "\t", "·", "|", "】", "]",
+    ]
+
+    /// 标签词（比对时英文不分大小写；顺序 = 先长后短，避免 `答` 抢在 `回答` 前面）。
+    private static let labels: [String] = [
+        "结论", "conclusion", "answer", "回答", "答复", "答",
+    ]
+
+    /// 行首装饰（纯符号，不含字面语义；剥掉不会丢字）。
+    private static let decorations: Set<Character> = [
+        "📌", "🧾", "✅", "💡", "🔎", "👉", "➡️", "•", "·",
+    ]
+
+    /// 剥掉结论正文开头的标签壳；没有壳就**原样返回**（含空白与换行）。
+    public static func stripping(_ text: String) -> String {
+        var lines = text.components(separatedBy: "\n")
+        for _ in 0..<3 {
+            guard let index = lines.firstIndex(where: {
+                !$0.trimmingCharacters(in: .whitespaces).isEmpty
+            }) else { return lines.joined(separator: "\n") }
+            let original = lines[index]
+            guard let stripped = stripLeadingShell(original) else { break }
+            if stripped.isEmpty {
+                // 整行只是壳（`## 结论` / `结论：` 独占一行）⇒ 连它后面的空行一起去掉。
+                var next = index + 1
+                while next < lines.count, lines[next].trimmingCharacters(in: .whitespaces).isEmpty {
+                    next += 1
+                }
+                lines.removeSubrange(index..<next)
+            } else {
+                lines[index] = stripped
+                break
+            }
+        }
+        return lines.joined(separator: "\n")
+    }
+
+    /// 第一行剥壳：返回剥完的文本（`nil` = 这一行没有壳，调用方停手）。
+    private static func stripLeadingShell(_ line: String) -> String? {
+        var body = Substring(line.trimmingCharacters(in: .whitespaces))
+        var didStrip = false
+
+        func trimMarkers() {
+            while true {
+                if body.hasPrefix("#") {
+                    body = body.drop { $0 == "#" }
+                    body = body.drop { $0 == " " || $0 == "\t" }
+                    didStrip = true
+                } else if body.hasPrefix("**") {
+                    body = body.dropFirst(2)
+                    didStrip = true
+                } else if body.hasPrefix(">") || body.hasPrefix("-") || body.hasPrefix("*") {
+                    body = body.dropFirst()
+                    body = body.drop { $0 == " " || $0 == "\t" }
+                    didStrip = true
+                } else if let first = body.first, decorations.contains(first) {
+                    body = body.dropFirst()
+                    body = body.drop { $0 == " " || $0 == "\t" }
+                    didStrip = true
+                } else {
+                    return
+                }
+            }
+        }
+        trimMarkers()
+
+        let lowered = body.lowercased()
+        for label in labels where lowered.hasPrefix(label) {
+            // 粗体收尾也算壳（`**结论**：` / `**Conclusion** —`）：先越过 `*` 再判分隔符。
+            let after = body.dropFirst(label.count).drop { $0 == "*" }
+            if let next = after.first, !separators.contains(next) { continue }
+            body = after
+            // 分隔符一串都吃掉（`结论： ` / `Conclusion: —`）。
+            body = body.drop { separators.contains($0) }
+            didStrip = true
+            break
+        }
+        // 剥完标签之后可能还挂着粗体收尾（`**结论**：` 的第二个 `**`）。
+        trimMarkers()
+
+        return didStrip ? String(body) : nil
+    }
+}
+
 public enum AgentAnswerClassifier {
 
     /// 规则 2a 的过程自述开头（去掉标记符号之后比对；英文大小写不敏感）。

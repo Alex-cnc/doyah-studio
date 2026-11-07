@@ -554,6 +554,17 @@ python3 Scripts/check-pending-agenda.py --self-test
 # `--family-timeout` 可改）：超时判红，不是跳过。
 python3 Scripts/check-self-test-counts.py
 python3 Scripts/check-self-test-counts.py --self-test
+# §3.38（2026-11-07，beta1.0.8 主人令「前门等所有改动记得要同步到详细设计里去，别事情干完了又不同步四书」）：
+# 上面这一大段管的是「文档之间」的一致性（表格结构 / 计数 / 版本号 / 口径 / 队列），**管不了**
+# 「代码改了、书没跟着改」这一格 —— 真现场：beta1.0.7 那批（一轮一个思考区 / 三行汇总 / 吸顶 /
+# 输入历史 / 审批三档 / 外层跟随）全是**先改代码、隔一两个提交才补详设**，靠人记。
+# 判据 `check-doc-sync.py`：列出最近 12 个提交里「碰了 `App/` 或 `Core/`、却一个 `Docs/` 文件都没碰」
+# 的提交，逐条打印它碰了哪几个代码文件（`--limit N` 可调；`--self-test` 5 例）。
+# **提示级、只报告不拦截**（`|| echo` 兜住，`set -e` 下也不会中断闭环）：改了代码不等于改了契约性行为，
+# 硬拦只会逼出 `--no-verify` 与「代码一个提交、文档一个提交」的假同步；真正的纪律写在详设 §3.38
+# —— 凡改契约性行为必须**同批**改详设，提交前跑这一条。
+python3 Scripts/check-doc-sync.py --limit 12 \
+  || echo "⚠ 待补文档判据自身出错（不是「无待补」）—— 见上面那行 stderr"
 
 echo "==> 5/19 文档口径对账（状态括注 / 版本范围 / 台账↔需求索引覆盖 / §4.2 条数 / 派生队列与 next_try）"
 python3 Scripts/check-status-consistency.py

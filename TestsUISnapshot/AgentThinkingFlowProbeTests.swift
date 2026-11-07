@@ -13,11 +13,12 @@ import DoyahCore
 ///
 /// ## 判据（每条都带反例读数）
 ///
-/// ② **视口稳定**：200 段增量过程中逐次采样整块高度 —— **max == min == 200pt**（方差 0）；
-///    反例（改前形态：`ScrollView.frame(maxHeight: 178)`）高度跟着内容递增 ⇒ 判红；
+/// ② **高度按整行阶梯长、到上限为止**（§3.37 起取代「定高 200」）：200 段增量过程中逐次采样整块高度 ——
+///    单调不减、全部落在「抬头 22 + 整行 20 的整数倍」格点上、最高 = 200pt（上限）、变化次数远小于段数；
+///    反例（改前形态 `ScrollView.frame(maxHeight: 178)`）高度每段都变一点 ⇒ 判红；
 /// ③ **条件跟随**：贴着底时新内容到达 ⇒ 内部偏移跟到底；**模拟用户上滚**后新增内容 ⇒
 ///    偏移**一动不动**（反例：无条件跟随时偏移被拽回底部）；
-/// ④ **两档高度**：运行中 ↔ 终态 ↔ 手动展开来回切，采样到的整块高度只取 **200 / 20**，
+/// ④ **三态高度**：运行中 ↔ 终态 ↔ 手动展开来回切，采样到的整块高度只取 **内容档 / 200 / 20**，
 ///    没有中间值（反例：`.animation` 改同一对高度 ⇒ 采得到中间档）。
 ///
 /// ## 读数从哪来（不是推算）
@@ -144,25 +145,41 @@ final class AgentThinkingFlowProbeTests: XCTestCase {
         return hosting.fittingSize.height
     }
 
-    /// 判据② 的本体：**高度只能是一个数**。
-    private func viewportViolations(samples: [CGFloat], expected: CGFloat) -> [String] {
-        guard let minHeight = samples.min(), let maxHeight = samples.max(), !samples.isEmpty else {
+    /// 判据② 的本体（§3.37 起）：**高度只能按整行阶梯增长，到上限为止** ——
+    /// 既不许「定高留白」，也不许「每段都变一点」（beta1.0.4 的抖动）。
+    private func steppedViolations(samples: [CGFloat], rows: Int) -> [String] {
+        guard let first = samples.first, let last = samples.last, samples.count > 1 else {
             return ["一个样本都没采到 ⇒ 判据没量到东西"]
         }
         var issues: [String] = []
-        if abs(maxHeight - minHeight) > 0.5 {
-            issues.append("采样高度从 \(minHeight)pt 漂到 \(maxHeight)pt（极差 \(maxHeight - minHeight)pt）⇒ 视口跟着内容长")
+        let cap = AgentThinkingViewport.totalHeight
+        let header = AgentThinkingViewport.collapsedHeight + AgentThinkingViewport.hairGap
+        let step = AgentThinkingViewport.lineHeight
+        if samples.contains(where: { $0 > cap + 0.5 }) {
+            issues.append("采样里出现 \(samples.max() ?? 0)pt > 上限 \(cap)pt")
         }
-        if abs(maxHeight - expected) > 0.5 {
-            issues.append("高度 \(maxHeight)pt ≠ 定高 \(expected)pt")
+        if last < first - 0.5 {
+            issues.append("高度从 \(first)pt 掉到 \(last)pt ⇒ 越流越矮")
+        }
+        for value in samples where value < cap - 0.5 {
+            let offGrid = abs(((value - header) / step).rounded() * step + header - value)
+            if offGrid > 0.5 {
+                issues.append("\(value)pt 不在「抬头 \(header) + 整行 \(Int(step))pt」的格点上 ⇒ 高度没按整行量化")
+                break
+            }
+        }
+        var changes = 0
+        for index in 1..<samples.count where abs(samples[index] - samples[index - 1]) > 0.5 { changes += 1 }
+        if changes > rows {
+            issues.append("高度变了 \(changes) 次 > 内容行数 \(rows) ⇒ 每段都在变（逐 token 抖）")
         }
         return issues
     }
 
-    // MARK: - ② 固定视口：200 段增量，高度一次都不许变
+    // MARK: - ② 流式：按整行阶梯长到上限，然后停住
 
     @MainActor
-    func testViewportHeightIsConstantDuringStreaming() {
+    func testViewportGrowsByRowsAndStopsAtCap() {
         let harness = Harness()
         let live = host(AnyView(HarnessView(model: harness)))
         defer { live.window.contentView = nil }
@@ -174,21 +191,23 @@ final class AgentThinkingFlowProbeTests: XCTestCase {
         }
         let minHeight = heights.min() ?? 0
         let maxHeight = heights.max() ?? 0
-        let mean = heights.reduce(0, +) / CGFloat(Swift.max(1, heights.count))
-        let variance = heights.reduce(0) { $0 + ($1 - mean) * ($1 - mean) } / CGFloat(Swift.max(1, heights.count))
-        let issues = viewportViolations(samples: heights, expected: AgentThinkingViewport.totalHeight)
-        print("🧪 ② 固定视口：200 段增量逐次采样 \(heights.count) 次 ⇒ min \(minHeight)pt / max \(maxHeight)pt"
-              + " / 方差 \(String(format: "%.4f", variance)) / 末段文本 \(harness.text.count) 字"
-              + (issues.isEmpty ? " ⇒ 稳 ✅" : " ⇒ \(issues.joined(separator: "；"))"))
+        let changes = zip(heights, heights.dropFirst()).filter { abs($1 - $0) > 0.5 }.count
+        let issues = steppedViolations(samples: heights, rows: 200 * 2)
+        print("🧪 ② 流式（§3.37）：200 段增量逐次采样 \(heights.count) 次 ⇒ 首 \(heights.first ?? 0)pt"
+              + " / min \(minHeight)pt / max \(maxHeight)pt / 变化 \(changes) 次 / 末段文本 \(harness.text.count) 字"
+              + (issues.isEmpty ? " ⇒ 按行阶梯长到上限 ✅" : " ⇒ \(issues.joined(separator: "；"))"))
         XCTAssertTrue(issues.isEmpty, issues.joined(separator: "；"))
-        XCTAssertEqual(minHeight, 200, accuracy: 0.5, "最小高度不是 200pt")
-        XCTAssertEqual(maxHeight, 200, accuracy: 0.5, "最大高度不是 200pt")
-        XCTAssertLessThan(variance, 0.01, "高度方差 \(variance) ≠ 0 ⇒ 还在抖")
+        XCTAssertLessThan(minHeight, AgentThinkingViewport.totalHeight,
+                          "第一段就已经是 \(minHeight)pt ⇒ 高度没跟着内容收（又回到定高）")
+        XCTAssertEqual(maxHeight, AgentThinkingViewport.totalHeight, accuracy: 0.5,
+                       "内容 5000+ 字也没顶到上限 \(AgentThinkingViewport.totalHeight)pt")
+        XCTAssertLessThanOrEqual(changes, heights.count / 3,
+                                 "高度变了 \(changes) 次 / 采样 \(heights.count) 次 ⇒ 每段都在变")
         XCTAssertGreaterThan(harness.text.count, 5_000, "夹具的思考只有 \(harness.text.count) 字 ⇒ 撑不满视口")
 
         // 视口是真的在滚：内容高 ≫ 视口高。
         guard let scroll = zoneScrollView(live) else {
-            return XCTFail("思考区里没找到内部滚动容器（NSScrollView）⇒ 200pt 定高是不是把滚动也一起丢了")
+            return XCTFail("思考区里没找到内部滚动容器（NSScrollView）⇒ 上限是不是把滚动也一起丢了")
         }
         let contentHeight = scroll.documentView?.bounds.height ?? 0
         print("🧪 ② 内部滚动：文档高 \(contentHeight)pt / 视口高 \(scroll.contentView.bounds.height)pt"
@@ -200,28 +219,40 @@ final class AgentThinkingFlowProbeTests: XCTestCase {
                              "内容 \(contentHeight)pt 撑不出内部滚动 ⇒ 判据没测到真场景")
     }
 
-    /// 反例②：改前形态（`maxHeight`）⇒ 同一套判据必须报红。
-    /// 同一口径下再量一次**新形态**做对照：新形态逐次恒 200，旧形态递增 —— 这才叫「判据有牙齿」。
+    /// 反例②：改前形态（`maxHeight`）⇒ **同一套判据**必须报红。
+    ///
+    /// 两个不同的缺陷各有一条反例，别混在一起：
+    /// · 本条 = beta1.0.4 那版（`ScrollView.frame(maxHeight: 178)`）⇒ 高度**每段都变一点**、
+    ///   且不落在整行格点上 ⇒ `steppedViolations` 判红；
+    /// · 「定高 200 留白」那版的反例在 `AgentThinkingAdaptiveHeightProbeTests` 判据①（200pt ⇒ 判红）。
+    ///
+    /// 新形态的正样本走**活宿主**（`testViewportGrowsByRowsAndStopsAtCap`）：
+    /// `fittingHeight` 那条路对异步实测（`ContentHeightSpy` 下一拍）量不到 —— 同步建 `NSHostingView`
+    /// 时回调还没发生，量出来恒是「抬头 22pt」（实测），拿它当对照会得出假结论。
     @MainActor
     func testLegacyMaxHeightViewportGrowsAndIsJudgedRed() {
         var legacyHeights: [CGFloat] = []
-        var newHeights: [CGFloat] = []
         var text = ""
         for index in 0..<40 {
             text += thinkingLine(index)
             legacyHeights.append(fittingHeight(LegacyThinkingShape(text: text)))
-            newHeights.append(fittingHeight(HarnessView(model: Harness(text: text))))
         }
-        let issues = viewportViolations(samples: legacyHeights, expected: AgentThinkingViewport.totalHeight)
-        let newIssues = viewportViolations(samples: newHeights, expected: AgentThinkingViewport.totalHeight)
+        let changes = zip(legacyHeights, legacyHeights.dropFirst()).filter { abs($1 - $0) > 0.5 }.count
+        let header = AgentThinkingViewport.collapsedHeight + AgentThinkingViewport.hairGap
+        let step = AgentThinkingViewport.lineHeight
+        let offGrid = legacyHeights.filter { value in
+            value < AgentThinkingViewport.totalHeight - 0.5
+                && abs(((value - header) / step).rounded() * step + header - value) > 0.5
+        }.count
+        let issues = steppedViolations(samples: legacyHeights, rows: 80)
         print("🧪 反例②（maxHeight 旧形态）：\(Array(legacyHeights.prefix(6)).map { Int($0.rounded()) }) … →"
-              + " \(legacyHeights.max() ?? 0)pt（首段 \(legacyHeights.first ?? 0)pt）"
+              + " \(legacyHeights.max() ?? 0)pt（首段 \(legacyHeights.first ?? 0)pt / 变化 \(changes) 次"
+              + " / 脱离整行格点 \(offGrid) 档）"
               + " ⇒ " + (issues.isEmpty ? "假绿 ❌" : "判红 ✅"))
-        print("🧪 对照②（同一口径，新形态）：\(Array(newHeights.prefix(6)).map { Int($0.rounded()) }) … ⇒ "
-              + (newIssues.isEmpty ? "恒 200pt ✅" : "❌ " + newIssues.joined(separator: "；")))
-        XCTAssertTrue(newIssues.isEmpty, "同一口径下新形态都不稳：\(newIssues.joined(separator: "；"))")
         XCTAssertFalse(issues.isEmpty,
                        "旧形态（高度 \(legacyHeights.first ?? 0) → \(legacyHeights.max() ?? 0)pt）判据仍然绿 ⇒ 判据没有牙齿")
+        XCTAssertGreaterThanOrEqual(offGrid, 3,
+                                    "旧形态里脱离整行格点的只有 \(offGrid) 档 ⇒ 夹具没复现「连续随手长」的形态")
     }
 
     // MARK: - ③ 条件跟随：只有贴底才跟

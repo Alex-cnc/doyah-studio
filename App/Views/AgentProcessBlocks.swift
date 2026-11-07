@@ -72,7 +72,9 @@ struct AgentToolBlockView: View {
                   : LocalizedStrings.text(.agentChatExpand, language: language))
 
             if expanded {
-                // 行体**在内部滚动、有上限**：300 次调用不会把这一块撑成 6000pt。
+                // 行体高度 = **min(行数 × 行高, 上限)**（§3.37）：两条调用就两行高，
+                // 不再先占满 216pt 再留一块空白；超过上限才在内部滚（300 次调用不会把
+                // 这一块撑成 6000pt）。行数是整数 ⇒ 天然只在整行边界变化，不会抖。
                 ScrollView(.vertical) {
                     VStack(alignment: .leading, spacing: Spacing.hair) {
                         if rows.isEmpty {
@@ -92,7 +94,9 @@ struct AgentToolBlockView: View {
                         }
                     }
                 }
-                .frame(maxHeight: Self.bodyMaxHeight)
+                .frame(height: AgentProcessBody.height(rows: count,
+                                                       spacing: Spacing.hair,
+                                                       cap: Self.bodyMaxHeight))
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -158,12 +162,12 @@ struct AgentToolBlockView: View {
 /// 五步就是五块 200pt 的折叠块。现在它收的是**整轮**的段（`segments`）：
 /// · 只有一个抬头 ⇒ 折 / 展**一次作用于整轮**；
 /// · 步骤边界退成**区内轻分隔**（一行发丝 + 极小字「第 N 步」），不是二级折叠头；
-/// · 整块仍定高 200pt，多长都在内部滚。
+/// · 整块高度 = **min(内容实测高, 200)**（§3.37）：内容少就贴着字收，超上限才在内部滚。
 ///
 /// ## 三态（人类主人 2026-11-07 拍的产品决策）
 ///
-/// 1. **运行中（本轮未结束）** ⇒ 默认**展开**，可流式增量显示，限高 `contentMaxHeight`
-///    （整块 ≤ `expandedMaxHeight` = 200pt）且内部滚动；用户可手动收起。
+/// 1. **运行中（本轮未结束）** ⇒ 默认**展开**，可流式增量显示，高度按 §3.37 自适应
+///    （≤ `expandedMaxHeight` = 200pt，超了内部滚动）；用户可手动收起。
 /// 2. **任一终态**（完成 / 失败 / 取消）⇒ **自动折成一行**摘要：
 ///    `思考过程 · 12 步 · 18.4s · 展开`（`collapsedHeight` = 一行）。
 /// 3. **用户手动展开后** ⇒ 本轮内保持（sticky），**不许**每帧 / 每个新事件又折回去；
@@ -172,9 +176,10 @@ struct AgentToolBlockView: View {
 ///
 /// 「哪一段算独白」「哪几条消息凑成这一轮」也**不在这里**判：`AgentTurnThinking` 给，视图只画。
 ///
-/// ## 流式期间的三条（详设 §3.33.2，beta1.0.4 真机「滚动条很闪」）
+/// ## 流式期间的四条（详设 §3.33.2 / §3.37，beta1.0.4「滚动条很闪」+ beta1.0.8「固定高度」）
 ///
-/// · **固定视口**：展开态整块**恒 200pt**（抬头 20 + 发丝 2 + 视口 178），内容只在视口里滚；
+/// · **高度 = min(内容, 上限) 且按整行量化**（§3.37）：一行的思考就一行高，超 178pt 才卡在上限；
+///   量化保证高度只在**跨过行高倍数**时变 —— 既没有空白，也不会退回「一个 token 抖一次」；
 /// · **条件跟随**：只有用户贴着底时才跟着新内容走，往上翻就停手（`AgentScrollFollow`）；
 /// · **运行中不画滚动指示器**：内容每 50ms 长一截，滑块尺寸每次重算就是闪的来源；
 ///   终态手动展开是静态内容，交回系统默认。
@@ -240,11 +245,17 @@ struct AgentThinkingZone: View {
     /// 折叠态高度：**一行摘要**（= 一行等宽字）。
     static let collapsedHeight: CGFloat = AgentThinkingViewport.collapsedHeight
 
-    /// 展开态**内容视口**的高度（定值，不跟内容长）：200 − 20 − 2 = **178pt**。
+    /// 展开态**内容视口的上限**（178pt = 200 − 20 − 2）；不够就只占实测那么多（§3.37）。
     static let contentMaxHeight: CGFloat = AgentThinkingViewport.viewportHeight
 
-    /// 展开态整块高度（恒为 200pt；`maxHeight` 的旧名保留给既有判据）。
+    /// 展开态整块**上限**（200pt；`expandedMaxHeight` 这个名字留给既有判据当上限用）。
     static var expandedMaxHeight: CGFloat { AgentThinkingViewport.totalHeight }
+
+    /// 内容**实测高**（已按整行量化，§3.37）。
+    ///
+    /// 只存量化后的值：写一次 `@State` 就是一次重排，而量化值只在**跨过行高倍数**时变 ——
+    /// 这就是「高度不随每个 token 抖」的落点（判据④）。实测由 `ContentHeightSpy` 报回。
+    @State private var measuredContentHeight: CGFloat = 0
 
     private static let font = Theme.font(.mono)
 
@@ -302,10 +313,12 @@ struct AgentThinkingZone: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            // **两档定高**（§3.33.2 ④）：20pt / 200pt，中间没有第三个数 ——
-            // 折叠与展开是**直接切档**，不加 `withAnimation` 改高度（动画期间尺寸逐帧插值，
-            // 看着就是又一档闪）。
-            .frame(height: AgentThinkingViewport.height(expanded: expanded), alignment: .topLeading)
+            // **高度 = min(内容实测高, 上限)**（§3.37）：折叠态一行；展开态贴着内容收，
+            // 到 200pt 才停。两档之间**不加 `withAnimation`**（动画逐帧插值 = 又一档闪）。
+            .frame(height: expanded
+                   ? AgentThinkingViewport.expandedHeight(contentHeight: measuredContentHeight)
+                   : Self.collapsedHeight,
+                   alignment: .topLeading)
             // **判据①的计数点**（§3.33.4）：一个思考区一个锚 —— 折叠态也在，
             // 所以「页面上几个思考区」是可数的机械读数，不是靠数折叠头看出来的。
             // `tokens` 带上抬头那个数：判据② 拿它跟「合并后的区」对账（±0）。
@@ -313,7 +326,7 @@ struct AgentThinkingZone: View {
         }
     }
 
-    /// 内容视口：**定高 178pt + 内部滚动**（不跟内容长 —— 整块对外恒 200pt）。
+    /// 内容视口：**高度 = min(内容实测高, 178pt)**，超了才内部滚动（§3.37）。
     ///
     /// 段与段之间是**轻分隔**（§3.33.4）：一行发丝 + 极小字「第 N 步」。
     /// 它不是折叠头（点不动、不占一行抬头高度）—— 折展只有整区那一个口。
@@ -338,6 +351,14 @@ struct AgentThinkingZone: View {
                 // **宽度必须吃满视口**：不给它，文档视图会按「理想宽」缩成一列字
                 // （实测每字一行、文档高 14 万 pt），滚动位置与跟随读数就都失真了。
                 .frame(maxWidth: .infinity, alignment: .leading)
+                // **内容实测高**（§3.37）：挂在内容根上，读的是这一块**自然高**。
+                // 只在量化值跨过一整行时才写 `@State`（写一次 = 一次重排）——
+                // 「高度随每个 token 抖」与「内容短时留一大块空白」在同一个口径下都关掉。
+                .background(ContentHeightSpy { raw in
+                    let quantized = AgentThinkingViewport.quantizedContentHeight(raw)
+                    guard quantized != measuredContentHeight else { return }
+                    measuredContentHeight = quantized
+                })
                 // 跟随状态只被**人真的滚了**改写（内容长高不改它）：
                 // 内容长高就刷新，「刚长高还没跟」会被误判成用户往上翻。
                 //
@@ -350,9 +371,10 @@ struct AgentThinkingZone: View {
                     }
                 })
             }
-            // **命门：定高而不是上限**。改前是 `maxHeight`，内容短时 `ScrollView`
-            // 会缩到内容高 ⇒ 每来一段增量整块高度就变一次、下面的正文被推一次。
-            .frame(height: Self.contentMaxHeight)
+            // **视口高 = min(实测内容高, 178)**（§3.37）：内容少就只占内容那么多（不空一块），
+            // 内容多就卡在 178 由内部滚动接手。**按整行量化**，所以不会一个 token 变一次。
+            .frame(height: AgentThinkingViewport.expandedViewportHeight(
+                contentHeight: measuredContentHeight))
             // **滚动条策略**（§3.33.2 ⑤）：运行中**隐藏** —— 内容每 50ms 长一截，指示器
             // 每次都得按新内容高重算滑块尺寸，那正是「闪」的来源；视口只有 178pt，
             // 一屏之内不需要位置指示。终态手动展开是**静态内容**，交回系统默认（可见）。
@@ -472,6 +494,12 @@ struct AgentToolCallsSummaryRow: View {
 
     private static let font = Theme.font(.mono)
 
+    /// 展开后的**总行数**：一行一次调用（解析不出的那条按 1 行算，因为
+    /// `AgentToolCallRow` 认不出时就是原样一行）。§3.37 的行体高度直接吃这个数。
+    private var bodyRowCount: Int {
+        texts.reduce(0) { $0 + max(1, AgentToolLines.rows($1).count) }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.hair) {
             Button(action: onToggle) {
@@ -494,6 +522,8 @@ struct AgentToolCallsSummaryRow: View {
                   : LocalizedStrings.text(.agentChatExpand, language: language))
 
             if expanded {
+                // 行体高 = **min(总行数 × 行高, 216pt)**（§3.37）：一次调用就一行高，
+                // 56 次调用才到上限并在内部滚。行数由文本现算（一行一次调用），不抖。
                 ScrollView(.vertical) {
                     VStack(alignment: .leading, spacing: Spacing.hair) {
                         ForEach(Array(texts.enumerated()), id: \.offset) { _, text in
@@ -503,7 +533,9 @@ struct AgentToolCallsSummaryRow: View {
                         }
                     }
                 }
-                .frame(maxHeight: Self.bodyMaxHeight)
+                .frame(height: AgentProcessBody.height(rows: bodyRowCount,
+                                                       spacing: Spacing.hair,
+                                                       cap: Self.bodyMaxHeight))
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
