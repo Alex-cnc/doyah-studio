@@ -420,6 +420,44 @@ done
 echo "==> 附带第三方许可声明"
 cp "${ROOT}/THIRD-PARTY-NOTICES.md" "${APP}/Contents/Resources/THIRD-PARTY-NOTICES.md"
 
+# ---- 随包命令行工具（2026-11-07 主人拍板：ripgrep 进包）------------------------------
+# `App/Resources/tools/` 里的 `rg`（ripgrep 15.2.0，仅 macOS arm64）是智能体 `search` 工具的
+# **首选执行器**：`Core/AgentRipgrep.swift` 按 `Bundle.main.resourceURL/tools/rg` 找它。
+# 与壁纸 / 灵魂 L0 同一条坑：SwiftPM 把 `Resources` 整目录 exclude 掉 ⇒ **放盘上不等于进包**，
+# 这里点名拷贝。缺了**不报错**（App 会回落到 `WorkspaceSearch` 的 Swift 实现，功能不消失），
+# 但必须把「这次没带工具」打印出来 —— 静默少一个工具 = 悄悄退回 1.4 秒一次的慢路径。
+TOOLS_SRC="${ROOT}/App/Resources/tools"
+if [ -d "${TOOLS_SRC}" ]; then
+  echo "==> 随包命令行工具（App/Resources/tools/ ⇒ Contents/Resources/tools/）"
+  mkdir -p "${APP}/Contents/Resources/tools"
+  cp -R "${TOOLS_SRC}/." "${APP}/Contents/Resources/tools/"
+  chmod 755 "${APP}/Contents/Resources/tools/rg" 2>/dev/null || true
+  # **嵌套可执行文件必须自己签一次**（ad-hoc，与主二进制同一套口径）：外层 `codesign` 只盖
+  # bundle 的封装，不替嵌套的 Mach-O 签；不签的话启动子进程会被 Gatekeeper / 公证判成
+  # 「未签名嵌套代码」。签完当场 `codesign -v` 验 —— 验不过就**不出包**（出一个起不来的
+  # 工具比没有这个工具更坏：它会以「rg 不可用」的形式静默退回慢路径）。
+  for TOOL in "${APP}/Contents/Resources/tools/"*; do
+    [ -f "${TOOL}" ] || continue
+    file "${TOOL}" | grep -q "Mach-O" || continue
+    codesign --force --sign - --timestamp=none "${TOOL}" >/dev/null 2>&1 || {
+      echo "❌ 随包工具签名失败：$(basename "${TOOL}")" >&2; exit 1; }
+    if ! codesign -v "${TOOL}" >/dev/null 2>&1; then
+      echo "❌ 随包工具验签不过：$(basename "${TOOL}")（codesign -v 非 0）" >&2
+      exit 1
+    fi
+    echo "    $(basename "${TOOL}")：$(file -b "${TOOL}" | cut -d, -f1) · $(codesign -dv "${TOOL}" 2>&1 | grep -E '^Signature=' | head -1) · codesign -v OK"
+  done
+  if [ -x "${APP}/Contents/Resources/tools/rg" ]; then
+    echo "    $("${APP}/Contents/Resources/tools/rg" --version | head -1)（search 首选执行器）"
+  fi
+  # 本仓只随包 arm64 一份：Intel / universal 包里它会 EBADARCH ⇒ 如实提示回落，不静默。
+  if [ -n "${BIN_X86}" ] || [ "${DOYAH_ARCH:-}" = "x86_64" ]; then
+    echo "    注意：本包是 Intel / 通用包，而 tools/rg 只有 arm64 —— Intel 机上 search 会回落 Swift 实现"
+  fi
+else
+  echo "警告：缺少 ${TOOLS_SRC}（本次包内没有 rg；search 走 Swift 实现，慢 30–50 倍）"
+fi
+
 # 插件面随包发（概设 §7 · §8 判据⑤「产物含插件目录与清单」）：清单与资源进
 # `Contents/Resources/Plugins/`，**源码（`*.swift`）不进包** —— 与 `project.yml` 里
 # 那条资源登记同口径（源码由各自 target 收）。装配器读的就是这个位置：
@@ -524,6 +562,11 @@ else
   fi
 fi
 echo "    结果：$(codesign -dv "${APP}" 2>&1 | grep -E 'Signature=|Identifier=' | tr '\n' ' ')"
+# 随包工具（`Contents/Resources/tools/rg`）在**外层签完之后**再验一次：外层签名把整棵
+# `Resources` 封进了 CodeResources，任何一步改动都会让它失配 —— 这一格就是那个读数的出处。
+if [ -f "${APP}/Contents/Resources/tools/rg" ]; then
+  codesign -v "${APP}/Contents/Resources/tools/rg" && echo "==> 随包工具验签：Contents/Resources/tools/rg OK（ad-hoc）"
+fi
 
 # ---- 别名：不带版本号的 `dist/DoyahStudio.app` 只作**方便入口**（派活单 `T-20261002-028`）----
 # 身份 = **带版本号的实物**（`DoyahStudio-${RELEASE_LABEL}.app` 自身）；别名只是一个软链，

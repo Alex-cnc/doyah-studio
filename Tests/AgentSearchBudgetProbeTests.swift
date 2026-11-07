@@ -179,9 +179,12 @@ final class AgentSearchBudgetProbeTests: XCTestCase {
 
         let group = try XCTUnwrap(second.groups.first)
         XCTAssertFalse(group.cached, "关掉缓存就不该有 cached")
-        XCTAssertGreaterThanOrEqual(elapsed, 50,
-                                    "反例：关缓存后第二次仍要全仓扫（实测 \(elapsed)ms）"
-                                    + "—— 若 < 50ms，说明 ② 的耗时判据在空转")
+        // 2026-11-07：`search` 起改走**随包 ripgrep**（同一查询 0.05 秒级），原来那条
+        // 「第二次 ≥ 50ms」的**墙钟**判据在变快的产品上会误红（实测 14ms，而它确实扫了盘）。
+        // 改成判「这一组是现扫的」：缓存命中的组 `elapsedMillis` 恒为 0（`AgentWorkspaceTools`
+        // 里写死），现扫的组是实测耗时 > 0 —— 与快慢无关，判据要判的是「扫没扫」，不是「多慢」。
+        XCTAssertGreaterThan(group.elapsedMillis, 0,
+                             "反例：关缓存后这一组必须是现扫的（缓存命中记 0ms，实测 \(group.elapsedMillis)ms）")
         print("PROBE_SEARCH_CACHE_OFF {\"firstMillis\":\(first.elapsedMillis),"
               + "\"secondMillis\":\(elapsed),\"cached\":\(group.cached)}")
     }

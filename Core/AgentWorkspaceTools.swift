@@ -303,12 +303,20 @@ public struct AgentWorkspaceTools: Sendable {
     /// 「谁正在写哪个文件」的台账（`FR-AI-31` ①）。默认取**进程内共享**那一本 ——
     /// 每轮现造一个 `AgentWorkspaceTools` 也不会各拿一本账，否则并发写永远抓不到。
     public var writes: AgentWriteCoordinator
+    /// **搜索执行器的定位入口**（2026-11-07）：默认「随包 `Contents/Resources/tools/rg`
+    /// → PATH」，两处都没有就不加速、走 Swift 引擎。
+    ///
+    /// 为什么是个可注入的闭包而不是直接调 `AgentRipgrep.locate()`：反例判据要能把
+    /// 「rg 被删 / 被改名 / 没有执行权」这一格真的翻出来（`Tests/AgentRipgrepSearchTests`），
+    /// 而测试进程的 PATH 与 `Bundle.main` 都不是 App 的那一份。
+    public var ripgrepLocator: @Sendable () -> String?
 
     public init(root: URL, registry: AgentToolRegistry = .standard,
                 maxReadBytes: Int = 6_000, maxReadLines: Int = 160, maxDirectoryEntries: Int = 500,
                 harmStopLog: AgentHarmStopLog? = nil,
                 searchCache: AgentSearchCache? = AgentSearchCache(),
-                writes: AgentWriteCoordinator = .shared) {
+                writes: AgentWriteCoordinator = .shared,
+                ripgrepLocator: @escaping @Sendable () -> String? = { AgentRipgrep.locate() }) {
         self.root = root
         self.registry = registry
         self.maxReadBytes = maxReadBytes
@@ -317,6 +325,7 @@ public struct AgentWorkspaceTools: Sendable {
         self.harmStopLog = harmStopLog
         self.searchCache = searchCache
         self.writes = writes
+        self.ripgrepLocator = ripgrepLocator
     }
 
     // MARK: - 越界授权（`§3.26`）
@@ -520,8 +529,19 @@ public struct AgentWorkspaceTools: Sendable {
         // ② 剩下的词**一次扫盘**（多词引擎：读一遍文件，每个词各比一遍）。
         if !pending.isEmpty {
             let scanStart = Date()
-            let nameResults = WorkspaceSearch.findFileNames(in: root, queries: pending, limit: limit)
-            let contentResults = WorkspaceSearch.findContents(in: root, queries: pending, limit: limit)
+            // **首选随包 ripgrep**（`Contents/Resources/tools/rg`，2026-11-07 主人拍板）：
+            // 同一查询（`WorkspaceSearch`）、同一个工作区根（`~/dev/doyah/lead`）实测：
+            // limit=50 时 rg 65ms / 这两行 240ms；limit=1000（扫到底、不提前停）时 rg 49ms /
+            // 这两行 1402ms —— 慢的那一头随「要扫多少」放大，rg 那一头不随。
+            // 取不到 rg（随包被删 / 没有执行权 / 架构不符 / 超时 / rg 自己出错）⇒
+            // `accelerate` 返回 nil，**原样回落既有 Swift 引擎** —— 不抛错、不返回空。
+            let accelerated = ripgrepLocator().flatMap {
+                AgentRipgrep.accelerate(in: root, queries: pending, limit: limit, executable: $0)
+            }
+            let nameResults = accelerated?.fileNames
+                ?? WorkspaceSearch.findFileNames(in: root, queries: pending, limit: limit)
+            let contentResults = accelerated?.contents
+                ?? WorkspaceSearch.findContents(in: root, queries: pending, limit: limit)
             let millis = Int(Date().timeIntervalSince(scanStart) * 1000)
             for (index, query) in pending.enumerated() {
                 let names = index < nameResults.count ? nameResults[index] : .init(entries: [], isTruncated: false)

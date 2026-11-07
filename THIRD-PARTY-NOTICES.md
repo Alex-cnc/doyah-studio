@@ -25,6 +25,7 @@
 | [swift-nio-transport-services](https://github.com/apple/swift-nio-transport-services.git) | 1.19.0 | Apache License 2.0 | 见下方对应许可证全文 |
 | [swift-service-lifecycle](https://github.com/swift-server/swift-service-lifecycle.git) | 2.9.0 | Apache License 2.0 | Copyright 2019-2023 The ServiceLifecycle Project |
 | [swift-system](https://github.com/apple/swift-system.git) | 1.8.1 | Apache License 2.0 + Runtime Library Exception | 见下方对应许可证全文 |
+| [ripgrep](https://github.com/BurntSushi/ripgrep) | 15.2.0（随包二进制，**仅 macOS arm64**） | Unlicense / MIT（双许可，任选其一） | Copyright (c) 2015 Andrew Gallant |
 
 ## 二、组件 NOTICE 文件
 
@@ -944,3 +945,51 @@ OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
 USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
+
+## 四、随包命令行工具（ripgrep）
+
+`ripgrep 15.2.0`（`rg`）作为**可执行文件**随 macOS 包分发，位置
+`DoyahStudio.app/Contents/Resources/tools/rg`（源码位置 `App/Resources/tools/rg`）。
+智能体的 `search` 工具优先用它检索工作区；取不到时如实回落产品自带的 Swift 实现。
+
+* **许可**：ripgrep 采用 **Unlicense / MIT 双许可**（原文见 `App/Resources/tools/COPYING`
+  与 `App/Resources/tools/LICENSE-MIT`，两份随包一起分发在 `Contents/Resources/tools/`）。
+  本节按 MIT 履行署名与免责声明，其余条款以原文为准。
+* **版权**：Copyright (c) 2015 Andrew Gallant。
+* **架构范围**：本次只随包 **macOS arm64** 这一份。Windows 侧（`Platform/windows`）需要各自
+  提供 `rg.exe`，不在本次范围，其许可声明由 Windows 侧自己的第三方声明承担；
+  Intel 机上这份 arm64 二进制起不来时，`search` 回落 Swift 实现（功能不消失，只是慢）。
+* **sha256**：`468681470b3ed6291dc85691e83c5d2f8fc6c6ec25b164ffa66248713a7e28a3`
+  （版本 / 来源 / 升级步骤记在 `App/Resources/tools/README.md`）。
+
+```
+The MIT License (MIT)
+
+Copyright (c) 2015 Andrew Gallant
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+```
+
+Unlicense 原文（ripgrep 仓的 `COPYING`，一句话版）：
+
+```
+This project is dual-licensed under the Unlicense and MIT licenses.
+
+You may use this code under the terms of either license.
+```
