@@ -66,8 +66,17 @@ public enum AgentLongMessagePreview: Equatable, Hashable, Sendable {
     case off
     case headTail(head: Int, tail: Int)
 
-    /// 契约默认值：首 2 末 2。
-    public static let contractDefault = AgentLongMessagePreview.headTail(head: 2, tail: 2)
+    /// 契约默认值：**不折**（`off`）。
+    ///
+    /// 2026-11-07 改（详设 §3.33「对话区展示优先级」）：人类主人实机反馈
+    /// 「**结论竟然折叠起来**，却把 29 个 claims 全展开放屏幕上」——
+    /// 首 2 末 2 折的正是**结论本身**（回答正文 / 代码块），而答案才是他要读的那一块。
+    /// 于是默认改成不折：**结论默认整体呈现**。开关仍然在（有人确实想要长消息折叠时能自己打开），
+    /// 但那是**显式 opt-in**，不是默认形态。
+    ///
+    /// 契约表（概设 §8.9 ⑤）随这一条同步改了默认值 —— 判据 `Tests/AgentDisplayPreferencesTests`
+    /// 钉的就是「默认等于这一格」，不是钉「首 2 末 2」这个历史值。
+    public static let contractDefault = AgentLongMessagePreview.off
 
     /// 单边行数上界（取值域的一部分，写进拒绝理由里）。
     public static let maxLinesPerEdge = 20
@@ -121,7 +130,7 @@ extension AgentDisplayError: CustomStringConvertible {
 /// 九个开关的那一份值（`FR-AGT-UX-CONV-012`）。
 ///
 /// **默认值逐项对契约表**（概设 §8.9 ⑤）：流式输出开 / 紧凑关 / 显示思考段关 / 时间戳关 /
-/// 工具进度全部 / 字形表情字形档 / 长消息预览首 2 末 2 / 底栏元数据关 / 运行中提交打断。
+/// 工具进度全部 / 字形表情字形档 / 长消息预览**不折**（2026-11-07 改，见 §3.33）/ 底栏元数据关 / 运行中提交打断。
 /// 判据 `Tests/AgentDisplayPreferencesTests` 把这张表逐格钉住 —— 默认值改了就是改了契约，
 /// 该红的必须红。
 ///

@@ -166,11 +166,22 @@ final class AgentDisplayRowsTests: XCTestCase {
     // MARK: - ⑦ 长消息预览（首 2 末 2）
 
     /// 够长才折：首 2 行 + 折叠行（`…`）+ 末 2 行，折叠行报出被藏了几行。
+    ///
+    /// 2026-11-07 起「长消息预览」**默认不折**（详设 §3.33「对话区展示优先级」：
+    /// 结论默认整体呈现）—— 所以这里先断言默认形态是**整段**，再显式打开 `2+2`
+    /// 去钉折叠规则本身（开关还在，只是变成 opt-in）。
     func testLongMessagePreviewKeepsFirstTwoAndLastTwo() {
         let body = (1...7).map { "line\($0)" }.joined(separator: "\n")
         let input = AgentDisplayProjection.Input(message: message(body))
 
         var preferences = AgentDisplayPreferences()
+        // 默认：结论整段出（不许折 —— 折了就是主人 2026-11-07 说的「结论竟然折叠起来」）。
+        let byDefault = AgentDisplayProjection.rows(for: input, preferences: preferences)
+        XCTAssertEqual(byDefault.count, 1)
+        XCTAssertEqual(byDefault[0].text, body, "默认形态必须是整段结论")
+        XCTAssertFalse(byDefault.contains { if case .previewGap = $0.kind { return true } else { return false } })
+
+        preferences.longPreview = .headTail(head: 2, tail: 2)
         let folded = AgentDisplayProjection.rows(for: input, preferences: preferences)
         XCTAssertEqual(folded.count, 3, "首 2 / 末 2 / 折叠处 各一行")
         XCTAssertEqual(folded[0].text, "line1\nline2")
@@ -190,13 +201,14 @@ final class AgentDisplayRowsTests: XCTestCase {
         // 边界：刚好 4 行（= 首 2 + 末 2）不折 —— 折了会少一行内容还多一个「展开」。
         let exact = AgentDisplayProjection.rows(
             for: AgentDisplayProjection.Input(message: message((1...4).map { "line\($0)" }.joined(separator: "\n"))),
-            preferences: AgentDisplayPreferences())
+            preferences: preferences)
         XCTAssertEqual(exact.count, 1)
 
         // 边界：5 行 ⇒ 折 1 行。
+        preferences.longPreview = .headTail(head: 2, tail: 2)
         let five = AgentDisplayProjection.rows(
             for: AgentDisplayProjection.Input(message: message((1...5).map { "line\($0)" }.joined(separator: "\n"))),
-            preferences: AgentDisplayPreferences())
+            preferences: preferences)
         XCTAssertEqual(five.count, 3)
         XCTAssertEqual(five[0].hiddenLines, 1)
     }
@@ -380,20 +392,26 @@ final class AgentDisplayRowsTests: XCTestCase {
     // MARK: - ⑥ 预览切法的唯一出处
 
     /// 短消息不折（`nil`）、够长才折、关档一律不折 —— 界面与投影读的是同一份切法。
+    ///
+    /// 2026-11-07：默认档改成 `off`（详设 §3.33：结论默认整体呈现），所以这里要**显式**
+    /// 打开 `2+2` 才判折叠规则；顺带钉住默认档不折。
     func testPreviewSplitIsTheSharedSlicingRule() {
-        var preferences = AgentDisplayPreferences()          // 默认：首 2 末 2
+        var preferences = AgentDisplayPreferences()
+        let long = (1...7).map { "line\($0)" }.joined(separator: "\n")
+        XCTAssertNil(AgentDisplayProjection.previewSplit(text: long, preferences: preferences),
+                     "默认档必须不折（结论默认整体呈现）")
+
+        preferences.longPreview = .headTail(head: 2, tail: 2)
         XCTAssertNil(AgentDisplayProjection.previewSplit(text: "a\nb\nc\nd", preferences: preferences),
                      "刚好 4 行不折（折了会少一行内容还多一个展开）")
 
-        let split = AgentDisplayProjection.previewSplit(text: (1...7).map { "line\($0)" }.joined(separator: "\n"),
-                                                       preferences: preferences)
+        let split = AgentDisplayProjection.previewSplit(text: long, preferences: preferences)
         XCTAssertEqual(split?.head, "line1\nline2")
         XCTAssertEqual(split?.tail, "line6\nline7")
         XCTAssertEqual(split?.hidden, 3)
 
         preferences.longPreview = .off
-        XCTAssertNil(AgentDisplayProjection.previewSplit(text: (1...7).map { "line\($0)" }.joined(separator: "\n"),
-                                                        preferences: preferences),
+        XCTAssertNil(AgentDisplayProjection.previewSplit(text: long, preferences: preferences),
                      "关掉预览 ⇒ 不折")
     }
 

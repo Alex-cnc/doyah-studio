@@ -25,7 +25,10 @@ final class AgentDisplayPreferencesTests: XCTestCase {
             .init(key: .timestamps, defaultValue: "off", allowed: "on|off"),
             .init(key: .toolProgress, defaultValue: "all", allowed: "all|summary|off"),
             .init(key: .indicatorGlyph, defaultValue: "emoji", allowed: "emoji|unicode|ascii"),
-            .init(key: .longPreview, defaultValue: "2+2", allowed: "off|H+T (1...20)"),
+            // 长消息预览：**默认不折**（2026-11-07 详设 §3.33）。这一格原来钉的是 `2+2`
+            // —— 那正好把结论本身折成首 2 末 2 行，人类主人实机看到的「结论竟然折叠起来」
+            // 就是它。开关还在（`off|H+T`），但默认形态是「结论整体呈现」。
+            .init(key: .longPreview, defaultValue: "off", allowed: "off|H+T (1...20)"),
             .init(key: .bottomBarMeta, defaultValue: "off", allowed: "on|off"),
             .init(key: .submitWhileRunning, defaultValue: "interrupt", allowed: "interrupt|queue"),
         ]

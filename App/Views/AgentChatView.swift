@@ -91,6 +91,9 @@ struct AgentChatView: View {
     @State private var expandedPreview: Set<UUID> = []
     /// **显式展开**过的「已应用」摘要组（按组 id）。同一条纪律：点开过就不再收回去。
     @State private var expandedAppliedGroups: Set<String> = []
+    /// **显式展开**过的断言台账（按时间线事件的 id）。默认折叠成一行（详设 §3.33）——
+    /// 点开过就记下来，否则下一次重绘又折回去，等于点不动。
+    @State private var expandedClaimAudits: Set<UUID> = []
 
     private var transcript: some View {
         // **跟着最新内容走**（人类主人 2026-10-17 实机反馈：「对话框不自动滚动到最新位置，要手工拖动」）。
@@ -318,6 +321,12 @@ struct AgentChatView: View {
     /// 取 `Spacing.l`（16pt ≈ 13pt 等宽字两个字符宽）—— 版式语汇不许在视图里写裸数字（§5.3.8.1 ⑧）。
     private static let gutterWidth: CGFloat = Spacing.l
 
+    /// 思考段的**高度上限**（详设 §3.33）：一行等宽字 20pt × 6 行。
+    ///
+    /// 常量而不是「按屏高算」：这样「思考多长」对外层只差一个**有界**的量，
+    /// 探针能拿它当判据（`AgentChatAnswerPriorityProbeTests`）。
+    static let thinkingMaxHeight: CGFloat = Metrics.listRowHeight * 6
+
     /// 行首栏的一格字形。宽度**固定**（两字符列），所以「有字形」与「没字形」的行正文仍然对齐。
     private func gutter(_ glyph: String, _ tint: Color) -> some View {
         Text(glyph)
@@ -404,7 +413,24 @@ struct AgentChatView: View {
     /// 人既看不懂、也没有下一次动作。这里把它拆成「一句人话 + 原因 + ↻ 重试」。
     @ViewBuilder
     private func noticeRow(_ message: AgentChatMessage) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 0) {
+        // **断言台账**（详设 §3.33）：这段文本不是阅读内容，是「这句话有没有依据」的
+        // 审计账（每条断言 + 它的出处行）。默认折成**一行**，有未核断言时那一行就是告警；
+        // 展开才逐条看，且明细有高度上限、内部滚动。
+        // 认不出机器头的时间线事件照旧走下面那条「一行灰字」的老路，这里不猜。
+        if let audit = AgentClaimAudit.parse(message.text) {
+            HStack(alignment: .firstTextBaseline, spacing: 0) {
+                gutter("▼", Theme.text(.secondary))
+                AgentClaimAuditRow(audit: audit,
+                                   expanded: Binding(
+                                    get: { expandedClaimAudits.contains(message.id) },
+                                    set: { isOpen in
+                                        if isOpen { expandedClaimAudits.insert(message.id) }
+                                        else { expandedClaimAudits.remove(message.id) }
+                                    }
+                                   ))
+            }
+        } else {
+            HStack(alignment: .firstTextBaseline, spacing: 0) {
             // 时间线事件的字形（§5.3.8.1 ②）：告警 `⚠`，其余 `▼`。
             // 三档字形都要能表达「错误」（`FR-AGT-UX-CONV-012`）：失败那一行取
             // `AgentDisplayProjection.glyph(.error, style:)`，不是写死一个 `⚠`。
@@ -435,6 +461,7 @@ struct AgentChatView: View {
                 Text(TranscriptHighlight.apply(highlightNeedle, to: AttributedString(noticeText(message.text))))
                     .font(Self.transcriptFont)
                     .foregroundStyle(Theme.chat(.notice, colorScheme))
+            }
             }
         }
     }
@@ -1508,6 +1535,10 @@ struct AgentChatView: View {
 
     /// 思考段（开关 `thinking`）：**关 ⇒ 一行都不画**（连空行都不留，契约②）；
     /// 开但这一条没有思考源 ⇒ 同样不画（画个空框等于说「这里有东西、只是空」）。
+    ///
+    /// **有高度上限 + 内部滚动**（详设 §3.33）：思考属于「过程信息」，按新优先级它不许
+    /// 把结论挤出屏幕。这一段以前是整段直铺 —— 一段长思考就能把下面的正文推到屏幕外。
+    /// 上限是常量 `thinkingMaxHeight`（不随思考长度变），探针逐点判。
     @ViewBuilder
     private func thinkingBlock(_ message: AgentChatMessage) -> some View {
         if appState.agentDisplayPreferences.thinking,
@@ -1519,10 +1550,15 @@ struct AgentChatView: View {
                     Text(L(.agentChatThinkingTitle))
                         .font(Self.transcriptFont)
                         .foregroundStyle(Theme.chat(.thinking, colorScheme))
-                    AgentTranscriptText(text: thinking,
-                                        font: Self.transcriptFont,
-                                        highlight: highlightNeedle)
-                        .foregroundStyle(Theme.chat(.thinking, colorScheme).opacity(0.92))
+                    ScrollView(.vertical) {
+                        AgentTranscriptText(text: thinking,
+                                            font: Self.transcriptFont,
+                                            highlight: highlightNeedle)
+                            .foregroundStyle(Theme.chat(.thinking, colorScheme).opacity(0.92))
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    // 命门：**这个上限**。去掉它，思考段有多长这一块就多高。
+                    .frame(maxHeight: Self.thinkingMaxHeight)
                 }
                 Spacer(minLength: 0)
             }

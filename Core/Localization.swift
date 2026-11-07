@@ -3465,6 +3465,12 @@ public enum LKey: String, CaseIterable, Sendable {
     case agentClaimSummaryLine
     case agentClaimWithheldTitle
     case agentClaimWithheldBody
+    // 断言台账的**折叠态**（详设 §3.33）：默认一行 / 未核告警 / 展开后的组头。
+    case agentClaimAuditHeadline
+    case agentClaimAuditWarning
+    case agentClaimAuditSection
+    case agentClaimAuditHintMore
+    case agentClaimAuditHintLess
 
     // 九个显示开关（FR-AGT-UX-CONV-012）：面板标签、取值域选项、拒绝与降级的一句话。
     // 键名与取值域在 Core/AgentDisplayPreferences.swift（跨端同源），这里只管文案。
@@ -3675,6 +3681,15 @@ public enum LocalizedStrings {
                                     .english: "Some claims in this answer have no source"],
         .agentClaimWithheldBody: [.simplifiedChinese: "%ld 条结论没有出处，已从交付内容里摘掉（仍列在这里供你复核）",
                                    .english: "%ld claims had no source and were removed from the deliverable (still listed here for review)"],
+
+        // 断言台账**折叠态**（详设 §3.33）：界面默认只画一行，展开才看逐条。
+        .agentClaimAuditHeadline: [.simplifiedChinese: "%ld 条断言 · 已核 %ld / 未核 %ld",
+                                   .english: "%ld claims · %ld verified / %ld unverified"],
+        .agentClaimAuditWarning: [.simplifiedChinese: "%ld 条断言没有依据（共 %ld 条）",
+                                  .english: "%ld claims have no basis (out of %ld)"],
+        .agentClaimAuditSection: [.simplifiedChinese: "%@ %ld 条", .english: "%@ (%ld)"],
+        .agentClaimAuditHintMore: [.simplifiedChinese: "展开看依据", .english: "show basis"],
+        .agentClaimAuditHintLess: [.simplifiedChinese: "收起依据", .english: "hide basis"],
 
         // 九个显示开关（FR-AGT-UX-CONV-012）。
         .agentDisplaySection: [.simplifiedChinese: "显示", .english: "Display"],

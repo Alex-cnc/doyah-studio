@@ -174,8 +174,12 @@ final class AgentClaimTraceTests: XCTestCase {
         XCTAssertTrue(try! XCTUnwrap(rows[3].text).contains("AgentLoopTests"))
     }
 
-    /// 块的形状：首行是汇总，其后逐行；行数与 rows 一一对应（不多不少）。
-    func testBlockHasSummaryThenOneLinePerRow() {
+    /// 块的形状：**首行是机器头**（`claims:总/已核/推断/未核`），其后逐行；
+    /// 行数与 rows 一一对应（不多不少）。
+    ///
+    /// 首行为什么不是一句人话（2026-11-07 改）：界面要把整块折成**一行**，
+    /// 折多少 / 告什么警取决于三个计数 —— 那种东西不许靠解析译文拿到（切语言就认不出）。
+    func testBlockHasHeaderThenOneLinePerRow() {
         let provenance = trace([
             AgentClaim(statement: "结论甲", status: .verified, bases: [fileBasis], confidence: 0.98),
             AgentClaim(statement: "结论乙", status: .unverified, confidence: 0.2,
@@ -184,8 +188,10 @@ final class AgentClaimTraceTests: XCTestCase {
         let block = try! XCTUnwrap(AgentClaimTrace.block(for: provenance, language: .simplifiedChinese))
         let lines = block.components(separatedBy: "\n")
         XCTAssertEqual(lines.count - 1, AgentClaimTrace.rows(for: provenance).count,
-                       "首行汇总之外，每行对应一条 row：\(block)")
-        XCTAssertTrue(lines[0].hasPrefix("2 条结论"), lines[0])
+                       "首行机器头之外，每行对应一条 row：\(block)")
+        XCTAssertEqual(lines[0], "claims:2/1/0/1",
+                       "首行要是一眼可反解的机器头（总/已核/推断/未核）：\(lines[0])")
+        XCTAssertEqual(lines[0], AgentClaimTrace.header(for: provenance))
         XCTAssertTrue(lines[1].hasPrefix("✓ [已验证] 结论甲"), lines[1])
         XCTAssertTrue(lines[2].hasPrefix("  出处："), "出处行要缩进：\(lines[2])")
     }
@@ -200,6 +206,68 @@ final class AgentClaimTraceTests: XCTestCase {
         XCTAssertTrue(en.contains("Source:"), en)
         XCTAssertFalse(en.contains("出处"), "英文面不许漏中文：\(en)")
         XCTAssertFalse(en.contains("已验证"), "英文面不许漏中文：\(en)")
+    }
+
+    // MARK: - 折叠投影（§3.33）：一行摘要 / 未核告警 / 分组明细
+
+    /// 机器头 → 三个计数，原样反解（界面拿它画那一行，不自己数）。
+    func testAuditParseRecoversCountsAndSections() {
+        let provenance = trace([
+            AgentClaim(statement: "已核的", status: .verified, bases: [fileBasis], confidence: 0.98),
+            AgentClaim(statement: "推出来的", status: .inferred, bases: [otherBasis],
+                       confidence: 0.7, alternatives: ["也可以那样"]),
+            AgentClaim(statement: "没依据的", status: .unverified, confidence: 0.2,
+                       alternatives: ["换个查法"]),
+        ])
+        let block = try! XCTUnwrap(AgentClaimTrace.block(for: provenance, language: .simplifiedChinese))
+        let audit = try! XCTUnwrap(AgentClaimAudit.parse(block), "机器头反解不出来：\(block)")
+
+        XCTAssertEqual(audit.total, 3)
+        XCTAssertEqual(audit.verifiedCount, 1)
+        XCTAssertEqual(audit.inferredCount, 1)
+        XCTAssertEqual(audit.unverifiedCount, 1)
+        XCTAssertEqual(audit.sections.map(\.status), [.verified, .inferred, .unverified],
+                       "分组顺序固定：已验证 → 推断 → 没验证")
+        XCTAssertEqual(audit.sections.map(\.claimCount), [1, 1, 1])
+        XCTAssertTrue(audit.hasUnverified)
+        // 明细行一条不少：断言 3 条 + 出处 2 条 + 备选 2 条。
+        XCTAssertEqual(audit.sections.reduce(0) { $0 + $1.lines.count }, 7,
+                       "分组明细把行吞了：\(audit.sections.map { $0.lines.map(\.text) })")
+        // 出处行跟着它上面那条断言走（不许串组）。
+        XCTAssertTrue(audit.sections[0].lines.count == 2, "已验证组 = 断言 + 1 条出处")
+        XCTAssertTrue(audit.sections[1].lines.count == 3, "推断组 = 断言 + 1 条出处 + 1 条备选")
+    }
+
+    /// 那一行人话：`29 条断言 · 已核 21 / 未核 8`（语言作形参）。
+    func testAuditHeadlineFollowsLanguage() {
+        let audit = AgentClaimAudit(total: 29, verifiedCount: 21,
+                                   inferredCount: 3, unverifiedCount: 8)
+        XCTAssertEqual(audit.headline(language: .simplifiedChinese), "29 条断言 · 已核 21 / 未核 8")
+        XCTAssertEqual(audit.headline(language: .english), "29 claims · 21 verified / 8 unverified")
+    }
+
+    /// **未核断言一行告警**：有未核才出，全部已核 ⇒ `nil`（不许出现「0 条」这种噪音）。
+    func testWarningOnlyAppearsWhenSomethingIsUnverified() {
+        let dirty = AgentClaimAudit(total: 29, verifiedCount: 21,
+                                    inferredCount: 0, unverifiedCount: 8)
+        XCTAssertEqual(dirty.warning(language: .simplifiedChinese), "8 条断言没有依据（共 29 条）")
+        XCTAssertEqual(dirty.warning(language: .english), "8 claims have no basis (out of 29)")
+
+        let clean = AgentClaimAudit(total: 29, verifiedCount: 25,
+                                    inferredCount: 4, unverifiedCount: 0)
+        XCTAssertNil(clean.warning(language: .simplifiedChinese), "全部已核还告警 = 狼来了")
+        XCTAssertNil(clean.warning(language: .english))
+        XCTAssertFalse(clean.hasUnverified)
+    }
+
+    /// 认不出机器头 ⇒ `nil`（别的时间线事件不归这里管，界面继续原样画那一行灰字）。
+    func testParseRejectsForeignNotices() {
+        XCTAssertNil(AgentClaimAudit.parse("finished"))
+        XCTAssertNil(AgentClaimAudit.parse("monitor:stalled"))
+        XCTAssertNil(AgentClaimAudit.parse("29 条结论：已验证 21 / 推断 0 / 没验证 8"),
+                     "旧格式（人话首行）不再被当成台账")
+        XCTAssertNil(AgentClaimAudit.parse("claims:29/21/0"), "少一个计数就是格式变了，宁可不认")
+        XCTAssertNil(AgentClaimAudit.parse("claims:a/b/c/d"))
     }
 
     /// 把握百分比是四舍五入到整数的 0…100（界面拿它当读数印，不自己再算一遍）。
