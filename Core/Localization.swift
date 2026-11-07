@@ -1455,6 +1455,8 @@ public enum LKey: String, CaseIterable, Sendable {
     case agentApprovalRowsQueryFailed
     case agentChatExpand
     case agentChatCollapse
+    /// 详设 §3.34：吸顶条的提示（点击跳回这一轮的提问）。
+    case agentChatStickyQuestionJump
     /// `FR-AGT-UX-CONV-012` 的「显示思考段」：思考段的抬头（开关打开且真有内容时才画）。
     case agentChatThinkingTitle
     /// 详设 §3.33「思考区三态」：终态折成一行时的抬头（「思考过程 · 12 步 · 18.4s · 展开」）。
@@ -5228,6 +5230,8 @@ public enum LocalizedStrings {
         .agentScheduleExecuted: [.simplifiedChinese: "执行了 %d 条", .english: "%d executed"],
         .agentChatExpand: [.simplifiedChinese: "展开", .english: "Expand"],
         .agentChatCollapse: [.simplifiedChinese: "收起", .english: "Collapse"],
+        // 详设 §3.34：吸顶条点下去 = 滚回这一轮的提问（条上是用户的原话，不再重复一遍）。
+        .agentChatStickyQuestionJump: [.simplifiedChinese: "回到这一轮的问题", .english: "Back to this turn's question"],
         .agentChatThinkingTitle: [.simplifiedChinese: "思考", .english: "thinking"],
         // 详设 §3.33「思考区三态」：终态那一行的抬头 + 步数（运行中展开，终态折一行）。
         .agentChatThinkingFoldTitle: [.simplifiedChinese: "思考过程", .english: "reasoning"],

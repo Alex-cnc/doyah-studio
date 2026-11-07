@@ -274,6 +274,16 @@ public enum AgentChatTurnShape {
         return result
     }
 
+    /// 一轮的**起点下标**（每条用户提问都是一个新轮次的轮首），按出现顺序。
+    ///
+    /// 为什么要有这个口：`AgentChatTurnShape` 是「什么算一轮」的**唯一**定义处 ——
+    /// 结论判定（`finalAssistantIndices`）、思考区的最后一轮判定（`isInLastTurn`）、
+    /// 以及 §3.34 的「当前轮用户问题吸顶」都从这份切分取数。谁要「当前轮」，
+    /// 就拿 `turnStartIndices(...).last`，**不许**在别处写第二份「最后一条用户消息」。
+    public static func turnStartIndices(in messages: [AgentChatMessage]) -> [Int] {
+        messages.indices.filter { messages[$0].role == .user }
+    }
+
     /// 第 `index` 条消息是否属于**最后一轮**（最后一轮 = 最后一次用户提问之后）。
     ///
     /// 思考区的默认形态看的就是这个：只有最后一轮才可能「正在跑」（`running`），

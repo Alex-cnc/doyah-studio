@@ -100,81 +100,138 @@ struct AgentChatView: View {
     /// 对话区**是不是贴着底**（详设 §3.33.2 ③）：只由真实滚动读数改写，内容长高不改它。
     @State private var transcriptPinned = true
 
+    /// **当前轮那条提问是否已经滚出视口顶**（§3.34 契约①）：由 `StickyQuestionSpy` 判，视图只读结论。
+    ///
+    /// 判定的两个量（视口顶 / 提问顶边）都在 Spy 那一次读数里取 —— 视图不自己拼几何，
+    /// 也不自己算「滚出去了没有」（那样会有第二份定义，还会拿被回收行的旧读数去判）。
+    @State private var questionScrolledOut = false
+
+    /// 当前要钉的那一条（`nil` = 条不出现）：本轮那条问题**已经滚出视口顶**时才有值。
+    private var stickyQuestion: AgentStickyQuestion? {
+        guard questionScrolledOut else { return nil }
+        return AgentStickyQuestion.currentTurn(in: model.messages)
+    }
+
+    private var isStickyVisible: Bool { stickyQuestion != nil }
+
+    /// 点吸顶条时的滚动命令（§3.34 契约③）：落点 = 那条消息的顶边，由 `StickyQuestionSpy`
+    /// 按内容坐标直接滚（`ScrollViewProxy.scrollTo` 会命中 `ForEach` 条目容器，低 28.5pt）。
+    @State private var stickyScroller = StickyQuestionScroller()
+
     private var transcript: some View {
         // **哪一条助手消息是「结论」**（详设 §3.33）：轮内最后一条。算一次给整屏用 ——
         // 逐条算会把同一份判定算 N 遍，还会让「第几条是最后一条」出现第二个答案。
         let finalAssistants = AgentChatTurnShape.finalAssistantIndices(in: model.messages)
+        // **当前轮**（= 最后一轮的轮首用户消息，§3.34）：从 `AgentChatTurnShape` 取，
+        // 不在视图里另写一份「最后一条用户消息」—— 轮的定义只许有一处。
+        let question = AgentStickyQuestion.currentTurn(in: model.messages)
         // **跟着最新内容走**（人类主人 2026-10-17 实机反馈：「对话框不自动滚动到最新位置，要手工拖动」）。
         // 读数取 `model.scrollTick`（消息条数 + 正文总长 + 卡片数）—— 流式逐段出现、过程块追加、
         // 卡片新增，任何一种都会让读数变大 ⇒ 一次滚动跟随；只在**内容真的变了**时动手，不空转。
         return ScrollViewReader { proxy in
-            ScrollView {
-                // 块间距跟「紧凑模式」（`FR-AGT-UX-CONV-012` ②）：紧档用发丝间距。
-                LazyVStack(alignment: .leading,
-                           spacing: appState.agentDisplayPreferences.compact ? Spacing.hair : Spacing.xs) {
-                    // **空态**（§9.1.16 ⑦）：新会话一片空白时，给一句能直接发出去的起手话。
-                    // 空白屏不是「干净」，是「不知道该说什么」—— 别的区域都有空态，这里不该例外。
-                    if AgentChatEmptyStateGate.shouldShow(messageCount: model.messages.count,
-                                                          cardCount: model.cards.count,
-                                                          isRunning: model.isRunning) {
-                        startupPanel
-                    }
-                    ForEach(Array(model.messages.enumerated()), id: \.element.id) { index, message in
-                        // 轮次之间用**一条细横线**分开（§5.3.8.1 ③：分隔用 `Metrics.hairline`，
-                        // 不给每条消息套卡片/底纹）。用户提问就是「新一轮」的起点。
-                        if message.role == .user, index > 0 {
-                            hairline.padding(.vertical, Spacing.m)
+            // **吸顶条 + 滚动区**（详设 §3.34）。条是滚动区**上面**的兄弟视图：
+            // · 不参与滚动（契约②）—— 条自己不动；
+            // · 视口从条下面起 ⇒ 内容一行都不会被盖住（契约② 的 inset 不靠 padding 补，
+            //   靠布局让位；判定用的两个量都在**内容坐标**里，条在不在都不改它们 ——
+            //   「条出现 ⇒ 内容位移 ⇒ 判定翻转 ⇒ 条消失」那条自激回路因此不存在）；
+            // · 条的出现/消失只改视口高度，不改任何一行的高度（契约④）。
+            AgentStickyQuestionColumn(sticky: stickyQuestion, onActivate: {
+                // 契约③：滚回**那条消息的顶部**（不是页面顶部）。落点由 spy 按内容坐标给
+                // （见 `StickyQuestionScroller`：`scrollTo(id)` 会命中 ForEach 条目容器，低 28.5pt）。
+                stickyScroller.scrollQuestionToTop()
+            }) {
+                ScrollView {
+                    // 块间距跟「紧凑模式」（`FR-AGT-UX-CONV-012` ②）：紧档用发丝间距。
+                    LazyVStack(alignment: .leading,
+                               spacing: appState.agentDisplayPreferences.compact ? Spacing.hair : Spacing.xs) {
+                        // **空态**（§9.1.16 ⑦）：新会话一片空白时，给一句能直接发出去的起手话。
+                        // 空白屏不是「干净」，是「不知道该说什么」—— 别的区域都有空态，这里不该例外。
+                        if AgentChatEmptyStateGate.shouldShow(messageCount: model.messages.count,
+                                                              cardCount: model.cards.count,
+                                                              isRunning: model.isRunning) {
+                            startupPanel
                         }
-                        // `.id` 是搜索定位用的锚（`⌕` 命中时滚到那一条）。
-                        //
-                        // **行首栏 = 时间戳列**（`FR-AGT-UX-CONV-012` ③）：开关关掉时
-                        // 这一格仍占等宽（不可见填充），所以正文不会左移 —— 不抖动。
-                        HStack(alignment: .top, spacing: 0) {
-                            leadingColumn(message)
-                            VStack(alignment: .leading, spacing: Spacing.hair) {
-                                thinkingZone(message,
-                                             isFinalAssistant: finalAssistants.contains(index),
-                                             isLastTurn: isLastTurn(index))
-                                messageRow(message, isFinalAssistant: finalAssistants.contains(index))
+                        ForEach(Array(model.messages.enumerated()), id: \.element.id) { index, message in
+                            // 轮次之间用**一条细横线**分开（§5.3.8.1 ③：分隔用 `Metrics.hairline`，
+                            // 不给每条消息套卡片/底纹）。用户提问就是「新一轮」的起点。
+                            if message.role == .user, index > 0 {
+                                hairline.padding(.vertical, Spacing.m)
+                            }
+                            // `.id` 是搜索定位用的锚（`⌕` 命中时滚到那一条）。
+                            //
+                            // **行首栏 = 时间戳列**（`FR-AGT-UX-CONV-012` ③）：开关关掉时
+                            // 这一格仍占等宽（不可见填充），所以正文不会左移 —— 不抖动。
+                            HStack(alignment: .top, spacing: 0) {
+                                leadingColumn(message)
+                                VStack(alignment: .leading, spacing: Spacing.hair) {
+                                    thinkingZone(message,
+                                                 isFinalAssistant: finalAssistants.contains(index),
+                                                 isLastTurn: isLastTurn(index))
+                                    messageRow(message, isFinalAssistant: finalAssistants.contains(index))
+                                }
+                            }
+                            .id(message.id)
+                            // **当前轮那一行**带一个标记（§3.34）。只有这一行挂：读数由
+                            // `StickyQuestionSpy` 统一取（它按标记实例缓存位置，行被回收也不会丢）。
+                            .background {
+                                if message.id == question?.messageID {
+                                    // 只挂一个**标记**（§3.34）：读数由 `StickyQuestionSpy` 统一取，
+                                    // 行被回收也不会丢掉已量到的位置。
+                                    StickyQuestionRowAnchor()
+                                }
                             }
                         }
-                        .id(message.id)
+                        ForEach(cardItems) { item in
+                            cardRow(item)
+                        }
+                        Color.clear.frame(height: 1).id(Self.bottomAnchor)
                     }
-                    ForEach(cardItems) { item in
-                        cardRow(item)
-                    }
-                    Color.clear.frame(height: 1).id(Self.bottomAnchor)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, Spacing.l).padding(.vertical, Spacing.m)
+                    // 贴底判定（§3.33.2 ③）：只吃**真实滚动读数**，内容长高不刷新它。
+                    // 挂在内容根上（不是底部哨兵）—— 哨兵滚出视口会被 `LazyVStack` 回收，
+                    // 回收后就收不到滚动通知，状态会冻在「贴底」。
+                    .background(StickyQuestionSpy(scroller: stickyScroller) { reading in
+                        // 一次读数：吸顶判定 + 贴底跟随（§3.34 / §3.33.2 ③）。
+                        // 都在 `clip.boundsDidChange` 里算 —— 内容长高不改这两个结论。
+                        if reading.isStuck != questionScrolledOut { questionScrolledOut = reading.isStuck }
+                        let pinned = reading.distanceToBottom <= AgentScrollFollow.bottomTolerance
+                        if pinned != transcriptPinned { transcriptPinned = pinned }
+                    })
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, Spacing.l).padding(.vertical, Spacing.m)
-                // 贴底判定（§3.33.2 ③）：只吃**真实滚动读数**，内容长高不刷新它。
-                // 挂在内容根上（不是底部哨兵）—— 哨兵滚出视口会被 `LazyVStack` 回收，
-                // 回收后就收不到滚动通知，状态会冻在「贴底」。
-                .background(ScrollOffsetSpy { distance in
-                    let pinned = distance <= AgentScrollFollow.bottomTolerance
-                    if pinned != transcriptPinned { transcriptPinned = pinned }
-                })
+                .onChange(of: model.scrollTick) { _ in follow(proxy) }
+                .onChange(of: model.isRunning) { _ in follow(proxy) }
+                // **条出现/消失会让视口少/多一行**：贴着底时补跟一次，否则「条一来就已经差
+                // 一行没贴底」⇒ 下一个滚动事件把跟随判成「用户上翻」，流式就不跟了。
+                .onChange(of: isStickyVisible) { _, _ in
+                    if transcriptPinned { follow(proxy) }
+                }
+                // **新轮开始 ⇒ 思考区回到「按阶段默认」**（§3.33 三态之四）：手动态只在本轮内生效。
+                .onChange(of: currentTurnKey) { _, _ in
+                    thinkingManual.register(turnKey: currentTurnKey)
+                    // **人刚张了口就把视口贴回底部**：否则上一轮翻到上面的位置会把这一轮的回答挡在屏外。
+                    transcriptPinned = true
+                    // 吸顶的落点跟着换轮：新轮那一行会重新挂标记，Spy 会按新实例重记坐标；
+                    // 这里先把上一轮的结论清掉，避免「新轮一开口就顶着上一轮的问题」。
+                    questionScrolledOut = false
+                    follow(proxy)
+                }
+                .onAppear { thinkingManual.register(turnKey: currentTurnKey) }
+                // 搜索词一变就**定位到第一条命中**（§9.1.16 缺口 ③）。
+                .onChange(of: searchText) { _, _ in revealFirstHit(proxy) }
+                .onAppear { follow(proxy) }
             }
-            .onChange(of: model.scrollTick) { _ in follow(proxy) }
-            .onChange(of: model.isRunning) { _ in follow(proxy) }
-            // **新轮开始 ⇒ 思考区回到「按阶段默认」**（§3.33 三态之四）：手动态只在本轮内生效。
-            .onChange(of: currentTurnKey) { _, _ in
-                thinkingManual.register(turnKey: currentTurnKey)
-                // **人刚张了口就把视口贴回底部**：否则上一轮翻到上面的位置会把这一轮的回答挡在屏外。
-                transcriptPinned = true
-                follow(proxy)
-            }
-            .onAppear { thinkingManual.register(turnKey: currentTurnKey) }
-            // 搜索词一变就**定位到第一条命中**（§9.1.16 缺口 ③）。
-            .onChange(of: searchText) { _, _ in revealFirstHit(proxy) }
-            .onAppear { follow(proxy) }
         }
     }
 
-    /// 当前轮次的钥匙：**最后一条用户提问的 id**（没有提问 ⇒ `nil`）。
+    /// 当前轮次的钥匙：**最后一轮的轮首用户提问 id**（没有提问 ⇒ `nil`）。
     /// 思考区的手动态按它分轮（`AgentThinkingManualState`）。
+    ///
+    /// 取数走 `AgentStickyQuestion.currentTurn`（→ `AgentChatTurnShape.turnStartIndices`）：
+    /// 这里原先写的是 `messages.last(where: { $0.role == .user })`，与 §3.34 的吸顶条会是
+    /// 两份「当前轮」的定义 —— 轮的定义只许有一处。
     private var currentTurnKey: UUID? {
-        model.messages.last(where: { $0.role == .user })?.id
+        AgentStickyQuestion.currentTurn(in: model.messages)?.messageID
     }
 
     /// 第 `index` 条消息是否属于最后一轮（思考区是否可能处于「运行中」）。
