@@ -86,8 +86,15 @@ def commits(repo: str, limit: int) -> list[dict]:
 
 
 def changed_files(repo: str, sha: str) -> list[str]:
-    raw = run_git(repo, "show", "--name-only", "--format=", "--find-renames", sha)
-    return [line.strip() for line in raw.splitlines() if line.strip()]
+    """这一次提交碰过的路径（**NUL 分隔**）。
+
+    为什么不用按行切：中文文件名会被 git 按 `core.quotepath` 转义成
+    `"Docs/Doyah\344\272\247..."`（带引号 + 八进制），按行读再 `startswith("Docs/")`
+    一条都命中不了 —— 实测过一次：本仓库的文档全是中文名，于是**每个提交都被判成「没碰文档」**。
+    `-z` 输出的是原始字节，一个路径一个 `\0`，与引号规则无关。
+    """
+    raw = run_git(repo, "show", "--name-only", "--format=", "--find-renames", "-z", sha)
+    return [path for path in raw.split("\0") if path.strip()]
 
 
 def classify(files: list[str]) -> dict:
@@ -159,8 +166,10 @@ def self_test() -> int:
         git("config", "user.email", "gate@example.com")
         git("config", "user.name", "gate")
 
-        # 例 0：初始提交只带文档（让后面的「代码提交」不带 Docs/，判据才有分母）
+        # 例 0：初始提交只带文档（让后面的「代码提交」不带 Docs/，判据才有分母）；
+        # **其中一份是中文文件名** —— 中文路径会被 git 转义，按行解析就会把「改了文档」漏成「没改」。
         write("Docs/a.md", "# a\n")
+        write("Docs/中文文档.md", "# 文档\n")
         git("add", "-A")
         git("commit", "-q", "-m", "初始文档")
 
@@ -168,9 +177,9 @@ def self_test() -> int:
         write("App/Views/A.swift", "// 1\n")
         git("add", "-A")
         git("commit", "-q", "-m", "代码改了、文档没改")
-        # 例 2：代码 + 文档同批 ⇒ 不算待补
+        # 例 2：代码 + 文档同批 ⇒ 不算待补（文档是**中文名**那份，锁住 NUL 分隔那条口径）
         write("App/Views/A.swift", "// 2\n")
-        write("Docs/a.md", "# a2\n")
+        write("Docs/中文文档.md", "# 文档 2\n")
         git("add", "-A")
         git("commit", "-q", "-m", "代码与文档同批")
         # 例 3：只碰文档 ⇒ 不是待补（也不是「碰了代码」）

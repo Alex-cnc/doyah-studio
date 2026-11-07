@@ -1,6 +1,6 @@
 # Doyah产品详细设计说明书 · macOS
 
-> **版本** **v1.1.11**（2026-11-07 §3.37 + §3.38 **第六轮**：beta1.0.8 真机「现在又变成了 thinking/tools 等区域是固定高度，中间空一个大空白区域，只有等返回最终结论之后才能填满」+ 同日补拍「结论不要带『结论』二字前缀」—— 根因：`AgentThinkingViewport.height(expanded:)` 只返回 `200`/`20` 两个常量（`Core/AgentThinkingStream.swift:132-134`），视图在 `App/Views/AgentProcessBlocks.swift:305-308` / `:353-355` 把整块与视口都钉成定高，工具行体又只有 `maxHeight`（`:95` / `:506`）；改法：**高度 = min(内容实测高, 上限)** 且内容实测高**按整行向上取**（`AgentThinkingViewport.quantizedContentHeight`，步长 20pt + `ContentHeightSpy` 实测 + 只在量化值变时写 `@State`），工具行体按行数直接算（`AgentProcessBody.height`），并落**阶段形态表**（运行中贴着长 / 终态一行让位，思考区 20pt、工具区 20pt、结论完整）；结论层新增 `AgentAnswerLabel.stripping(_:)` 在**渲染前**剥「结论：/Conclusion:/## 结论/📌」，原文一个字节不改；判据九条各带反例读数 —— ① 1 行 ⇒ 区高 **42pt**（恒 200 形态 200pt 判红）、② 1/3/8 行 ⇒ **42/82/162pt**、③ 60 行 ⇒ **200/178/文档 901pt**、④ 300 次追加高度只变 **8 次**（内容 25 行；未量化样本 299 次判红）、⑤ 空白 **4/14/19pt** < 一行（恒 200pt ⇒ 162pt 判红）、⑥ 运行中 **102pt** → 终态 **20pt** 且**跳变 1 次**、⑦ 终态 `Tool calls` 行 **20pt**、⑧ 7 个带壳样本剥净 + 3 个正文样本逐字节不变（不剥 ⇒ 判红）、⑨ 量化/限高/行体纯函数 **20/64/216pt**；另新增 §3.38 四书同步纪律与 `Scripts/check-doc-sync.py`（提示级，最近 12 个提交实测 **5 个**碰代码未碰文档；`--self-test` **5 例**全过））。
+> **版本** **v1.1.11**（2026-11-07 §3.37 + §3.38 **第六轮**：beta1.0.8 真机「现在又变成了 thinking/tools 等区域是固定高度，中间空一个大空白区域，只有等返回最终结论之后才能填满」+ 同日补拍「结论不要带『结论』二字前缀」—— 根因：`AgentThinkingViewport.height(expanded:)` 只返回 `200`/`20` 两个常量（`Core/AgentThinkingStream.swift:132-134`），视图在 `App/Views/AgentProcessBlocks.swift:305-308` / `:353-355` 把整块与视口都钉成定高，工具行体又只有 `maxHeight`（`:95` / `:506`）；改法：**高度 = min(内容实测高, 上限)** 且内容实测高**按整行向上取**（`AgentThinkingViewport.quantizedContentHeight`，步长 20pt + `ContentHeightSpy` 实测 + 只在量化值变时写 `@State`），工具行体按行数直接算（`AgentProcessBody.height`），并落**阶段形态表**（运行中贴着长 / 终态一行让位，思考区 20pt、工具区 20pt、结论完整）；结论层新增 `AgentAnswerLabel.stripping(_:)` 在**渲染前**剥「结论：/Conclusion:/## 结论/📌」，原文一个字节不改；判据九条各带反例读数 —— ① 1 行 ⇒ 区高 **42pt**（恒 200 形态 200pt 判红）、② 1/3/8 行 ⇒ **42/82/162pt**、③ 60 行 ⇒ **200/178/文档 901pt**、④ 300 次追加高度只变 **8 次**（内容 25 行；未量化样本 299 次判红）、⑤ 空白 **4/14/19pt** < 一行（恒 200pt ⇒ 162pt 判红）、⑥ 运行中 **102pt** → 终态 **20pt** 且**跳变 1 次**、⑦ 终态 `Tool calls` 行 **20pt**、⑧ 7 个带壳样本剥净 + 3 个正文样本逐字节不变（不剥 ⇒ 判红）、⑨ 量化/限高/行体纯函数 **20/64/216pt**；另新增 §3.38 四书同步纪律与 `Scripts/check-doc-sync.py`（提示级，最近 12 个提交实测 **6 个**碰代码、其中 **1 个**未碰文档；`--self-test` **5 例**全过））。
 > **版本** **v1.1.10**（2026-11-07 §3.33.4 **第五轮**：beta1.0.7 真机「多个步骤的思考应该是合一起的啊，现在是分成了一块一块的」—— 根因：思考区在 `AgentChatView.swift:158` 的 `ForEach(model.messages)` 循环体里**按消息（= 按 step）实例化**（`:171-173` → `:1607` 的 `thinkingZone`），五步就是五块；改法：**一轮 = 一个思考区**（`Core/AgentTurnThinking.swift` 把本轮段聚成一个数组、区挂在轮首那条过程消息），区内退成**轻分隔**（一行发丝 + 极小字「第 N 步」），折 / 展一次作用于整轮；主人同日收口为**一轮只许三行汇总**（`▸ Thinking  ~308 tokens` / `▾ Tool calls (1)  ~16 tokens` / `Σ ~324 total`，默认全折、三行互不影响、第二行展开后逐次调用仍各一行 20pt），token 口径写死为 `Σ = thinking + tools + output`（合并后区的文本 + 工具过程行 + 结论段，一律走 `AgentTokenEstimator` 并带 `~`，端点 usage 只作 tooltip 旁证）；定高 200 / 折叠 20 一个字没动；八条判据各带反例读数 —— ① 五步 ⇒ 区 **1** 个（改前 **5** 个）、② 整块 **200pt** / 视口 **178pt** / 文档 **271pt**、③ 段序 `[1,2,3,4,5]`（倒序判红）、④ **20 → 200 → 20pt** 且区数恒 1（分块形态 5 区合计 100pt）、⑤ 工具块 **5 个**各 **20pt**、⑥ 三行各 **1** 行且 **[20,20,20]**（分块形态 Thinking **5** 行）、⑦ Thinking 行 **324** == 合并后区 **324**（写输出段 **18** ⇒ 判红）、⑧ `Σ 352 = 324 + 10 + 18`（只算输出 **18** ⇒ 判红））。
 > **版本** **v1.1.9**（2026-11-07 §3.33.3 **第四轮**：beta1.0.6 真机「每 Step 里的思考过程是可以滚动，但整个界面却不滚动了，要手工去拖动」—— 外层对话区跟随的三处根因：① 落点是底部**哨兵**、比内容底边高 **12pt**（`Spacing.m` 尾随 padding）⇒ 每跟一次距底恒 12pt > 4pt 容差；② 判定只看「距底多少」⇒ **内容长高**与**人上翻**不可分，跟一次就把 `pinned` 打成假、而 `follow` 先 `guard pinned` ⇒ 整段流式再也不跟；③ 触发只挂 `scrollTick`、读数只订阅 `clip.boundsDidChange` ⇒ 内容长高 / 吸顶条进出（视口 −20pt）一律漏。改法：落点=内容底边、判定升级为**状态机**（看偏移的变化方向）、读数器三路订阅（clip bounds / document frame / clip frame）+ 贴底态当场补跟；五条判据各带反例读数）。
 > **版本** **v1.1.8**（2026-11-07 §3.36 **新增「审批授权三档」**：beta1.0.6 真机「需要确认的次数太多了，要提供一次授权、会话内授权等选项」—— 审批单与待审批卡片并列三档（**仅这一次** 默认不记任何东西 / **本会话内允许** 只在同一会话、同一「工具 + 作用域」不再问且不落盘 / **总是允许** 落盘跨重启并**当场告知后果**）；记账键 = **工具名 + 规范化作用域**（文件 = 路径、命令 = 首词、MCP/SQL = 参数摘要，**不许只写工具名**）；删除 / 越界 / 对外发送 / 凭据**不提供**另外两档且**盘上有旧授权也不认**；设置 → 运行策略 → 「已授权的操作」逐条可撤、撤销立即生效且落盘；五条判据 + 作用域判据各带反例读数）。
@@ -1706,16 +1706,19 @@
 
 > 「前门等所有改动记得要同步到详细设计里去，别事情干完了又不同步四书」
 
-**现状审计（`git log --oneline -12`，2026-11-07 21:5x）**：最近 12 个提交里 5 个**碰了代码没碰文档**
-（`check-doc-sync.py --limit 12` 的读数，脚本原文输出）：
+**现状审计（`git log --oneline -12`，2026-11-07 22:2x，含本节所在提交）**：最近 12 个提交里 **6 个碰了
+`App/` 或 `Core/`**，其中 **1 个没碰 `Docs/`**（`check-doc-sync.py --limit 12` 的原文输出）：
 
 ```
-979569a6  §3.33.4 形制补判据 …                 代码：App/Views/AgentChatChrome.swift
-6a2dca48  §3.33.4 一轮一个思考区 + 一轮三行汇总 …  代码：App/Views/AgentChatChrome.swift, …AgentChatView.swift, …AgentProcessBlocks.swift, Core/AgentTurnThinking.swift 等 6 个文件
-9fdda5a2  对话区外层跟随 …                      代码：App/Views/AgentChatView.swift, App/Views/StickyQuestionAnchor.swift, Core/AgentThinkingStream.swift
-5d2b23d7  审批改三档授权 …                      代码：App/AgentChatModel.swift, App/AppState.swift, App/DoyahStudioApp.swift, … 等 12 个文件
-d36c944e  输入框加 shell 式历史导航 …             代码：App/AgentChatModel.swift, …AgentChatView.swift, …AgentComposerEditor.swift, Core/AgentComposerHistory.swift
+979569a6  §3.33.4 形制补判据：Σ 行是「Σ ~324 total」…   代码：App/Views/AgentChatChrome.swift
+（其余 5 个碰代码的提交都同批碰了 Docs/）
 ```
+
+**这次审计抓到的第一个坑（如实登记）**：本脚本第一版用 `git show --name-only` 按行读路径，而本仓的
+文档全是**中文文件名** —— git 默认把它们转义成 `"Docs/Doyah\344\272\247..."`（带引号 + 八进制），
+`startswith("Docs/")` 一条都命中不了 ⇒ **每个提交都被判成「没碰文档」**（实测读数从 1 条待补变成 5 条）。
+现在改成 `-z`（NUL 分隔、原始字节），并在 `--self-test` 里加了一份**中文名文档**当夹具锁住这条口径。
+这条本身就是「判据假绿」的教科书例子：数字看着合理（5 个），结论全错。
 
 **契约**
 1. **凡改契约性行为，必须同批改详设**（同一批提交里出现 `Docs/Doyah产品详细设计说明书-macOS.md` 的改动），
