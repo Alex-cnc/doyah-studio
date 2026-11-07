@@ -144,14 +144,16 @@ struct AgentChatView: View {
                         cardRow(item)
                     }
                     Color.clear.frame(height: 1).id(Self.bottomAnchor)
-                        // 贴底判定（§3.33.2 ③）：只吃**真实滚动读数**，内容长高不刷新它。
-                        .background(ScrollOffsetSpy { distance in
-                            let pinned = distance <= AgentScrollFollow.bottomTolerance
-                            if pinned != transcriptPinned { transcriptPinned = pinned }
-                        })
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, Spacing.l).padding(.vertical, Spacing.m)
+                // 贴底判定（§3.33.2 ③）：只吃**真实滚动读数**，内容长高不刷新它。
+                // 挂在内容根上（不是底部哨兵）—— 哨兵滚出视口会被 `LazyVStack` 回收，
+                // 回收后就收不到滚动通知，状态会冻在「贴底」。
+                .background(ScrollOffsetSpy { distance in
+                    let pinned = distance <= AgentScrollFollow.bottomTolerance
+                    if pinned != transcriptPinned { transcriptPinned = pinned }
+                })
             }
             .onChange(of: model.scrollTick) { _ in follow(proxy) }
             .onChange(of: model.isRunning) { _ in follow(proxy) }

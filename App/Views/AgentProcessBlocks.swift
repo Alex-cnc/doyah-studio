@@ -248,18 +248,21 @@ struct AgentThinkingZone: View {
                     Color.clear
                         .frame(height: 1)
                         .id(Self.bottomAnchor)
-                        // 跟随状态只被**人真的滚了**改写（内容长高不改它）：
-                        // 内容长高就刷新，「刚长高还没跟」会被误判成用户往上翻。
-                        .background(ScrollOffsetSpy { distance in
-                            let pinned = distance <= AgentScrollFollow.bottomTolerance
-                            if pinned != follow.isPinnedToBottom {
-                                follow.update(distanceToBottom: distance)
-                            }
-                        })
                 }
                 // **宽度必须吃满视口**：不给它，文档视图会按「理想宽」缩成一列字
                 // （实测每字一行、文档高 14 万 pt），滚动位置与跟随读数就都失真了。
                 .frame(maxWidth: .infinity, alignment: .leading)
+                // 跟随状态只被**人真的滚了**改写（内容长高不改它）：
+                // 内容长高就刷新，「刚长高还没跟」会被误判成用户往上翻。
+                //
+                // 挂在**内容根**上而不是底部哨兵上：哨兵在滚出视口后会被回收，
+                // 回收了就再也收不到滚动通知 ⇒ 跟随状态冻在「贴底」，人往上翻照样被拽回来。
+                .background(ScrollOffsetSpy { distance in
+                    let pinned = distance <= AgentScrollFollow.bottomTolerance
+                    if pinned != follow.isPinnedToBottom {
+                        follow.update(distanceToBottom: distance)
+                    }
+                })
             }
             // **命门：定高而不是上限**。改前是 `maxHeight`，内容短时 `ScrollView`
             // 会缩到内容高 ⇒ 每来一段增量整块高度就变一次、下面的正文被推一次。
