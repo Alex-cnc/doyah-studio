@@ -199,9 +199,9 @@ enum AgentTurnUsageLines {
         "Tool calls (\(count))  " + tokenText(tokens, estimated: estimated)
     }
 
-    /// 第三行：`Σ ~324 total`。
+    /// 第三行：`Σ ~324 total`（**不带 tokens** —— 主人给的就是这个形制）。
     static func total(tokens: Int, estimated: Bool) -> String {
-        "Σ " + tokenText(tokens, estimated: estimated) + " total"
+        "Σ " + (estimated ? "~" : "") + "\(tokens)" + " total"
     }
 
     /// Σ 展开后的分项（每项一行）：`thinking  ~308` / `tools  ~16 (1 次)` / `output  ~0`。

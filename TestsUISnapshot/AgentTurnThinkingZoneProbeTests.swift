@@ -593,3 +593,23 @@ extension AgentTurnThinkingZoneProbeTests {
         }
     }
 }
+
+// MARK: - 形制（主人的原话，一个字都不许漂）
+
+extension AgentTurnThinkingZoneProbeTests {
+
+    /// 三行的**文本形制**就是主人给的那三行 —— 判据直接比字符串（不靠人眼看截图）。
+    func testRowTextMatchesTheOwnerGivenShape() {
+        let thinking = AgentTurnUsageLines.thinking(tokens: 308, estimated: true)
+        let tools = AgentTurnUsageLines.toolCalls(count: 1, tokens: 16, estimated: true)
+        let total = AgentTurnUsageLines.total(tokens: 324, estimated: true)
+        print("🧪 形制：\"\(thinking)\" / \"\(tools)\" / \"\(total)\"")
+        XCTAssertEqual(thinking, "Thinking  ~308 tokens", "第一行不是 `Thinking  ~308 tokens`")
+        XCTAssertEqual(tools, "Tool calls (1)  ~16 tokens", "第二行不是 `Tool calls (1)  ~16 tokens`")
+        XCTAssertEqual(total, "Σ ~324 total", "第三行不是 `Σ ~324 total`")
+
+        // 端点真给了分项数（`isEstimated == false`）才允许去掉 `~`。
+        XCTAssertEqual(AgentTurnUsageLines.thinking(tokens: 308, estimated: false), "Thinking  308 tokens",
+                       "非估算时还带着 `~`")
+    }
+}
