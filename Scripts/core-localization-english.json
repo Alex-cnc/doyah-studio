@@ -1290,6 +1290,34 @@
         "Core/AgentAnswerSplit.swift:64"
       ],
       "note": "过程独白判定用的英文触发词（匹配模型输出，用于把中间叙述归入思考区），不是面向用户的展示文案，不进语言表"
+    },
+    "first i": {
+      "kind": "guardrailPattern",
+      "sites": [
+        "Core/AgentAnswerSplit.swift:63"
+      ],
+      "note": "过程独白判定用的英文触发词（匹配模型输出、把中间叙述归入思考区），不是展示文案"
+    },
+    "i am going to": {
+      "kind": "guardrailPattern",
+      "sites": [
+        "Core/AgentAnswerSplit.swift:63"
+      ],
+      "note": "过程独白判定用的英文触发词（匹配模型输出、把中间叙述归入思考区），不是展示文案"
+    },
+    "i will": {
+      "kind": "guardrailPattern",
+      "sites": [
+        "Core/AgentAnswerSplit.swift:63"
+      ],
+      "note": "过程独白判定用的英文触发词（匹配模型输出、把中间叙述归入思考区），不是展示文案"
+    },
+    "i'm going to": {
+      "kind": "guardrailPattern",
+      "sites": [
+        "Core/AgentAnswerSplit.swift:63"
+      ],
+      "note": "过程独白判定用的英文触发词（匹配模型输出、把中间叙述归入思考区），不是展示文案"
     }
   }
 }
