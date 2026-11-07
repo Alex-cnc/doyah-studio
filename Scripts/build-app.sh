@@ -331,15 +331,23 @@ PLIST
 # 为什么不用 heredoc 变量：`DoyahReleaseLabel` / `CFBundleShortVersionString` 在模板里
 # 必须逐字是 `${RELEASE_LABEL}` / `${MARKETING_VERSION}`（`Scripts/check-release-version.py`
 # 的 B1/B4 两族判据），而 rc 的标签是「这一次」的覆盖值、不是发布标签的第二处定义。
-if [ -n "${VARIANT_KEY}" ]; then
-  /usr/libexec/PlistBuddy \
-    -c "Set :CFBundleIdentifier ${BUNDLE_IDENTIFIER}" \
-    -c "Set :DoyahReleaseLabel ${APPLIED_LABEL}" \
-    -c "Set :CFBundleShortVersionString ${APPLIED_MARKETING_VERSION}" \
-    -c "Add :DoyahBuildVariant string ${VARIANT_KEY}" \
-    -c "Add :DoyahDataDirectoryName string ${DATA_DIRECTORY_NAME}" \
-    "${APP}/Contents/Info.plist"
-  echo "==> 变体身份已写入 Info.plist（${BUNDLE_IDENTIFIER} / ${DATA_DIRECTORY_NAME}）"
+# **只要这一次的身份与默认值不同就要写**（`--label beta1.0.1` 只换标签、不带 --variant，
+# 原来的条件 `[ -n "${VARIANT_KEY}" ]` 会跳过写盘 ⇒ 产物仍是 beta1.0/1.0.0，
+# 而下面的自检按期望值判 ⇒ 直接失败。2026-11-06 报「beta1.0.1 打不出来」就是这条）。
+if [ -n "${VARIANT_KEY}" ] || [ -n "${LABEL_OVERRIDE}" ]; then
+  PLIST_ARGS=(
+    -c "Set :DoyahReleaseLabel ${APPLIED_LABEL}"
+    -c "Set :CFBundleShortVersionString ${APPLIED_MARKETING_VERSION}"
+  )
+  if [ -n "${VARIANT_KEY}" ]; then
+    PLIST_ARGS+=(
+      -c "Set :CFBundleIdentifier ${BUNDLE_IDENTIFIER}"
+      -c "Add :DoyahBuildVariant string ${VARIANT_KEY}"
+      -c "Add :DoyahDataDirectoryName string ${DATA_DIRECTORY_NAME}"
+    )
+  fi
+  /usr/libexec/PlistBuddy "${PLIST_ARGS[@]}" "${APP}/Contents/Info.plist"
+  echo "==> 身份已写入 Info.plist（${APPLIED_LABEL} / ${APPLIED_MARKETING_VERSION}${VARIANT_KEY:+ / ${BUNDLE_IDENTIFIER} · ${DATA_DIRECTORY_NAME}}）"
 fi
 
 # 版本身份**写盘后立刻读回来核**（2026-11-03）。
