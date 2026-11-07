@@ -197,6 +197,69 @@ final class AgentThinkingStreamTests: XCTestCase {
         XCTAssertEqual(scrolledUp, 22, accuracy: 0.01)
     }
 
+    // MARK: - ③b 贴底判定：分得清「人上翻」与「内容长高」（§3.33.3 契约②/③）
+
+    /// 由头（人类主人 2026-11-07 真机 beta1.0.6）：
+    /// > 「每 Step 里的思考过程是可以滚动，但整个界面却不滚动了，要手工去拖动」
+    ///
+    /// 旧判定只看「距底多少」：**内容长高**与**人往上滚**都表现为「距底变大」，
+    /// 于是「贴底 + 新内容刚到、还没跟」这一瞬被判成「人上翻」⇒ 跟随当场断掉。
+    /// 新口径看**偏移的变化方向**：内容长高 / 视口变矮时偏移不动 ⇒ 保持跟。
+    func testFollowSeparatesContentGrowthFromUserScroll() {
+        var follow = AgentScrollFollow()
+        let viewport: CGFloat = 400
+
+        // ① 贴底起步：内容 1000 ⇒ 最大偏移 600、距底 0。
+        follow.update(contentHeight: 1000, viewportHeight: viewport, offsetFromTop: 600)
+        XCTAssertTrue(follow.shouldFollow)
+
+        // ② **内容长高 200pt**（偏移一动不动）⇒ 距底 200，但这不是人翻的 ⇒ 仍跟。
+        follow.update(contentHeight: 1200, viewportHeight: viewport, offsetFromTop: 600)
+        XCTAssertTrue(follow.shouldFollow,
+                      "内容长高 200pt 就被判成「人上翻」⇒ 流式一跟就停（beta1.0.6 的现象）")
+
+        // ③ **吸顶条出现**（视口矮 20pt）：内容高与偏移都不变 ⇒ 仍跟。
+        follow.update(contentHeight: 1200, viewportHeight: 380, offsetFromTop: 600)
+        XCTAssertTrue(follow.shouldFollow, "视口变矮 20pt 就被判成「人上翻」⇒ 条一出现跟随就断")
+
+        // ④ 人真的往上滚 100pt ⇒ 停跟。
+        follow.update(contentHeight: 1200, viewportHeight: 380, offsetFromTop: 500)
+        XCTAssertFalse(follow.shouldFollow, "偏移小了 100pt 还跟 ⇒ 抢用户控制权")
+
+        // ⑤ 停跟之后内容再长 ⇒ 保持停跟（不回弹）。
+        follow.update(contentHeight: 1600, viewportHeight: 380, offsetFromTop: 500)
+        XCTAssertFalse(follow.shouldFollow, "用户上翻之后内容一长又被拽回底部")
+
+        // ⑥ 人往上滚的时候偏移反向变大（往下滚回）但还没到底 ⇒ 仍停跟。
+        follow.update(contentHeight: 1600, viewportHeight: 380, offsetFromTop: 700)
+        XCTAssertFalse(follow.shouldFollow, "只是往下滚了一段（距底 520）就恢复跟随")
+
+        // ⑦ 滚回距底 3pt（容差内）⇒ 恢复跟随。
+        follow.update(contentHeight: 1600, viewportHeight: 380, offsetFromTop: 1217)
+        XCTAssertTrue(follow.shouldFollow, "回到容差内没恢复跟随")
+
+        // ⑧ 整像素抖动（< 0.5pt）不算人上翻。
+        var jitter = AgentScrollFollow()
+        jitter.update(contentHeight: 1000, viewportHeight: viewport, offsetFromTop: 600)
+        jitter.update(contentHeight: 1000, viewportHeight: viewport, offsetFromTop: 599.8)
+        XCTAssertTrue(jitter.shouldFollow, "0.2pt 的舍入抖动被判成「人上翻」")
+
+        print("🧪 ③b 贴底状态机：内容长高(200pt) 跟 / 视口变矮(20pt) 跟 / 上翻(100pt) 不跟"
+              + " / 上翻后长高 不跟 / 回底(3pt) 跟 / 抖动(0.2pt) 跟")
+
+        // **反例读数**：同一串读数喂给「只看距底」的旧口径 ⇒ 第 ② 步就判红（不再跟）。
+        var legacy = AgentScrollFollow()
+        for (content, viewportHeight, offset) in [(CGFloat(1000), viewport, CGFloat(600)),
+                                                  (1200, viewport, 600)] {
+            legacy.update(distanceToBottom: AgentScrollFollow.distanceToBottom(contentHeight: content,
+                                                                              viewportHeight: viewportHeight,
+                                                                              offsetFromTop: offset))
+        }
+        print("🧪 反例③b（旧口径只看距底）：内容长高 200pt 后 shouldFollow = \(legacy.shouldFollow)"
+              + (legacy.shouldFollow ? " ⇒ 假绿 ❌" : " ⇒ 判红 ✅（正是 beta1.0.6 断跟的机制）"))
+        XCTAssertFalse(legacy.shouldFollow, "旧口径在同一串读数上也判「跟」⇒ 新判据没有牙齿")
+    }
+
     // MARK: - ④ 两档高度（没有中间值）
 
     func testTriStateHeightsAreOnlyTwoValues() {

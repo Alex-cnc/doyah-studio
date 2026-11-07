@@ -41,6 +41,16 @@ final class StickyQuestionScroller {
     func scrollQuestionToTop() {
         spy?.scrollQuestionToTop()
     }
+
+    /// 把视口滚到**内容底边**（贴底跟随的唯一落点，§3.33.3 契约①）。
+    func scrollToBottom() {
+        spy?.scrollToBottom()
+    }
+
+    /// 新轮开口：重置贴底状态机并贴底（§3.33.3）。
+    func repinToBottom() {
+        spy?.repinToBottom()
+    }
 }
 
 /// 对话区滚动读数的**唯一出口**（详设 §3.34；贴底跟随沿用 §3.33.2 ③）：一次滚动，三个读数。
@@ -74,6 +84,11 @@ struct StickyQuestionSpy: NSViewRepresentable {
         var distanceToBottom: CGFloat
         /// 当前轮提问是否已经滚出视口顶（条该出现）。
         var isStuck: Bool
+        /// 外层对话区是不是**贴着底**（唯一判定：`AgentScrollFollow` 的状态机，住在读数器里）。
+        var isPinned: Bool = true
+        /// 内容总高 / 视口高（pt）：只给判据读数用，判定不读它们。
+        var contentHeight: CGFloat = 0
+        var viewportHeight: CGFloat = 0
     }
 
     /// 点条时的滚动命令（`nil` = 不需要 / 探针自己滚）。
@@ -96,7 +111,25 @@ struct StickyQuestionSpy: NSViewRepresentable {
     final class SpyView: NSView {
 
         var onReading: ((Reading) -> Void)?
+
+        /// **贴底判定唯一的状态机**（§3.33.3）。
+        ///
+        /// 为什么住在读数器里而不是宿主的 `@State` 里：它要记住「上一次的偏移」才能分清
+        /// 「人往上滚了」与「内容长高了」。放进 `@State` 结构体，就得每次读数都写一次状态
+        /// ⇒ 每一个滚动帧都重算一屏（那正是 §3.33.2 要消掉的「闪」）。这里只是一块内存，
+        /// 宿主只在**判定翻转**时被通知一次。
+        private var follow = AgentScrollFollow()
+
         private var observer: NSObjectProtocol?
+        /// 内容高变化的那一路（新内容 / 折展都会改它）。
+        private var frameObserver: NSObjectProtocol?
+        /// 视口高变化的那一路（吸顶条进出 / 窗口改宽高）。
+        private var clipFrameObserver: NSObjectProtocol?
+        /// 正在由**我们自己**滚（防止「补跟 → 读数 → 再补跟」在同一个调用栈里递归）。
+        private var isScrolling = false
+        /// **订阅时那一个 clip**：读数永远只从它来（子滚动区 —— 比如内层思考视口 —— 的
+        /// `boundsDidChange` 通知 object 不是它，因此进不来）。
+        private weak var attachedClip: NSClipView?
 
         /// 当前轮提问顶边在内容坐标里的位置，以及它是从哪个标记实例量来的。
         private var questionTop: CGFloat?
@@ -110,11 +143,32 @@ struct StickyQuestionSpy: NSViewRepresentable {
         }
 
         func attachIfNeeded() {
-            guard observer == nil, let scroll = enclosingScrollView else { return }
+            guard observer == nil, let scroll = enclosingScrollView, let document = scroll.documentView else { return }
             let clip = scroll.contentView
+            attachedClip = clip
             clip.postsBoundsChangedNotifications = true
             observer = NotificationCenter.default.addObserver(
                 forName: NSView.boundsDidChangeNotification,
+                object: clip,
+                queue: .main
+            ) { [weak self] _ in
+                self?.report()
+            }
+            // **内容高变化也要报一次**（§3.33.3 契约①）：流式逐段、新步骤、思考区折/展、
+            // 吸顶条进出都只改**内容高**而不改偏移 —— 等 `boundsDidChange` 就等于永远等不到。
+            document.postsFrameChangedNotifications = true
+            frameObserver = NotificationCenter.default.addObserver(
+                forName: NSView.frameDidChangeNotification,
+                object: document,
+                queue: .main
+            ) { [weak self] _ in
+                self?.report()
+            }
+            // **视口高变化也要报一次**：吸顶条进出（§3.34）让视口少/多 20pt，内容高一点没变、
+            // 偏移也一点没动 —— 只有「视口变矮」这一件事把距底撑开 20pt（实测 T-① 第 6 次）。
+            clip.postsFrameChangedNotifications = true
+            clipFrameObserver = NotificationCenter.default.addObserver(
+                forName: NSView.frameDidChangeNotification,
                 object: clip,
                 queue: .main
             ) { [weak self] _ in
@@ -126,8 +180,11 @@ struct StickyQuestionSpy: NSViewRepresentable {
         }
 
         private func report() {
-            guard let scroll = enclosingScrollView, let document = scroll.documentView else { return }
-            let clip = scroll.contentView
+            // **只读我们自己订阅的那一个 clip**：视图被挪进子滚动区时这条守卫会挡住
+            // 「内层滚动当外层读数」（§3.33.3 契约②）。
+            guard let clip = attachedClip, clip.window != nil,
+                  let scroll = clip.enclosingScrollView, let document = scroll.documentView
+            else { return }
             let contentHeight = document.bounds.height
             let viewportHeight = clip.bounds.height
             let maxOffset = max(0, contentHeight - viewportHeight)
@@ -137,19 +194,55 @@ struct StickyQuestionSpy: NSViewRepresentable {
 
             refreshQuestionTopIfNeeded(in: document, flipped: flipped)
 
-            let stuck = questionTop.map {
-                AgentStickyQuestion.shouldStick(viewportTop: offsetFromTop, questionTop: $0)
-            } ?? false
+            // 贴底判定：一次完整读数进状态机（分得清「人上翻」与「内容长高」）。
+            follow.update(contentHeight: contentHeight,
+                          viewportHeight: viewportHeight,
+                          offsetFromTop: offsetFromTop)
+
             let distance = AgentScrollFollow.distanceToBottom(contentHeight: contentHeight,
                                                               viewportHeight: viewportHeight,
                                                               offsetFromTop: offsetFromTop)
+
+            // **贴底态的自愈**（§3.33.3 契约①）：内容刚长高、偏移还没跟上 ⇒ 当场补跟，
+            // 不等「通知 → 下一拍回写 → 再重排」那条链（少两帧，实测会漏出 20pt）。
+            // 只在**贴底**时做：人往上翻之后 `follow` 已经是假，这里一次都不会触发。
+            if follow.isPinnedToBottom, distance > AgentScrollFollow.bottomTolerance, !isScrolling {
+                scrollToBottom()
+                return
+            }
+
+            let stuck = questionTop.map {
+                AgentStickyQuestion.shouldStick(viewportTop: offsetFromTop, questionTop: $0)
+            } ?? false
             let reading = Reading(offsetFromTop: offsetFromTop,
                                   distanceToBottom: distance,
-                                  isStuck: stuck)
+                                  isStuck: stuck,
+                                  isPinned: follow.isPinnedToBottom,
+                                  contentHeight: contentHeight,
+                                  viewportHeight: viewportHeight)
             // 回写走**下一拍**：`boundsDidChange` 可能就发生在 SwiftUI 的一次布局 / 更新里，
             // 当场写宿主 `@State` 会踩「Modifying state during view update」
             // （本轮实测原话：`AgentChatView.swift:197: Modifying state during view update`）。
             DispatchQueue.main.async { [weak self] in self?.onReading?(reading) }
+        }
+
+        /// 把视口滚到**内容底边**（贴底跟随的唯一落点，§3.33.3 契约①）。
+        ///
+        /// 为什么不走 `ScrollViewProxy.scrollTo(底部哨兵, anchor: .bottom)`：那个落点对齐的是
+        /// **哨兵**的底边，而内容末尾还有 12pt 的 `.padding(.vertical)`（`Spacing.m`）——
+        /// 实测（beta1.0.6 真机 / 探针）贴底后距底**恒为 12.0pt**，超过 4pt 容差 ⇒
+        /// 每跟一次就立刻被判成「用户上翻」⇒ 整段流式再也不跟。落点必须**同一个分母**。
+        func scrollToBottom() {
+            applyScroll(offsetFromTop: .greatestFiniteMagnitude)
+        }
+
+        /// **新轮开口**：状态机整个重置（上一轮翻到哪都作废）再贴底。
+        ///
+        /// 为什么不只是「贴底一次」：人刚发了消息就该看见这一轮的回答 —— 哪怕他上一轮
+        /// 翻到半路停着。重置状态机是刻意的：那一刻的「上翻」意图已经失效了。
+        func repinToBottom() {
+            follow = AgentScrollFollow()
+            scrollToBottom()
         }
 
         /// 把视口顶滚到「当前轮那一行提问的顶边」（§3.34 契约③）。
@@ -166,8 +259,12 @@ struct StickyQuestionSpy: NSViewRepresentable {
         }
 
         private func applyScroll(offsetFromTop: CGFloat) {
-            guard let scroll = enclosingScrollView, let document = scroll.documentView else { return }
-            let clip = scroll.contentView
+            guard let clip = attachedClip ?? enclosingScrollView?.contentView,
+                  let scroll = clip.enclosingScrollView,
+                  let document = scroll.documentView
+            else { return }
+            isScrolling = true
+            defer { isScrolling = false }
             let maxOffset = max(0, document.bounds.height - clip.bounds.height)
             let clamped = min(max(0, offsetFromTop), maxOffset)
             let y = document.isFlipped ? clamped : (maxOffset - clamped)
@@ -202,6 +299,8 @@ struct StickyQuestionSpy: NSViewRepresentable {
 
         deinit {
             if let observer { NotificationCenter.default.removeObserver(observer) }
+            if let frameObserver { NotificationCenter.default.removeObserver(frameObserver) }
+            if let clipFrameObserver { NotificationCenter.default.removeObserver(clipFrameObserver) }
         }
     }
 }

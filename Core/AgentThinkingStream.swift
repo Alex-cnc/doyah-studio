@@ -150,17 +150,50 @@ public struct AgentScrollFollow: Sendable {
     /// 「算贴着底」的容差（pt）：整像素舍入 + 行内换行的高度误差都不会超过它。
     public static let bottomTolerance: CGFloat = 4
 
+    /// 「偏移往上挪了多少才算人翻上去了」（pt）：小于它的位移是整像素舍入抖动，不算上翻。
+    public static let upwardSlop: CGFloat = 0.5
+
     /// 现在是不是贴着底（`true` = 新内容到了就跟）。
     public private(set) var isPinnedToBottom: Bool
+
+    /// 上一次读数的「距顶偏移」。判「是不是人往上滚了」**只看这一项的变化方向**。
+    ///
+    /// 为什么要它（2026-11-07 beta1.0.6 真机「整个界面不滚动，要手工拖」）：
+    /// 单看「距底多少」分不清两件完全不同的事 ——
+    /// · **人往上滚了** ⇒ 偏移**变小**（该停跟）；
+    /// · **内容长高了 / 视口变矮了** ⇒ 偏移不动、距底变大（**不该**停跟，跟一次就好）。
+    /// 旧实现只看后者，于是「贴底 + 新内容刚到、还没跟」这一瞬被判成「人上翻」，
+    /// 跟随当场断掉，而且之后再也不会自己回来（`follow` 是先 `guard pinned` 的）。
+    private var previousOffsetFromTop: CGFloat?
 
     public init(isPinnedToBottom: Bool = true) {
         self.isPinnedToBottom = isPinnedToBottom
     }
 
-    /// 用**真实滚动读数**刷新：`distanceToBottom` = 视口底边到内容底边的距离（pt，≥ 0）。
+    /// 用一次**完整读数**刷新（`contentHeight` / `viewportHeight` / `offsetFromTop` 都来自
+    /// 同一次 `clip.boundsDidChange` 或同一次内容高变化）。
     ///
-    /// 只在**偏移真的变了**时调（用户滚 / 程序滚）；内容长高本身**不刷新**它 ——
-    /// 否则「贴着底 + 新内容到了还没跟」这一瞬会被误判成「用户往上翻了」，跟随当场断掉。
+    /// 三条口径：
+    /// 1. 距底 ≤ 容差 ⇒ **贴底**（人滚回底部、或我们自己的跟随落定了）；
+    /// 2. 距底 > 容差 **且偏移比上次小** ⇒ **人往上滚了** ⇒ 停跟；
+    /// 3. 其余（内容长高 / 视口变矮 / 我们的跟随还没落定）⇒ **保持原判定**。
+    public mutating func update(contentHeight: CGFloat,
+                               viewportHeight: CGFloat,
+                               offsetFromTop: CGFloat) {
+        let distance = Self.distanceToBottom(contentHeight: contentHeight,
+                                             viewportHeight: viewportHeight,
+                                             offsetFromTop: offsetFromTop)
+        if distance <= Self.bottomTolerance {
+            isPinnedToBottom = true
+        } else if let previous = previousOffsetFromTop, offsetFromTop < previous - Self.upwardSlop {
+            isPinnedToBottom = false
+        }
+        previousOffsetFromTop = offsetFromTop
+    }
+
+    /// 只有「距底多少」这一项时的口径（内层思考视口用它：那里没有 padding，落点即底边）。
+    ///
+    /// 外层对话区**不许**用它 —— 外层要能分清「人上翻」与「内容长高」，见上面 `update` 的三条口径。
     public mutating func update(distanceToBottom: CGFloat) {
         isPinnedToBottom = distanceToBottom <= Self.bottomTolerance
     }

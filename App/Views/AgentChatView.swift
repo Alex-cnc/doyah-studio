@@ -77,9 +77,6 @@ struct AgentChatView: View {
 
     // MARK: - 消息流 + 卡片
 
-    /// 底部锚的 id（自动滚动用）。
-    private static let bottomAnchor = "agentChatBottom"
-
     /// 悬停中的消息（消息级操作只在悬停时露出）与刚复制过的那条。
     @State private var hoveredMessageID: UUID?
     @State private var copiedMessageID: UUID?
@@ -99,8 +96,13 @@ struct AgentChatView: View {
     /// 点开过就记下来，否则下一次重绘又折回去，等于点不动。
     @State private var expandedClaimAudits: Set<UUID> = []
 
-    /// 对话区**是不是贴着底**（详设 §3.33.2 ③）：只由真实滚动读数改写，内容长高不改它。
+    /// 对话区**是不是贴着底**（详设 §3.33.3）：只由读数器（`StickyQuestionSpy` 里的
+    /// `AgentScrollFollow` 状态机）改写，**内容长高不改它**。
     @State private var transcriptPinned = true
+
+    /// **该跟了**的次数（详设 §3.33.3 契约①）：读数说「贴底、但距底还差一截」时加一 ——
+    /// 那就是「内容刚长高、我们还没跟上」的那一帧。跟随只认这一个信号，不再逐条内容事件去猜。
+    @State private var followRequests = 0
 
     /// **当前轮那条提问是否已经滚出视口顶**（§3.34 契约①）：由 `StickyQuestionSpy` 判，视图只读结论。
     ///
@@ -186,28 +188,30 @@ struct AgentChatView: View {
                         ForEach(cardItems) { item in
                             cardRow(item)
                         }
-                        Color.clear.frame(height: 1).id(Self.bottomAnchor)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, Spacing.l).padding(.vertical, Spacing.m)
-                    // 贴底判定（§3.33.2 ③）：只吃**真实滚动读数**，内容长高不刷新它。
-                    // 挂在内容根上（不是底部哨兵）—— 哨兵滚出视口会被 `LazyVStack` 回收，
-                    // 回收后就收不到滚动通知，状态会冻在「贴底」。
+                    // 贴底判定（§3.33.3）：读数器一次给三样（吸顶 / 距底 / 贴底），
+                    // 判定本身住在 `StickyQuestionSpy` 的状态机里。挂在内容根上（不是底部哨兵）——
+                    // 哨兵滚出视口会被 `LazyVStack` 回收，回收后就再也收不到读数。
                     .background(StickyQuestionSpy(scroller: stickyScroller) { reading in
-                        // 一次读数：吸顶判定 + 贴底跟随（§3.34 / §3.33.2 ③）。
-                        // 都在 `clip.boundsDidChange` 里算 —— 内容长高不改这两个结论。
+                        // 一次读数：吸顶判定 + 贴底跟随（§3.34 / §3.33.3）。
+                        // 人滚 / 内容长高 / 视口变矮三路都会送读数进来（见 Spy 的三个订阅）。
                         if reading.isStuck != questionScrolledOut { questionScrolledOut = reading.isStuck }
-                        let pinned = reading.distanceToBottom <= AgentScrollFollow.bottomTolerance
-                        if pinned != transcriptPinned { transcriptPinned = pinned }
+                        // 贴底判定**只读读数器的结论**（§3.33.3）：它分得清「人上翻」与「内容长高」。
+                        if reading.isPinned != transcriptPinned { transcriptPinned = reading.isPinned }
+                        // 贴底却还差一截 = 内容刚长高、我们还没跟上 ⇒ 补跟一次。
+                        if reading.isPinned, reading.distanceToBottom > AgentScrollFollow.bottomTolerance {
+                            followRequests &+= 1
+                        }
                     })
                 }
-                .onChange(of: model.scrollTick) { _ in follow(proxy) }
-                .onChange(of: model.isRunning) { _ in follow(proxy) }
-                // **条出现/消失会让视口少/多一行**：贴着底时补跟一次，否则「条一来就已经差
+                .onChange(of: followRequests) { _, _ in follow() }
+                .onChange(of: model.scrollTick) { _ in follow() }
+                .onChange(of: model.isRunning) { _ in follow() }
+                // **条出现/消失会让视口少/多一行**：贴底时补跟一次，否则「条一来就已经差
                 // 一行没贴底」⇒ 下一个滚动事件把跟随判成「用户上翻」，流式就不跟了。
-                .onChange(of: isStickyVisible) { _, _ in
-                    if transcriptPinned { follow(proxy) }
-                }
+                .onChange(of: isStickyVisible) { _, _ in follow() }
                 // **新轮开始 ⇒ 思考区回到「按阶段默认」**（§3.33 三态之四）：手动态只在本轮内生效。
                 .onChange(of: currentTurnKey) { _, _ in
                     thinkingManual.register(turnKey: currentTurnKey)
@@ -216,12 +220,13 @@ struct AgentChatView: View {
                     // 吸顶的落点跟着换轮：新轮那一行会重新挂标记，Spy 会按新实例重记坐标；
                     // 这里先把上一轮的结论清掉，避免「新轮一开口就顶着上一轮的问题」。
                     questionScrolledOut = false
-                    follow(proxy)
+                    // 状态机也要重置：上一轮翻到半路的「上翻」意图不许粘到新一轮上。
+                    stickyScroller.repinToBottom()
                 }
                 .onAppear { thinkingManual.register(turnKey: currentTurnKey) }
                 // 搜索词一变就**定位到第一条命中**（§9.1.16 缺口 ③）。
                 .onChange(of: searchText) { _, _ in revealFirstHit(proxy) }
-                .onAppear { follow(proxy) }
+                .onAppear { follow() }
             }
         }
     }
@@ -353,18 +358,16 @@ struct AgentChatView: View {
         (Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String) ?? "—"
     }
 
-    /// **滚到底 —— 但只在人贴着底的时候**（详设 §3.33.2 ③）。
+    /// **滚到底 —— 但只在人贴着底的时候**（详设 §3.33.3 契约①）。
     ///
-    /// 改前这里有两条「闪」的根因，各自独立：
-    /// ① `withAnimation(.easeOut(0.15))` + 每个 token 都触发 ⇒ 动画**永远重启**、永远跑不完，
-    ///    滚动条一路处于「正在滑」的状态；
-    /// ② 无条件跟随 ⇒ 人往上翻也被拽回底部，跟用户抢控制权。
-    ///
-    /// 现在：贴底才跟、跟就**直接跳**（不插值）。用户点「回到最新」这类显式动作也走它 ——
-    /// 那时 `transcriptPinned` 由真实滚动读数改回 `true` 之后自然跟随。
-    private func follow(_ proxy: ScrollViewProxy) {
+    /// 两条纪律：
+    /// ① **贴底才跟**（`AgentScrollFollow` 的状态机住在读数器里），人往上翻就停手，不回弹；
+    /// ② **落点 = 内容底边**，不是底部哨兵：哨兵的对齐点比内容底边高 12pt（`Spacing.m` 的尾随
+    ///    padding），实测那里距底恒 12.0pt > 4pt 容差 ⇒ 每跟一次就被判成「用户上翻」⇒
+    ///    整段流式再也不跟（beta1.0.6 真机「整个界面不滚了，要手工拖」就是这个）。
+    private func follow() {
         guard transcriptPinned else { return }
-        proxy.scrollTo(Self.bottomAnchor, anchor: .bottom)
+        stickyScroller.scrollToBottom()
     }
 
     /// 定位到**第一条**命中（§9.1.16 缺口 ③）。
