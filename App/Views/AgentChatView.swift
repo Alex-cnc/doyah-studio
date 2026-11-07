@@ -97,6 +97,9 @@ struct AgentChatView: View {
     /// 点开过就记下来，否则下一次重绘又折回去，等于点不动。
     @State private var expandedClaimAudits: Set<UUID> = []
 
+    /// 对话区**是不是贴着底**（详设 §3.33.2 ③）：只由真实滚动读数改写，内容长高不改它。
+    @State private var transcriptPinned = true
+
     private var transcript: some View {
         // **哪一条助手消息是「结论」**（详设 §3.33）：轮内最后一条。算一次给整屏用 ——
         // 逐条算会把同一份判定算 N 遍，还会让「第几条是最后一条」出现第二个答案。
@@ -141,6 +144,11 @@ struct AgentChatView: View {
                         cardRow(item)
                     }
                     Color.clear.frame(height: 1).id(Self.bottomAnchor)
+                        // 贴底判定（§3.33.2 ③）：只吃**真实滚动读数**，内容长高不刷新它。
+                        .background(ScrollOffsetSpy { distance in
+                            let pinned = distance <= AgentScrollFollow.bottomTolerance
+                            if pinned != transcriptPinned { transcriptPinned = pinned }
+                        })
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, Spacing.l).padding(.vertical, Spacing.m)
@@ -148,11 +156,16 @@ struct AgentChatView: View {
             .onChange(of: model.scrollTick) { _ in follow(proxy) }
             .onChange(of: model.isRunning) { _ in follow(proxy) }
             // **新轮开始 ⇒ 思考区回到「按阶段默认」**（§3.33 三态之四）：手动态只在本轮内生效。
-            .onChange(of: currentTurnKey) { _, _ in thinkingManual.register(turnKey: currentTurnKey) }
+            .onChange(of: currentTurnKey) { _, _ in
+                thinkingManual.register(turnKey: currentTurnKey)
+                // **人刚张了口就把视口贴回底部**：否则上一轮翻到上面的位置会把这一轮的回答挡在屏外。
+                transcriptPinned = true
+                follow(proxy)
+            }
             .onAppear { thinkingManual.register(turnKey: currentTurnKey) }
             // 搜索词一变就**定位到第一条命中**（§9.1.16 缺口 ③）。
             .onChange(of: searchText) { _, _ in revealFirstHit(proxy) }
-            .onAppear { follow(proxy, animated: false) }
+            .onAppear { follow(proxy) }
         }
     }
 
@@ -279,13 +292,18 @@ struct AgentChatView: View {
         (Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String) ?? "—"
     }
 
-    /// 滚到底。**不抢正在往上翻的人的手**：只在内容变化时执行，且用户点「回到最新」也能主动调它。
-    private func follow(_ proxy: ScrollViewProxy, animated: Bool = true) {
-        if animated {
-            withAnimation(.easeOut(duration: 0.15)) { proxy.scrollTo(Self.bottomAnchor, anchor: .bottom) }
-        } else {
-            proxy.scrollTo(Self.bottomAnchor, anchor: .bottom)
-        }
+    /// **滚到底 —— 但只在人贴着底的时候**（详设 §3.33.2 ③）。
+    ///
+    /// 改前这里有两条「闪」的根因，各自独立：
+    /// ① `withAnimation(.easeOut(0.15))` + 每个 token 都触发 ⇒ 动画**永远重启**、永远跑不完，
+    ///    滚动条一路处于「正在滑」的状态；
+    /// ② 无条件跟随 ⇒ 人往上翻也被拽回底部，跟用户抢控制权。
+    ///
+    /// 现在：贴底才跟、跟就**直接跳**（不插值）。用户点「回到最新」这类显式动作也走它 ——
+    /// 那时 `transcriptPinned` 由真实滚动读数改回 `true` 之后自然跟随。
+    private func follow(_ proxy: ScrollViewProxy) {
+        guard transcriptPinned else { return }
+        proxy.scrollTo(Self.bottomAnchor, anchor: .bottom)
     }
 
     /// 定位到**第一条**命中（§9.1.16 缺口 ③）。

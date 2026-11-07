@@ -157,6 +157,13 @@ struct AgentToolBlockView: View {
 ///    （`AgentThinkingFold` / `AgentThinkingManualState`），视图只读结论。
 ///
 /// 「哪一段算独白」也**不在这里**判：`AgentAnswerClassifier` 给，视图只画。
+///
+/// ## 流式期间的三条（详设 §3.33.2，beta1.0.4 真机「滚动条很闪」）
+///
+/// · **固定视口**：展开态整块**恒 200pt**（抬头 20 + 发丝 2 + 视口 178），内容只在视口里滚；
+/// · **条件跟随**：只有用户贴着底时才跟着新内容走，往上翻就停手（`AgentScrollFollow`）；
+/// · **运行中不画滚动指示器**：内容每 50ms 长一截，滑块尺寸每次重算就是闪的来源；
+///   终态手动展开是静态内容，交回系统默认。
 struct AgentThinkingZone: View {
 
     /// 这一格的内容：过程独白（必先是它）+ 思考段（开关打开时才有）。
@@ -173,23 +180,30 @@ struct AgentThinkingZone: View {
     @Environment(\.colorScheme) private var colorScheme
 
     /// 折叠态高度：**一行摘要**（= 一行等宽字）。
-    static let collapsedHeight: CGFloat = Metrics.listRowHeight
+    static let collapsedHeight: CGFloat = AgentThinkingViewport.collapsedHeight
 
-    /// 展开态**内容**的上限；整块（抬头 + 发丝 + 内容）≯ 200pt。
-    static let contentMaxHeight: CGFloat = 200 - collapsedHeight - Spacing.hair
+    /// 展开态**内容视口**的高度（定值，不跟内容长）：200 − 20 − 2 = **178pt**。
+    static let contentMaxHeight: CGFloat = AgentThinkingViewport.viewportHeight
 
-    /// 展开态整块上限（运行中与手动展开都受它约束）。
-    static var expandedMaxHeight: CGFloat {
-        collapsedHeight + Spacing.hair + contentMaxHeight
-    }
+    /// 展开态整块高度（恒为 200pt；`maxHeight` 的旧名保留给既有判据）。
+    static var expandedMaxHeight: CGFloat { AgentThinkingViewport.totalHeight }
 
     private static let font = Theme.font(.mono)
+
+    /// 内容末尾那个 1pt 哨兵的 id（自动跟随的锚）。
+    private static let bottomAnchor = "agentThinkingBottom"
+
+    /// **条件跟随**（§3.33.2 ③）：只在贴着底时跟；用户往上滚就停手。
+    ///
+    /// 只在「是不是贴底」**真的翻转**时写它 —— 每像素滚一下都写 `@State` 就等于
+    /// 把「不闪」拆掉一半（每次写都重算这一格）。
+    @State private var follow = AgentScrollFollow()
 
     var body: some View {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         if !trimmed.isEmpty {
             let expanded = AgentThinkingFold.isExpanded(phase: phase, manual: manual)
-            VStack(alignment: .leading, spacing: Spacing.hair) {
+            VStack(alignment: .leading, spacing: AgentThinkingViewport.hairGap) {
                 HStack(alignment: .firstTextBaseline, spacing: Spacing.s) {
                     Text(expanded ? "▾" : "▸")
                         .font(Self.font)
@@ -212,14 +226,56 @@ struct AgentThinkingZone: View {
                       : LocalizedStrings.text(.agentChatExpand, language: language))
 
                 if expanded {
-                    ScrollView(.vertical) {
-                        AgentTranscriptText(text: trimmed, font: Self.font, highlight: highlight)
-                            .foregroundStyle(Theme.chat(.thinking, colorScheme).opacity(0.92))
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                    // 命门：**这一个上限**。去掉它，思考有多长这一块就多高。
-                    .frame(maxHeight: Self.contentMaxHeight)
+                    viewport(trimmed)
                 }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            // **两档定高**（§3.33.2 ④）：20pt / 200pt，中间没有第三个数 ——
+            // 折叠与展开是**直接切档**，不加 `withAnimation` 改高度（动画期间尺寸逐帧插值，
+            // 看着就是又一档闪）。
+            .frame(height: AgentThinkingViewport.height(expanded: expanded), alignment: .topLeading)
+        }
+    }
+
+    /// 内容视口：**定高 178pt + 内部滚动**（不跟内容长 —— 整块对外恒 200pt）。
+    private func viewport(_ text: String) -> some View {
+        ScrollViewReader { proxy in
+            ScrollView(.vertical) {
+                VStack(alignment: .leading, spacing: 0) {
+                    AgentTranscriptText(text: text, font: Self.font, highlight: highlight)
+                        .foregroundStyle(Theme.chat(.thinking, colorScheme).opacity(0.92))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    Color.clear
+                        .frame(height: 1)
+                        .id(Self.bottomAnchor)
+                        // 跟随状态只被**人真的滚了**改写（内容长高不改它）：
+                        // 内容长高就刷新，「刚长高还没跟」会被误判成用户往上翻。
+                        .background(ScrollOffsetSpy { distance in
+                            let pinned = distance <= AgentScrollFollow.bottomTolerance
+                            if pinned != follow.isPinnedToBottom {
+                                follow.update(distanceToBottom: distance)
+                            }
+                        })
+                }
+                // **宽度必须吃满视口**：不给它，文档视图会按「理想宽」缩成一列字
+                // （实测每字一行、文档高 14 万 pt），滚动位置与跟随读数就都失真了。
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            // **命门：定高而不是上限**。改前是 `maxHeight`，内容短时 `ScrollView`
+            // 会缩到内容高 ⇒ 每来一段增量整块高度就变一次、下面的正文被推一次。
+            .frame(height: Self.contentMaxHeight)
+            // **滚动条策略**（§3.33.2 ⑤）：运行中**隐藏** —— 内容每 50ms 长一截，指示器
+            // 每次都得按新内容高重算滑块尺寸，那正是「闪」的来源；视口只有 178pt，
+            // 一屏之内不需要位置指示。终态手动展开是**静态内容**，交回系统默认（可见）。
+            .scrollIndicators(phase == .running ? .hidden : .visible)
+            .onChange(of: text) { _, _ in
+                // 只在贴着底时跟；**不带动画**（动画版每个增量都重启一次巡航，永远跑不完）。
+                guard follow.shouldFollow else { return }
+                proxy.scrollTo(Self.bottomAnchor, anchor: .bottom)
+            }
+            .onAppear {
+                follow.update(distanceToBottom: 0)
+                proxy.scrollTo(Self.bottomAnchor, anchor: .bottom)
             }
         }
     }

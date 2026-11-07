@@ -15,6 +15,21 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
         didSet { refreshSlashSuggestions() }
     }
 
+    // MARK: - 流式上屏的合并（详设 §3.33.2）
+
+    /// 增量 buffer（50ms 一个窗口）。**真值只在这里**，`state` 拿到的永远是「一次一窗」的批量。
+    private var streamCoalescer = AgentStreamCoalescer()
+
+    /// 探针可注入的时钟（缺省 = 单调时钟）。判据靠它把 200 条增量压在确定的虚拟时间里跑。
+    var streamClock: () -> TimeInterval = { ProcessInfo.processInfo.systemUptime }
+
+    /// 合并窗口到期的那一次强刷（`nil` = 没有排着的）。
+    private var streamFlushTask: Task<Void, Never>?
+
+    /// **上屏次数**读数（判据 ① 的分子：进来多少条增量、真正上屏多少次）。
+    var streamIngestedCount: Int { streamCoalescer.ingestedCount }
+    var streamFlushCount: Int { streamCoalescer.flushCount }
+
     /// 斜杠命令候选（`FR-AGT-UX-CONV-014` 输入侧）：只在「敲命令名」这一段有，进了参数区就空。
     /// 纯 Core 判定（`AgentSlashCompleter`），这里只负责跟着输入刷新与填字。
     @Published private(set) var slashSuggestions: [AgentSlashSuggestion] = []
@@ -984,6 +999,8 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
         case .newQuestion: state.beginRun(prompt: prompt)
         case .continueLast: state.beginResume()
         }
+        // 新一轮：上一轮 buffer 里若还有字，**丢掉**（它属于上一轮，漏到这一轮就是串台）。
+        streamCoalescer.discard()
         guard state.isRunning else { return }   // 不能发时 `beginRun` 已如实出提示，这里不许往下走
         cancellation.reset()
         // 新的一轮开始 ⇒ 上一轮的提示条与求助卡收起来（它们说的都是上一轮的事）。
@@ -1190,7 +1207,15 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
 
     func observe(_ event: AgentLoopEvent) async {
         if case let .hopStarted(index) = event { currentHop = index }
-        state.apply(event)
+        // **增量先入 buffer**（§3.33.2）：token 级回调不再一次一条地改 `@Published state`。
+        // 其余事件是**结构边界**（跳 / 工具 / 终态）：先把积压的字上屏，再落这条 ——
+        // 否则过程行会跑到正文前面去。
+        if AgentStreamCoalescer.isStreamPiece(event) {
+            ingestStreamPiece(event)
+        } else {
+            flushStream()
+            state.apply(event)
+        }
         // **IM 那一轮的过程播报**（`FR-AGT-LINK-CHAN-003` 可见性补齐）：节流与发送都在
         // `AgentIMProgressReporter` 里，这里只把「第几跳 / 在跑哪个工具」喂进去。
         // 不 `await` 它 —— 观察口是循环里的 `await`，让 QQ 接口的往返拖住模型轮次是本末倒置。
@@ -1216,6 +1241,45 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
                 await applyApproved(cardID: card.id)
             }
         }
+    }
+
+    // MARK: - 流式合并（§3.33.2 ①）
+
+    /// 进一条增量：到点就上屏，没到点就攒着并排一次到期强刷。
+    private func ingestStreamPiece(_ event: AgentLoopEvent) {
+        let now = streamClock()
+        if let batch = streamCoalescer.ingest(event, at: now) {
+            applyStreamBatch(batch)
+        }
+        scheduleStreamFlush(at: now)
+    }
+
+    /// 排一次「窗口到期」的强刷（只排一个；排着的那个到期时会把积压全取走）。
+    private func scheduleStreamFlush(at now: TimeInterval) {
+        guard streamFlushTask == nil else { return }
+        let wait = streamCoalescer.timeUntilDue(at: now)
+        streamFlushTask = Task { @MainActor [weak self] in
+            // 最短 1ms：`wait == 0` 时让出一次主 actor，让同批的增量先进 buffer（合并语义）。
+            try? await Task.sleep(nanoseconds: UInt64(max(wait, 0.001) * 1_000_000_000))
+            guard let self else { return }
+            self.streamFlushTask = nil
+            self.flushStream()
+        }
+    }
+
+    /// **强刷**：把 buffer 里积压的增量一次性上屏（结构边界 / 收尾 / 窗口到期都走这里）。
+    @discardableResult
+    private func flushStream() -> Int {
+        streamFlushTask?.cancel()
+        streamFlushTask = nil
+        guard let batch = streamCoalescer.takeAll(at: streamClock()) else { return 0 }
+        applyStreamBatch(batch)
+        return batch.count
+    }
+
+    /// 一批增量 = **一次状态变更**（`@Published` 发一次 ⇒ SwiftUI 重算一帧）。
+    private func applyStreamBatch(_ batch: [AgentLoopEvent]) {
+        state.applyBatch(batch)
     }
 
     private struct IMProgressSnapshot {
@@ -1277,6 +1341,9 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
 
     private func finish(_ result: AgentLoopResult) {
         stopWatchdog()
+        // **收尾前强刷最后一句**（§3.33.2 ①）：buffer 里还压着的字不许丢在半路 ——
+        // 结论的末几个字正好落在窗口里，丢了就是「结论断在半句」。
+        flushStream()
         state.finishRun()
         drainQueue()
         // **逾期补发**（2026-11-04 真机）：IM 那一轮先回过「还在跑」的，收尾这一刻把结论

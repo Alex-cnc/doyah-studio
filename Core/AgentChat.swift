@@ -483,23 +483,9 @@ public struct AgentChatState: Equatable, Sendable {
                 messages.append(AgentChatMessage(role: .assistant, text: "", isStreaming: true, createdAt: Date()))
             }
         case .delta(let piece):
-            // **增量就地追加** —— 不等整段（`FR-AI-25` ②）
-            if let index = messages.lastIndex(where: { $0.isStreaming }) {
-                messages[index].text += piece
-            } else {
-                messages.append(AgentChatMessage(role: .assistant, text: piece, isStreaming: true, createdAt: Date()))
-            }
+            applyStreamPiece(piece, thinking: false)
         case .reasoningDelta(let piece):
-            // **思考段**（`FR-AGT-UX-CONV-012`）：写进同一条消息的 `thinking` 栏，
-            // **不进 `text`**（进了就会被当成答复、被写进会话文件、被完成判据复核）。
-            // 开关关着时这一栏照收但不显示（投影层给零行）—— 关掉开关不许丢数据，
-            // 否则「开着看不重要、关了一会儿想看」就得重跑一遍。
-            if let index = messages.lastIndex(where: { $0.isStreaming }) {
-                messages[index].thinking = (messages[index].thinking ?? "") + piece
-            } else {
-                messages.append(AgentChatMessage(role: .assistant, text: "", isStreaming: true,
-                                                createdAt: Date(), thinking: piece))
-            }
+            applyStreamPiece(piece, thinking: true)
         case .toolStarted(let name, let summary):
             // **自跑的命令收在同一条过程消息里**（人类主人 2026-10-17 实机反馈原话：「智能体自己执行的命令
             // 这些信息应该是在同一条信息中滚动，避免刷屏」）。改前：每调一次工具就 `cards.append` 一张卡片
@@ -570,6 +556,47 @@ public struct AgentChatState: Equatable, Sendable {
             //（与写冲突 / 完成未验证同一条口径：码留给界面翻，别让人去读机器码）。
             applyMonitor(AgentRunAlert(kind: AgentRunAlertKind(rawValue: kind) ?? .spinning,
                                        observed: observed, threshold: threshold))
+        }
+    }
+
+    /// **一条增量就地落地**（正文 / 思考段两条通道）。
+    ///
+    /// **增量就地追加** —— 不等整段（`FR-AI-25` ②）。思考段写进同一条消息的 `thinking` 栏，
+    /// **不进 `text`**（进了就会被当成答复、被写进会话文件、被完成判据复核）。
+    /// 开关关着时这一栏照收但不显示（投影层给零行）—— 关掉开关不许丢数据，
+    /// 否则「开着看不重要、关了一会儿想看」就得重跑一遍。
+    private mutating func applyStreamPiece(_ piece: String, thinking: Bool) {
+        if let index = messages.lastIndex(where: { $0.isStreaming }) {
+            if thinking {
+                messages[index].thinking = (messages[index].thinking ?? "") + piece
+            } else {
+                messages[index].text += piece
+            }
+        } else if thinking {
+            messages.append(AgentChatMessage(role: .assistant, text: "", isStreaming: true,
+                                            createdAt: Date(), thinking: piece))
+        } else {
+            messages.append(AgentChatMessage(role: .assistant, text: piece, isStreaming: true,
+                                            createdAt: Date()))
+        }
+    }
+
+    /// **合并后的一次上屏**（详设 §3.33.2 ①）：一个合并窗口里攒下的增量在
+    /// **同一次状态变更**里落地。
+    ///
+    /// 为什么不让调用方对每条增量各调一次 `apply`：那样 `@Published` 一个窗口发 N 次、
+    /// SwiftUI 就重算 N 帧 —— 「一个窗口一次上屏」就白做了。这里只碰增量（其余事件是
+    /// 结构边界，调用方必须先强刷再 `apply`，顺序才不会乱）。
+    public mutating func applyBatch(_ events: [AgentLoopEvent]) {
+        guard !events.isEmpty else { return }
+        // 心跳一个窗口刷一次就够（看门狗阈值是秒级）。
+        noteProgress()
+        for event in events {
+            switch event {
+            case .delta(let piece): applyStreamPiece(piece, thinking: false)
+            case .reasoningDelta(let piece): applyStreamPiece(piece, thinking: true)
+            default: break
+            }
         }
     }
 
