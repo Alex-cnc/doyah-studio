@@ -277,6 +277,16 @@ if [ -n "${BIN_X86}" ]; then
   lipo -create -output "${APP}/Contents/MacOS/DoyahStudio" "${BIN}" "${BIN_X86}"
 else
   cp "${BIN}" "${APP}/Contents/MacOS/DoyahStudio"
+  # **release 包要去符号**（人类主人 2026-11-07：「108MB 感觉也没多少功能」）。
+  # 实测同一份 release 二进制：71MB → `strip -x` 后 35MB，整包 73MB → ≈37MB。
+  # debug 包**不 strip**：留着符号才能看崩溃栈（定位问题时用 debug 包）。
+  # 必须在下面的 codesign **之前**做 —— strip 改文件就会让签名失效。
+  if [ "${CONFIGURATION}" = "release" ]; then
+    BEFORE="$(stat -f%z "${APP}/Contents/MacOS/DoyahStudio")"
+    strip -x "${APP}/Contents/MacOS/DoyahStudio" 2>/dev/null || true
+    AFTER="$(stat -f%z "${APP}/Contents/MacOS/DoyahStudio")"
+    echo "==> 已去符号（release）：$((BEFORE/1024/1024))MB → $((AFTER/1024/1024))MB"
+  fi
 fi
 echo "==> 架构：$(lipo -info "${APP}/Contents/MacOS/DoyahStudio" 2>&1 | sed 's/^.*: //')"
 
