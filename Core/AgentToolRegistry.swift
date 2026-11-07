@@ -156,10 +156,12 @@ public struct AgentToolRegistry: Sendable {
                                 required: [],
                                 level: .readOnly, approval: .none),
             AgentToolDefinition(name: searchToolName,
-                                summary: "在工作区里按名字或内容搜索（只读）",
+                                summary: "在工作区里按文件名或内容搜索（只读）。**多个近义词 / 多个关键词一次给**："
+                                    + "queries 传字符串数组（如 [\"会话超时\",\"会话时间\"]），一次调用返回每个词各自的命中；"
+                                    + "不要一个词一次地反复搜。只搜一个词时用 query",
                                 capability: .search,
-                                parameters: ["query": "string", "limit": "integer"],
-                                required: ["query"],
+                                parameters: ["query": "string", "queries": "array", "limit": "integer"],
+                                required: [],
                                 level: .readOnly, approval: .none),
             AgentToolDefinition(name: "query_db",
                                 summary: "在连接上跑一条只读查询（写语句要走审批）",

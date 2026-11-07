@@ -92,12 +92,68 @@ public struct AgentToolDirectoryOutput: Equatable, Sendable {
     public var truncated: Bool
 }
 
-/// 搜索的输出：**文件名命中**与**内容命中**分列（`FR-AI-20` ① 要求两类都能命中）。
+/// 搜索的输出：**逐词一组**命中（`FR-AI-20` ① 要求文件名与内容两类都能命中）。
+///
+/// 2026-11-07（真机：一轮 26 步 / 149.6 秒，`search` 被近义词反复调用了十几次）起按**词**分组：
+/// 一次调用可以搜多个词，每组各自报「文件名命中 / 内容命中」，并标出这一组是**现搜的**还是
+/// **缓存命中**的（`cached` / `partial`）。顶层的 `fileNames` / `contentHits` 是各组合并后的
+/// 全集（旧渲染与旧判据照旧读它，不因改形状而失明）。
 public struct AgentToolSearchOutput: Equatable, Sendable {
+
+    /// 一个词的命中。
+    public struct Group: Equatable, Sendable {
+        /// 模型这次给的词（原文，不改写）。
+        public var query: String
+        public var fileNames: [String]
+        /// `相对路径:行号: 片段`
+        public var contentHits: [String]
+        /// 这一组来自缓存（没扫盘）。
+        public var cached: Bool
+        /// 缓存来自**别的词**（包含关系）⇒ 只覆盖一部分，要全量得单独搜这个词。
+        public var partial: Bool
+        /// 缓存里那一次搜索的原词（`partial` 时界面/回灌要说清来源）。
+        public var source: String?
+        public var truncated: Bool
+        /// 这一组花了多少毫秒（缓存命中 ⇒ 0；同一次扫盘的几个词共享同一个读数）。
+        public var elapsedMillis: Int
+
+        public init(query: String, fileNames: [String] = [], contentHits: [String] = [],
+                    cached: Bool = false, partial: Bool = false, source: String? = nil,
+                    truncated: Bool = false, elapsedMillis: Int = 0) {
+            self.query = query
+            self.fileNames = fileNames
+            self.contentHits = contentHits
+            self.cached = cached
+            self.partial = partial
+            self.source = source
+            self.truncated = truncated
+            self.elapsedMillis = elapsedMillis
+        }
+    }
+
     public var fileNames: [String]
     /// `相对路径:行号: 片段`
     public var contentHits: [String]
     public var truncated: Bool
+    /// 逐词命中（顺序 = 模型给的词的顺序）。
+    public var groups: [Group]
+    /// 本次实际搜过的词（含缓存命中的）。
+    public var queries: [String]
+    /// 整次调用花了多少毫秒（探针 / 回灌要能读出来）。
+    public var elapsedMillis: Int
+
+    /// 这一整次是不是全部来自缓存。
+    public var fromCache: Bool { !groups.isEmpty && groups.allSatisfy(\.cached) }
+
+    public init(fileNames: [String] = [], contentHits: [String] = [], truncated: Bool = false,
+                groups: [Group] = [], queries: [String] = [], elapsedMillis: Int = 0) {
+        self.fileNames = fileNames
+        self.contentHits = contentHits
+        self.truncated = truncated
+        self.groups = groups
+        self.queries = queries
+        self.elapsedMillis = elapsedMillis
+    }
 }
 
 /// 要审批的动作（写 / 执行）。指纹按**次**算：工具名 + 参数 ⇒ 换参数要重新批。
@@ -240,6 +296,10 @@ public struct AgentWorkspaceTools: Sendable {
     public var maxDirectoryEntries: Int
     /// 停手记录（`FR-AI-34`）：给了就把每次刹停留痕；不给（单测）就不写文件。
     public var harmStopLog: AgentHarmStopLog?
+    /// **同一轮里的搜索缓存**（2026-11-07）：同词再搜 / 近义词（包含关系）直接命中，毫秒级。
+    /// 每轮一份（`makeLoop` 每次新造 `AgentWorkspaceTools`）；写 / 执行立即作废。
+    /// 不给（`nil`）= 不缓存（探针的反例臂就靠它）。
+    public var searchCache: AgentSearchCache?
     /// 「谁正在写哪个文件」的台账（`FR-AI-31` ①）。默认取**进程内共享**那一本 ——
     /// 每轮现造一个 `AgentWorkspaceTools` 也不会各拿一本账，否则并发写永远抓不到。
     public var writes: AgentWriteCoordinator
@@ -247,6 +307,7 @@ public struct AgentWorkspaceTools: Sendable {
     public init(root: URL, registry: AgentToolRegistry = .standard,
                 maxReadBytes: Int = 6_000, maxReadLines: Int = 160, maxDirectoryEntries: Int = 500,
                 harmStopLog: AgentHarmStopLog? = nil,
+                searchCache: AgentSearchCache? = AgentSearchCache(),
                 writes: AgentWriteCoordinator = .shared) {
         self.root = root
         self.registry = registry
@@ -254,6 +315,7 @@ public struct AgentWorkspaceTools: Sendable {
         self.maxReadLines = maxReadLines
         self.maxDirectoryEntries = maxDirectoryEntries
         self.harmStopLog = harmStopLog
+        self.searchCache = searchCache
         self.writes = writes
     }
 
@@ -422,27 +484,110 @@ public struct AgentWorkspaceTools: Sendable {
 
     // MARK: - search
 
+    /// 一次调用最多搜几个词（防止模型把一整段话拆成 50 个词：那样每个文件要多比 50 轮）。
+    public static let maxQueriesPerCall = 8
+
     /// 搜索（文件名 + 内容两类）。**复用既有引擎**，不另写遍历。
-    public func searchStructured(query: String, limit: Int = 50) -> AgentToolOutcome {
-        let needle = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !needle.isEmpty else { return .refused(.emptyQuery, detail: query) }
+    ///
+    /// 2026-11-07：改成**一次收多个词**。由头是真机读数 —— 26 步 / 149.6 秒、56 次工具调用，
+    /// `search` 被「会话时间太长 / 会话超时 / 会话时间 / 会话」这类近义改写刷了十几次，
+    /// 每次都是全仓扇扫（1.4–1.8 秒）+ 一次模型往返（约 9 秒）。
+    /// 现在：多个词一次调用、**一次扫盘**；重复 / 包含关系的词直接吃缓存（毫秒级）；
+    /// 返回里带一句「本次已搜过这 N 个词」，省得它下一步再一个一个词地重搜。
+    public func searchStructured(queries rawQueries: [String], limit: Int = 50,
+                                 at now: Date = Date()) -> AgentToolOutcome {
+        let queries = Self.distinctQueries(rawQueries)
+        guard !queries.isEmpty else {
+            return .refused(.emptyQuery, detail: rawQueries.joined(separator: " "))
+        }
+        let started = Date()
 
-        let files = WorkspaceSearch.findFileNames(in: root, query: needle, limit: limit)
-        let contents = WorkspaceSearch.findContents(in: root, query: needle, limit: limit)
-
-        var hits: [String] = []
-        for group in contents.groups {
-            for hit in group.hits {
-                hits.append("\(group.entry.relativePath):\(hit.line): \(hit.snippet)")
+        // ① 先问缓存：同一个词 / 包含关系的词不必再扫盘。
+        let cachedHits = searchCache?.lookup(queries, at: now) ?? [:]
+        var groups: [AgentToolSearchOutput.Group] = []
+        var pending: [String] = []
+        for query in queries {
+            if let hit = cachedHits[WorkspaceSearch.normalize(query: query)] {
+                groups.append(AgentToolSearchOutput.Group(
+                    query: query, fileNames: hit.fileNames, contentHits: hit.contentHits,
+                    cached: true, partial: !hit.exact, source: hit.source,
+                    truncated: hit.truncated, elapsedMillis: 0))
+            } else {
+                pending.append(query)
             }
         }
-        return .search(AgentToolSearchOutput(fileNames: files.entries.map(\.relativePath),
-                                            contentHits: hits,
-                                            truncated: files.isTruncated || contents.isTruncated))
+
+        // ② 剩下的词**一次扫盘**（多词引擎：读一遍文件，每个词各比一遍）。
+        if !pending.isEmpty {
+            let scanStart = Date()
+            let nameResults = WorkspaceSearch.findFileNames(in: root, queries: pending, limit: limit)
+            let contentResults = WorkspaceSearch.findContents(in: root, queries: pending, limit: limit)
+            let millis = Int(Date().timeIntervalSince(scanStart) * 1000)
+            for (index, query) in pending.enumerated() {
+                let names = index < nameResults.count ? nameResults[index] : .init(entries: [], isTruncated: false)
+                let contents = index < contentResults.count ? contentResults[index] : .empty
+                let fileNames = names.entries.map(\.relativePath)
+                var hits: [String] = []
+                for group in contents.groups {
+                    for hit in group.hits {
+                        hits.append("\(group.entry.relativePath):\(hit.line): \(hit.snippet)")
+                    }
+                }
+                let truncated = names.isTruncated || contents.isTruncated
+                searchCache?.store(query: query, fileNames: fileNames, contentHits: hits,
+                                   truncated: truncated, at: now)
+                groups.append(AgentToolSearchOutput.Group(
+                    query: query, fileNames: fileNames, contentHits: hits,
+                    cached: false, partial: false, source: nil,
+                    truncated: truncated, elapsedMillis: millis))
+            }
+        }
+
+        // ③ 顺序还原成模型给的词的顺序（缓存命中的那几组是后来插进来的）。
+        let order = Dictionary(queries.enumerated().map { (WorkspaceSearch.normalize(query: $1), $0) },
+                               uniquingKeysWith: { first, _ in first })
+        groups.sort { (order[WorkspaceSearch.normalize(query: $0.query)] ?? 0)
+            < (order[WorkspaceSearch.normalize(query: $1.query)] ?? 0) }
+
+        var mergedFileNames: [String] = []
+        var mergedHits: [String] = []
+        for group in groups {
+            for name in group.fileNames where !mergedFileNames.contains(name) { mergedFileNames.append(name) }
+            for hit in group.contentHits where !mergedHits.contains(hit) { mergedHits.append(hit) }
+        }
+        return .search(AgentToolSearchOutput(
+            fileNames: mergedFileNames, contentHits: mergedHits,
+            truncated: groups.contains(where: \.truncated),
+            groups: groups, queries: queries,
+            elapsedMillis: Int(Date().timeIntervalSince(started) * 1000)))
     }
 
+    /// 单数入口：`query` 里**用空白（或逗号）隔开多个词**时按多个词搜（2026-11-07）；
+    /// 只有一个词时与旧行为逐字相同。
     public func search(query: String, limit: Int = 50) -> AgentToolOutcome {
-        searchStructured(query: query, limit: limit)
+        let words = query.split(whereSeparator: { $0.isWhitespace || $0 == "," || $0 == "，" })
+            .map(String.init)
+        return searchStructured(queries: words.count > 1 ? words : [query], limit: limit)
+    }
+
+    /// 多词入口（`queries` 数组）。
+    public func search(queries: [String], limit: Int = 50) -> AgentToolOutcome {
+        searchStructured(queries: queries, limit: limit)
+    }
+
+    /// 词表归一：去空白、去空词、按归一词去重（`QQ` 与 `qq` 算同一个词），最多 `maxQueriesPerCall` 个。
+    public static func distinctQueries(_ raw: [String]) -> [String] {
+        var seen: Set<String> = []
+        var result: [String] = []
+        for item in raw {
+            let trimmed = item.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else { continue }
+            let normalized = WorkspaceSearch.normalize(query: trimmed)
+            guard !normalized.isEmpty, seen.insert(normalized).inserted else { continue }
+            result.append(trimmed)
+            if result.count >= maxQueriesPerCall { break }
+        }
+        return result
     }
 
     // MARK: - write_file（③：差异预览 + 逐次审批 + 未批准不落盘）
@@ -524,6 +669,8 @@ public struct AgentWorkspaceTools: Sendable {
             return .refused(.unreadable, detail: url.lastPathComponent)
         }
         batch?.record(path: relativePath(url), previousText: previousText, writtenText: content)
+        // 磁盘变了：这一轮之前的搜索命中不再可信（「写完再看一眼」要看到真东西）。
+        searchCache?.invalidate()
         return .wrote(AgentToolFileOutput(path: relativePath(url), text: content,
                                          truncated: false, totalBytes: content.utf8.count))
     }
@@ -609,6 +756,8 @@ public struct AgentWorkspaceTools: Sendable {
         } catch {
             return .refused(.unreadable, detail: url.lastPathComponent)
         }
+        // 磁盘变了：本轮之前的搜索命中作废。
+        searchCache?.invalidate()
         return .wrote(AgentToolFileOutput(path: relativePath(url), text: after,
                                          truncated: false, totalBytes: after.utf8.count))
     }
@@ -668,7 +817,10 @@ public struct AgentWorkspaceTools: Sendable {
         guard case .allowed(let executable, let arguments) = policy.assess(command) else {
             return .refused(.commandNotAllowed, detail: command)
         }
-        return .command(await runner.run(executable: executable, arguments: arguments, workingDirectory: root))
+        let result = await runner.run(executable: executable, arguments: arguments, workingDirectory: root)
+        // 命令可能改了盘：本轮之前的搜索命中作废。
+        searchCache?.invalidate()
+        return .command(result)
     }
 
     // MARK: - 内部

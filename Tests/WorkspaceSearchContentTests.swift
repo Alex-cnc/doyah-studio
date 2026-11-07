@@ -201,7 +201,9 @@ final class WorkspaceSearchContentTests: XCTestCase {
     /// 拿整份文件搜子串会把注释当成命中 —— 这条判据初版就是这么误报的。
     func testFileNameSearchUsesTheSamePredicate() throws {
         let code = try codeOnly(source("Core/WorkspaceSearch.swift"))
-        XCTAssertTrue(code.contains("matches(entry.name, normalizedQuery: needle)"),
+        // 2026-11-07：文件名搜索改成「一次遍历、多个词」，谓词调用点的形参从 `needle` 变成
+        // `needles[index]` —— 判据跟着挪锚点（**不许删**）。
+        XCTAssertTrue(code.contains("matches(entry.name, normalizedQuery: needles["),
                       "文件名搜索必须与内容搜索同谓词；锚点变了请更新这条判据，不要删掉它")
         XCTAssertFalse(code.contains("localizedCaseInsensitiveContains"))
     }

@@ -57,16 +57,33 @@ public enum WorkspaceSearch {
         ignored: Set<String> = WorkspaceTree.searchIgnored,
         fileManager: FileManager = .default
     ) -> Result {
-        let needle = normalize(query: query)
-        guard !needle.isEmpty, limit > 0, maxDepth >= 0 else {
-            return Result(entries: [], isTruncated: false)
-        }
+        findFileNames(in: root, queries: [query], limit: limit, maxDepth: maxDepth,
+                      ignored: ignored, fileManager: fileManager).first
+            ?? Result(entries: [], isTruncated: false)
+    }
 
-        var found: [WorkspaceEntry] = []
-        var truncated = false
+    /// **一次遍历、多个词**（2026-11-07：智能体把同一个意思换个词搜了十几次，每次都是全仓扇扫）。
+    ///
+    /// 与单数版**同一套骨架**（同一个 `matches` 谓词 / 同一份忽略名单 / 同样的深度与截断口径），
+    /// 差别只是「文件名要对每个词各比一次」—— 所以 N 个词的代价是**一次遍历**，不是 N 次。
+    /// 返回与 `queries` **同序**的结果；空词的对应项是空结果（不假装搜过）。
+    public static func findFileNames(
+        in root: URL,
+        queries: [String],
+        limit: Int = defaultResultLimit,
+        maxDepth: Int = defaultMaxDepth,
+        ignored: Set<String> = WorkspaceTree.searchIgnored,
+        fileManager: FileManager = .default
+    ) -> [Result] {
+        let needles = queries.map(normalize(query:))
+        var found = [[WorkspaceEntry]](repeating: [], count: queries.count)
+        var truncated = [Bool](repeating: false, count: queries.count)
+        let active = needles.indices.filter { !needles[$0].isEmpty }
+        let empty = queries.map { _ in Result(entries: [], isTruncated: false) }
+        guard !active.isEmpty, limit > 0, maxDepth >= 0 else { return empty }
+
         var queue: [(url: URL, depth: Int)] = [(root, 0)]
-
-        while !queue.isEmpty {
+        scan: while !queue.isEmpty {
             let (directory, depth) = queue.removeFirst()
             guard depth < maxDepth else { continue }
             guard let children = try? WorkspaceTree.children(
@@ -80,21 +97,28 @@ public enum WorkspaceSearch {
                 case .directory:
                     queue.append((directory.appendingPathComponent(entry.name), depth + 1))
                 case .file:
-                    if matches(entry.name, normalizedQuery: needle) {
-                        if found.count >= limit {
-                            truncated = true
-                            return Result(entries: found, isTruncated: true)
+                    for index in active where !truncated[index] {
+                        guard matches(entry.name, normalizedQuery: needles[index]) else { continue }
+                        if found[index].count >= limit {
+                            truncated[index] = true
+                            // 每个词都到顶了 ⇒ 剩下的树不用再走（单数版就是这样提前停的）。
+                            if active.allSatisfy({ truncated[$0] }) { break scan }
+                            continue
                         }
-                        found.append(entry)
+                        found[index].append(entry)
                     }
                 }
             }
         }
 
-        return Result(
-            entries: found.sorted { $0.relativePath.localizedCaseInsensitiveCompare($1.relativePath) == .orderedAscending },
-            isTruncated: truncated
-        )
+        return queries.indices.map { index in
+            Result(
+                entries: found[index].sorted {
+                    $0.relativePath.localizedCaseInsensitiveCompare($1.relativePath) == .orderedAscending
+                },
+                isTruncated: truncated[index]
+            )
+        }
     }
 
     // MARK: - 内容检索（FR-EDIT-44 / FR-EDIT-42 共用的一套引擎）
@@ -321,43 +345,70 @@ public enum WorkspaceSearch {
         ignored: Set<String> = WorkspaceTree.searchIgnored,
         fileManager: FileManager = .default
     ) -> ContentResult {
-        let needle = normalize(query: query)
-        guard !needle.isEmpty, limit > 0, perFileLimit > 0, maxDepth >= 0, maxFileSize > 0 else {
-            return .empty
-        }
-        var groups: [ContentGroup] = []
+        findContents(in: root, queries: [query], limit: limit, perFileLimit: perFileLimit,
+                     maxDepth: maxDepth, maxFileSize: maxFileSize, snippetLimit: snippetLimit,
+                     ignored: ignored, fileManager: fileManager).first ?? .empty
+    }
+
+    /// **一次扫盘、多个词**（2026-11-07）：N 个近义词搜内容的代价从「N 次全仓扇扫」降到
+    /// **一次读盘**（每个词只多一轮行内比对）。返回与 `queries` **同序**；空词给空结果。
+    ///
+    /// 与单数版共用同一骨架 `scanTextFiles` / 同一个 `matches` 谓词 / 同一份行号口径
+    /// （`lineRanges`）与摘要口径（`snippet`）—— 两套遍历 = 迟早「同一个词两处搜出不同结果」。
+    public static func findContents(
+        in root: URL,
+        queries: [String],
+        limit: Int = defaultResultLimit,
+        perFileLimit: Int = defaultPerFileLimit,
+        maxDepth: Int = defaultMaxDepth,
+        maxFileSize: Int = defaultMaxFileSize,
+        snippetLimit: Int = defaultSnippetLimit,
+        ignored: Set<String> = WorkspaceTree.searchIgnored,
+        fileManager: FileManager = .default
+    ) -> [ContentResult] {
+        let needles = queries.map(normalize(query:))
+        var groups = [[ContentGroup]](repeating: [], count: queries.count)
+        var totals = [Int](repeating: 0, count: queries.count)
+        var truncated = [Bool](repeating: false, count: queries.count)
         var skips = SkipReport()
-        var total = 0
-        var truncated = false
+        let empty = queries.map { _ in ContentResult() }
+        let active = needles.indices.filter { !needles[$0].isEmpty }
+        guard !active.isEmpty, limit > 0, perFileLimit > 0, maxDepth >= 0, maxFileSize > 0 else { return empty }
 
         let scanned = scanTextFiles(
             in: root, maxDepth: maxDepth, maxFileSize: maxFileSize,
             ignored: ignored, fileManager: fileManager, skips: &skips
         ) { entry, text in
-            var fileHits: [ContentHit] = []
             let ns = text as NSString
-            for (index, range) in lineRanges(in: text).enumerated() {
-                let raw = ns.substring(with: range)
-                guard matches(raw, normalizedQuery: needle) else { continue }
-                if total >= limit { truncated = true; break }
-                fileHits.append(ContentHit(
-                    entry: entry, line: index + 1, snippet: snippet(raw, limit: snippetLimit)
-                ))
-                total += 1
-                if fileHits.count >= perFileLimit { break }
+            let ranges = lineRanges(in: text)
+            for index in active where !truncated[index] {
+                var fileHits: [ContentHit] = []
+                for (position, range) in ranges.enumerated() {
+                    let raw = ns.substring(with: range)
+                    guard matches(raw, normalizedQuery: needles[index]) else { continue }
+                    if totals[index] >= limit { truncated[index] = true; break }
+                    fileHits.append(ContentHit(
+                        entry: entry, line: position + 1, snippet: snippet(raw, limit: snippetLimit)
+                    ))
+                    totals[index] += 1
+                    if fileHits.count >= perFileLimit { break }
+                }
+                if !fileHits.isEmpty { groups[index].append(ContentGroup(entry: entry, hits: fileHits)) }
             }
-            if !fileHits.isEmpty { groups.append(ContentGroup(entry: entry, hits: fileHits)) }
-            return !truncated
+            // 每个词都到顶了 ⇒ 不必再读后面的文件（单数版就是这样提前停的）。
+            return !active.allSatisfy { truncated[$0] }
         }
 
-        return ContentResult(
-            groups: groups.sorted {
-                $0.entry.relativePath.localizedCaseInsensitiveCompare($1.entry.relativePath) == .orderedAscending
-            },
-            skips: skips,
-            scannedFiles: scanned,
-            isTruncated: truncated
-        )
+        return queries.indices.map { index in
+            ContentResult(
+                groups: groups[index].sorted {
+                    $0.entry.relativePath.localizedCaseInsensitiveCompare($1.entry.relativePath) == .orderedAscending
+                },
+                skips: skips,
+                scannedFiles: scanned,
+                isTruncated: truncated[index]
+            )
+        }
     }
 
     // MARK: - 替换计划（FR-EDIT-42 的另一半）

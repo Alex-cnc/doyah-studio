@@ -1431,15 +1431,46 @@ public struct AgentLoop: Sendable {
                                    : untrustedSection(directory.entries.joined(separator: "\n"),
                                                       source: .toolOutput, label: "dir"))
         case .search(let search):
-            var lines = ["search:\(search.fileNames.count) 个文件名命中 · \(search.contentHits.count) 处内容命中"]
+            var lines = ["search:\(search.queries.count) 个词 · \(search.fileNames.count) 个文件名命中 · "
+                         + "\(search.contentHits.count) 处内容命中"
+                         + (search.fromCache ? " · 全部来自缓存" : "")
+                         + "（\(search.elapsedMillis)ms）"]
             if search.fileNames.isEmpty && search.contentHits.isEmpty {
                 lines.append("(无命中)")
             }
-            let body = search.fileNames + search.contentHits
-            if !body.isEmpty {
-                lines.append(untrustedSection(body.joined(separator: "\n"),
-                                              source: .toolOutput,
-                                              label: AgentToolRegistry.searchToolName))
+            // **这次到底搜过哪些词**必须说出来（2026-11-07）：不说，模型下一步还会「一个词一次」地重搜。
+            if search.queries.count > 1 || search.groups.contains(where: { $0.cached }) {
+                lines.append("本次已搜过这 \(search.queries.count) 个词："
+                             + search.queries.joined(separator: " / ")
+                             + "（上面每一条都已按词分组给出，不要再一个词一次地重搜）")
+            }
+            if search.groups.isEmpty {
+                // 旧形状（直接构造的输出）：沿用合并后的两列。
+                let body = search.fileNames + search.contentHits
+                if !body.isEmpty {
+                    lines.append(untrustedSection(body.joined(separator: "\n"),
+                                                  source: .toolOutput,
+                                                  label: AgentToolRegistry.searchToolName))
+                }
+            } else {
+                for group in search.groups {
+                    var head = "· 词「\(group.query)」"
+                    if group.cached {
+                        head += group.partial
+                            ? " cached（部分：来自之前搜过的「\(group.source ?? "-")」）"
+                            : " cached"
+                    }
+                    head += "：\(group.fileNames.count) 个文件名 · \(group.contentHits.count) 处内容"
+                    if group.cached { head += " · 0ms" } else { head += " · \(group.elapsedMillis)ms" }
+                    if group.truncated { head += "（已截断）" }
+                    lines.append(head)
+                    let body = group.fileNames + group.contentHits
+                    if !body.isEmpty {
+                        lines.append(untrustedSection(body.joined(separator: "\n"),
+                                                      source: .toolOutput,
+                                                      label: AgentToolRegistry.searchToolName))
+                    }
+                }
             }
             if search.truncated { lines.append("(命中已按上限截断)") }
             return lines.joined(separator: "\n")

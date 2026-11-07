@@ -27,6 +27,23 @@ public enum AgentToolArguments {
     public static func int(_ arguments: [String: String], _ key: String) -> Int? {
         arguments[key].flatMap(Int.init)
     }
+
+    /// 取一个**字符串数组**参数（`queries`）—— 数组不是标量，`parse` 会跳过它，所以单取这一条。
+    /// 模型三种写法都收：`["a","b"]`、`"a b"`（单个字符串，交给调用方按空白拆）、
+    /// 以及标量混进数组的 `["a", 1]`（非字符串项丢掉，不猜）。
+    public static func strings(_ json: String, _ key: String) -> [String] {
+        let trimmed = json.trimmingCharacters(in: .whitespacesAndNewlines)
+        let text = trimmed.isEmpty ? "{}" : trimmed
+        guard let data = text.data(using: .utf8),
+              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let value = object[key] else { return [] }
+        switch value {
+        case let list as [String]: return list
+        case let list as [Any]: return list.compactMap { $0 as? String }
+        case let single as String: return [single]
+        default: return []
+        }
+    }
 }
 
 /// 标准分发器（`FR-AI-20` / `FR-AI-18` 的接头）：**按能力**把工具调用接到实现上。
@@ -197,6 +214,10 @@ public struct AgentStandardDispatcher: AgentToolDispatcher {
         case .search:
             guard let workspace else { return .refused(.unavailable, detail: definition.capability.rawValue) }
             let limit = AgentToolArguments.int(arguments, "limit") ?? 50
+            // **一次给多个词**（`queries` 数组，2026-11-07）：一次调用拿到每个词各自的命中，
+            // 模型就不用「一个词一次」地反复扇扫。
+            let queries = AgentToolArguments.strings(invocation.argumentsJSON, "queries")
+            if !queries.isEmpty { return workspace.search(queries: queries, limit: limit) }
             return workspace.search(query: arguments["query"] ?? "", limit: limit)
 
         case .writeFile:

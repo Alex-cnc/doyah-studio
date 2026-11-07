@@ -27,10 +27,19 @@ public final class AgentRepeatGuard: @unchecked Sendable {
         public var window: TimeInterval
         /// 允许的次数（第 `limit + 1` 次开始拒）。
         public var limit: Int
+        /// **同一轮内每种只读工具最多几次**（`0` = 不限）。
+        ///
+        /// 为什么精确比对不够（2026-11-07 真机：一轮 26 步 / 149.6 秒、56 次工具调用）：
+        /// `search` 是**换个词再来一次**——`会话时间太长` / `会话超时` / `会话时间` / `会话`……
+        /// 每条参数都不一样 ⇒ 上面那条 (工具, 参数) 的账一笔也拦不住，每次仍是一次全仓扇扫 + 一次模型往返。
+        /// 所以这里按**能力**记总量：到顶就回灌一句「先用已有结果给结论，或者换更具体的词」。
+        public var turnBudget: [AgentToolCapability: Int]
 
-        public init(window: TimeInterval = 180, limit: Int = 2) {
+        public init(window: TimeInterval = 180, limit: Int = 2,
+                    turnBudget: [AgentToolCapability: Int] = [.search: 6, .listDirectory: 6]) {
             self.window = window
             self.limit = limit
+            self.turnBudget = turnBudget
         }
     }
 
@@ -41,6 +50,8 @@ public final class AgentRepeatGuard: @unchecked Sendable {
 
     public let policy: Policy
     private var entries: [String: Entry] = [:]
+    /// 本轮每种只读工具用了几次（**不随参数变**，也不因写 / 执行清账 —— 它是「这一轮的总量」）。
+    private var turnUse: [AgentToolCapability: Int] = [:]
     private let lock = NSLock()
 
     public init(policy: Policy = Policy()) {
@@ -61,6 +72,17 @@ public final class AgentRepeatGuard: @unchecked Sendable {
         }
         guard Self.watched.contains(capability) else { return nil }
 
+        // ① 本轮总量（按**能力**，不看参数）：换个词也照样记账 —— 近义改写就是这么绕过去的。
+        let used = (turnUse[capability] ?? 0) + 1
+        turnUse[capability] = used
+        if let budget = policy.turnBudget[capability], budget > 0, used > budget {
+            return "tool-budget: 本轮 \(tool) 这类调用已经做过 \(budget) 次（每轮上限 \(budget) 次），"
+                + "本次不再执行 —— 已经拿到的结果就在上面的对话里。"
+                + "先用已有结果给结论；确实还缺，就换**更具体**的词，"
+                + "或者一次把几个词都放进 queries 数组（一次调用拿到每个词各自的命中）。"
+        }
+
+        // ② 同一条（工具 + 参数）在本轮第 `limit + 1` 次开始拒。
         // 参数归一（键序 / 空白不同但语义相同的两次调用算同一条）。
         let key = "\(capability.rawValue)|\(Self.canonical(arguments))"
         var entry = entries[key]
@@ -75,6 +97,12 @@ public final class AgentRepeatGuard: @unchecked Sendable {
             + "结果就在上面的对话里，本次不再执行。换个问法 / 换个路径，或者直接用已有结果给结论。"
     }
 
+    /// 本轮某种只读工具已经用了几次（读数口：探针 / 日志要能说「预算用在哪」）。
+    public func used(_ capability: AgentToolCapability) -> Int {
+        lock.lock(); defer { lock.unlock() }
+        return turnUse[capability] ?? 0
+    }
+
     /// 这一轮已经记了几条（读数口：面板 / 日志要能说「拦掉了几次」）。
     public var trackedCount: Int {
         lock.lock(); defer { lock.unlock() }
@@ -84,6 +112,7 @@ public final class AgentRepeatGuard: @unchecked Sendable {
     public func reset() {
         lock.lock(); defer { lock.unlock() }
         entries.removeAll()
+        turnUse.removeAll()
     }
 
     /// 参数归一：解析成对象后按键排序重新序列化；解析不了就压掉空白。
