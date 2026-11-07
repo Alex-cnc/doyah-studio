@@ -6066,9 +6066,19 @@ final class AppState: ObservableObject {
 
     // MARK: - 显示开关（`FR-AGT-UX-CONV-012`：九项、改一项立刻生效并落盘）
 
-    /// 九个开关在盘上的那一份（与其余本机数据同一目录）。
+    /// **显示开关文件所在目录的探针覆盖**（`nil` = 生产：会话目录）。
+    ///
+    /// 为什么留这个口：`load()` 里的「旧默认 `2+2` → `off`」迁移（详设 §3.33）必须走
+    /// **真启动路径**才判得了「旧库里是 `2+2` ⇒ 结论不折」；而真路径读的是
+    /// `AgentSessionStore.defaultDirectory` 下那份**真用户的**配置 —— 探针既不能动它
+    /// （会改主人的设置），也不能指望它有个可预期的值（每台机器不一样）。
+    /// 覆盖成临时目录之后，探针量到的是「真 load + 真视图」，不是照着画一遍。
+    var agentDisplayPreferencesDirectoryOverride: URL?
+
+    /// 九个开关在盘上的那一份（与其余本机数据同一目录；探针可覆盖目录）。
     private var agentDisplayPreferencesFile: AgentDisplayPreferencesFile {
-        AgentDisplayPreferencesFile(directory: AgentSessionStore.defaultDirectory)
+        AgentDisplayPreferencesFile(directory: agentDisplayPreferencesDirectoryOverride
+                                    ?? AgentSessionStore.defaultDirectory)
     }
 
     /// 进程内那一份。**视图直接读它**：改一项立刻换值 ⇒ 这一屏下一次重绘就是新形态
@@ -6085,6 +6095,13 @@ final class AppState: ObservableObject {
         let loaded = agentDisplayPreferencesFile.load()
         agentDisplayPreferences = loaded.preferences
         agentDisplayPreferencesState = loaded.state
+        // **旧默认迁移写回一次**（详设 §3.33）：盘上还是 v1 的 `2+2` 时，
+        // `load()` 在内存里已经按 `off` 算好了。写回是为了「只迁一次」——
+        // 不写回的话每次启动都重算一遍（结果仍对，但用户此后显式选 `2+2` 会被再覆盖一次，
+        // 「保存成功」就变成谎话）。写不进盘也不改结论：这一屏照样按 `off` 显示。
+        if loaded.needsRewrite {
+            try? agentDisplayPreferencesFile.save(loaded.preferences)
+        }
     }
 
     enum AgentDisplaySaveResult: Equatable {

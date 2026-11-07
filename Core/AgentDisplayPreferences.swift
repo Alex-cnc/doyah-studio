@@ -27,7 +27,8 @@ public enum AgentDisplayKey: String, CaseIterable, Sendable {
     case toolProgress = "display.toolProgress"
     /// 状态指示字形（默认表情字形档）：三档都要能表达就绪 / 运行中 / 错误。
     case indicatorGlyph = "display.indicatorGlyph"
-    /// 长消息预览（默认首 2 末 2 行）：折叠处有省略号且可展开。
+    /// 长消息预览（**默认关 = 不折**，2026-11-07 起；旧默认 `2+2` 见 §3.33 的迁移）：
+    /// 打开后折叠处有省略号且可展开。
     case longPreview = "display.longPreview"
     /// 运行底栏元数据（默认关）：开时状态行追加模型 / 上下文百分比 / 工作目录。
     case bottomBarMeta = "display.bottomBarMeta"
@@ -77,6 +78,10 @@ public enum AgentLongMessagePreview: Equatable, Hashable, Sendable {
     /// 契约表（概设 §8.9 ⑤）随这一条同步改了默认值 —— 判据 `Tests/AgentDisplayPreferencesTests`
     /// 钉的就是「默认等于这一格」，不是钉「首 2 末 2」这个历史值。
     public static let contractDefault = AgentLongMessagePreview.off
+
+    /// **旧契约默认**（`2+2`）的规范串。只给迁移用（见 `AgentDisplayPreferencesFile.load`）：
+    /// 已装机器盘上存着这个值时，它不是用户的选择，是**当年那份默认**。
+    public static let legacyContractDefault = "2+2"
 
     /// 单边行数上界（取值域的一部分，写进拒绝理由里）。
     public static let maxLinesPerEdge = 20
@@ -296,10 +301,25 @@ public struct AgentDisplayPreferencesFile {
         public let preferences: AgentDisplayPreferences
         public let state: LoadState
         public let fileURL: URL
+        /// 载入时做了一次**旧默认迁移** ⇒ 调用方应当写回一次（见 `load()` 的注释）。
+        public let needsRewrite: Bool
+
+        init(preferences: AgentDisplayPreferences,
+             state: LoadState,
+             fileURL: URL,
+             needsRewrite: Bool = false) {
+            self.preferences = preferences
+            self.state = state
+            self.fileURL = fileURL
+            self.needsRewrite = needsRewrite
+        }
     }
 
-    /// 盘上的文件名（跨端同名，便于三端对照排查）。
+    /// 盘上文件名（跨端同名，便于三端对照排查）。
     public static let fileName = "agent-display-preferences.json"
+
+    /// 盘上格式版本。`1` = beta1.0.3 及以前（`longPreview` 默认写 `2+2`）；`2` = 现行。
+    public static let currentVersion = 2
 
     public let fileURL: URL
 
@@ -325,11 +345,31 @@ public struct AgentDisplayPreferencesFile {
                               state: .degraded(reason: "parseFailed"), fileURL: fileURL)
         }
 
+        // **一次性迁移：旧默认 `2+2` → `off`**（详设 §3.33，2026-11-07 真机复验）。
+        //
+        // 为什么必须有这一条：上一批只把 `contractDefault` 改成 `off`，那只管**新装**机器。
+        // 已装用户在 beta1.0.3 之前跑过一次 ⇒ 盘上那份是当时按旧默认写下的 `2+2`，
+        // 于是「结论依旧被折成首 2 末 2 行」——默认值改了、人还是看不见结论。
+        //
+        // 判定口径（可用信息只有这些，故只能这样定）：盘上 `version` 还是 1（旧格式）
+        // 且 `longPreview` 恰好等于旧契约默认 `2+2` ⇒ 视为**当年那份默认**，迁到 `off`。
+        // 真正显式选过 `2+2` 的用户在 v1 里与默认值**不可区分** —— 这是 v1 格式的事实，
+        // 不在这一层假装能分辨；迁移只做一次（写回 version 2），此后用户再自己设 `2+2`
+        // 就按他的选择存，不再覆盖（判据 `Tests/AgentDisplayPreferencesTests` 钉住三条）。
+        var values = payload.values
+        var needsRewrite = false
+        let previewKey = AgentDisplayKey.longPreview.rawValue
+        if payload.version < Self.currentVersion,
+           values[previewKey] == AgentLongMessagePreview.legacyContractDefault {
+            values[previewKey] = AgentLongMessagePreview.contractDefault.canonicalValue
+            needsRewrite = true
+        }
+
         // **逐项过 `apply` 自己的校验**（范围与词表不在这里重写 —— 同一处真相）。
         // 每一项都调一次：一项越界就要点名那一项，而不是笼统说「文件坏了」。
         var preferences = AgentDisplayPreferences()
         for key in AgentDisplayKey.allCases {
-            guard let stored = payload.values[key.rawValue] else { continue }
+            guard let stored = values[key.rawValue] else { continue }
             do {
                 try preferences.apply(key: key.rawValue, value: stored)
             } catch let error as AgentDisplayError {
@@ -342,7 +382,8 @@ public struct AgentDisplayPreferencesFile {
                                   fileURL: fileURL)
             }
         }
-        return LoadResult(preferences: preferences, state: .loaded, fileURL: fileURL)
+        return LoadResult(preferences: preferences, state: .loaded,
+                          fileURL: fileURL, needsRewrite: needsRewrite)
     }
 
     public func save(_ preferences: AgentDisplayPreferences) throws {
@@ -352,7 +393,7 @@ public struct AgentDisplayPreferencesFile {
         for pair in preferences.canonicalValues {
             values[pair.key.rawValue] = pair.value
         }
-        let payload = Payload(version: 1, values: values)
+        let payload = Payload(version: Self.currentVersion, values: values)
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         try encoder.encode(payload).write(to: fileURL, options: .atomic)

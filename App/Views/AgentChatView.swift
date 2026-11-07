@@ -81,11 +81,13 @@ struct AgentChatView: View {
     /// 悬停中的消息（消息级操作只在悬停时露出）与刚复制过的那条。
     @State private var hoveredMessageID: UUID?
     @State private var copiedMessageID: UUID?
-    /// 被收起的过程块（按过程消息的 id；**缺省是展开 `▼`** —— 收起的是「看过了」的那几块）。
-    @State private var collapsedToolBlocks: Set<UUID> = []
-    /// **显式展开**过的工具块（`FR-AGT-UX-CONV-012` 的紧凑 / 摘要档把默认形态改成「收起」，
-    /// 于是「点开过」也必须记下来 —— 否则点开一下、下一次重绘又收回去，等于点不动）。
+    /// **显式展开**过的工具块（详设 §3.33：工具块**默认折成一行摘要**，
+    /// 于是「点开过」必须记下来 —— 否则点开一下、下一次重绘又收回去，等于点不动）。
     @State private var expandedToolBlocks: Set<UUID> = []
+    /// **思考区手动态**（详设 §3.33「思考区三态」）：记「哪一轮 + 用户动过没有」，
+    /// 换轮次就清（回到「按阶段默认」）。sticky 与轮次作用域都在 Core，
+    /// 这里只是持有它 —— 视图自己记 `Bool` 会在新轮次里沿用上一轮的选择。
+    @State private var thinkingManual = AgentThinkingManualState()
     /// **显式展开**过的长消息（`FR-AGT-UX-CONV-012` ⑥ 预览）：点过 `… 展开` 就记下来，
     /// 否则下一次重绘又折回去，等于点不动。
     @State private var expandedPreview: Set<UUID> = []
@@ -96,10 +98,13 @@ struct AgentChatView: View {
     @State private var expandedClaimAudits: Set<UUID> = []
 
     private var transcript: some View {
+        // **哪一条助手消息是「结论」**（详设 §3.33）：轮内最后一条。算一次给整屏用 ——
+        // 逐条算会把同一份判定算 N 遍，还会让「第几条是最后一条」出现第二个答案。
+        let finalAssistants = AgentChatTurnShape.finalAssistantIndices(in: model.messages)
         // **跟着最新内容走**（人类主人 2026-10-17 实机反馈：「对话框不自动滚动到最新位置，要手工拖动」）。
         // 读数取 `model.scrollTick`（消息条数 + 正文总长 + 卡片数）—— 流式逐段出现、过程块追加、
         // 卡片新增，任何一种都会让读数变大 ⇒ 一次滚动跟随；只在**内容真的变了**时动手，不空转。
-        ScrollViewReader { proxy in
+        return ScrollViewReader { proxy in
             ScrollView {
                 // 块间距跟「紧凑模式」（`FR-AGT-UX-CONV-012` ②）：紧档用发丝间距。
                 LazyVStack(alignment: .leading,
@@ -124,8 +129,10 @@ struct AgentChatView: View {
                         HStack(alignment: .top, spacing: 0) {
                             leadingColumn(message)
                             VStack(alignment: .leading, spacing: Spacing.hair) {
-                                thinkingBlock(message)
-                                messageRow(message)
+                                thinkingZone(message,
+                                             isFinalAssistant: finalAssistants.contains(index),
+                                             isLastTurn: isLastTurn(index))
+                                messageRow(message, isFinalAssistant: finalAssistants.contains(index))
                             }
                         }
                         .id(message.id)
@@ -140,10 +147,24 @@ struct AgentChatView: View {
             }
             .onChange(of: model.scrollTick) { _ in follow(proxy) }
             .onChange(of: model.isRunning) { _ in follow(proxy) }
+            // **新轮开始 ⇒ 思考区回到「按阶段默认」**（§3.33 三态之四）：手动态只在本轮内生效。
+            .onChange(of: currentTurnKey) { _, _ in thinkingManual.register(turnKey: currentTurnKey) }
+            .onAppear { thinkingManual.register(turnKey: currentTurnKey) }
             // 搜索词一变就**定位到第一条命中**（§9.1.16 缺口 ③）。
             .onChange(of: searchText) { _, _ in revealFirstHit(proxy) }
             .onAppear { follow(proxy, animated: false) }
         }
+    }
+
+    /// 当前轮次的钥匙：**最后一条用户提问的 id**（没有提问 ⇒ `nil`）。
+    /// 思考区的手动态按它分轮（`AgentThinkingManualState`）。
+    private var currentTurnKey: UUID? {
+        model.messages.last(where: { $0.role == .user })?.id
+    }
+
+    /// 第 `index` 条消息是否属于最后一轮（思考区是否可能处于「运行中」）。
+    private func isLastTurn(_ index: Int) -> Bool {
+        AgentChatTurnShape.isInLastTurn(in: model.messages, at: index)
     }
 
     /// **启动界面**（空会话 / 首启，§5.3.8.1 ⑥）：品牌块 → 信息面（本视图里**唯一**允许描边的块）
@@ -321,11 +342,11 @@ struct AgentChatView: View {
     /// 取 `Spacing.l`（16pt ≈ 13pt 等宽字两个字符宽）—— 版式语汇不许在视图里写裸数字（§5.3.8.1 ⑧）。
     private static let gutterWidth: CGFloat = Spacing.l
 
-    /// 思考段的**高度上限**（详设 §3.33）：一行等宽字 20pt × 6 行。
+    /// 思考区展开态的**整块上限**（详设 §3.33「思考区三态」：整块 ≯ 200pt = 抬头 + 发丝 + 内容 178）。
     ///
     /// 常量而不是「按屏高算」：这样「思考多长」对外层只差一个**有界**的量，
-    /// 探针能拿它当判据（`AgentChatAnswerPriorityProbeTests`）。
-    static let thinkingMaxHeight: CGFloat = Metrics.listRowHeight * 6
+    /// 探针能拿它当判据（`AgentChatNarrationProbeTests`）。真值在 `AgentThinkingZone`。
+    static var thinkingZoneExpandedMaxHeight: CGFloat { AgentThinkingZone.expandedMaxHeight }
 
     /// 行首栏的一格字形。宽度**固定**（两字符列），所以「有字形」与「没字形」的行正文仍然对齐。
     private func gutter(_ glyph: String, _ tint: Color) -> some View {
@@ -343,7 +364,7 @@ struct AgentChatView: View {
     }
 
     @ViewBuilder
-    private func messageRow(_ message: AgentChatMessage) -> some View {
+    private func messageRow(_ message: AgentChatMessage, isFinalAssistant: Bool = true) -> some View {
         switch message.role {
         case .user:
             // 行首栏是 `>`（§5.3.8.1 ②），**不是右对齐气泡**，也不是每条一个卡片。
@@ -381,7 +402,7 @@ struct AgentChatView: View {
                                 .foregroundStyle(Theme.text(.secondary))
                         }
                     } else {
-                        assistantBody(message)
+                        assistantBody(message, isFinalAssistant: isFinalAssistant)
                     }
                     if message.isStreaming {
                         // 流式光标：**逐段**出现时它一直在（`FR-AI-25` ②）。
@@ -466,24 +487,26 @@ struct AgentChatView: View {
         }
     }
 
-    /// 一组工具调用（§5.3.8.1 ②）：折叠头 `└─ ▼ 工具 (3)`，条目 `├─ ⏺` / `└─ ⏺`。
+    /// 一组工具调用（§5.3.8.1 ②）：**默认折成一行摘要**，展开才是 `├─ ⏺` 条目。
     ///
-    /// **不描边、不铺底**（§5.3.8.1 ③：终端语汇里没有通栏卡片）；缩进取令牌 `Metrics.listIndent`。
-    /// 条目文本由 `AgentToolLines` 从 Core 写的那一行过程里拆出来（认不出就原样画，不猜）。
+    /// ## 2026-11-07 真机第三次缺陷：「tools 调用了最终还没折叠起来」
+    ///
+    /// 改前的默认形态是 `!(compact || toolProgress == .summary)` —— 契约默认
+    /// `toolProgress = .all` ⇒ **默认展开**。一轮 56 次调用就是 56 行，工具列表铺满
+    /// 对话区、结论被挤到屏幕外。工具调用是**过程信息**，按 §3.33 的优先级它只配占
+    /// **一行**：`▸ 56 次工具调用 · 8.2s · 展开`。
+    ///
+    /// 渲染在 `AgentToolBlockView`（独立件，探针能把展开态真挂起来量）；这里只做
+    /// 「开关 → 形态」的接线与展开态记账。
     @ViewBuilder
     private func toolBlock(_ message: AgentChatMessage) -> some View {
         let rows = AgentToolLines.rows(message.text)
         let rawLines = message.text.components(separatedBy: "\n")
         let count = rows.isEmpty ? rawLines.count : rows.count
         let display = appState.agentDisplayPreferences
-        // **默认形态由显示开关定**（`FR-AGT-UX-CONV-012`）：
-        // · 紧凑模式 / 摘要档 ⇒ 默认收起（否则「摘要」这个词没有落点）；
-        // · 其余 ⇒ 默认展开（老形态）。
-        // 用户点过就以点过的为准 —— 显式收起 / 显式展开各记一个集合。
-        let defaultExpanded = !(display.compact || display.toolProgress == .summary)
+        // **默认折叠**（唯一形态）：点开过才展开。以前这里还有一个「默认展开」的分支，
+        // 那正是主人看到的「一大块 tools 列表没折」—— 过程信息不许有「默认铺开」这一档。
         let expanded = expandedToolBlocks.contains(message.id)
-            ? true
-            : (collapsedToolBlocks.contains(message.id) ? false : defaultExpanded)
 
         if display.toolProgress == .off {
             // 「工具进度 = 关」：只留「调用 N 次」—— **不给折叠头**（给了就等于留了个能展开的口子）。
@@ -498,96 +521,16 @@ struct AgentChatView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         } else {
-        VStack(alignment: .leading, spacing: Spacing.hair) {
-            Button {
+            AgentToolBlockView(text: message.text,
+                               expanded: expanded,
+                               highlight: highlightNeedle,
+                               language: LocalizationManager.shared.effectiveLanguage) {
                 if expanded {
-                    collapsedToolBlocks.insert(message.id)
                     expandedToolBlocks.remove(message.id)
                 } else {
-                    collapsedToolBlocks.remove(message.id)
                     expandedToolBlocks.insert(message.id)
                 }
-            } label: {
-                HStack(spacing: Spacing.s) {
-                    Text(expanded ? "└─ ▼" : "└─ ▶")
-                        .font(Self.transcriptFont)
-                        .foregroundStyle(Theme.text(.secondary))
-                    Text(L(.agentChatToolBlockTitle) + " (" + String(count) + ")")
-                        .font(Self.transcriptFont)
-                        .foregroundStyle(Theme.text(.secondary))
-                    Spacer(minLength: 0)
-                }
-                .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
-            .help(expanded ? L(.agentChatCollapse) : L(.agentChatExpand))
-
-            if expanded {
-                if rows.isEmpty {
-                    // 认不出的过程行：**原样**逐行画（Core 换了格式时，这里既不吞字也不猜）。
-                    ForEach(Array(rawLines.enumerated()), id: \.offset) { _, line in
-                        Text(TranscriptHighlight.apply(highlightNeedle, to: AttributedString(line)))
-                            .font(Self.transcriptFont)
-                            .foregroundStyle(Theme.text(.secondary))
-                            .textSelection(.enabled)
-                            .padding(.leading, Metrics.listIndent)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                } else {
-                    ForEach(Array(rows.enumerated()), id: \.offset) { index, row in
-                        toolEntryRow(row, isLast: index == rows.count - 1)
-                    }
-                }
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        }
-    }
-
-    /// 一条工具条目：`├─ ⏺ <名>("<参数摘要>") (<耗时>s)`（末条用 `└─`）。
-    private func toolEntryRow(_ row: AgentToolLine, isLast: Bool) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: Spacing.s) {
-            Text(isLast ? "└─ ⏺" : "├─ ⏺")
-                .font(Self.transcriptFont)
-                .foregroundStyle(Theme.text(.tertiary))
-            // **调用的那一行走淡蓝**（§5.3.8.4：蓝 = 机器动作）。以前这里是 `Theme.text(.primary)`，
-            // 于是「工具过程」整片是白的，跟助手正文混成一片 —— 主人 2026-10-31：「执行的 tools
-            // 这里还是白色，并不是淡蓝」。跑着的调暗一档表示「还没回来」，结果行仍走中性。
-            Text(TranscriptHighlight.apply(highlightNeedle,
-                                           to: AttributedString(AgentToolLines.callText(row))))
-                .font(Self.transcriptFont)
-                .foregroundStyle(row.outcome == .running
-                                 ? Theme.chat(.command, colorScheme).opacity(0.7)
-                                 : Theme.chat(.command, colorScheme))
-                .textSelection(.enabled)
-            // **失败逐条标在自己这一行上**（六态「部分失败」：不许整轮报失败、也不许丢失败条目）。
-            // 行内只放**短码**（一行要看得完），整句解释进 `.help`。
-            if case let .failure(reason) = row.outcome {
-                Text("✗ " + refusalCode(reason))
-                    .font(Self.transcriptFont)
-                    .foregroundStyle(Theme.status(.danger))
-                    .help(refusalHelp(reason) ?? "")
-            }
-            Spacer(minLength: 0)
-        }
-        .frame(minHeight: Metrics.listRowHeight)
-        .padding(.leading, Metrics.listIndent)
-    }
-
-    /// 拒因里的 `denied:` 前缀（`Core` 的 `toolFinished` 事件把它拼在机器码前面）。
-    private static let deniedPrefix = "denied:"
-
-    /// 行内那个**短码**：剥掉 `denied:` 包装词，其余原样（宁可见码，也不编一句像解释的话）。
-    private func refusalCode(_ raw: String) -> String {
-        raw.hasPrefix(Self.deniedPrefix) ? String(raw.dropFirst(Self.deniedPrefix.count)) : raw
-    }
-
-    /// 短码 → 整句解释（只翻能确定的那两种；其余返回 `nil`，不挂提示）。
-    private func refusalHelp(_ raw: String) -> String? {
-        switch refusalCode(raw) {
-        case "writeConflict": return L(.agentChatWriteBusy)
-        case "staleTarget": return L(.agentChatWriteStale)
-        default: return nil
         }
     }
 
@@ -1533,57 +1476,104 @@ struct AgentChatView: View {
             .foregroundStyle(Theme.text(.tertiary))
     }
 
-    /// 思考段（开关 `thinking`）：**关 ⇒ 一行都不画**（连空行都不留，契约②）；
-    /// 开但这一条没有思考源 ⇒ 同样不画（画个空框等于说「这里有东西、只是空」）。
+    /// **思考区**（详设 §3.33「思考区三态」）：过程独白 + （开关打开时的）思考段都住在这里。
     ///
-    /// **有高度上限 + 内部滚动**（详设 §3.33）：思考属于「过程信息」，按新优先级它不许
-    /// 把结论挤出屏幕。这一段以前是整段直铺 —— 一段长思考就能把下面的正文推到屏幕外。
-    /// 上限是常量 `thinkingMaxHeight`（不随思考长度变），探针逐点判。
+    /// 三态由 Core 判（`AgentThinkingFold`）：
+    /// · **运行中** ⇒ 默认展开、限高 200pt + 内部滚动（「我先读一下…再…」逐段吐出来）；
+    /// · **任一终态** ⇒ 自动折成一行（`思考过程 · 12 步 · 18.4s · 展开`）；
+    /// · **用户手动动过** ⇒ 以用户为准且本轮内保持（sticky，`AgentThinkingManualState`）。
+    ///
+    /// 为什么独白也放这里、而不另做一个「独白行」：两者都是**过程信息**，同一轮里
+    /// 该有同一个形态（否则一轮里两套折叠规则，主人得记住哪个会自己折）。
+    ///
+    /// 内容空（没有独白、也没有打开的思考段）⇒ 一行都不画（契约②：零占位）。
     @ViewBuilder
-    private func thinkingBlock(_ message: AgentChatMessage) -> some View {
-        if appState.agentDisplayPreferences.thinking,
-           let thinking = message.thinking,
-           !thinking.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            HStack(alignment: .top, spacing: 0) {
-                gutter("·", Theme.chat(.thinking, colorScheme))
-                VStack(alignment: .leading, spacing: Spacing.hair) {
-                    Text(L(.agentChatThinkingTitle))
-                        .font(Self.transcriptFont)
-                        .foregroundStyle(Theme.chat(.thinking, colorScheme))
-                    ScrollView(.vertical) {
-                        AgentTranscriptText(text: thinking,
-                                            font: Self.transcriptFont,
-                                            highlight: highlightNeedle)
-                            .foregroundStyle(Theme.chat(.thinking, colorScheme).opacity(0.92))
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                    // 命门：**这个上限**。去掉它，思考段有多长这一块就多高。
-                    .frame(maxHeight: Self.thinkingMaxHeight)
-                }
-                Spacer(minLength: 0)
+    private func thinkingZone(_ message: AgentChatMessage, isFinalAssistant: Bool,
+                              isLastTurn: Bool) -> some View {
+        let parts = thinkingParts(message, isFinalAssistant: isFinalAssistant)
+        if !parts.isEmpty {
+            let phase: AgentThinkingPhase = (model.isRunning && isLastTurn) ? .running : .finished
+            let manual = thinkingManual.manual(for: currentTurnKey)
+            AgentThinkingZone(text: parts.joined(separator: "\n\n"),
+                              phase: phase,
+                              manual: manual,
+                              steps: model.steps.count,
+                              elapsedSeconds: model.lastElapsedSeconds,
+                              highlight: highlightNeedle,
+                              language: LocalizationManager.shared.effectiveLanguage) { expanded in
+                thinkingManual.set(expanded)
             }
         }
     }
 
-    /// 长消息预览（开关 `longPreview`）：首 N 末 M 行 + 折叠处 `… 展开`。
+    /// 思考区里该有哪些内容（顺序：**思考段在前、独白在后** —— 前者是模型的内部独白，
+    /// 后者是它写在正文里的过程叙述）。
     ///
-    /// 切法取 Core 的 `AgentDisplayProjection.previewSplit`（与投影同一份口径）；
-    /// 展开状态是本视图的 `expandedPreview`（**按消息 id**：展开一条不影响别的条）。
+    /// · 思考段仍受 `display.thinking` 开关管（关 = 不画那一段，但数据照收）；
+    /// · **过程独白不受这个开关管**：它是模型写进正文的字，既不能回正文（主人明确
+    ///   「这是思考过程，不是正文」），也不该被静默吞掉（关掉开关不等于删掉它）。
+    private func thinkingParts(_ message: AgentChatMessage, isFinalAssistant: Bool) -> [String] {
+        guard message.role == .assistant else { return [] }
+        var parts: [String] = []
+        if appState.agentDisplayPreferences.thinking,
+           let thinking = message.thinking,
+           !thinking.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            parts.append(thinking)
+        }
+        let text = message.text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !text.isEmpty {
+            if isFinalAssistant {
+                let split = AgentAnswerClassifier.split(message.text)
+                // 整条都是独白 ⇒ 它按「末段永远是结论」的兜底走正文（否则正文区一个字都没有），
+                // 这里就不再放一遍——同一段字在两处出现，读起来像重复。
+                if !split.isNarrationOnly, let narration = split.narration,
+                   !narration.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    parts.append(narration)
+                }
+            } else {
+                // 轮内的中间叙述：整条都是过程（位置判定，不看长相）。
+                parts.append(text)
+            }
+        }
+        return parts
+    }
+
+    /// 正文（结论）区。
+    ///
+    /// ## 这里只画结论（详设 §3.33）
+    ///
+    /// 主人问：「Doyah Agent 里输出的『我先读一下……再……』这是思考过程吗？」——是。
+    /// 于是正文只留**结论**：过程独白归思考区（`thinkingZone`），中间叙述（轮内非最后
+    /// 一条助手消息）整条也归思考区。正文区里一个「我先…」都不该出现。
+    ///
+    /// · 终态：`AgentAnswerClassifier` 切出结论段（末段 + 代码块）；
+    /// · 流式中：同样只画结论那一段 —— 独白正在思考区里增量长，若此时整段画进正文，
+    ///   终态一到它会在正文里「消失」，读起来像内容被吞了。
+    ///
+    /// 整条都是独白（`isNarrationOnly`，例如只说了一句「我先看一下」就断了）⇒ 按契约
+    /// 「末段永远是结论」的兜底原样出 —— 这种消息**不折**，否则正文区一个字都没有。
     @ViewBuilder
-    private func assistantBody(_ message: AgentChatMessage) -> some View {
-        let preferences = appState.agentDisplayPreferences
-        let split = message.isStreaming || expandedPreview.contains(message.id)
+    private func assistantBody(_ message: AgentChatMessage, isFinalAssistant: Bool) -> some View {
+        if !isFinalAssistant {
+            // 中间叙述：整条在思考区里（`thinkingZone`）。正文区不重复画一遍。
+            EmptyView()
+        } else {
+            conclusionBody(AgentAnswerClassifier.split(message.text).conclusion, message: message)
+        }
+    }
+
+    /// **结论段**：默认整段呈现（含代码块）。`longPreview` 是**显式 opt-in** ——
+    /// 它折的正是结论本身，所以默认必须是 `off`（§3.33；旧机器盘上的 `2+2` 由
+    /// `AgentDisplayPreferencesFile` 的一次性迁移改掉）。
+    @ViewBuilder
+    private func conclusionBody(_ text: String, message: AgentChatMessage) -> some View {
+        let split = expandedPreview.contains(message.id)
             ? nil
-            : AgentDisplayProjection.previewSplit(text: message.text, preferences: preferences)
+            : AgentDisplayProjection.previewSplit(text: text,
+                                                  preferences: appState.agentDisplayPreferences)
         if let split {
             VStack(alignment: .leading, spacing: Spacing.hair) {
-                AgentMarkdownBody(
-                    text: split.head,
-                    isStreaming: false,
-                    font: Self.transcriptFont,
-                    highlight: highlightNeedle,
-                    tint: Theme.chat(.assistant, colorScheme)
-                )
+                markdownBody(split.head, isStreaming: false)
                 // 折叠处：`…` + 展开入口（契约⑥「折叠处有 `…` 且可展开」）。
                 //
                 // **这里刻意不用 `Button`**：转写区的折叠行是**内容里的一个折角**，不是工具条按钮；
@@ -1597,23 +1587,22 @@ struct AgentChatView: View {
                     .onTapGesture { expandedPreview.insert(message.id) }
                     .accessibilityAddTraits(.isButton)
                     .help(L(.agentChatExpand))
-                AgentMarkdownBody(
-                    text: split.tail,
-                    isStreaming: false,
-                    font: Self.transcriptFont,
-                    highlight: highlightNeedle,
-                    tint: Theme.chat(.assistant, colorScheme)
-                )
+                markdownBody(split.tail, isStreaming: false)
             }
         } else {
-            AgentMarkdownBody(
-                text: message.text,
-                isStreaming: message.isStreaming,
-                font: Self.transcriptFont,
-                highlight: highlightNeedle,
-                tint: Theme.chat(.assistant, colorScheme)
-            )
+            markdownBody(text, isStreaming: message.isStreaming)
         }
+    }
+
+    /// 助手正文的 Markdown 呈现（解析只走 `MarkdownDocument`，见 `AgentMarkdownBody`）。
+    private func markdownBody(_ text: String, isStreaming: Bool) -> some View {
+        AgentMarkdownBody(
+            text: text,
+            isStreaming: isStreaming,
+            font: Self.transcriptFont,
+            highlight: highlightNeedle,
+            tint: Theme.chat(.assistant, colorScheme)
+        )
     }
 
     // MARK: - 状态行（§5.3.8.1 ④：一行、字段顺序固定）

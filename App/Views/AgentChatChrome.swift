@@ -111,6 +111,65 @@ enum AgentToolLines {
     }
 }
 
+/// 工具块的**一行摘要**（详设 §3.33：`▸ 56 次工具调用 · 8.2s · 展开`）。
+///
+/// 为什么摘要要在这里算、而不是在视图里拼字符串：
+/// · 条数与总耗时是**两个纯数**（`count` / Σ`elapsed`），判据可以直接断言
+///   「56 条 + 8.2s」这一行，不必去截字符串；
+/// · 界面与探针读**同一份**文案（`AgentClaimAuditRow.summaryText` 同一条纪律）。
+enum AgentToolBlockSummary {
+
+    /// 全部条目的耗时之和；一条耗时都没有 ⇒ `nil`（**不写 0.0s** —— 没真跑过就没有耗时）。
+    static func elapsedSeconds(_ rows: [AgentToolLine]) -> Double? {
+        var total: Double = 0
+        var seen = false
+        for row in rows {
+            guard let raw = row.elapsed else { continue }
+            // `0.5s` → 0.5（`AgentToolLines` 只认「数字 + s」这一种形态）。
+            guard let value = Double(raw.dropLast()) else { continue }
+            total += value
+            seen = true
+        }
+        return seen ? total : nil
+    }
+
+    /// 那一行摘要的正文（不含行首的 `▸` / `▾`）。
+    ///
+    /// `expanded` 只换末尾那两个字（展开 / 收起）—— 条数与耗时**两种形态都一样**，
+    /// 这样展开前后读数不会跳（「56 次」在展开后又变成别的数字，等于报了两次不同的账）。
+    static func text(count: Int, elapsedSeconds: Double?, expanded: Bool,
+                     language: AppLanguage) -> String {
+        var parts = [LocalizedStrings.format(.agentChatToolSummary, language: language, count)]
+        if let elapsedSeconds {
+            parts.append(String(format: "%.1fs", elapsedSeconds))
+        }
+        parts.append(LocalizedStrings.text(expanded ? .agentChatCollapse : .agentChatExpand,
+                                           language: language))
+        return parts.joined(separator: " · ")
+    }
+}
+
+/// 思考区**终态那一行摘要**（详设 §3.33「思考区三态」：`思考过程 · 12 步 · 18.4s · 展开`）。
+///
+/// 为什么摘要里必须带**步数与耗时**：折起来之后它是这一轮过程信息的**唯一读数** ——
+/// 只写「思考过程」等于把「跑了多久、走了几步」也一并折掉了。
+enum AgentThinkingSummary {
+
+    static func text(steps: Int, elapsedSeconds: Double?, expanded: Bool,
+                     language: AppLanguage) -> String {
+        var parts = [LocalizedStrings.text(.agentChatThinkingFoldTitle, language: language)]
+        if steps > 0 {
+            parts.append(LocalizedStrings.format(.agentChatStepsCount, language: language, steps))
+        }
+        if let elapsedSeconds {
+            parts.append(String(format: "%.1fs", elapsedSeconds))
+        }
+        parts.append(LocalizedStrings.text(expanded ? .agentChatCollapse : .agentChatExpand,
+                                           language: language))
+        return parts.joined(separator: " · ")
+    }
+}
+
 /// 状态行里的进度条（§5.3.8.1 ④：`[████░░] 42%`）。
 ///
 /// 纯函数，格子数固定：终端里的方括号进度条就是这个样子，宽度不能随窗口伸缩

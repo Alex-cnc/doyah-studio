@@ -216,6 +216,94 @@ final class AgentDisplayPreferencesTests: XCTestCase {
         XCTAssertTrue(loaded.preferences.compact, "认得的那一项照常生效")
     }
 
+    // MARK: - 旧默认迁移（2026-11-07 真机复验：已装机器结论仍被折）
+
+    /// 真机那一份盘的形状：beta1.0.3 之前按旧默认写下的一整份（`longPreview = 2+2`）。
+    private func legacyPayloadJSON(preview: String = "2+2") -> String {
+        """
+        {"version": 1, "values": {
+          "display.streaming": "on",
+          "display.compact": "off",
+          "display.thinking": "off",
+          "display.timestamps": "off",
+          "display.toolProgress": "all",
+          "display.indicatorGlyph": "emoji",
+          "display.longPreview": "\(preview)",
+          "display.bottomBarMeta": "off",
+          "display.submitWhileRunning": "interrupt"
+        }}
+        """
+    }
+
+    /// ① 旧库（v1、`2+2`）启动 ⇒ **迁到 `off`**，并且要求写回一次（只迁一次）。
+    ///
+    /// 反例（改前的行为）就在同一个函数里量：同一份文本按 v1 原值解出来是 `2+2`
+    /// ⇒ `previewSplit` 非 `nil` ⇒ 结论被折。这条反例证明判据有牙齿。
+    func testLegacyDefaultTwoPlusTwoMigratesToOff() throws {
+        let directory = try makeScratchDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let file = AgentDisplayPreferencesFile(directory: directory)
+        try Data(legacyPayloadJSON().utf8).write(to: file.fileURL)
+
+        let loaded = file.load()
+        XCTAssertEqual(loaded.state, .loaded)
+        XCTAssertEqual(loaded.preferences.longPreview, .off,
+                       "旧库里的 `2+2` 没迁走 ⇒ 已装用户看到的结论仍是首 2 末 2 行")
+        XCTAssertTrue(loaded.needsRewrite, "迁移之后要写回一次（否则每次启动都重判，且用户此后显式选 2+2 会被再覆盖）")
+
+        // 写回之后：version 2 + 仍然 `off`，且不再要求重写。
+        try file.save(loaded.preferences)
+        let onDisk = try String(contentsOf: file.fileURL, encoding: .utf8)
+        XCTAssertTrue(onDisk.contains("\"version\" : 2"), "写回的那份必须是 v2：\(onDisk)")
+        let again = file.load()
+        XCTAssertEqual(again.preferences.longPreview, .off)
+        XCTAssertFalse(again.needsRewrite, "v2 之后不许再迁 —— 否则用户显式选的值每次启动都被改掉")
+
+        // **反例**：同一份 v1 文本按原值解（不迁移）= 改前的行为 ⇒ 结论被折。
+        var legacy = AgentDisplayPreferences()
+        try legacy.apply(key: AgentDisplayKey.longPreview.rawValue, value: "2+2")
+        XCTAssertEqual(legacy.longPreview, .headTail(head: 2, tail: 2))
+        let longText = (1...30).map { "第 \($0) 行：结论正文。" }.joined(separator: "\n")
+        XCTAssertNotNil(AgentDisplayProjection.previewSplit(text: longText, preferences: legacy),
+                        "反例没被判红 ⇒ 这条判据量不出「结论被折」")
+        XCTAssertNil(AgentDisplayProjection.previewSplit(text: longText, preferences: loaded.preferences),
+                     "迁移后默认形态仍然折了结论")
+    }
+
+    /// ② 迁移**只做一次**：用户在 v2 之后显式选 `2+2` 要保留（不迁移）。
+    func testExplicitChoiceAfterMigrationSurvives() throws {
+        let directory = try makeScratchDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let file = AgentDisplayPreferencesFile(directory: directory)
+
+        // 先演一遍迁移 + 写回。
+        try Data(legacyPayloadJSON().utf8).write(to: file.fileURL)
+        let migrated = file.load()
+        try file.save(migrated.preferences)
+
+        // 用户自己把开关打开（显式 opt-in）。
+        var chosen = migrated.preferences
+        try chosen.apply(key: AgentDisplayKey.longPreview.rawValue, value: "2+2")
+        try file.save(chosen)
+
+        let loaded = file.load()
+        XCTAssertEqual(loaded.preferences.longPreview, .headTail(head: 2, tail: 2),
+                       "v2 之后用户显式选的 `2+2` 被迁移吃掉了 ⇒ 「保存成功」是谎话")
+        XCTAssertFalse(loaded.needsRewrite)
+    }
+
+    /// ③ 旧库里的**非默认**值不迁（`3+5` 是用户自己选的，哪怕它是 v1）。
+    func testLegacyNonDefaultPreviewIsKept() throws {
+        let directory = try makeScratchDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let file = AgentDisplayPreferencesFile(directory: directory)
+        try Data(legacyPayloadJSON(preview: "3+5").utf8).write(to: file.fileURL)
+
+        let loaded = file.load()
+        XCTAssertEqual(loaded.preferences.longPreview, .headTail(head: 3, tail: 5))
+        XCTAssertFalse(loaded.needsRewrite, "只有等于旧默认 `2+2` 的才视为「当年那份默认」")
+    }
+
     /// 拒绝 / 降级的人话两种语言都拿得到，且不是原样模板（`%@` 不许漏到界面上）。
     func testRejectionTextIsLocalizedInBothLanguages() {
         let error = AgentDisplayError.invalidValue(key: AgentDisplayKey.toolProgress.rawValue,

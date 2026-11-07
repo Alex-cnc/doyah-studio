@@ -1457,6 +1457,10 @@ public enum LKey: String, CaseIterable, Sendable {
     case agentChatCollapse
     /// `FR-AGT-UX-CONV-012` 的「显示思考段」：思考段的抬头（开关打开且真有内容时才画）。
     case agentChatThinkingTitle
+    /// 详设 §3.33「思考区三态」：终态折成一行时的抬头（「思考过程 · 12 步 · 18.4s · 展开」）。
+    case agentChatThinkingFoldTitle
+    /// 步数（「12 步」）—— 思考区摘要要报「这一轮走了几步」。
+    case agentChatStepsCount
     /// `FR-AI-31` ①：同一文件正有另一次写入 — 这一次没落盘。
     case agentChatWriteBusy
     /// `FR-AI-31` ①：批准之后文件被改过 — 不拿旧审批覆盖。
@@ -1504,6 +1508,8 @@ public enum LKey: String, CaseIterable, Sendable {
     case agentChatTurnFailed
     /// §5.3.8.1 ②：过程块折叠头的名字（`└─ ▼ 工具 (3)`）。
     case agentChatToolBlockTitle
+    /// 详设 §3.33：工具块的**一行摘要**（默认形态：「56 次工具调用 · 8.2s · 展开」）。
+    case agentChatToolSummary
     /// §5.3.8.1 ⑤：运行中常驻在输入框下面那一行中断提示。
     case agentChatInterruptHint
     /// §5.3.8.1 ④：状态行第一格（空闲 / 运行中）。
@@ -5113,6 +5119,8 @@ public enum LocalizedStrings {
         .agentChatTurnFailed: [.simplifiedChinese: "这一轮没跑成", .english: "This turn did not complete"],
         // §5.3.8.1 版式语汇：过程块折叠头 / 中断提示 / 状态行那几格。
         .agentChatToolBlockTitle: [.simplifiedChinese: "工具", .english: "tools"],
+        // 详设 §3.33：工具块与过程独白的**一行摘要**（默认形态；展开才看明细）。
+        .agentChatToolSummary: [.simplifiedChinese: "%ld 次工具调用", .english: "%ld tool calls"],
         .agentChatInterruptHint: [.simplifiedChinese: "⌘. 中断这一轮", .english: "⌘. to interrupt"],
         .agentStatusReady: [.simplifiedChinese: "就绪", .english: "ready"],
         .agentStatusComputing: [.simplifiedChinese: "( •_•)>◉─ 在算…", .english: "( •_•)>◉─ computing…"],
@@ -5221,6 +5229,9 @@ public enum LocalizedStrings {
         .agentChatExpand: [.simplifiedChinese: "展开", .english: "Expand"],
         .agentChatCollapse: [.simplifiedChinese: "收起", .english: "Collapse"],
         .agentChatThinkingTitle: [.simplifiedChinese: "思考", .english: "thinking"],
+        // 详设 §3.33「思考区三态」：终态那一行的抬头 + 步数（运行中展开，终态折一行）。
+        .agentChatThinkingFoldTitle: [.simplifiedChinese: "思考过程", .english: "reasoning"],
+        .agentChatStepsCount: [.simplifiedChinese: "%ld 步", .english: "%ld steps"],
         .workspaceHomeBuildLine: [.simplifiedChinese: "版本 %@（构建 %@）", .english: "Version %@ (build %@)"],
         .workspaceHomeCopyright: [.simplifiedChinese: "版权所有 © 2026 豆丫科技 · 本机优先：数据与文件不出这台机器", .english: "Copyright © 2026 Doyah Tech · Local first: your data and files stay on this machine"],
         // 版权行（2026-10-27 人类主人令）：**中英各叫各的名字** —— 中文界面给「豆丫科技」，英文界面给「Doyah Tech」，不混写（英文文案里不夹汉字这条判据照旧适用）。两个名字并列的那一句（`© 2026 豆丫科技 · Doyah Tech`）只出现在不分语言的地方：Info.plist / LICENSE。
