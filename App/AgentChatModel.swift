@@ -34,6 +34,20 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
     /// 纯 Core 判定（`AgentSlashCompleter`），这里只负责跟着输入刷新与填字。
     @Published private(set) var slashSuggestions: [AgentSlashSuggestion] = []
 
+    // MARK: - 输入历史（详设 §3.35）
+
+    /// 提交历史：**提交成功才入历史**、连续重复去重、上限 200 条、落盘（跨重启不丢）。
+    ///
+    /// 纯逻辑全在 Core（`AgentInputHistory` / `AgentInputHistoryNavigator`），
+    /// 这里只做两件事：把「真的发出去那一刻」记下来、把 ↑↓ 翻成一次回填。
+    @Published private(set) var inputHistory: AgentInputHistory
+
+    /// 历史落盘失败的那句话（`nil` = 没出错）。写不进去不影响发言，但不许静默。
+    @Published private(set) var inputHistorySaveError: String?
+
+    private var historyNavigator = AgentInputHistoryNavigator()
+    let inputHistoryStore: AgentInputHistoryStore
+
     private let slashCompleter = AgentSlashCompleter()
 
     /// 选一条候选：把插入文本写进输入框（`/model ` 带尾随空格，省一次敲键）；候选随之收掉。
@@ -295,10 +309,51 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
     /// 生产路径照旧走默认值。
     init(sessionID: String = "chat-\(UUID().uuidString)",
          state: AgentChatState = AgentChatState(),
-         queue: AgentPromptQueue = AgentPromptQueue()) {
+         queue: AgentPromptQueue = AgentPromptQueue(),
+         inputHistoryStore: AgentInputHistoryStore = .standard()) {
         self.sessionID = sessionID
         self.state = state
         self.queue = queue
+        self.inputHistoryStore = inputHistoryStore
+        // 读不出来就当空历史（第一次启动就是这种状态）—— 一份历史坏掉不该让对话打不开。
+        self.inputHistory = (try? inputHistoryStore.load()) ?? AgentInputHistory()
+    }
+
+    // MARK: - 输入历史（详设 §3.35）
+
+    /// 记一条历史。**只在「真的发出去」那一刻调**（挡下 / 空串不记，契约 ④）。
+    ///
+    /// 顺手把浏览游标归零：刚发完一条，下一次 ↑ 应该从**最新**一条开始，而不是接着上次的位置。
+    func recordInputHistory(_ text: String) {
+        historyNavigator.reset()
+        guard inputHistory.record(text) else { return }
+        persistInputHistory()
+    }
+
+    /// ↑↓ 回填（**只改文字，不发送** —— 契约 ③）。返回要填进输入框的文字，`nil` = 这一步不动。
+    func recallHistory(_ arrow: AgentComposerArrow) -> String? {
+        let recalled: String?
+        switch arrow {
+        case .up: recalled = historyNavigator.up(current: input, history: inputHistory)
+        case .down: recalled = historyNavigator.down(current: input, history: inputHistory)
+        }
+        guard let recalled else { return nil }
+        input = recalled
+        return recalled
+    }
+
+    /// 退出历史浏览（草稿态）。发送 / 清空输入之后调。
+    func resetInputHistoryNavigation() {
+        historyNavigator.reset()
+    }
+
+    private func persistInputHistory() {
+        do {
+            try inputHistoryStore.save(inputHistory)
+            inputHistorySaveError = nil
+        } catch {
+            inputHistorySaveError = "\(error)"
+        }
     }
 
     /// 取消标记（跨并发域读：用锁，不掺进界面状态）。
@@ -406,6 +461,8 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
         // 那正是「本地执行不进模型」要禁掉的那件事。命令也不清队列、不打断在跑的那一轮
         // （`/stop` 才是打断，且它自己走 `stop()`）。
         if let effect = slashRuntime.plan(prompt) {
+            // 命令也是「提交成功」（它在本地执行完、输入框清空）⇒ 入历史，↑ 能把它叫回来再改参数。
+            recordInputHistory(prompt)
             input = ""
             await perform(effect)
             return
@@ -423,6 +480,7 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
             if AgentDisplayProjection.abortsInFlightBeforeSending(displayPreferencesProvider()) {
                 stop()
             }
+            recordInputHistory(prompt)
             input = ""
             return
         }
@@ -1057,7 +1115,11 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
             gate.record(.proceed, for: trigger)
             gateRecall = nil
         }
-        if intent == .newQuestion { input = "" }
+        if intent == .newQuestion {
+            // 走到这里 = 真的发出去了（门控挡下 / 造不出循环都在上面 return 了）⇒ 入历史（契约 ④）。
+            recordInputHistory(prompt)
+            input = ""
+        }
         lastPrompt = prompt
         let started = Date()
         task = Task { [weak self] in

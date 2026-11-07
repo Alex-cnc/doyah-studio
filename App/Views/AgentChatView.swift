@@ -22,7 +22,9 @@ struct AgentChatView: View {
     var initialStepsExpanded: Bool = false
     /// 定时 agent 面板的入口（`FR-AI-27`）：面板本身读的是 `AppState` 里的条目与历史。
     @EnvironmentObject private var appState: AppState
-    @FocusState private var inputFocused: Bool
+    /// 输入框这一格的高度（§3.35：多行编辑器由内容量出，超过 `maxLines` 行封顶）。
+    @State private var composerHeight: CGFloat =
+        AgentComposerMetrics.verticalInset * 2 + AgentComposerEditor.lineHeight(for: Theme.nsFont(.mono))
     /// 发丝线要按当前外观取色（深色主题用白色低透明叠加，浅色主题用实色）。
     @Environment(\.colorScheme) private var colorScheme
     /// 任务清单是否展开（TUI 的 `▸/▾` 折叠）。跑着时默认收起、只留最后两步。
@@ -414,6 +416,9 @@ struct AgentChatView: View {
     /// 正文用等宽 —— TUI 只有一种字体，等宽本身就是它的观感（人类主人 2026-10-22：
     /// 「我希望 Agent 的界面像 Hermes -tui 的界面」）。
     private static let transcriptFont = Theme.font(.mono)
+
+    /// 同一套等宽字的 AppKit 侧那份（输入框是 `NSTextView`，要吃 `NSFont`）。
+    private static var transcriptNSFont: NSFont { Theme.nsFont(.mono) }
 
     /// 行首栏：**两个等宽字符**的固定列宽（§5.3.8.1 ②），正文从同一列起。
     /// 取 `Spacing.l`（16pt ≈ 13pt 等宽字两个字符宽）—— 版式语汇不许在视图里写裸数字（§5.3.8.1 ⑧）。
@@ -1956,23 +1961,42 @@ struct AgentChatView: View {
             if !model.slashSuggestions.isEmpty {
                 slashSuggestionStrip
             }
-            HStack(alignment: .firstTextBaseline, spacing: Spacing.s) {
+            HStack(alignment: .top, spacing: Spacing.s) {
                 // 提示符 `>`（§5.3.8.1 ⑤），与消息区用户行同一个字形、同一列。
+                // 多行编辑器按 `.top` 对齐 ⇒ 提示符自己补上框内上边距，与**首行**齐平。
                 Text(">")
                     .font(Self.transcriptFont)
                     .foregroundStyle(Theme.accentColor)
-                TextField(L(.agentChatPlaceholder), text: $model.input)
-                    .textFieldStyle(.plain)
-                    .font(Self.transcriptFont)
-                    .focused($inputFocused)
-                    // 六态「权限不足」那一档（§5.3.8）：**有单子等批 或 会话已归档 ⇒ 输入框禁用**。
-                    // 禁用而不是「灰掉仍然发送」—— 先发后问是本条的明令禁止项。
-                    .disabled(readOnly || model.hasPendingApproval)
-                    .onSubmit {
-                        // 跑着时提交 = 排队（不是无视、也不是打断）
-                        let typed = !model.input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                        if typed { Task { await model.send() } }
+                    .padding(.top, AgentComposerMetrics.verticalInset)
+                ZStack(alignment: .topLeading) {
+                    // 输入面（详设 §3.35）：**多行** `NSTextView` 承载 —— ⏎ 发送、⇧⏎ 换行、
+                    // ↑↓ 只在首行行首 / 末行行末回填历史（其余位置归光标）。
+                    AgentComposerEditor(
+                        text: $model.input,
+                        height: $composerHeight,
+                        font: Self.transcriptNSFont,
+                        // 六态「权限不足」那一档（§5.3.8）：**有单子等批 或 会话已归档 ⇒ 输入框禁用**。
+                        // 禁用而不是「灰掉仍然发送」—— 先发后问是本条的明令禁止项。
+                        isEnabled: !(readOnly || model.hasPendingApproval),
+                        // 斜杠命令候选条开着 ⇒ ↑↓ 归浮层，不回填历史（§3.35 契约 ⑥）。
+                        overlayOpen: !model.slashSuggestions.isEmpty,
+                        onSubmit: {
+                            // 跑着时提交 = 排队（不是无视、也不是打断）
+                            let typed = !model.input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                            if typed { Task { await model.send() } }
+                        },
+                        onHistoryRecall: { arrow in model.recallHistory(arrow) }
+                    )
+                    .frame(height: composerHeight)
+                    // 占位文案：AppKit 的文本视图自己不画占位符，按老 `TextField` 的观感补一层。
+                    if model.input.isEmpty {
+                        Text(L(.agentChatPlaceholder))
+                            .font(Self.transcriptFont)
+                            .foregroundStyle(Theme.text(.tertiary))
+                            .padding(.top, AgentComposerMetrics.verticalInset)
+                            .allowsHitTesting(false)
                     }
+                }
                 if model.isRunning {
                     Text(L(.agentChatRunning)).font(Self.transcriptFont).foregroundStyle(Theme.text(.secondary))
                     // **停止是等宽字形 `■`，不是 SF Symbol**（§5.3.8.1 ⑤）：图标自带留白与光学重心，

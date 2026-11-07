@@ -3,6 +3,7 @@
 
 # 构建产物
 .build/
+.build-agent/
 .build-cache/
 DerivedData/
 dist/
