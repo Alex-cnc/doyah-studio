@@ -313,7 +313,14 @@ public struct AgentStandardDispatcher: AgentToolDispatcher {
                 ].joined(separator: "|"))
                 let request = AgentApprovalRequest(toolName: definition.name,
                                                    fingerprint: fingerprint,
-                                                   payload: "\(definition.name)\n\(invocation.argumentsJSON)")
+                                                   payload: "\(definition.name)\n\(invocation.argumentsJSON)",
+                                                   // 远端工具的参数字形不受我们约束 ⇒ 作用域 = 参数原文摘要
+                                                   // （同一串参数才算同一档）；工具名 / 参数里的
+                                                   // 发送、凭据字样把危险面拉高到「只此一次」。
+                                                   scope: AgentApprovalScope.argumentDigest(invocation.argumentsJSON),
+                                                   hazard: AgentApprovalHazardRules.merged(
+                                                       AgentApprovalHazardRules.text(definition.name),
+                                                       AgentApprovalHazardRules.text(invocation.argumentsJSON)))
                 guard approvals.contains(fingerprint) else { return .needsApproval(request) }
             }
             switch mcp.call(tool: definition.name, argumentsJSON: invocation.argumentsJSON) {

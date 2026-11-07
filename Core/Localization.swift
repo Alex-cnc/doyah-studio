@@ -2531,6 +2531,23 @@ public enum LKey: String, CaseIterable, Sendable {
     case agentApprovalApproved
     case agentApprovalRejected
     case agentApprovalDismissHint
+    // 三档授权（§3.36）：仅这一次 / 本会话内 / 总是允许，以及可撤销清单
+    case agentApprovalTierSection
+    case agentApprovalTierOnce
+    case agentApprovalTierSession
+    case agentApprovalTierAlways
+    case agentApprovalTierAlwaysConsequence
+    case agentApprovalTierScopeHint
+    case agentApprovalTierBlocked
+    case agentApprovalTierMenu
+    case agentApprovalGrantsSection
+    case agentApprovalGrantsEmpty
+    case agentApprovalGrantsSession
+    case agentApprovalGrantsAlways
+    case agentApprovalGrantsRevoke
+    case agentApprovalGrantsRevokeAll
+    case agentApprovalGrantRevoked
+    case agentApprovalGrantSaveFailed
 
     // 只读模式与白名单（FR-AI-09）
     case agentGuardSection
@@ -6192,6 +6209,23 @@ public enum LocalizedStrings {
         .agentApprovalApproved: [.simplifiedChinese: "已批准并执行。", .english: "Approved and run."],
         .agentApprovalRejected: [.simplifiedChinese: "已拒绝，动作不会执行。", .english: "Rejected; the action will not run."],
         .agentApprovalDismissHint: [.simplifiedChinese: "关闭本窗口不会批准，动作会留在「待审批」里。", .english: "Closing this sheet does not approve it; the action stays pending."],
+
+        .agentApprovalTierSection: [.simplifiedChinese: "允许方式", .english: "How long to allow"],
+        .agentApprovalTierOnce: [.simplifiedChinese: "仅这一次", .english: "Just this once"],
+        .agentApprovalTierSession: [.simplifiedChinese: "本会话内允许", .english: "Allow for this session"],
+        .agentApprovalTierAlways: [.simplifiedChinese: "总是允许", .english: "Always allow"],
+        .agentApprovalTierMenu: [.simplifiedChinese: "允许方式…", .english: "Allow…"],
+        .agentApprovalTierAlwaysConsequence: [.simplifiedChinese: "以后这类操作不再询问；可在「设置 → 智能体 → 运行策略 → 已授权的操作」里改回。", .english: "You won't be asked again for this kind of action; change it back in Settings → Agent → Runtime → Granted actions."],
+        .agentApprovalTierScopeHint: [.simplifiedChinese: "只对「%@」生效，同工具的其它目标仍会询问。", .english: "Covers only “%@”; other targets of the same tool still ask."],
+        .agentApprovalTierBlocked: [.simplifiedChinese: "删除、对外发送这类操作不可逆，每次都要确认（不能选「本会话内」「总是允许」）。", .english: "Deletes and outbound sends can't be undone, so they are confirmed every time — the session and always options don't apply."],
+        .agentApprovalGrantsSection: [.simplifiedChinese: "已授权的操作", .english: "Granted actions"],
+        .agentApprovalGrantsEmpty: [.simplifiedChinese: "还没有长期授权：每次这类操作都会再问一次。", .english: "No standing grants yet: every such action asks again."],
+        .agentApprovalGrantsSession: [.simplifiedChinese: "本会话内", .english: "This session"],
+        .agentApprovalGrantsAlways: [.simplifiedChinese: "全局（跨重启）", .english: "Everywhere (survives restart)"],
+        .agentApprovalGrantsRevoke: [.simplifiedChinese: "撤销", .english: "Revoke"],
+        .agentApprovalGrantsRevokeAll: [.simplifiedChinese: "全部撤销", .english: "Revoke all"],
+        .agentApprovalGrantRevoked: [.simplifiedChinese: "已撤销：这类操作会重新询问。", .english: "Revoked: this kind of action asks again."],
+        .agentApprovalGrantSaveFailed: [.simplifiedChinese: "授权没能写进设置：%@", .english: "Couldn't save the grant: %@"],
 
         .agentGuardSection: [.simplifiedChinese: "只读模式与白名单", .english: "Read-only mode & allowlist"],
         .agentReadOnlyMode: [.simplifiedChinese: "只读模式（推荐）", .english: "Read-only mode (recommended)"],

@@ -467,6 +467,46 @@ struct AgentSettingsSheet: View {
                     }
                 }
 
+                // **已授权的操作**（§3.36 ④）：能看见，才能收得回。
+                // 会话级（换会话即失效）与全局级（跨重启）都在这一节，逐条可撤、也能一次全撤。
+                // 与「审批策略」的关系：那一格管**基线宽严**，这一节管**具体哪一条不再问** ——
+                // 撤销之后立刻恢复询问（判定读的就是这本账，不在别处留副本）。
+                Section(L(.agentApprovalGrantsSection)) {
+                    if appState.agentApprovalGrants.isEmpty {
+                        Text(L(.agentApprovalGrantsEmpty))
+                            .font(Theme.font(.caption))
+                            .foregroundStyle(Theme.text(.secondary))
+                            .fixedSize(horizontal: false, vertical: true)
+                    } else {
+                        ForEach(appState.agentApprovalGrants) { grant in
+                            HStack(alignment: .firstTextBaseline, spacing: Spacing.s) {
+                                VStack(alignment: .leading, spacing: Spacing.hair) {
+                                    Text("\(grant.tool) · \(grant.scope)")
+                                        .font(Theme.font(.caption))
+                                        .textSelection(.enabled)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                    Text(grant.tier == .always
+                                         ? L(.agentApprovalGrantsAlways)
+                                         : L(.agentApprovalGrantsSession))
+                                        .font(Theme.font(.caption))
+                                        .foregroundStyle(Theme.text(.secondary))
+                                }
+                                Spacer(minLength: Spacing.s)
+                                Button(L(.agentApprovalGrantsRevoke)) {
+                                    appState.revokeAgentApprovalGrant(id: grant.id)
+                                }
+                                .buttonStyle(.bordered)
+                                .controlSize(.small)
+                            }
+                        }
+                        Button(L(.agentApprovalGrantsRevokeAll)) {
+                            appState.revokeAllAgentApprovalGrants()
+                        }
+                        .buttonStyle(.bordered)
+                    }
+                }
+                .onAppear { appState.loadAgentApprovalGrants() }
+
                 // **插件（扩展点）**（`FR-AGT-LINK-EXT-003` 的界面那一半）：
                 // 装了哪些、每个真授权了什么、没装上的为什么、卸完还剩什么 —— 四件都在这一节。
                 // 「装」这件事本身 = 把插件文件夹放进目录（面板不假装能凭空拉一个插件下来），

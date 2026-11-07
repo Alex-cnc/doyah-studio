@@ -760,6 +760,20 @@ struct AgentChatView: View {
         return false
     }
 
+    /// 这张待审批卡能不能给「本会话内 / 总是允许」两档（§3.36 ③）。
+    ///
+    /// 判据与审核那一侧**同一套规则**（`AgentApprovalHazardRules`）：删除 / 覆盖 / 对外发送
+    /// 一律不给那两档。这里是界面层的**提前收口**（少一次误点），真正的闸门在
+    /// `AgentApprovalGrantStore.isGranted`（盘上就算有历史授权也不认）。
+    private func cardAllowsStandingGrant(_ card: AgentToolCard) -> Bool {
+        let preview = card.approvalPreview ?? ""
+        if preview.hasPrefix("越界") { return false }
+        var hazard = AgentApprovalHazardRules.text(card.name)
+        hazard = AgentApprovalHazardRules.merged(hazard, AgentApprovalHazardRules.command(preview))
+        hazard = AgentApprovalHazardRules.merged(hazard, AgentApprovalHazardRules.sql(preview))
+        return hazard.allowsGrant
+    }
+
     @ViewBuilder
     private func toolCard(_ card: AgentToolCard) -> some View {
         // §7.9.10：工具卡也守在行首栏里 —— `⚡` 占 14pt，卡体从同一条竖线起；
@@ -850,6 +864,23 @@ struct AgentChatView: View {
                                       help: L(.agentChatApprovalApprove),
                                       tint: Theme.status(.success)) { model.approve(card.id) }
                         .controlSize(.small)
+                    // **允许方式**（§3.36）：默认那枚「✓」就是「仅这一次」；
+                    // 旁边这一枚只给另外两档 —— 能少问几次，但范围写在档位旁边（见 `AgentApprovalSheet`）。
+                    // 不可逆的那几张单（删除 / 对外发送）**不提供**这两档：主按钮照样是「仅这一次」。
+                    if cardAllowsStandingGrant(card) {
+                        Menu {
+                            Button(L(.agentApprovalTierSession)) { model.approve(card.id, tier: .session) }
+                            Button(L(.agentApprovalTierAlways)) { model.approve(card.id, tier: .always) }
+                        } label: {
+                            Image(systemName: "chevron.down.circle")
+                        }
+                        .menuStyle(.borderlessButton)
+                        .menuIndicator(.hidden)
+                        .fixedSize()
+                        .controlSize(.small)
+                        .help(L(.agentApprovalTierMenu))
+                        .accessibilityLabel(Text(L(.agentApprovalTierMenu)))
+                    }
                     ToolbarIconButton(systemName: "xmark.circle",
                                       help: L(.agentChatApprovalDeny),
                                       tint: Theme.status(.danger)) { model.deny(card.id) }

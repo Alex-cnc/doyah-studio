@@ -110,7 +110,11 @@ public struct AgentDatabaseTool: Sendable {
         let payload = findings.isEmpty ? sql : sql + "\n" + findings.map(\.rawValue).joined(separator: " ")
         return AgentApprovalRequest(toolName: tool.name,
                                     fingerprint: AgentFingerprint.hash(material),
-                                    payload: payload)
+                                    payload: payload,
+                                    // 作用域 = 这条 SQL 的原文摘要（§3.36 ②）：换一句 SQL 就重新问；
+                                    // 危险面 = 首个关键字（`DELETE` / `DROP` / `TRUNCATE`）⇒ 只此一次。
+                                    scope: AgentApprovalScope.argumentDigest(material),
+                                    hazard: AgentApprovalHazardRules.sql(sql))
     }
 
     private func outcome(from execution: AgentQueryExecution, kind: AgentStatementKind) -> AgentToolOutcome {

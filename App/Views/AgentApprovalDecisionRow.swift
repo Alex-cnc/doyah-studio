@@ -144,25 +144,30 @@ struct AgentApprovalDecisionWiring {
     /// 造两枚动作的闭包。
     ///
     /// 落地全在 `AppState`（状态机流转 / 执行 / 留痕一处收口），这里只做三件事：
-    /// ① 置「在途」（两枚按钮据此变灰）；② 把备注带上；③ 收回结果（是否已离开待审批队列 ⇒ 该关窗）。
+    /// ① 置「在途」（两枚按钮据此变灰）；② 把备注与**允许方式**（`tier`）带上；
+    /// ③ 收回结果（是否已离开待审批队列 ⇒ 该关窗）。
     ///
     /// - Parameters:
     ///   - note: 取当前的备注（用户可能刚打完字 —— 传值会把点击那一刻之前的文字丢掉）；
+    ///   - tier: 取当前的允许方式（§3.36；缺省「仅这一次」= 不记任何东西）—— 同样是**取当前值**，
+    ///     改了档位再点批准，落账的就是改后那一档；
     ///   - isWorking: 在途状态回写；
     ///   - onSettled: 决策落地后回调「是否已离开待审批队列」（`true` ⇒ 关窗）。
     static func make(
         appState: AppState,
         approvalID: UUID,
         note: @escaping () -> String,
+        tier: @escaping () -> AgentApprovalTier = { .once },
         isWorking: @escaping (Bool) -> Void,
         onSettled: @escaping (Bool) -> Void = { _ in }
     ) -> AgentApprovalDecisionWiring {
         func submit(approve: Bool) {
             isWorking(true)
             let decisionNote = note()
+            let chosenTier = approve ? tier() : AgentApprovalTier.once
             Task {
                 if approve {
-                    await appState.approveAgentAction(id: approvalID, note: decisionNote)
+                    await appState.approveAgentAction(id: approvalID, note: decisionNote, tier: chosenTier)
                 } else {
                     await appState.rejectAgentAction(id: approvalID, note: decisionNote)
                 }

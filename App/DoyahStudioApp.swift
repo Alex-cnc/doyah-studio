@@ -180,9 +180,9 @@ struct DoyahStudioApp: App {
                     agentChat.denyApproval = { card in
                         appState.resolveAgentApproval(fingerprint: card.approvalFingerprint, granted: false)
                     }
-                    agentChat.applyApproval = { card in
+                    agentChat.applyApproval = { card, tier in
                         guard let rootPath = workspace.rootPath else { return .failure("failed") }
-                        return await appState.applyAgentChatApproval(card: card, workspacePath: rootPath)
+                        return await appState.applyAgentChatApproval(card: card, workspacePath: rootPath, tier: tier)
                     }
                     // `NFR-AI-04` 配额回写：对话跑完把账本交回宿主（跨轮累计，上限才真的会触发）。
                     agentChat.recordQuotaLedger = { ledger in

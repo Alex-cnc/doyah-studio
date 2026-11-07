@@ -1,5 +1,6 @@
 # Doyah产品详细设计说明书 · macOS
 
+> **版本** **v1.1.8**（2026-11-07 §3.36 **新增「审批授权三档」**：beta1.0.6 真机「需要确认的次数太多了，要提供一次授权、会话内授权等选项」—— 审批单与待审批卡片并列三档（**仅这一次** 默认不记任何东西 / **本会话内允许** 只在同一会话、同一「工具 + 作用域」不再问且不落盘 / **总是允许** 落盘跨重启并**当场告知后果**）；记账键 = **工具名 + 规范化作用域**（文件 = 路径、命令 = 首词、MCP/SQL = 参数摘要，**不许只写工具名**）；删除 / 越界 / 对外发送 / 凭据**不提供**另外两档且**盘上有旧授权也不认**；设置 → 运行策略 → 「已授权的操作」逐条可撤、撤销立即生效且落盘；五条判据 + 作用域判据各带反例读数）。
 > **版本** **v1.1.7**（2026-11-07 §3.35 **新增「输入框 shell 式历史导航」**：beta1.0.5 真机「当光标在输入框中，按上下方向键能自动补全历史输入」—— 输入框由**单行 `TextField`** 改为**多行 `NSTextView`**（⏎ 发送 / ⇧⏎ 换行），↑↓ **只在首行行首 / 末行行末**回填历史（多行中间一律走光标，硬约束）、草稿不丢、只回填不发送、提交成功才入历史（连续重复去重 / 上限 200 / 落盘）；六条判据各带反例读数）。
 > **版本** **v1.1.6**（2026-11-07 §3.34 **新增「当前轮用户问题吸顶一行」**：beta1.0.4 真机「用户发出的问题被滚动的输出冲掉了……应该跟 hermes 一样：如果输出的文字太多，用户这句话就挂在最顶端」—— 对话区顶部新增**一行**吸顶条（20pt，只在当前轮提问滚出视口顶时出现、滚回即消失、点它滚回那条消息的顶边、不遮内容、不重排行）；五条判据各带反例读数）。
 > **版本** **v1.1.5**（2026-11-07 §3.33.2 **第三轮**：beta1.0.4 真机「流式输出让滚动条很闪」—— 思考区的流式上屏改为 **50ms 合并窗口**（头一条立即上屏、结构边界强刷、收尾强刷）、展开态**定高 200pt 视口**（不再跟内容长）、自动跟随**只在贴底态**发生（且不带动画）、运行中**不画滚动指示器**；四条判据各带反例读数）。
@@ -1324,6 +1325,72 @@
 - 禁止在组字期间（`hasMarkedText()`）接管 ↑↓ 或 ⏎（输入法要用它们选字 / 确认候选）；
 - 禁止把历史上限做成不封顶（200 是契约值，判据钉着）；
 - 禁止只做内存历史不落盘（「跨重启不丢」是契约第 4 条的一半）。
+
+
+
+### 3.36 审批授权三档：仅这一次 / 本会话内 / 总是允许（2026-11-07，beta1.0.6）
+
+主人原话（装好的 beta1.0.6）：
+
+> 「需要确认的次数太多了，要提供一次授权、会话内授权等选项」
+
+**现状与根因（`文件:行号`，改前）**
+
+| # | 落点 | 事实 |
+|---|---|---|
+| ① | `Core/AgentWorkspaceTools.swift:340`（越界出单）、`:644`（`prepareWrite`）、`:740`（`prepareEdit`）、`:818`（`prepareCommand`）、`Core/AgentStandardDispatcher.swift:314`（MCP 工具）、`Core/AgentDatabaseTool.swift:111`（`query_db`） | 六处出单只带 `toolName / fingerprint / payload / baseDigest` —— **没有「作用域」这一格**。指纹里塞着参数原文，于是「同一条命令再跑一次」也要重新问；而「能不能别再问」这件事在出单那一刻根本无从表达。 |
+| ② | `App/AppState.swift:4794`（`awaitAgentApproval`）、`:4785`（`agentSessionGrants: Set<String>`）、`:4788`（`isSessionGrantable`） | 唯一的「少问」机制是**按指纹**记的会话集合：键里带着参数原文 ⇒ 同一条命令改了参数就重新问（人抱怨的正是这个），而且它**不是选项**（没有「仅这一次」这一档可比）、**不落盘**、**不可撤**（用户看不见也删不掉）。 |
+| ③ | `App/AppState.swift:4837`（`resolveAgentApproval(fingerprint:granted:)`）、`App/Views/AgentApprovalDecisionRow.swift:159`（`make`）、`App/Views/AgentApprovalSheet.swift:246`（`decisionRow`）、`App/Views/AgentChatView.swift:846`（待审批卡片那两枚图标） | 决定只有「批准 / 拒绝」两档布尔值 —— **没有「以后还问不问」这一维**：批准一次就完事，界面也没有地方让人表达「这一类别再问」。 |
+| ④ | 无（新增） | 「哪里算同一类」「哪些事永远不许免问」「记下来的授权在哪儿撤」此前**一条都没有**。 |
+
+**契约四条**
+
+1. **三档并列**（审批单与待审批卡片上都是这三档，标签写人话）：
+   - **仅这一次**（默认，**不记任何东西**）；
+   - **本会话内允许**（只在本会话内、同一「工具 + 作用域」不再问；会话结束 / 换会话即失效，**不落盘**到全局设置）；
+   - **总是允许**（落盘到设置，跨重启生效）—— **必须同时告知后果**（一行小字：以后这类操作不再询问，可在设置里改回）。
+2. **范围粒度不许糊**：记账键 = **工具名 + 规范化后的作用域值**（`AgentApprovalScope.key`，形如 `write_file|a.txt`）。作用域按工具各自的**事实**取：文件写 / 改 = 规范化路径；执行命令 = **首个词**；无路径类参数（MCP / SQL）= 参数原文摘要。**禁止「只写工具名」单键** —— 那等于「允许写 a.txt」顺带允许写全盘。
+3. **危险面不降级**：`AgentApprovalHazard != .ordinary`（越界 / 删除 / 对外发送 / 凭据）**只保留「仅这一次」**，另外两档**不提供**（不是置灰）并在面板上写明原因；而且即使**盘上已经存在**一条针对该作用域的全局授权（历史遗留 / 手改文件），`isGranted` 也**不认**它。
+4. **可撤回**：设置 → 智能体 → 运行策略 → **已授权的操作** 里列出所有授权（会话级 / 全局级各带档位标注），**逐条可撤**、也能一次全撤；撤销立即生效（判定读的就是这本账）。
+
+**怎么实现（五件，各管一件事）**
+
+| 部件 | 落点 | 职责 |
+|---|---|---|
+| 档位 | `Core/AgentApprovalGrant.swift:8`（`AgentApprovalTier`） | `once / session / always` 三档；`remembersGrant` / `isPersistent` 是判定用的两个谓词（`once` 不留任何东西） |
+| 作用域 | `Core/AgentApprovalGrant.swift:36`（`AgentApprovalScope`，`:59` 路径规范化 / `:70` 命令首词 / `:78` 参数摘要） | `key` = 工具名 + 作用域值；路径**按分量**规范化，不做字符串前缀匹配（`/a/x.txt` 不许匹配 `/a/x.txt.bak`） |
+| 危险面 | `Core/AgentApprovalGrant.swift:86`（`AgentApprovalHazard`）、`:128`（`AgentApprovalHazardRules`：`:150` 命令、`:167` SQL、`:177` 文本网） | 三张网取**更严**的那个：命令首词 / `git` 子命令（`rm`、`git reset`、`git push` …）；SQL 首关键字（`DELETE` / `DROP` / `TRUNCATE` / `ALTER … DROP`）；工具名或参数里的发送 / 凭据字样 |
+| 账本 | `Core/AgentApprovalGrant.swift:221`（`AgentApprovalGrantStore`，`:257` `isGranted`、`:271` `remember`、`:294` `revoke`、`:302` `revokeAll`） | 会话级只在内存（带 `sessionID`）、全局级落 `agent-approval-grants.json`（原子写）；`isGranted` 的**第一步**就是 `hazard.allowsGrant` |
+| 闸门 | `App/AppState.swift:4808`（`awaitAgentApproval`：先看账、再问人）、`:4853`（`rememberAgentApprovalGrant`）、`:4877` / `:4888`（撤销两口）、`:1070`（给界面的投影 `agentApprovalGrants`） | 账上有 ⇒ 直接放行；没有 ⇒ 照旧问，问完按人选的那一档记账；`resolveAgentApproval` 多带一格 `tier`，先到的批准也按档记（`:4837`） |
+| 接线 | `Core/AgentWorkspaceTools.swift:172`（`scope` / `hazard` 两格）、`:187`（`approvalScope`）；出单六处同上表①；`App/Views/AgentApprovalSheet.swift:265`（三档单选 + 范围 + 后果）、`App/Views/AgentApprovalDecisionRow.swift:160`（`tier` 取当前值）、`App/Views/AgentChatView.swift:876`（卡片上的「允许方式…」菜单）、`App/Views/AgentSettingsSheet.swift:474`（可撤销清单） | 界面只收集意图；判定与记账全在 Core 那本账 + `AppState` 那一处 |
+
+**判据**（`Tests/AgentApprovalGrantTests.swift` 6 例，`Executed 6 tests, with 0 failures`；每条都带反例读数）
+
+- `T-3.36-01` **① 仅这一次**：`remember(.once)` 返回 `nil`、账本 **0 条**、盘上**没有**文件、同工具第 2 次**仍问** = `true`；反例：若 `once` 也记账 ⇒ 账本条数 1 且第 2 次不问 ⇒ 判红。
+- `T-3.36-02` **② 本会话内**：同会话免问 = `true`；**换一个会话仍问 = `true`**（反例：会话级漏成全局 ⇒ 判红）；**重启（同目录重新读盘）仍问 = `true`、落盘 = `false`**（反例：写进全局 ⇒ 判红）；`endSession` 之后同会话仍问 = `true`。
+- `T-3.36-03` **③ 总是允许 + 范围**：重启后读回 **1 条**、同路径免问 = `true`；写 `/a/x.txt` 被允许而写 **`/b/y.txt` 仍问 = `true`**、同目录兄弟文件 `/a/x.txt.bak` **仍问 = `true`**、换工具（`edit_file`）**仍问 = `true`**；反例：键退化成「工具名」⇒ 后三条全部变成 `false` ⇒ 判红。
+- `T-3.36-04` **④ 不可逆仍确认**：`rm -rf` ⇒ `destructive`（可记授权 = `false`）、对外发送 ⇒ `outbound`（可记授权 = `false`）；两档都选「总是」⇒ `remember` 返回 `nil`、**仍问 = `true`**；更狠的一格：盘上**预置**一条 `run_command|rm` 的「总是」授权（模拟历史遗留 / 手改文件）⇒ 读进 **1 条**且**仍问 = `true`**；反例：放行 ⇒ 判红。
+- `T-3.36-05` **⑤ 撤销**：两条授权撤掉一条 ⇒ 该条**仍问 = `true`**、另一条**仍免问 = `true`**（不是一键清空）；撤销**落盘**（重启后剩 1 条、该条仍问 = `true`）；`revokeAll` 之后账本 **0 条**、盘上 **0 条**。
+- `T-3.36-06` **作用域取法（判据 ②③ 的地基）**：`/a/b/../b/x.txt` 规范化成 `/a/b/x.txt`；`python3 hello.py` 的作用域 = `python3`、`write_file` 的 = `a.txt`（**不是工具名**）；`git reset --hard` ⇒ `destructive`；越界出单的作用域 = 绝对路径且危险面 = `outsideWorkspace`（永不记授权）；`DELETE FROM …` ⇒ `destructive`、`UPDATE …` ⇒ `ordinary`（可记授权）。读数：`写=a.txt 命令=python3 git=destructive 越界=/etc/hosts.bak/outsideWorkspace`。
+
+**为什么键要窄到「路径 / 首词」**：「本会话内允许」比「总是允许」轻，但它**不是**「这一类都免问」的许可证。会话级的价值在同一个目标反复改（模型改一版再看一遍、再改回来），所以键取到文件这一级；命令取首词，是因为 `python3 a.py` 与 `python3 b.py` 的风险面对人来说是同一个（同一个解释器、同一个沙箱根），而换成 `git` 就是另一个工具。两条取法都写在 `AgentApprovalScope` 里，判据逐条钉着。
+
+**边界（如实登记）**
+
+- 作用域**不做目录前缀**：「允许写 `src/` 下任何文件」这一档没有做 —— 它比逐次审批更危险（人以为只批了一个文件），要放开只能在设置里改「权限配置」的沙箱根，那是另一条契约（§3.26 / `AgentPermissionConfig`）；
+- SQL 的作用域是**语句原文摘要**（不是表名）：`UPDATE orders SET a=1` 与 `UPDATE orders SET a=2` 是两条 —— 宁可多问一次，也不替人把「两张表」概括成一句；
+- 卡片上的「允许方式…」菜单是**界面层的提前收口**（按 `approvalPreview` 文本判危险面），与出单时的权威判定（`hazard`）**可能不一致**：不一致时以权威判定为准（`isGranted` 用的是出单那一刻的 `hazard`），界面多给一次选项也不会放行不可逆动作；
+- 会话级授权的归属靠 `sessionID`（`makeAgentChatLoop` 每轮开跑刷新 `agentApprovalCurrentSessionID`）；审计面板那条审批单不在循环里，它记「本会话内」时用的是这一格 —— 从没跑过对话就直接在审计面板里批，会话级授权归 `""`，等价于「下一次跑起来之前不认」；
+- 真机上的「点一下菜单再点某一档」没有机器判据（离屏宿主里 `Menu` 不落可点的 `NSButton`），本节判据覆盖的是**判定与记账**这一层；界面那两颗按钮的既有探针（`TestsUISnapshot/AgentApprovalDecisionProbeTests`）仍打在同一个 `AgentApprovalDecisionWiring.make` 上。
+
+**禁止行为**
+
+- 禁止把授权键记成「工具名」（§3.36 ②：那是「允一次 = 允全盘」的形状，判据 ③ 专门钉它）；
+- 禁止为了少弹框把不可逆动作（删除 / `rm -rf` 类 / 对外发送 / 凭据）放进「本会话内」或「总是允许」（判据 ④：盘上有历史授权也不认）；
+- 禁止把「本会话内」写进全局设置文件（判据 ②：重启后必须重新问）；
+- 禁止只在内存里撤销（判据 ⑤：撤了要落盘，重启不能复活）；
+- 禁止让「仅这一次」留下任何痕迹（判据 ①：账本 0 条、盘上无文件）；
+- 禁止界面自己算一遍「要不要问」（判定只有一处：`AgentApprovalGrantStore.isGranted`）。
 
 
 

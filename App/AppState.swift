@@ -1063,6 +1063,12 @@ final class AppState: ObservableObject {
     /// 面板内的错误（读取 / 导出失败、执行失败…）。
     @Published var agentAuditError: String?
 
+    /// 已记下的审批授权（§3.36 ④）：会话级 + 全局级，设置里逐条可撤。
+    ///
+    /// 每次记账 / 撤销后由 `refreshAgentApprovalGrants()` 重新投影一次 —— 界面读这一份，
+    /// 判定读 `agentApprovalGrantStore`（**唯一出处**，不在视图里另算）。
+    @Published private(set) var agentApprovalGrants: [AgentApprovalGrant] = []
+
     // MARK: 数据任务（FR-AI-05 / FR-AI-06 / FR-AI-08）
 
     /// 「数据任务…」面板的呈现开关（菜单命令驱动）。
@@ -4556,6 +4562,8 @@ final class AppState: ObservableObject {
 
         guard case .ready(let model, let endpoint) = agentChatEndpointState,
               let url = URL(string: endpoint) else { return nil }
+        // 会话级授权（§3.36）归属哪个会话：这一轮开跑时刷新一次 —— 换会话 ⇒ 旧账不认。
+        agentApprovalCurrentSessionID = sessionID
         // `FR-AI-22` 上下文供给（第一批：**当前连接的表结构摘要 + 活跃页签**）：
         // · 摘要**与 NL→SQL 共用同一处**（`agentSchemaSummary`）—— 不另起一份；表数 / 列数预算（NFR-AI-01）也只有一处；
         // · 取不到摘要（没连库 / 元数据拿不到）⇒ **不带这一段**，而不是编一个空壳出来；
@@ -4758,7 +4766,8 @@ final class AppState: ObservableObject {
         // 「行 / 不行」。没有这条，人点了批准也回不到循环里 —— 卡片一遍遍被重新要，命令永不执行。
         context.approvalDecision = { [weak self] request in
             guard let self else { return false }
-            return await self.awaitAgentApproval(request)
+            // 会话 id 一起带上：会话级授权只认**同一个会话**（换会话 ⇒ 重新问，§3.36 ②）。
+            return await self.awaitAgentApproval(request, sessionID: sessionID)
         }
         return (loop, context)
     }
@@ -4769,41 +4778,47 @@ final class AppState: ObservableObject {
     /// 所以是**数组**：每个等待者都要被唤醒，不能只叫醒一个、剩下的干等到超时。
     private var agentApprovalWaiters: [String: [CheckedContinuation<Bool, Never>]] = [:]
 
-    /// **已经批了、但循环还没开始等**的指纹。
+    /// **已先行到达的批准**（指纹 → 用户选的那一档）。
     ///
     /// 为什么需要：卡片是「先推到界面、再开始等」的（不先推，人根本看不见要批什么）。这张卡的
     /// 自动批准 / 人手快点点下去，可能就发生在循环挂上等待之前的几毫秒里 —— 那一刻没有等待者，
     /// 批准会当场丢掉，循环随后挂上去等 600 秒，最后按拒绝处理（2026-10-31 实测就是这个时序）。
     /// 所以「先到的批准」先记在这儿，循环来等的时候**立刻兑现**。
-    private var agentPendingGrants: Set<String> = []
-
-    /// **本会话内已批准过的指纹**（策略类出单）。
     ///
-    /// 为什么：同一条命令重跑是常态（模型改正后重试、人反复验证），每次重问等于让人重复点同一个「批准」——
-    /// 2026-10-31 现场一条 `python3 hello.py` 让人点了上百次。**越界单不进这里**：越界授权仍是
-    /// 「一次一单、批准前不动盘」（§3.26），同一条路径改一次就要再问一次。
-    private var agentSessionGrants: Set<String> = []
+    /// 记的是**档位**不只是布尔：先到的那一次也得按人选的档记账（§3.36），否则「本会话内允许」
+    /// 在快点的时序下会悄悄退化成「仅这一次」。
+    private var agentPendingGrants: [String: AgentApprovalTier] = [:]
 
-    /// 这一张单能不能「批一次、本会话免重问」。
-    private func isSessionGrantable(_ request: AgentApprovalRequest) -> Bool {
-        !request.payload.hasPrefix("越界")
-    }
+    /// 本次决议选的档位（指纹 → 档）：`resolveAgentApproval` 写下，等待中的循环取走即删。
+    private var agentDecisionTiers: [String: AgentApprovalTier] = [:]
+
+    /// 审批授权的**唯一一本账**（§3.36）：会话级只在内存、全局级落在
+    /// `Application Support/<identity>/agent-approval-grants.json`。
+    ///
+    /// 它与旧的 `agentSessionGrants`（按**指纹**记）是同一件事的两个粒度：旧账的键里带着
+    /// 参数原文，于是「同一类操作」永远匹配不上（人抱怨的就是这个）；新账的键是
+    /// **工具 + 作用域**，且危险面不认账（`AgentApprovalGrantStore.isGranted`）。
+    private var agentApprovalGrantStore = AgentApprovalGrantStore()
 
     /// 循环来这里等一个决定。**超时就按「不行」**（`AgentApprovalDecision.timeout`）——
     /// 挂死人比误拒更糟：挂住的那一轮会把步数和令牌都耗在原地。
-    func awaitAgentApproval(_ request: AgentApprovalRequest) async -> Bool {
-        // 同类命令本会话已经批过 ⇒ 不再问人（越界单除外）。
-        if isSessionGrantable(request), agentSessionGrants.contains(request.fingerprint) {
-            StartupLog.write("同类命令已批过：\(request.toolName) 指纹=\(request.fingerprint.prefix(8)) ⇒ 直接放行")
+    ///
+    /// 三档授权（§3.36）在这里落地：**先看账，再问人**。账上有（同一会话的会话级 / 全局级，
+    /// 且不是不可逆动作）就直接放行；没有就照旧问，问完按人选的那一档记账。
+    func awaitAgentApproval(_ request: AgentApprovalRequest, sessionID: String) async -> Bool {
+        let scope = request.approvalScope
+        // ① 已记过的授权 ⇒ 不再问人（危险面在 `isGranted` 里就被挡下：不可逆的一律照样问）。
+        if agentApprovalGrantStore.isGranted(scope, hazard: request.hazard, sessionID: sessionID) {
+            StartupLog.write("已授权：\(request.toolName) 作用域=\(scope.value) ⇒ 直接放行")
             return true
         }
-        // 批准先到（卡片先推给界面、人先点了）⇒ 立刻兑现，不进等待队列。
-        if agentPendingGrants.remove(request.fingerprint) != nil {
-            StartupLog.write("审批已先行：\(request.toolName) 指纹=\(request.fingerprint.prefix(8)) ⇒ 批准")
-            if isSessionGrantable(request) { agentSessionGrants.insert(request.fingerprint) }
+        // ② 批准先到（卡片先推给界面、人先点了）⇒ 立刻兑现，不进等待队列。
+        if let tier = agentPendingGrants.removeValue(forKey: request.fingerprint) {
+            StartupLog.write("审批已先行：\(request.toolName) 作用域=\(scope.value) 档=\(tier.rawValue) ⇒ 批准")
+            rememberAgentApprovalGrant(request, tier: tier, sessionID: sessionID)
             return true
         }
-        StartupLog.write("等审批：\(request.toolName) 指纹=\(request.fingerprint.prefix(8))")
+        StartupLog.write("等审批：\(request.toolName) 作用域=\(scope.value)")
         let decided = await withTaskGroup(of: Bool?.self) { group -> Bool? in
             group.addTask { [weak self] in
                 await withCheckedContinuation { (cont: CheckedContinuation<Bool, Never>) in
@@ -4821,21 +4836,85 @@ final class AppState: ObservableObject {
             return first
         }
         guard let decided else {
-            StartupLog.write("审批超时：\(request.toolName) 指纹=\(request.fingerprint.prefix(8)) ⇒ 按拒绝处理")
+            agentDecisionTiers.removeValue(forKey: request.fingerprint)
+            StartupLog.write("审批超时：\(request.toolName) 作用域=\(scope.value) ⇒ 按拒绝处理")
             resolveAgentApproval(fingerprint: request.fingerprint, granted: false)
             return false
         }
-        StartupLog.write("审批决议：\(request.toolName) 指纹=\(request.fingerprint.prefix(8)) ⇒ \(decided ? "批准" : "拒绝")")
-        if decided, isSessionGrantable(request) { agentSessionGrants.insert(request.fingerprint) }
+        // 档位由界面随决议一起给（`resolveAgentApproval`）；缺省 = 仅这一次（不记账）。
+        let tier = agentDecisionTiers.removeValue(forKey: request.fingerprint) ?? .once
+        StartupLog.write("审批决议：\(request.toolName) 作用域=\(scope.value) ⇒ \(decided ? "批准" : "拒绝") · 档=\(tier.rawValue)")
+        if decided { rememberAgentApprovalGrant(request, tier: tier, sessionID: sessionID) }
         return decided
     }
+
+    /// 按人选的那一档记账。`once` / 危险面 ⇒ **什么都不记**（`remember` 返回 `nil`，不是失败）。
+    @discardableResult
+    func rememberAgentApprovalGrant(_ request: AgentApprovalRequest, tier: AgentApprovalTier,
+                                    sessionID: String) -> AgentApprovalGrant? {
+        do {
+            let grant = try agentApprovalGrantStore.remember(request.approvalScope, tier: tier,
+                                                             hazard: request.hazard, sessionID: sessionID)
+            if grant != nil { refreshAgentApprovalGrants() }
+            return grant
+        } catch {
+            // 落盘失败**不许假装记下了**：那会让用户以为「以后不问了」，实际每次都问。
+            agentAuditError = L(.agentApprovalGrantSaveFailed, ErrorPresenter.message(for: error))
+            refreshAgentApprovalGrants()
+            return nil
+        }
+    }
+
+    /// 把账投影给界面（设置里那一份可撤销清单）。
+    func refreshAgentApprovalGrants() {
+        agentApprovalGrants = agentApprovalGrantStore.grants
+    }
+
+    /// 设置面板打开时读一次（盘上那份全局授权跨重启，进程里这份一开始是空投影）。
+    func loadAgentApprovalGrants() { refreshAgentApprovalGrants() }
+
+    /// 逐条撤销（§3.36 ④）：撤掉之后**立即**恢复询问。
+    func revokeAgentApprovalGrant(id: String) {
+        do {
+            try agentApprovalGrantStore.revoke(id: id)
+            agentAuditMessage = L(.agentApprovalGrantRevoked)
+        } catch {
+            agentAuditError = L(.agentApprovalGrantSaveFailed, ErrorPresenter.message(for: error))
+        }
+        refreshAgentApprovalGrants()
+    }
+
+    /// 全部撤销。
+    func revokeAllAgentApprovalGrants() {
+        do {
+            try agentApprovalGrantStore.revokeAll()
+            agentAuditMessage = L(.agentApprovalGrantRevoked)
+        } catch {
+            agentAuditError = L(.agentApprovalGrantSaveFailed, ErrorPresenter.message(for: error))
+        }
+        refreshAgentApprovalGrants()
+    }
+
+    /// 会话结束（换会话 / 关掉这一轮对话）：会话级授权整批失效，全局级不动。
+    func endAgentApprovalSession(_ sessionID: String) {
+        agentApprovalGrantStore.endSession(sessionID: sessionID)
+        refreshAgentApprovalGrants()
+    }
+
+    /// 当前对话的会话 id（会话级授权的归属）。每轮开跑由 `makeAgentChatLoop` 刷新 ——
+    /// 审批单（审计面板那条路）不在循环里，它要记「本会话内」时只能从这里取。
+    private(set) var agentApprovalCurrentSessionID = ""
 
     /// 等人的上限（秒）。到点按拒绝处理并留痕。
     static let agentApprovalTimeout: TimeInterval = 600
 
     /// 界面点了「批准 / 拒绝」⇒ 唤醒正在等的循环。没有等待者（例如重放旧卡片）就什么都不做。
-    func resolveAgentApproval(fingerprint: String?, granted: Bool) {
+    ///
+    /// `tier` 是**批准那一刻**人选的档（§3.36）：只影响「以后还问不问」，不改变「这一次批不批」——
+    /// 拒绝时它一律不看。
+    func resolveAgentApproval(fingerprint: String?, granted: Bool, tier: AgentApprovalTier = .once) {
         guard let fingerprint, !fingerprint.isEmpty else { return }
+        if granted { agentDecisionTiers[fingerprint] = tier }
         if agentApprovalWaiters[fingerprint] == nil {
             StartupLog.write("决议无等待者：\(fingerprint.prefix(8))（走旧兑现路径）")
         }
@@ -4930,18 +5009,19 @@ final class AppState: ObservableObject {
     ///   交给既有的「磁盘已改」提示（`reloadTab(force: false)` 的老口径，站人这一边）。
     /// · **留下可撤销的原文**：写之前把 `before` 读下来记账 —— 账记在**写成功之后**，
     ///   写失败就不该留下一条「能撤销」的空账。
-    func applyAgentChatApproval(card: AgentToolCard, workspacePath: String) async -> AgentChatModel.ApplyResult {
-        StartupLog.write("批准兑现：\(card.name) 指纹=\(card.approvalFingerprint?.prefix(8) ?? "nil")")
+    func applyAgentChatApproval(card: AgentToolCard, workspacePath: String,
+                                tier: AgentApprovalTier = .once) async -> AgentChatModel.ApplyResult {
+        StartupLog.write("批准兑现：\(card.name) 指纹=\(card.approvalFingerprint?.prefix(8) ?? "nil") 档=\(tier.rawValue)")
         // **执行口只有一处：循环**。这里只负责「把批准送到循环手上」：
         // · 循环正在等 ⇒ 当场唤醒，它就地重派；
         // · 循环还没开始等（几毫秒的时序差）⇒ 先记账，它来等的时候立刻兑现。
         // 以前这里也自己执行一遍，于是「循环重发 + 这侧执行」两条路各跑一次，还互相覆盖。
         if let fingerprint = card.approvalFingerprint, !fingerprint.isEmpty {
             if agentApprovalWaiters[fingerprint] != nil {
-                resolveAgentApproval(fingerprint: fingerprint, granted: true)
+                resolveAgentApproval(fingerprint: fingerprint, granted: true, tier: tier)
             } else {
-                agentPendingGrants.insert(fingerprint)
-                StartupLog.write("批准先到：\(card.name) 指纹=\(fingerprint.prefix(8)) ⇒ 已记账，等循环来取")
+                agentPendingGrants[fingerprint] = tier
+                StartupLog.write("批准先到：\(card.name) 指纹=\(fingerprint.prefix(8)) 档=\(tier.rawValue) ⇒ 已记账，等循环来取")
             }
             return .success
         }
@@ -5457,8 +5537,28 @@ final class AppState: ObservableObject {
     }
 
     /// 批准并执行一条待审批动作（审批单上的「批准并执行」）。
-    func approveAgentAction(id: UUID, note: String? = nil) async {
+    func approveAgentAction(id: UUID, note: String? = nil, tier: AgentApprovalTier = .once) async {
+        // 三档授权（§3.36）：先把「以后还问不问」记下来，再走决策 —— 顺序与审计同向
+        // （先落账、再执行）；`once` / 不可逆那一档什么都不记。
+        if tier.remembersGrant, let approval = pendingAgentApprovals.first(where: { $0.id == id }),
+           let request = Self.agentApprovalRequest(for: approval.record) {
+            rememberAgentApprovalGrant(request, tier: tier, sessionID: agentApprovalCurrentSessionID)
+        }
         await decideAgentAction(id: id, approve: true, note: note)
+    }
+
+    /// 把一条**待审审计记录**折成出单形状（作用域 / 危险面）—— 审批单与循环读同一套规则。
+    ///
+    /// 工具名从注册表取（不在这里写字面量）；作用域 = 这条 SQL 的原文摘要（换一句就重新问）；
+    /// 危险面 = 首个关键字（`DELETE` / `DROP` / `TRUNCATE` ⇒ 只此一次）。
+    static func agentApprovalRequest(for record: AgentActionRecord) -> AgentApprovalRequest? {
+        guard let tool = AgentToolRegistry.standard.definition(for: .queryDatabase) else { return nil }
+        let material = [tool.name, record.sql, record.database ?? ""].joined(separator: "|")
+        return AgentApprovalRequest(toolName: tool.name,
+                                    fingerprint: AgentFingerprint.hash(material),
+                                    payload: record.sql,
+                                    scope: AgentApprovalScope.argumentDigest(material),
+                                    hazard: AgentApprovalHazardRules.sql(record.sql))
     }
 
     /// 拒绝一条待审批动作：**不执行**，留痕。

@@ -165,12 +165,28 @@ public struct AgentApprovalRequest: Equatable, Sendable {
     /// **出单那一刻**目标的基线串（`FR-AI-31` ①）：临写前复核用 —— 对不上就说明这份审批已经过期。
     /// 执行类动作没有目标文件 ⇒ 空串（不许拿"没有基线"当"基线成立"）。
     public var baseDigest: String
+    /// 授权作用域（§3.36 ②）：由**出单的这一处**给 —— 只有它知道目标路径 / 首词 / 参数原文。
+    ///
+    /// 空串 = 这一处没给作用域；授权一侧会退回「参数指纹」（同一串参数才算同一档），
+    /// **绝不退回「只认工具名」**（那等于一档放行全盘）。
+    public var scope: String
+    /// 危险面（§3.36 ③）：不可逆的那几档只保留「仅这一次」。
+    public var hazard: AgentApprovalHazard
 
-    public init(toolName: String, fingerprint: String, payload: String, baseDigest: String = "") {
+    public init(toolName: String, fingerprint: String, payload: String, baseDigest: String = "",
+                scope: String = "", hazard: AgentApprovalHazard = .ordinary) {
         self.toolName = toolName
         self.fingerprint = fingerprint
         self.payload = payload
         self.baseDigest = baseDigest
+        self.scope = scope
+        self.hazard = hazard
+    }
+
+    /// 授权的**作用域**：出单时给了就用它，没给就用参数指纹兜底（窄，不会吞掉别的目标）。
+    public var approvalScope: AgentApprovalScope {
+        let value = scope.isEmpty ? AgentApprovalScope.argumentDigest(fingerprint) : scope
+        return AgentApprovalScope(tool: toolName, value: value)
     }
 }
 
@@ -341,7 +357,10 @@ public struct AgentWorkspaceTools: Sendable {
             toolName: tool.name,
             fingerprint: AgentFingerprint.hash("\(tool.name)|\(absolute)|\(payload)"),
             payload: preview,
-            baseDigest: AgentWriteTargetState.digest(at: url)))
+            baseDigest: AgentWriteTargetState.digest(at: url),
+            // 作用域 = 目标绝对路径（同一个相对路径在不同工作区指向不同文件）；越界永不记授权。
+            scope: AgentApprovalScope.normalizedPath(absolute),
+            hazard: .outsideWorkspace))
     }
 
     /// 把一个可能越界的相对 / 绝对路径**绝对化**（不改写用户给的原值，只用于比较与出单）。
@@ -646,7 +665,10 @@ public struct AgentWorkspaceTools: Sendable {
             fingerprint: AgentFingerprint.hash("\(tool.name)|\(relative)|\(content)"),
             payload: AgentTextDiff.preview(before: before, after: content, path: relative),
             // 基线**出单时就记下**（`FR-AI-31` ①）：临写前复核这一格，对不上说明这份审批已经过期。
-            baseDigest: AgentWriteTargetState.digest(at: url)))
+            baseDigest: AgentWriteTargetState.digest(at: url),
+            // 作用域 = 这一个文件（§3.36 ②）：批了 `a.txt` 不等于批了同一目录里别的文件。
+            scope: AgentApprovalScope.normalizedPath(relative),
+            hazard: .ordinary))
     }
 
     /// 真写。**五件事缺一不可**：参数指纹与请求一致、该指纹在已批准集合里、目标仍在工作区内、
@@ -740,7 +762,9 @@ public struct AgentWorkspaceTools: Sendable {
         return .needsApproval(AgentApprovalRequest(
             toolName: tool.name,
             fingerprint: AgentFingerprint.hash("\(tool.name)|\(relative)|\(oldString)|\(newString)"),
-            payload: AgentTextDiff.preview(before: before, after: after, path: relative)))
+            payload: AgentTextDiff.preview(before: before, after: after, path: relative),
+            scope: AgentApprovalScope.normalizedPath(relative),
+            hazard: .ordinary))
     }
 
     /// 真改。**三件事缺一不可**（与 `writeFile` 同一口径）：参数指纹与请求一致、该指纹在已批准集合里、目标仍在工作区内。
@@ -817,7 +841,12 @@ public struct AgentWorkspaceTools: Sendable {
             let material = "\(tool.name)|\(executable)|\(arguments.joined(separator: " "))"
             return .needsApproval(AgentApprovalRequest(toolName: tool.name,
                                                       fingerprint: AgentFingerprint.hash(material),
-                                                      payload: payload))
+                                                      payload: payload,
+                                                      // 作用域 = 命令首词（§3.36 ②）：`python3 a.py` 批过之后
+                                                      // `python3 b.py` 不再问；换成 `git` 仍要问。
+                                                      scope: AgentApprovalScope.commandWord(command),
+                                                      // 危险面 = 首词 / git 子命令（`rm`、`git reset` …）⇒ 只保留「仅这一次」。
+                                                      hazard: AgentApprovalHazardRules.command(command)))
         }
     }
 

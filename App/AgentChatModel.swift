@@ -72,10 +72,13 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
     var makeLoop: ((String, AgentTurnPlan, any AgentLoopObserver) async -> (loop: AgentLoop, context: AgentLoopContext)?)?
     /// 宿主注入：真正把一次批准**兑现**（写盘 / 跑命令）。
     ///
+    /// 第二个参数是用户选的**授权档**（§3.36：仅这一次 / 本会话内 / 总是允许）——
+    /// 「批准这一次」与「以后还问不问」是两件事，档位只决定后者。
+    ///
     /// 结果是**机器码**而不是 `Bool`（`FR-AI-31` ①）：写冲突（`writeConflict`）/ 基线过期
     /// （`staleTarget`）/ 写盘失败（`failed`）三件事的处置不一样，一个 `false` 会把它们压成
     /// 同一句「没成」—— 那正是「静默覆盖」的另一面：**没说清为什么没写**。
-    var applyApproval: ((AgentToolCard) async -> ApplyResult)?
+    var applyApproval: ((AgentToolCard, AgentApprovalTier) async -> ApplyResult)?
     /// 宿主注入：把一次**已经应用**的改动撤回去（`FR-AI-25` ⑤：一步撤销，文件逐字节回到应用前）。
     /// 撤销目标由宿主按卡片号从账上找 —— 这里只传卡片，不传「要写什么」：
     /// 原文只该存在一处（Core 的 `AgentEditJournal`），界面与视图模型都不许自己记一份。
@@ -1174,11 +1177,11 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
         watchdog = nil
     }
 
-    func approve(_ cardID: UUID) {
+    func approve(_ cardID: UUID, tier: AgentApprovalTier = .once) {
         guard state.cards.first(where: { $0.id == cardID })?.approvalFingerprint != nil else { return }
         guard state.approve(cardID: cardID) else { return }
         Task { [weak self] in
-            await self?.applyApproved(cardID: cardID)
+            await self?.applyApproved(cardID: cardID, tier: tier)
         }
     }
 
@@ -1190,7 +1193,7 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
     /// · **幂等**：同一张卡在途就跳过（重复事件不写第二遍）；
     /// · **失败如实说**：宿主没接 / 没写成就报 `noApplier` / `applyFailed`，卡片停在「已批」——
     ///   绝不改成「已应用」而盘上没动。
-    private func applyApproved(cardID: UUID) async {
+    private func applyApproved(cardID: UUID, tier: AgentApprovalTier = .once) async {
         guard !inFlightApply.contains(cardID) else { return }
         guard let card = state.cards.first(where: { $0.id == cardID }), card.isAwaitingApply else { return }
         guard let applyApproval else {
@@ -1198,7 +1201,7 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
             return
         }
         inFlightApply.insert(cardID)
-        let result = await applyApproval(card)
+        let result = await applyApproval(card, tier)
         inFlightApply.remove(cardID)
         switch result {
         case .success:

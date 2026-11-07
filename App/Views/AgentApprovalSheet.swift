@@ -24,8 +24,23 @@ struct AgentApprovalSheet: View {
     /// 逐条形状的待审计划（`FR-STD-DB-TASK-002` 判据①：每条语句 + 目标库 + 各自影响面）。
     /// `nil` = 拆不出来（空脚本等）⇒ 退回「整段原文」那一种呈现。
     @State private var statementsPlan: HighRiskTaskApproval.Plan?
+    /// 三档授权（§3.36）：**默认「仅这一次」** —— 不记任何东西，下一次照样问。
+    @State private var tier: AgentApprovalTier = .once
 
     private var record: AgentActionRecord { approval.record }
+
+    /// 这条动作的危险面（§3.36 ③）：`DELETE` / `DROP` / `TRUNCATE` 归不可逆 ⇒
+    /// 另外两档**不提供**（不是置灰：置灰会被读成「再点一次就能选」）。
+    private var hazard: AgentApprovalHazard { AgentApprovalHazardRules.sql(record.sql) }
+
+    /// 这条授权的**范围**，给人读的一句话（默认那一档不显示 —— 不记东西就没有范围）。
+    private var scopeLabel: String {
+        let place = [record.connectionName, record.database].compactMap { $0 }.joined(separator: " · ")
+        let head = record.sql.trimmingCharacters(in: .whitespacesAndNewlines)
+            .split(separator: "\n").first.map(String.init) ?? ""
+        let snippet = head.count > 32 ? String(head.prefix(32)) + "…" : head
+        return place.isEmpty ? snippet : (place + " · " + snippet)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.m) {
@@ -44,6 +59,8 @@ struct AgentApprovalSheet: View {
 
             TextField(L(.agentApprovalNote), text: $note)
                 .textFieldStyle(.roundedBorder)
+
+            tierSection
 
             Text(L(.agentApprovalDismissHint))
                 .font(Theme.font(.caption))
@@ -238,16 +255,63 @@ struct AgentApprovalSheet: View {
 
     // MARK: - 决策
 
+    /// 三档授权（§3.36）：面板上**并列**三档，标签写人话。
+    ///
+    /// · 「仅这一次」是**默认**（不记任何东西）；
+    /// · 选了另外两档时**当场把范围写出来**（「只对「…」生效」）—— 不写范围，人就会以为
+    ///   自己批的是「这一类操作」，而我们要的恰恰是「只批这一条」；
+    /// · 「总是允许」**必须同时告知后果**（以后不再问、可在设置里改回）；
+    /// · 不可逆（删除 / 对外发送）**不提供**另外两档，只留「仅这一次」并写明原因。
+    private var tierSection: some View {
+        VStack(alignment: .leading, spacing: Spacing.xs) {
+            Text(L(.agentApprovalTierSection))
+                .font(Theme.font(.caption))
+                .foregroundStyle(Theme.text(.secondary))
+
+            Picker(L(.agentApprovalTierSection), selection: $tier) {
+                Text(L(.agentApprovalTierOnce)).tag(AgentApprovalTier.once)
+                if hazard.allowsGrant {
+                    Text(L(.agentApprovalTierSession)).tag(AgentApprovalTier.session)
+                    Text(L(.agentApprovalTierAlways)).tag(AgentApprovalTier.always)
+                }
+            }
+            .pickerStyle(.radioGroup)
+            .labelsHidden()
+
+            if hazard.allowsGrant {
+                if tier != .once {
+                    Text(L(.agentApprovalTierScopeHint, scopeLabel))
+                        .font(Theme.font(.caption))
+                        .foregroundStyle(Theme.text(.secondary))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                if tier == .always {
+                    // 后果**必须**说：这一档会跨重启，且此后不再问。
+                    Text(L(.agentApprovalTierAlwaysConsequence))
+                        .font(Theme.font(.caption))
+                        .foregroundStyle(Theme.status(.warning))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            } else {
+                Text(L(.agentApprovalTierBlocked))
+                    .font(Theme.font(.caption))
+                    .foregroundStyle(Theme.text(.secondary))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
     /// 两枚动作（拒绝 / 批准并执行）：**接线只有一处** —— `AgentApprovalDecisionWiring.make`
     /// 与探针读的是同一份（各写一份的后果：按钮在、点了没反应，或探针量的是自己拼的一条假路）。
     ///
     /// 决策本身交给 `AppState`：状态机流转 + 执行 + 留痕都在那一处完成，
-    /// 界面只负责收集「批准 / 拒绝」与备注、以及「落地之后要不要关窗」。
+    /// 界面只负责收集「批准 / 拒绝」「允许方式」与备注、以及「落地之后要不要关窗」。
     private var decisionRow: some View {
         let actions = AgentApprovalDecisionWiring.make(
             appState: appState,
             approvalID: approval.id,
             note: { note },
+            tier: { tier },
             isWorking: { isWorking = $0 },
             onSettled: { settled in
                 if settled { dismiss() }
