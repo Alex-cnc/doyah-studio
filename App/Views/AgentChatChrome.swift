@@ -170,6 +170,64 @@ enum AgentThinkingSummary {
     }
 }
 
+/// **一轮的三行汇总**（详设 §3.33.4）：`Thinking` / `Tool calls (N)` / `Σ total`。
+///
+/// ## 形制由人类主人 2026-11-07 钉死（照抄，不翻译、不加减字）
+///
+/// ```
+/// ▸ Thinking  ~308 tokens
+/// ▾ Tool calls (1)  ~16 tokens
+/// Σ ~324 total
+/// ```
+///
+/// 三个标签是**主人给的原话**（英文），不翻成中文也不加「约」字 —— 估算用数字前那个 `~` 表达
+/// （`isEstimated`），与上下文账本同一套估算口径（`AgentTokenEstimator`）。
+enum AgentTurnUsageLines {
+
+    /// 数字 + 单位：`~308 tokens` / `308 tokens`（估算带 `~`）。
+    static func tokenText(_ tokens: Int, estimated: Bool) -> String {
+        (estimated ? "~" : "") + "\(tokens) tokens"
+    }
+
+    /// 第一行：`Thinking  ~308 tokens`（两个空格是主人给的形制）。
+    static func thinking(tokens: Int, estimated: Bool) -> String {
+        "Thinking  " + tokenText(tokens, estimated: estimated)
+    }
+
+    /// 第二行：`Tool calls (1)  ~16 tokens`。
+    static func toolCalls(count: Int, tokens: Int, estimated: Bool) -> String {
+        "Tool calls (\(count))  " + tokenText(tokens, estimated: estimated)
+    }
+
+    /// 第三行：`Σ ~324 total`。
+    static func total(tokens: Int, estimated: Bool) -> String {
+        "Σ " + tokenText(tokens, estimated: estimated) + " total"
+    }
+
+    /// Σ 展开后的分项（每项一行）：`thinking  ~308` / `tools  ~16 (1 次)` / `output  ~0`。
+    static func breakdown(_ usage: AgentTurnUsage) -> [(label: String, value: String)] {
+        let mark = usage.isEstimated ? "~" : ""
+        return [
+            ("thinking", mark + "\(usage.thinkingTokens)"),
+            ("tools", mark + "\(usage.toolTokens) (\(usage.toolCallCount))"),
+            ("output", mark + "\(usage.outputTokens)"),
+        ]
+    }
+
+    /// Σ 的 tooltip：把口径**写在能被看见的地方**（三行只是数，口径得有人读得到）。
+    static func totalHelp(_ usage: AgentTurnUsage, language: AppLanguage) -> String {
+        var parts = ["Σ = thinking + tools + output = "
+                     + "\(usage.thinkingTokens) + \(usage.toolTokens) + \(usage.outputTokens)"]
+        if usage.isEstimated {
+            parts.append(LocalizedStrings.text(.agentChatUsageEstimatedNote, language: language))
+        }
+        if let reported = usage.reportedTotal {
+            parts.append(LocalizedStrings.format(.agentChatUsageReportedNote, language: language, reported))
+        }
+        return parts.joined(separator: "\n")
+    }
+}
+
 /// 状态行里的进度条（§5.3.8.1 ④：`[████░░] 42%`）。
 ///
 /// 纯函数，格子数固定：终端里的方括号进度条就是这个样子，宽度不能随窗口伸缩

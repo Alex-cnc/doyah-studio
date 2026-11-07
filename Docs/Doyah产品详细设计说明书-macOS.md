@@ -1,5 +1,6 @@
 # Doyah产品详细设计说明书 · macOS
 
+> **版本** **v1.1.10**（2026-11-07 §3.33.4 **第五轮**：beta1.0.7 真机「多个步骤的思考应该是合一起的啊，现在是分成了一块一块的」—— 根因：思考区在 `AgentChatView.swift:158` 的 `ForEach(model.messages)` 循环体里**按消息（= 按 step）实例化**（`:171-173` → `:1607` 的 `thinkingZone`），五步就是五块；改法：**一轮 = 一个思考区**（`Core/AgentTurnThinking.swift` 把本轮段聚成一个数组、区挂在轮首那条过程消息），区内退成**轻分隔**（一行发丝 + 极小字「第 N 步」），折 / 展一次作用于整轮；主人同日收口为**一轮只许三行汇总**（`▸ Thinking  ~308 tokens` / `▾ Tool calls (1)  ~16 tokens` / `Σ ~324 total`，默认全折、三行互不影响、第二行展开后逐次调用仍各一行 20pt），token 口径写死为 `Σ = thinking + tools + output`（合并后区的文本 + 工具过程行 + 结论段，一律走 `AgentTokenEstimator` 并带 `~`，端点 usage 只作 tooltip 旁证）；定高 200 / 折叠 20 一个字没动；八条判据各带反例读数 —— ① 五步 ⇒ 区 **1** 个（改前 **5** 个）、② 整块 **200pt** / 视口 **178pt** / 文档 **271pt**、③ 段序 `[1,2,3,4,5]`（倒序判红）、④ **20 → 200 → 20pt** 且区数恒 1（分块形态 5 区合计 100pt）、⑤ 工具块 **5 个**各 **20pt**、⑥ 三行各 **1** 行且 **[20,20,20]**（分块形态 Thinking **5** 行）、⑦ Thinking 行 **324** == 合并后区 **324**（写输出段 **18** ⇒ 判红）、⑧ `Σ 352 = 324 + 10 + 18`（只算输出 **18** ⇒ 判红））。
 > **版本** **v1.1.9**（2026-11-07 §3.33.3 **第四轮**：beta1.0.6 真机「每 Step 里的思考过程是可以滚动，但整个界面却不滚动了，要手工去拖动」—— 外层对话区跟随的三处根因：① 落点是底部**哨兵**、比内容底边高 **12pt**（`Spacing.m` 尾随 padding）⇒ 每跟一次距底恒 12pt > 4pt 容差；② 判定只看「距底多少」⇒ **内容长高**与**人上翻**不可分，跟一次就把 `pinned` 打成假、而 `follow` 先 `guard pinned` ⇒ 整段流式再也不跟；③ 触发只挂 `scrollTick`、读数只订阅 `clip.boundsDidChange` ⇒ 内容长高 / 吸顶条进出（视口 −20pt）一律漏。改法：落点=内容底边、判定升级为**状态机**（看偏移的变化方向）、读数器三路订阅（clip bounds / document frame / clip frame）+ 贴底态当场补跟；五条判据各带反例读数）。
 > **版本** **v1.1.8**（2026-11-07 §3.36 **新增「审批授权三档」**：beta1.0.6 真机「需要确认的次数太多了，要提供一次授权、会话内授权等选项」—— 审批单与待审批卡片并列三档（**仅这一次** 默认不记任何东西 / **本会话内允许** 只在同一会话、同一「工具 + 作用域」不再问且不落盘 / **总是允许** 落盘跨重启并**当场告知后果**）；记账键 = **工具名 + 规范化作用域**（文件 = 路径、命令 = 首词、MCP/SQL = 参数摘要，**不许只写工具名**）；删除 / 越界 / 对外发送 / 凭据**不提供**另外两档且**盘上有旧授权也不认**；设置 → 运行策略 → 「已授权的操作」逐条可撤、撤销立即生效且落盘；五条判据 + 作用域判据各带反例读数）。
 > **版本** **v1.1.7**（2026-11-07 §3.35 **新增「输入框 shell 式历史导航」**：beta1.0.5 真机「当光标在输入框中，按上下方向键能自动补全历史输入」—— 输入框由**单行 `TextField`** 改为**多行 `NSTextView`**（⏎ 发送 / ⇧⏎ 换行），↑↓ **只在首行行首 / 末行行末**回填历史（多行中间一律走光标，硬约束）、草稿不丢、只回填不发送、提交成功才入历史（连续重复去重 / 上限 200 / 落盘）；六条判据各带反例读数）。
@@ -1086,7 +1087,7 @@
 |---|---|---|---|
 | 结论（助手正文） | `App/Views/AgentChatView.swift`（`assistantBody` / `conclusionBody`）+ `Core/AgentAnswerSplit.swift`（`AgentAnswerClassifier`，边界见 §3.33.1 ②）+ `Core/AgentDisplayPreferences.swift`（`contractDefault = .off` 与 v1→v2 迁移） | **整段**（含代码块） | 不设上限（结论就该看完） |
 | 断言台账 claims | `App/Views/AgentClaimAuditRow.swift:30/36/42`（一行 + 明细）+ `Core/AgentClaimTrace.swift:107/171/225`（机器头 / `AgentClaimAudit` / `parse`）+ `App/Views/AgentChatView.swift:415`（`noticeRow` 认机器头） | **一行** | 折叠 `summaryHeight = 20pt`；展开 `expandedMaxHeight = 262pt`（= 20 + 间距 2 + 明细上限 **240pt**） |
-| 思考区（过程独白 + 思考段） | `App/Views/AgentProcessBlocks.swift`（`AgentThinkingZone`）+ `Core/AgentAnswerSplit.swift`（`AgentThinkingFold` / `AgentThinkingManualState`）+ `Core/AgentThinkingStream.swift`（视口常量 / 跟随判定 / 合并器，§3.33.2） | **运行中展开 / 任一终态折一行 / 手动动过本轮内 sticky**（§3.33.1 ③） | 折叠 `collapsedHeight = 20pt`；展开**整块恒 200pt**（抬头 20 + 发丝 2 + 视口 178，定高不跟内容长），内容内部滚动 |
+| 思考区（过程独白 + 思考段，**一轮一个区**） | `App/Views/AgentProcessBlocks.swift`（`AgentThinkingZone`）+ `Core/AgentTurnThinking.swift`（一轮的段聚合，§3.33.4）+ `Core/AgentAnswerSplit.swift`（`AgentThinkingFold` / `AgentThinkingManualState`）+ `Core/AgentThinkingStream.swift`（视口常量 / 跟随判定 / 合并器，§3.33.2） | **运行中展开 / 任一终态折一行 / 手动动过本轮内 sticky**（§3.33.1 ③）；**整轮一个区**、区内按步轻分隔（§3.33.4） | 折叠 `collapsedHeight = 20pt`；展开**整块恒 200pt**（抬头 20 + 发丝 2 + 视口 178，定高不跟内容长），内容内部滚动 |
 | 工具调用块 | `App/Views/AgentProcessBlocks.swift`（`AgentToolBlockView`）+ `App/Views/AgentChatChrome.swift`（`AgentToolBlockSummary`） | **一行摘要** `▸ 56 次工具调用 · 8.2s · 展开`（§3.33.1 ④） | 折叠 20pt；展开整块 **238pt**（抬头 20 + 发丝 2 + 行体 216 ≤ 240pt），行体内部滚动 |
 | 执行步骤详单 | `App/Views/AgentStepListPanel.swift`（§3.29 / §3.31 已落，本节不改） | 表头 + **2 行** | 收起 `collapsedHeight`（≈ 80pt）/ 展开 `maxHeight = 168pt` |
 
@@ -1257,6 +1258,91 @@
 - 禁止跟随状态住进宿主的 `@State` 结构体（每帧写状态 = 把 §3.33.2 的「不闪」拆掉）；
 - 禁止只挂内容事件（`scrollTick`）当触发：内容长高与视口变矮不改偏移，必须从**几何**触发；
 - 禁止让内层滚动区的读数改写外层跟随状态。
+
+#### 3.33.4 第五轮：一轮 = 一个思考区（2026-11-07，beta1.0.7）
+
+主人装上 beta1.0.7 后的原话：
+
+> 「多个步骤的思考应该是合一起的啊，现在是分成了一块一块的」
+
+即：一轮里**所有步骤**的思考要**合并成一个思考区**（一个可滚动的整体，按时间顺序累积），
+而不是每个 step 各自一个可折叠块。三态（§3.33.1 ③）、定高 200pt（§3.33.2 ②）、
+工具块一行摘要（§3.33.1 ④）**行为与高度都不变** —— 本轮只改「区按什么粒度实例化」。
+
+**根因（`文件:行号`，改前）**
+
+| # | 落点（改前） | 事实 |
+|---|---|---|
+| ① | `App/Views/AgentChatView.swift:158`（`ForEach(model.messages)`）+ `:171-173`（`thinkingZone(message, …)` 在**逐条消息的循环体里**） | 思考区是**按消息（= 按 step）实例化**的：五步 ⇒ 五块，各带自己的抬头与折叠态 |
+| ② | `App/Views/AgentChatView.swift:1607-1623`（`thinkingZone(_:isFinalAssistant:isLastTurn:)`）+ `:1613`（`AgentThinkingZone(text: parts.joined(…))`） | 「这一格显示什么」= **这一条消息**的 `thinkingParts`（`:1631`），单条作用域；跨步骤没有累积的去处 |
+| ③ | 无（新增） | 「一轮的思考」此前**没有任何一处**是数据：段序、步号、本轮步数都得由视图现拼 ⇒ 判据也没法数「页面上几个区」 |
+
+**契约五条**
+
+1. **一轮 = 一个思考区**：本轮所有步骤的思考文本按**发生顺序**累积进**同一个** `AgentThinkingZone`；不许每个 step 一个新块。归属只在 `Core/AgentTurnThinking.swift` 判一处（`zones(in:includeReasoning:)` / `zonesByAnchorIndex(in:includeReasoning:)`），轮切分仍走 `AgentChatTurnShape`（轮的定义只许有一处）。
+2. **内部仍可分段**：步骤边界用**轻分隔**（一行发丝 + 极小字「第 N 步」，`monoSmall` + 三级文字色）或段间距，**不用**多级折叠头（段上不挂点击、不占抬头高度）；整体仍**定高 200pt + 内部滚动**（`AgentThinkingViewport` 一个字没动）。
+3. **三态不变**：运行中展开（可流式）/ 终态自动折成一行（`思考过程 · N 步 · 18.4s · 展开`，`N` = 本轮**真有思考的段数**）/ 手动展开后本轮内 sticky（`AgentThinkingManualState`，钥匙 = 轮首消息 id）。
+4. **折 / 展是一次作用于整轮**：区只有**一处**抬头，`onToggle` 改的是这一轮的手动态；「点一下只折了某一步」在结构上不可能发生（没有按步的折叠态）。
+5. **工具块保持不变**：工具调用按调用 / 步骤各自成块（`AgentToolBlockView`，默认折一行 20pt），**不并进**思考区；思考区文本里一条工具行都不许出现（`Core` 侧只取 `AgentAnswerClassifier` 认出的独白 + 思考段）。
+
+**契约六条（收口版：一轮结束时只允许「三行汇总」）**
+
+主人 2026-11-07 补的最终形态（在上面「一轮一个区」之上再加三行）：
+
+```
+▸ Thinking  ~308 tokens
+▾ Tool calls (1)  ~16 tokens
+Σ ~324 total
+```
+
+6. **一轮只能是这三行**：顺序固定 `Thinking` → `Tool calls (N)` → `Σ total`，**默认全折**（各 20pt）；三行的折叠态**互不影响**（各自一个 `@State`，键 = 轮首消息 id）。**Thinking 行就是合并后的那一个思考区**（运行中按 §3.33.1 ③ 展开 200pt、可流式；终态折一行）——所以「两块 Thinking」在结构上不可能出现。
+7. **Token 数字的口径（写死，改口径先改 `Core/AgentTurnUsage`）**：
+   - `Thinking` = **合并后那个区**的文本 token 数（`AgentTurnThinking` 给视图的段 `joined("\n\n")`，与区**同一份字**）；
+   - `Tool calls (N)`：`N` = 本轮**调用次数**（一行一次调用），token = 本轮工具过程行文本的合计；
+   - `Σ` **定义为** `thinking + tools + output`（`output` = 本轮结论正文）。端点回报的 usage 是**整个请求**口径（系统提示 + 历史 + 工具 schema），与本轮产出不同源 ⇒ 只进 tooltip 作旁证，**不进** 任何一个数。
+   - 有 usage 用 usage、没有就估算：端点**没有分项 usage**，所以三项一律走仓库既有估算器 `AgentTokenEstimator.tokens(_:)`（汉字 1 字 = 1 token、其余 4 字符 = 1 token；与上下文账本同一套），数字前带 `~`；`isEstimated = false` 才允许去掉波浪号。
+   - **不许写死 / 占位**：三个数都从消息文本现算；运行中随增量涨（`AgentChatView` 每帧从 `AgentTurnUsageReader` 读，估算成本是线性扫文本）。
+8. **第二行展开后，内部仍是逐次调用各一行 20pt**（§3.33 口径不变）：`AgentToolCallRow` 一次调用一行、带 `├─ ⏺` 与耗时；工具数不因合并而变（判据⑤）。
+
+**怎么实现（四件，各管一件事）**
+
+| 部件 | 落点 | 职责 |
+|---|---|---|
+| 轮切分 | `Core/AgentTurnThinking.swift`（`AgentTurnSpan` / `AgentTurnSpans.spans(in:)`） | 「这一轮从哪条到哪条、过程信息挂哪一行」只有一处实现；思考聚合与用量都读它 |
+| 聚合 | `Core/AgentTurnThinking.swift`（`AgentThinkingSegment` / `AgentTurnThinkingZone` / `AgentTurnThinking`） | 一轮一段数组：`segmentText(of:isFinalAssistant:includeReasoning:)` 的口径**与改前 `thinkingParts` 逐条一致**（思考段受 `display.thinking` 管、独白不受），只是搬进 Core 让判据也读它；`zonesByAnchorIndex` 保证**一轮最多命中一条消息**（= 页面上最多一个区） |
+| 读数 | `Core/AgentTurnUsage.swift`（`AgentTurnUsage` / `AgentTurnUsageReader`） | 三行里的三个数：`thinking` 直接用聚合区的 `text`（同一份字，±0）、`tools` 扫工具过程行（`▸ ` 前缀计次）、`output` 取结论段；`totalTokens = thinking + tools + output`（等式写死在 `AgentTurnUsage`） |
+| 形态 | `App/Views/AgentProcessBlocks.swift`（`AgentThinkingZone(segments:…)`、`stepDivider(_:)`、`AgentToolCallsSummaryRow`、`AgentToolCallRow`、`AgentTurnTotalRow`、四个探针锚）+ `App/Views/AgentChatChrome.swift`（`AgentTurnUsageLines`，行文本形制） | 三行按固定顺序渲染、各 20pt、各自折展；段按 `ForEach(segments)` 渲染，第 2 段起插一条轻分隔；行文本一律走 `AgentTurnUsageLines`（判据与界面同一份） |
+
+**判据**（`TestsUISnapshot/AgentTurnThinkingZoneProbeTests.swift`，900×620 真 `AgentChatView`，`DOYAH_UI_SNAPSHOT=1`；聚合规约在 `Tests/AgentTurnThinkingTests.swift` 5 例）
+
+| 判据 | 读数（真跑） | 反例（同一套判定函数） |
+|---|---|---|
+| `T-3.33-20` **① 五步 ⇒ 1 个区** | 五步一轮（每步一段叙述 + 一次工具调用）⇒ 页面上 `AgentThinkingZone` 实例 **1 个** | 改前形态（一条消息一块，`LegacyPerStepThinking`）⇒ **5 个** ⇒ 判红（断言 `legacyCount == 5`） |
+| `T-3.33-21` **② 定高 200pt + 内部滚到末尾** | 整块 **200.0pt** / 内容视口 **178.0pt** / 文档 **271.0pt** / 滚到底距底 **0.0pt** | 视口跟着内容长 ⇒ `viewportViolations` 报「≠ 178pt」；文档 ≤ 视口 ⇒ 报「撑不出内部滚动」 |
+| `T-3.33-22` **③ 顺序保真** | 段锚按文档坐标上→下 = **`[1, 2, 3, 4, 5]`**；段文本开头 `["第 1 步"…"第 5 步"]` | 段序 **`[5, 4, 3, 2, 1]`** ⇒ `orderViolations` 判红 |
+| `T-3.33-23` **④ 折一次 = 折整轮** | 终态 **20.0pt** → 点一次 **200.0pt** → 再点 **20.0pt**，全过程**区数恒为 1** | 按 step 分块：**5 个区、合计 100pt**（点哪块只折哪块）⇒ 判红 |
+| `T-3.33-24` **⑤ 工具块不变** | 工具块 **5 个**、行高 **[20, 20, 20, 20, 20]**（`Tool calls` 行展开时逐条）；思考区文本里 `read_file` **0 处** | 工具并进思考区 ⇒ 块数 < 5 且区文本含 `read_file` ⇒ 判红 |
+| `T-3.33-25` **⑥ 三行各恰好一行** | 一轮 5 步 + 1 次工具、终态：`Thinking` 行 **1** / `Tool calls` 行 **1** / `Σ` 行 **1**，行高 **[20, 20, 20]** | 改前形态（一条消息一块）⇒ `Thinking` 行 **5** ⇒ 判红 |
+| `T-3.33-26` **⑦ Thinking 行 == 合并后的区** | 抬头画的 **324 tokens** == 合并后区的 `AgentTokenEstimator.tokens(zone.text)` **324 tokens**（输出段是 **18**，两者不等 ⇒ 认得出源） | 抬头写输出段的数（**18**）⇒ 判红 |
+| `T-3.33-27` **⑧ Σ == thinking + tools + output** | `Σ` **352** = thinking **324** + tools **10** + output **18**；Σ > thinking（说明后两段真进去了）、tools > 0 | `Σ` **只算输出**（**18**）⇒ 判红 |
+
+**边界（如实登记）**
+- 折叠动作是 `onTapGesture`（离屏宿主点不动）⇒ ④ 把 `onToggle` 的结论（`manual`）直接喂回去：生产里点抬头改的是同一个值，探针与生产读**同一份渲染代码**。
+- 「页面上几个区」靠**锚视图**计数（`AgentThinkingZoneMarker` / `AgentThinkingSegmentMarker` / `AgentToolBlockMarker`，零行为、零尺寸语义）：`Text` 不落 `NSTextField`、折叠态也没有滚动容器，数折头只能靠显式记号。
+- 内层视口要**最内层**那格 `NSScrollView`：外层对话区也是滚动容器，它的 `documentView` 子树里同样躺着段锚（实测先命中它 ⇒ 读到视口 390.5pt）。
+- 早轮次里 `elapsedSeconds` 仍取 `model.lastElapsedSeconds`（只对最后一轮准）—— 本轮不碰，登记在案。
+- **探针要先把外层滚回顶部**：运行中那一页会自动贴底，而 `LazyVStack` 会把滚出视口的行回收（实测顶部的过程块整块消失 ⇒ 记号 0 个）。读数前 `scrollToTop` 只动滚动位置，不改任何一行。
+- 估算器的成本 = 线性扫消息文本（每帧一次）；真机一轮几万字也在毫秒级，未做节流 —— 如果将来出现长会话 + 大历史，先量再优化，不提前加缓存。
+
+**禁止行为**
+- 禁止在 `ForEach` 的循环体里逐条实例化思考区（那是「一块一块」的定义）；
+- 禁止给段加折叠态 / 点击（段只是分隔，折展只有整区一个口）；
+- 禁止为了合并把工具行写成思考段（动作与思考是两回事，⑤ 会判红）；
+- 禁止一轮出现第二块 `Thinking`（三行是**上限也是下限**：有过程就只许这三行）；
+- 禁止把端点回报的 usage 当成 `Σ`（分母不同，等式会崩；只进 tooltip）；
+- 禁止把三个 token 数写死 / 占位（必须从消息文本现算，估算也要带 `~`）；
+- 禁止改定高 200 / 折叠 20 这两档（§3.33.2 ④ 的两档制不变）；
+- 禁止在视图里另写一份「这一轮该显示什么」（只许走 `AgentTurnThinking`）。
 
 ### 3.34 当前轮用户问题吸顶一行（2026-11-07，beta1.0.4）
 

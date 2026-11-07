@@ -457,9 +457,15 @@ final class AgentChatNarrationProbeTests: XCTestCase {
         let withoutTool = readPage([question(), .init(role: .assistant, text: Self.conclusion())],
                                    store: store)
         let toolExtra = withTool.transcriptContentHeight - withoutTool.transcriptContentHeight
-        print("🧪 整页：56 次工具块多占 \(toolExtra)pt（一行 \(AgentToolBlockView.collapsedHeight)pt）")
-        XCTAssertLessThanOrEqual(toolExtra, AgentToolBlockView.collapsedHeight + Spacing.xs + 0.5,
-                                 "56 次工具调用在整页上多占 \(toolExtra)pt ⇒ 默认没折")
+        // **§3.33.4 之后这条预算改成两行**：有工具就必然带出「Tool calls (N)」与「Σ total」两行
+        // （三行汇总的固定顺序），所以 56 次调用在整页上多占的是 **2 行 + 2 个发丝间距**，
+        // 而不是 1 行。有牙齿的那一半在别处：**56 次与 300 次同高**（上面 `collapsedMany == collapsedFew`），
+        // 且工具明细只在展开时按行出现。
+        let toolRowBudget = AgentToolBlockView.collapsedHeight * 2 + Spacing.hair * 2 + 0.5
+        print("🧪 整页：56 次工具块多占 \(toolExtra)pt（两行预算 \(toolRowBudget)pt；"
+              + "一行 \(AgentToolBlockView.collapsedHeight)pt ⇒ Tool calls + Σ 两行）")
+        XCTAssertLessThanOrEqual(toolExtra, toolRowBudget,
+                                 "56 次工具调用在整页上多占 \(toolExtra)pt ⇒ 超过「Tool calls + Σ」两行")
 
         // 反例：无上限的 56 行（改前形态）⇒ 同一套判据必须报红。
         let unbounded = height(VStack(alignment: .leading, spacing: Spacing.hair) {

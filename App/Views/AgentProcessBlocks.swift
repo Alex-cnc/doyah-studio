@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 import DoyahCore
 
@@ -97,6 +98,9 @@ struct AgentToolBlockView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         // 折叠态**钉成一行**（20pt）：这一块的高度是常量，探针拿它当判据。
         .frame(height: expanded ? nil : Self.collapsedHeight, alignment: .topLeading)
+        // **判据⑤的计数点**（§3.33.4）：工具块按调用 / 步骤各自成块 —— 收的是动作，
+        // 不是思考，所以思考区合并成一轮一个之后，这里一个都不能少、一行都不能变。
+        .background(AgentToolBlockAnchor())
     }
 
     /// 一条工具条目：`├─ ⏺ <名>("<参数摘要>") (<耗时>s)`（末条用 `└─`）。
@@ -144,7 +148,17 @@ struct AgentToolBlockView: View {
     }
 }
 
-/// **思考区**（详设 §3.33「思考区三态」）：过程独白（以及打开的思考段）只住在这里。
+/// **思考区**（详设 §3.33「思考区三态」/ §3.33.4「一轮一个思考区」）：过程独白（以及打开的思考段）只住在这里。
+///
+/// ## 一轮一个区（§3.33.4，beta1.0.7 主人原话）
+///
+/// > 「多个步骤的思考应该是合一起的啊，现在是分成了一块一块的」
+///
+/// 改前这个视图是**按 step 实例化**的（`AgentChatView` 在逐条消息的 `ForEach` 里调它），
+/// 五步就是五块 200pt 的折叠块。现在它收的是**整轮**的段（`segments`）：
+/// · 只有一个抬头 ⇒ 折 / 展**一次作用于整轮**；
+/// · 步骤边界退成**区内轻分隔**（一行发丝 + 极小字「第 N 步」），不是二级折叠头；
+/// · 整块仍定高 200pt，多长都在内部滚。
 ///
 /// ## 三态（人类主人 2026-11-07 拍的产品决策）
 ///
@@ -156,7 +170,7 @@ struct AgentToolBlockView: View {
 ///    新轮开始才回到「按阶段默认」—— sticky 与轮次作用域都在 Core
 ///    （`AgentThinkingFold` / `AgentThinkingManualState`），视图只读结论。
 ///
-/// 「哪一段算独白」也**不在这里**判：`AgentAnswerClassifier` 给，视图只画。
+/// 「哪一段算独白」「哪几条消息凑成这一轮」也**不在这里**判：`AgentTurnThinking` 给，视图只画。
 ///
 /// ## 流式期间的三条（详设 §3.33.2，beta1.0.4 真机「滚动条很闪」）
 ///
@@ -166,16 +180,60 @@ struct AgentToolBlockView: View {
 ///   终态手动展开是静态内容，交回系统默认。
 struct AgentThinkingZone: View {
 
-    /// 这一格的内容：过程独白（必先是它）+ 思考段（开关打开时才有）。
-    let text: String
+    /// 这一轮的段（顺序即发生顺序；详设 §3.33.4）。
+    let segments: [AgentThinkingSegment]
     let phase: AgentThinkingPhase
     /// `nil` = 用户没动过（按阶段默认）。
     let manual: Bool?
     let steps: Int
     let elapsedSeconds: Double?
+    /// 本轮思考的 token 合计（§3.33.4 第一行）；`nil` = 调用方没有读数（探针 / 单段路径）
+    /// ⇒ 抬头退回「思考过程 · N 步 · 18.4s · 展开」。
+    let tokens: Int?
     let highlight: String?
     let language: AppLanguage
     let onToggle: (Bool) -> Void
+
+    /// 单段形态（探针 / 只有一个调用点的简短路径）：等价于只有第 1 段的一轮。
+    init(text: String,
+         phase: AgentThinkingPhase,
+         manual: Bool?,
+         steps: Int,
+         elapsedSeconds: Double?,
+         tokens: Int? = nil,
+         highlight: String?,
+         language: AppLanguage,
+         onToggle: @escaping (Bool) -> Void) {
+        self.init(segments: [AgentThinkingSegment(step: 1, text: text)],
+                  phase: phase,
+                  manual: manual,
+                  steps: steps,
+                  elapsedSeconds: elapsedSeconds,
+                  tokens: tokens,
+                  highlight: highlight,
+                  language: language,
+                  onToggle: onToggle)
+    }
+
+    init(segments: [AgentThinkingSegment],
+         phase: AgentThinkingPhase,
+         manual: Bool?,
+         steps: Int,
+         elapsedSeconds: Double?,
+         tokens: Int? = nil,
+         highlight: String?,
+         language: AppLanguage,
+         onToggle: @escaping (Bool) -> Void) {
+        self.segments = segments
+        self.phase = phase
+        self.manual = manual
+        self.steps = steps
+        self.elapsedSeconds = elapsedSeconds
+        self.tokens = tokens
+        self.highlight = highlight
+        self.language = language
+        self.onToggle = onToggle
+    }
 
     @Environment(\.colorScheme) private var colorScheme
 
@@ -199,19 +257,30 @@ struct AgentThinkingZone: View {
     /// 把「不闪」拆掉一半（每次写都重算这一格）。
     @State private var follow = AgentScrollFollow()
 
+    /// 有内容的段（空白段丢掉：段还在，只是不占一行）。
+    private var drawn: [AgentThinkingSegment] {
+        segments.filter { !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+    }
+
+    /// 整区文本：跟随判定与「内容变了要不要跟」都看它（一段变了整区就变了）。
+    private var combinedText: String { drawn.map(\.text).joined(separator: "\n\n") }
+
     var body: some View {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !trimmed.isEmpty {
+        let drawn = self.drawn
+        if !drawn.isEmpty {
             let expanded = AgentThinkingFold.isExpanded(phase: phase, manual: manual)
             VStack(alignment: .leading, spacing: AgentThinkingViewport.hairGap) {
                 HStack(alignment: .firstTextBaseline, spacing: Spacing.s) {
                     Text(expanded ? "▾" : "▸")
                         .font(Self.font)
                         .foregroundStyle(Theme.text(.tertiary))
-                    Text(AgentThinkingSummary.text(steps: steps,
-                                                   elapsedSeconds: elapsedSeconds,
-                                                   expanded: expanded,
-                                                   language: language))
+                    // 抬头（§3.33.4 第一行）：有 token 读数就照主人给的形制
+                    // `Thinking  ~308 tokens`；没有读数（探针 / 无用量）退回旧摘要。
+                    Text(tokens.map { AgentTurnUsageLines.thinking(tokens: $0, estimated: true) }
+                         ?? AgentThinkingSummary.text(steps: steps,
+                                                      elapsedSeconds: elapsedSeconds,
+                                                      expanded: expanded,
+                                                      language: language))
                         .font(Self.font)
                         .foregroundStyle(Theme.chat(.thinking, colorScheme))
                         .lineLimit(1)
@@ -222,11 +291,14 @@ struct AgentThinkingZone: View {
                 .contentShape(Rectangle())
                 .onTapGesture { onToggle(!expanded) }
                 .accessibilityAddTraits(.isButton)
-                .help(expanded ? LocalizedStrings.text(.agentChatCollapse, language: language)
-                      : LocalizedStrings.text(.agentChatExpand, language: language))
+                // 步数 / 耗时 / 折展提示仍要读得到 —— 抬头只剩 token 数之后，它们进 tooltip。
+                .help(AgentThinkingSummary.text(steps: steps,
+                                                elapsedSeconds: elapsedSeconds,
+                                                expanded: expanded,
+                                                language: language))
 
                 if expanded {
-                    viewport(trimmed)
+                    viewport(drawn)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -234,17 +306,31 @@ struct AgentThinkingZone: View {
             // 折叠与展开是**直接切档**，不加 `withAnimation` 改高度（动画期间尺寸逐帧插值，
             // 看着就是又一档闪）。
             .frame(height: AgentThinkingViewport.height(expanded: expanded), alignment: .topLeading)
+            // **判据①的计数点**（§3.33.4）：一个思考区一个锚 —— 折叠态也在，
+            // 所以「页面上几个思考区」是可数的机械读数，不是靠数折叠头看出来的。
+            // `tokens` 带上抬头那个数：判据② 拿它跟「合并后的区」对账（±0）。
+            .background(AgentThinkingZoneAnchor(tokens: tokens ?? -1))
         }
     }
 
     /// 内容视口：**定高 178pt + 内部滚动**（不跟内容长 —— 整块对外恒 200pt）。
-    private func viewport(_ text: String) -> some View {
+    ///
+    /// 段与段之间是**轻分隔**（§3.33.4）：一行发丝 + 极小字「第 N 步」。
+    /// 它不是折叠头（点不动、不占一行抬头高度）—— 折展只有整区那一个口。
+    private func viewport(_ segments: [AgentThinkingSegment]) -> some View {
         ScrollViewReader { proxy in
             ScrollView(.vertical) {
                 VStack(alignment: .leading, spacing: 0) {
-                    AgentTranscriptText(text: text, font: Self.font, highlight: highlight)
-                        .foregroundStyle(Theme.chat(.thinking, colorScheme).opacity(0.92))
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                    ForEach(segments) { segment in
+                        if segment.step > 1 {
+                            stepDivider(segment.step)
+                        }
+                        AgentTranscriptText(text: segment.text, font: Self.font, highlight: highlight)
+                            .foregroundStyle(Theme.chat(.thinking, colorScheme).opacity(0.92))
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            // **判据③的计数点**：段锚带步号，探针按文档坐标排序核对 1→N。
+                            .background(AgentThinkingSegmentAnchor(step: segment.step))
+                    }
                     Color.clear
                         .frame(height: 1)
                         .id(Self.bottomAnchor)
@@ -271,7 +357,7 @@ struct AgentThinkingZone: View {
             // 每次都得按新内容高重算滑块尺寸，那正是「闪」的来源；视口只有 178pt，
             // 一屏之内不需要位置指示。终态手动展开是**静态内容**，交回系统默认（可见）。
             .scrollIndicators(phase == .running ? .hidden : .visible)
-            .onChange(of: text) { _, _ in
+            .onChange(of: combinedText) { _, _ in
                 // 只在贴着底时跟；**不带动画**（动画版每个增量都重启一次巡航，永远跑不完）。
                 guard follow.shouldFollow else { return }
                 proxy.scrollTo(Self.bottomAnchor, anchor: .bottom)
@@ -281,5 +367,291 @@ struct AgentThinkingZone: View {
                 proxy.scrollTo(Self.bottomAnchor, anchor: .bottom)
             }
         }
+    }
+
+    /// 步骤边界：**一行发丝 + 极小字「第 N 步」**（§3.33.4 契约②：轻分隔，不是多级折叠头）。
+    ///
+    /// 字取 `monoSmall`（比正文小一档）+ 三级文字色：读的时候是「翻页记号」，
+    /// 不是又一个可点的标题 —— 台阶感在，块的割裂感不在。
+    private func stepDivider(_ step: Int) -> some View {
+        HStack(spacing: Spacing.xs) {
+            Rectangle()
+                .fill(Theme.hairline(colorScheme))
+                .frame(height: Metrics.hairline)
+            Text(LocalizedStrings.format(.agentChatThinkingStepLabel, language: language, step))
+                .font(Theme.font(.monoSmall))
+                .foregroundStyle(Theme.text(.tertiary))
+                .fixedSize()
+        }
+        .padding(.vertical, Spacing.s)
+    }
+}
+
+// MARK: - 探针锚（详设 §3.33.4 判据①③⑤）
+
+/// 一个**思考区实例**的记号（零行为、零尺寸语义）。
+///
+/// 为什么要它：判据① 要的是「页面上有几个思考区」这个**数**。折叠态没有滚动容器、
+/// `Text` 也不落成 `NSTextField`（本仓已登记的边界）—— 靠在文档树里找一个**专门的类型**
+/// 才是机械读数：一个区一个锚，按 step 实例化的话它就跟着变成 N 个。
+///
+/// `tokens` = 抬头**实际画出来**的那个数（判据② 拿它跟合并后的区对账，不是另算一遍）。
+final class AgentThinkingZoneMarker: NSView {
+    var tokens: Int = -1
+}
+
+struct AgentThinkingZoneAnchor: NSViewRepresentable {
+    var tokens: Int = -1
+
+    func makeNSView(context: Context) -> AgentThinkingZoneMarker {
+        let view = AgentThinkingZoneMarker()
+        view.tokens = tokens
+        return view
+    }
+
+    func updateNSView(_ view: AgentThinkingZoneMarker, context: Context) {
+        view.tokens = tokens
+    }
+}
+
+/// 一个**段**的记号：带步号，探针按文档坐标排序核对「1→N」的顺序保真（判据③）。
+final class AgentThinkingSegmentMarker: NSView {
+    var step: Int = 0
+}
+
+struct AgentThinkingSegmentAnchor: NSViewRepresentable {
+    let step: Int
+
+    func makeNSView(context: Context) -> AgentThinkingSegmentMarker {
+        let view = AgentThinkingSegmentMarker()
+        view.step = step
+        return view
+    }
+
+    func updateNSView(_ view: AgentThinkingSegmentMarker, context: Context) {
+        view.step = step
+    }
+}
+
+/// 一个**工具块实例**的记号（判据⑤：合并思考区之后工具的个数与行高都不许变）。
+final class AgentToolBlockMarker: NSView {}
+
+struct AgentToolBlockAnchor: NSViewRepresentable {
+    func makeNSView(context: Context) -> AgentToolBlockMarker { AgentToolBlockMarker() }
+    func updateNSView(_ view: AgentToolBlockMarker, context: Context) {}
+}
+
+
+// MARK: - 一轮的三行汇总（详设 §3.33.4 契约六~八）
+
+/// **「Tool calls (N)  ~M tokens」那一行**（§3.33.4 契约七）：默认折成一行；
+/// 展开后**逐个调用各一行 20pt**（§3.33 的口径不变：一次调用 = 一行摘要）。
+///
+/// 为什么工具要收进这一行、而不是继续按消息各占一行：一轮 56 次调用就是 56 行，
+/// 结论被顶出屏幕（§3.33.1 ④ 的老问题）。收成一行之后**次数与 token**还在一眼可见的位置，
+/// 明细点开就有 —— 且明细仍是每调用一行，不是一坨文本。
+struct AgentToolCallsSummaryRow: View {
+
+    /// 本轮工具**调用次数**（读数，不是行数）。
+    let count: Int
+    /// 这些调用的 token 合计。
+    let tokens: Int
+    /// 本轮每条工具消息的原文（一次调用一条）。
+    let texts: [String]
+    let expanded: Bool
+    let highlight: String?
+    let language: AppLanguage
+    let onToggle: () -> Void
+
+    @Environment(\.colorScheme) private var colorScheme
+
+    /// 折叠态 = 一行（与工具块、思考区同一档）。
+    static let collapsedHeight: CGFloat = Metrics.listRowHeight
+    /// 展开后明细的上限（超了在内部滚，不把结论顶走）。
+    static let bodyMaxHeight: CGFloat = AgentToolBlockView.bodyMaxHeight
+
+    private static let font = Theme.font(.mono)
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.hair) {
+            Button(action: onToggle) {
+                HStack(spacing: Spacing.s) {
+                    Text(expanded ? "▾" : "▸")
+                        .font(Self.font)
+                        .foregroundStyle(Theme.text(.tertiary))
+                    Text(AgentTurnUsageLines.toolCalls(count: count, tokens: tokens, estimated: true))
+                        .font(Self.font)
+                        .foregroundStyle(Theme.text(.secondary))
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                    Spacer(minLength: 0)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .frame(height: Self.collapsedHeight)
+            .help(expanded ? LocalizedStrings.text(.agentChatCollapse, language: language)
+                  : LocalizedStrings.text(.agentChatExpand, language: language))
+
+            if expanded {
+                ScrollView(.vertical) {
+                    VStack(alignment: .leading, spacing: Spacing.hair) {
+                        ForEach(Array(texts.enumerated()), id: \.offset) { _, text in
+                            AgentToolCallRow(text: text,
+                                             highlight: highlight,
+                                             language: language)
+                        }
+                    }
+                }
+                .frame(maxHeight: Self.bodyMaxHeight)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        // **判据计数点**（§3.33.4 判据 A）：一眼能数「页面上几个 Tool calls 行」。
+        .background(AgentTurnUsageRowAnchor(kind: .toolCalls, tokens: tokens))
+    }
+}
+
+/// **一次工具调用 = 一行 20pt**（§3.33.4：Tool calls 展开后的内部行，§3.33 口径不变）。
+struct AgentToolCallRow: View {
+
+    /// 这条工具消息的原文（一行一次调用；解析不出的行原样画）。
+    let text: String
+    let highlight: String?
+    let language: AppLanguage
+
+    @Environment(\.colorScheme) private var colorScheme
+
+    private static let font = Theme.font(.mono)
+
+    var body: some View {
+        let rows = AgentToolLines.rows(text)
+        VStack(alignment: .leading, spacing: 0) {
+            if rows.isEmpty {
+                // 认不出的过程行：**原样**一行（既不吞字也不猜）。
+                Text(TranscriptHighlight.apply(highlight, to: AttributedString(text)))
+                    .font(Self.font)
+                    .foregroundStyle(Theme.text(.secondary))
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .frame(height: AgentToolBlockView.collapsedHeight, alignment: .leading)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            } else {
+                ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
+                    HStack(spacing: Spacing.s) {
+                        Text("├─ ⏺")
+                            .font(Self.font)
+                            .foregroundStyle(Theme.text(.tertiary))
+                        Text(TranscriptHighlight.apply(highlight,
+                                                       to: AttributedString(AgentToolLines.callText(row))))
+                            .font(Self.font)
+                            .foregroundStyle(row.outcome == .running
+                                             ? Theme.chat(.command, colorScheme).opacity(0.7)
+                                             : Theme.chat(.command, colorScheme))
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                        if case let .failure(reason) = row.outcome {
+                            Text("✗ " + reason)
+                                .font(Self.font)
+                                .foregroundStyle(Theme.status(.danger))
+                                .lineLimit(1)
+                        }
+                        Spacer(minLength: 0)
+                    }
+                    .frame(height: AgentToolBlockView.collapsedHeight)
+                }
+            }
+        }
+        // 判据⑤ 的计数点：一次调用一个 20pt 记号（工具个数与行高都不许被合并吞掉）。
+        .background(AgentToolBlockAnchor())
+    }
+}
+
+/// **「Σ ~324 total」那一行**（§3.33.4 契约八）：一轮 token 合计；展开看三项分项。
+///
+/// `Σ` 的口径写死在 `Core/AgentTurnUsage.totalTokens`（= thinking + tools + output），
+/// tooltip 里再说一遍 —— 「合计是哪几项相加」不写在能被读到的地方，等于没写。
+struct AgentTurnTotalRow: View {
+
+    let usage: AgentTurnUsage
+    let expanded: Bool
+    let language: AppLanguage
+    let onToggle: () -> Void
+
+    @Environment(\.colorScheme) private var colorScheme
+
+    static let rowHeight: CGFloat = Metrics.listRowHeight
+    private static let font = Theme.font(.mono)
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Button(action: onToggle) {
+                HStack(spacing: Spacing.s) {
+                    Text(expanded ? "▾" : "▸")
+                        .font(Self.font)
+                        .foregroundStyle(Theme.text(.tertiary))
+                    Text(AgentTurnUsageLines.total(tokens: usage.totalTokens, estimated: usage.isEstimated))
+                        .font(Self.font)
+                        .foregroundStyle(Theme.text(.secondary))
+                        .lineLimit(1)
+                    Spacer(minLength: 0)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .frame(height: Self.rowHeight)
+            .help(AgentTurnUsageLines.totalHelp(usage, language: language))
+
+            if expanded {
+                ForEach(Array(AgentTurnUsageLines.breakdown(usage).enumerated()), id: \.offset) { _, item in
+                    HStack(spacing: Spacing.s) {
+                        Text(item.label)
+                            .font(Self.font)
+                            .foregroundStyle(Theme.text(.tertiary))
+                            .frame(width: Self.labelWidth, alignment: .leading)
+                        Text(item.value)
+                            .font(Self.font)
+                            .foregroundStyle(Theme.text(.secondary))
+                        Spacer(minLength: 0)
+                    }
+                    .frame(height: Self.rowHeight)
+                    .padding(.leading, Metrics.listIndent)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(AgentTurnUsageRowAnchor(kind: .total, tokens: usage.totalTokens))
+    }
+
+    /// `thinking` / `output` 两档标签的固定列宽（三档对齐，读数不跳）。
+    private static let labelWidth: CGFloat = Spacing.l * 4
+}
+
+/// 三行汇总里「几行」的**计数点**（§3.33.4 判据 A）：一行一个记号。
+///
+/// 为什么不复用折叠头去数：`Button` 在离屏宿主里落成 `NSButton`、文字不落 `NSTextField`，
+/// 数行只能靠显式记号；思考那一行用 `AgentThinkingZoneMarker`（它就是区本身）。
+final class AgentTurnUsageRowMarker: NSView {
+    /// `toolCalls` / `total`（思考行由思考区自己的锚计）。
+    enum Kind: String { case toolCalls, total }
+    var kind: Kind = .toolCalls
+    /// 这一行**实际画出来**的 token 数（判据：Σ 行 == thinking + tools + output）。
+    var tokens: Int = -1
+}
+
+struct AgentTurnUsageRowAnchor: NSViewRepresentable {
+    let kind: AgentTurnUsageRowMarker.Kind
+    var tokens: Int = -1
+
+    func makeNSView(context: Context) -> AgentTurnUsageRowMarker {
+        let view = AgentTurnUsageRowMarker()
+        view.kind = kind
+        view.tokens = tokens
+        return view
+    }
+
+    func updateNSView(_ view: AgentTurnUsageRowMarker, context: Context) {
+        view.kind = kind
+        view.tokens = tokens
     }
 }

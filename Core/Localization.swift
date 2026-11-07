@@ -1463,6 +1463,12 @@ public enum LKey: String, CaseIterable, Sendable {
     case agentChatThinkingFoldTitle
     /// 步数（「12 步」）—— 思考区摘要要报「这一轮走了几步」。
     case agentChatStepsCount
+    /// 详设 §3.33.4：一轮一个思考区，区内步骤边界的**轻分隔**（「第 3 步」极小字）。
+    case agentChatThinkingStepLabel
+    /// 详设 §3.33.4：Σ 行的口径说明（三项估算 —— 数字前带 `~`）。
+    case agentChatUsageEstimatedNote
+    /// 详设 §3.33.4：端点回报的总用量（**不进 Σ**，只作旁证）。
+    case agentChatUsageReportedNote
     /// `FR-AI-31` ①：同一文件正有另一次写入 — 这一次没落盘。
     case agentChatWriteBusy
     /// `FR-AI-31` ①：批准之后文件被改过 — 不拿旧审批覆盖。
@@ -5253,6 +5259,17 @@ public enum LocalizedStrings {
         // 详设 §3.33「思考区三态」：终态那一行的抬头 + 步数（运行中展开，终态折一行）。
         .agentChatThinkingFoldTitle: [.simplifiedChinese: "思考过程", .english: "reasoning"],
         .agentChatStepsCount: [.simplifiedChinese: "%ld 步", .english: "%ld steps"],
+        // 详设 §3.33.4：一轮一个思考区，区内步骤边界只是一行发丝 + 这几个字（**极小字**，不是折叠头）。
+        .agentChatThinkingStepLabel: [.simplifiedChinese: "第 %ld 步", .english: "step %ld"],
+        // 详设 §3.33.4：三行汇总的数字是估算（端点没有分项 usage）⇒ 数字前带 `~`，口径写在 tooltip 里。
+        .agentChatUsageEstimatedNote: [
+            .simplifiedChinese: "三项均为估算（汉字 1 字 1 token、其余 4 字符 1 token，与上下文账本同一套口径）",
+            .english: "All three are estimates (1 token per CJK char, 1 token per 4 other characters — same estimator as the context ledger)"
+        ],
+        .agentChatUsageReportedNote: [
+            .simplifiedChinese: "端点回报本轮 %ld tokens（含系统提示与历史，口径不同，不进 Σ）",
+            .english: "Endpoint reported %ld tokens for this turn (includes system prompt and history; different basis, not part of Σ)"
+        ],
         .workspaceHomeBuildLine: [.simplifiedChinese: "版本 %@（构建 %@）", .english: "Version %@ (build %@)"],
         .workspaceHomeCopyright: [.simplifiedChinese: "版权所有 © 2026 豆丫科技 · 本机优先：数据与文件不出这台机器", .english: "Copyright © 2026 Doyah Tech · Local first: your data and files stay on this machine"],
         // 版权行（2026-10-27 人类主人令）：**中英各叫各的名字** —— 中文界面给「豆丫科技」，英文界面给「Doyah Tech」，不混写（英文文案里不夹汉字这条判据照旧适用）。两个名字并列的那一句（`© 2026 豆丫科技 · Doyah Tech`）只出现在不分语言的地方：Info.plist / LICENSE。

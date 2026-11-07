@@ -95,6 +95,11 @@ struct AgentChatView: View {
     /// **显式展开**过的断言台账（按时间线事件的 id）。默认折叠成一行（详设 §3.33）——
     /// 点开过就记下来，否则下一次重绘又折回去，等于点不动。
     @State private var expandedClaimAudits: Set<UUID> = []
+    /// **三行汇总里「Tool calls」那一行**的显式折叠态（§3.33.4 契约七：三行**互不影响**）。
+    /// 键 = 轮首消息 id；没记过 ⇒ 按阶段默认（运行中展开、终态折）。
+    @State private var toolCallsToggled: [UUID: Bool] = [:]
+    /// **三行汇总里「Σ total」那一行**的显式折叠态（默认折；展开看三项分项）。
+    @State private var totalToggled: [UUID: Bool] = [:]
 
     /// 对话区**是不是贴着底**（详设 §3.33.3）：只由读数器（`StickyQuestionSpy` 里的
     /// `AgentScrollFollow` 状态机）改写，**内容长高不改它**。
@@ -126,6 +131,22 @@ struct AgentChatView: View {
         // **哪一条助手消息是「结论」**（详设 §3.33）：轮内最后一条。算一次给整屏用 ——
         // 逐条算会把同一份判定算 N 遍，还会让「第几条是最后一条」出现第二个答案。
         let finalAssistants = AgentChatTurnShape.finalAssistantIndices(in: model.messages)
+        // **一轮一个思考区 + 一轮三行汇总**（详设 §3.33.4）：轮的划分只算一次（`AgentTurnSpans`），
+        // 区的归属与用量都从这一份切分里长出 —— 逐条消息各算一次的话，
+        // 「这一轮的第一条过程消息」会出现第二个答案，五步又变回五块。
+        let spans = AgentTurnSpans.spans(in: model.messages)
+        let thinkingZones = AgentTurnThinking.zonesByAnchorIndex(
+            in: model.messages,
+            includeReasoning: appState.agentDisplayPreferences.thinking
+        )
+        let usageByTurn = AgentTurnUsageReader.usage(
+            in: model.messages,
+            includeReasoning: appState.agentDisplayPreferences.thinking
+        )
+        let toolTextsByTurn = AgentTurnUsageReader.toolTexts(in: model.messages)
+        // 每条消息属于哪一轮（`ForEach` 里查「我是不是这一轮的过程块位置」）。
+        var spanByIndex: [Int: AgentTurnSpan] = [:]
+        for span in spans { for index in span.startIndex...span.endIndex { spanByIndex[index] = span } }
         // **当前轮**（= 最后一轮的轮首用户消息，§3.34）：从 `AgentChatTurnShape` 取，
         // 不在视图里另写一份「最后一条用户消息」—— 轮的定义只许有一处。
         let question = AgentStickyQuestion.currentTurn(in: model.messages)
@@ -168,10 +189,21 @@ struct AgentChatView: View {
                             HStack(alignment: .top, spacing: 0) {
                                 leadingColumn(message)
                                 VStack(alignment: .leading, spacing: Spacing.hair) {
-                                    thinkingZone(message,
-                                                 isFinalAssistant: finalAssistants.contains(index),
-                                                 isLastTurn: isLastTurn(index))
-                                    messageRow(message, isFinalAssistant: finalAssistants.contains(index))
+                                    // **三轮行的过程汇总**（§3.33.4）：只在本轮第一条过程消息那一行画一次函数
+                                    // （`Thinking` / `Tool calls (N)` / `Σ total`）—— 其余消息在这里什么都不画，
+                                    // 这正是「一块一块」消失的机械原因。
+                                    if let span = spanByIndex[index], span.anchorIndex == index {
+                                        turnProcessBlock(span: span,
+                                                         zone: thinkingZones[index],
+                                                         usage: usageByTurn[span.startIndex],
+                                                         toolTexts: toolTextsByTurn[span.startIndex] ?? [],
+                                                         isLastTurn: isLastTurn(index))
+                                    }
+                                    // 工具行**收进**「Tool calls」那一行（§3.33.4 契约七）：
+                                    // 本轮有过程块时不再各自成行；明细在那一行展开后逐条 20pt。
+                                    if !(message.role == .tool && spanByIndex[index]?.anchorIndex != nil) {
+                                        messageRow(message, isFinalAssistant: finalAssistants.contains(index))
+                                    }
                                 }
                             }
                             .id(message.id)
@@ -1592,66 +1624,66 @@ struct AgentChatView: View {
             .foregroundStyle(Theme.text(.tertiary))
     }
 
-    /// **思考区**（详设 §3.33「思考区三态」）：过程独白 + （开关打开时的）思考段都住在这里。
+    /// **一轮的过程汇总**（详设 §3.33.4）：一轮只有**三行**，顺序固定
+    /// （`Thinking` → `Tool calls (N)` → `Σ total`），三行的折叠态**互不影响**。
     ///
-    /// 三态由 Core 判（`AgentThinkingFold`）：
-    /// · **运行中** ⇒ 默认展开、限高 200pt + 内部滚动（「我先读一下…再…」逐段吐出来）；
-    /// · **任一终态** ⇒ 自动折成一行（`思考过程 · 12 步 · 18.4s · 展开`）；
-    /// · **用户手动动过** ⇒ 以用户为准且本轮内保持（sticky，`AgentThinkingManualState`）。
+    /// · 第一行 = 合并后**那一个**思考区（运行中展开 200pt 可流式，终态折 20pt）；
+    /// · 第二行 = 本轮工具次数 + token（默认折；展开后逐个调用各一行 20pt）；
+    /// · 第三行 = 本轮 token 合计 = thinking + tools + output（可展开看分项）。
     ///
-    /// 为什么独白也放这里、而不另做一个「独白行」：两者都是**过程信息**，同一轮里
-    /// 该有同一个形态（否则一轮里两套折叠规则，主人得记住哪个会自己折）。
-    ///
-    /// 内容空（没有独白、也没有打开的思考段）⇒ 一行都不画（契约②：零占位）。
+    /// 零占位：没有思考段就不画第一行、没有工具就不画第二行、整轮没有任何 token 就不画第三行
+    /// —— 不做「空壳三行」。
     @ViewBuilder
-    private func thinkingZone(_ message: AgentChatMessage, isFinalAssistant: Bool,
-                              isLastTurn: Bool) -> some View {
-        let parts = thinkingParts(message, isFinalAssistant: isFinalAssistant)
-        if !parts.isEmpty {
-            let phase: AgentThinkingPhase = (model.isRunning && isLastTurn) ? .running : .finished
-            let manual = thinkingManual.manual(for: currentTurnKey)
-            AgentThinkingZone(text: parts.joined(separator: "\n\n"),
-                              phase: phase,
-                              manual: manual,
-                              steps: model.steps.count,
-                              elapsedSeconds: model.lastElapsedSeconds,
-                              highlight: highlightNeedle,
-                              language: LocalizationManager.shared.effectiveLanguage) { expanded in
-                thinkingManual.set(expanded)
+    private func turnProcessBlock(span: AgentTurnSpan,
+                                  zone: AgentTurnThinkingZone?,
+                                  usage: AgentTurnUsage?,
+                                  toolTexts: [String],
+                                  isLastTurn: Bool) -> some View {
+        VStack(alignment: .leading, spacing: Spacing.hair) {
+            if let zone {
+                turnThinkingZone(zone, tokens: usage?.thinkingTokens, isLastTurn: isLastTurn)
+            }
+            if let usage, usage.toolCallCount > 0 {
+                let running = model.isRunning && isLastTurn
+                AgentToolCallsSummaryRow(count: usage.toolCallCount,
+                                         tokens: usage.toolTokens,
+                                         texts: toolTexts,
+                                         expanded: toolCallsToggled[span.turnKey] ?? running,
+                                         highlight: highlightNeedle,
+                                         language: LocalizationManager.shared.effectiveLanguage) {
+                    let now = toolCallsToggled[span.turnKey] ?? running
+                    toolCallsToggled[span.turnKey] = !now
+                }
+            }
+            if let usage, !usage.isEmpty {
+                AgentTurnTotalRow(usage: usage,
+                                  expanded: totalToggled[span.turnKey] ?? false,
+                                  language: LocalizationManager.shared.effectiveLanguage) {
+                    totalToggled[span.turnKey] = !(totalToggled[span.turnKey] ?? false)
+                }
             }
         }
     }
 
-    /// 思考区里该有哪些内容（顺序：**思考段在前、独白在后** —— 前者是模型的内部独白，
-    /// 后者是它写在正文里的过程叙述）。
+    /// 三行里的第一行：**合并后的那一个思考区**（本轮所有步骤的思考，按发生顺序累积）。
     ///
-    /// · 思考段仍受 `display.thinking` 开关管（关 = 不画那一段，但数据照收）；
-    /// · **过程独白不受这个开关管**：它是模型写进正文的字，既不能回正文（主人明确
-    ///   「这是思考过程，不是正文」），也不该被静默吞掉（关掉开关不等于删掉它）。
-    private func thinkingParts(_ message: AgentChatMessage, isFinalAssistant: Bool) -> [String] {
-        guard message.role == .assistant else { return [] }
-        var parts: [String] = []
-        if appState.agentDisplayPreferences.thinking,
-           let thinking = message.thinking,
-           !thinking.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            parts.append(thinking)
+    /// 三态由 Core 判（`AgentThinkingFold`）：运行中展开 / 任一终态折一行 / 手动动过本轮内 sticky。
+    /// 折 / 展**一次作用于整轮**：区只有一个抬头，`onToggle` 改的是这一轮的手动态。
+    @ViewBuilder
+    private func turnThinkingZone(_ zone: AgentTurnThinkingZone,
+                                  tokens: Int?,
+                                  isLastTurn: Bool) -> some View {
+        let phase: AgentThinkingPhase = (model.isRunning && isLastTurn) ? .running : .finished
+        AgentThinkingZone(segments: zone.segments,
+                          phase: phase,
+                          manual: thinkingManual.manual(for: zone.turnKey),
+                          steps: zone.stepCount,
+                          elapsedSeconds: model.lastElapsedSeconds,
+                          tokens: tokens,
+                          highlight: highlightNeedle,
+                          language: LocalizationManager.shared.effectiveLanguage) { expanded in
+            thinkingManual.set(expanded)
         }
-        let text = message.text.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !text.isEmpty {
-            if isFinalAssistant {
-                let split = AgentAnswerClassifier.split(message.text)
-                // 整条都是独白 ⇒ 它按「末段永远是结论」的兜底走正文（否则正文区一个字都没有），
-                // 这里就不再放一遍——同一段字在两处出现，读起来像重复。
-                if !split.isNarrationOnly, let narration = split.narration,
-                   !narration.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    parts.append(narration)
-                }
-            } else {
-                // 轮内的中间叙述：整条都是过程（位置判定，不看长相）。
-                parts.append(text)
-            }
-        }
-        return parts
     }
 
     /// 正文（结论）区。
