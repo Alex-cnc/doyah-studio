@@ -5,7 +5,7 @@
 把契约条文写进台账。人（和 agent）在赶进度时会跳过「该放哪本书」的判断，所以这个判断不能
 留在记忆里，必须由提交路径强制。
 
-判据（只查 Docs/ 里被改动的书，按文件名分书；**`Docs/frozen/**` 冻结副本不判** —— 它是活书的逐字副本）：
+判据（只查 Docs/ 里被改动的书，按文件名分书）：
   A. 详设（详细设计说明书）：禁止出现「第N轮 / 第N批 / betaX.Y.Z / 日期前缀标题」，
      禁止出现流程纪律词（门禁 / 提交前 / 纪律 / 规范要求 / 自检脚本）。
   B. 台账（任务清单）：禁止出现带编号的契约条文（「判据 T-x」「必须/不得 + 判据号」）。
@@ -40,11 +40,6 @@ def load(p):
     return pathlib.Path(p).read_text(encoding="utf-8", errors="replace").split("\n")
 
 def check_file(path):
-    # **冻结件不判**（2026-11-08）：`Docs/frozen/**` 是活书的逐字副本（`freeze-books.py` 复制 + 只重写版本头），
-    # 不是「有人把内容写错了书」。判它只会逼人用 `--no-verify` 绕过钩子 —— 那等于把整条归位判据一起关掉。
-    # 负例不变：活书里真写错照旧判红（`--self-test` 那两本书的夹具）。
-    if "frozen" in pathlib.Path(path).parts:
-        return []
     name = pathlib.Path(path).name
     book = next((k for k in FORBIDDEN if k in name), None)
     if not book:
