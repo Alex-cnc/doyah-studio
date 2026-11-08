@@ -1158,3 +1158,4 @@ if [ "${SKIPPED_COUNT}" -gt 0 ]; then
 else
   echo "✅ 验证闭环全部通过（十九项）"
 fi
+python3 "$ROOT/Scripts/check-doc-placement.py" || FAIL=1
