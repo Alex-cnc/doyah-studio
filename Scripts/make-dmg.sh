@@ -64,10 +64,25 @@ echo "  dmg 大小     : $SIZE"
 echo "  dmg sha256   : $DSHA"
 if [ "$ok" = 1 ] && [ "$HAS_BIN" = yes ]; then
   echo "  ✅ 通过"
+
 else
   echo "  ❌ 失败（挂载内容不完整）"
   exit 3
 fi
+
+# ---- 保留策略（主人 2026-11-08 令：「出一个新版旧版就可以删除了」）----
+# 打成功之后，dist/ 里只留这一版：旧 dmg 与旧 .app 全部删除。
+# 为什么放在打成功之后：中断/失败时不能把上一版也删掉，否则手上一个可装包都不剩。
+KEEP_APP="$(basename "$APP")"
+for d in "$ROOT"/dist/*.dmg; do
+  [ -e "$d" ] || continue
+  [ "$(basename "$d")" = "$(basename "$DMG")" ] || { rm -f "$d"; echo "  清掉旧 dmg: $(basename "$d")"; }
+done
+for a in "$ROOT"/dist/*.app; do
+  [ -e "$a" ] || continue
+  [ "$(basename "$a")" = "$KEEP_APP" ] || { rm -rf "$a"; echo "  清掉旧包: $(basename "$a")"; }
+done
+echo "  保留策略 : dist/ 只留 $(basename "$DMG") + $KEEP_APP（旧版已删）"
 echo
 echo "未签名/未公证：外部用户首次打开需右键 →「打开」，或"
 echo "  xattr -dr com.apple.quarantine \"/Applications/$(basename "$APP" .app).app\""
