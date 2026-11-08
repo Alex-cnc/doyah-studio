@@ -350,11 +350,18 @@ public struct AgentIMOutboundDrain: Sendable {
         public var delivered: Int
         public var failed: Int
         public var lastFailure: AgentIMSendOutcome?
+        /// 这一趟**真的发出去**的条目 id（逐条对比用：判据 ② 比的就是这份清单）。
+        public var deliveredIDs: [String]
+        /// 这一趟没发出去的条目 id（留在队列里等下一趟）。
+        public var failedIDs: [String]
 
-        public init(delivered: Int = 0, failed: Int = 0, lastFailure: AgentIMSendOutcome? = nil) {
+        public init(delivered: Int = 0, failed: Int = 0, lastFailure: AgentIMSendOutcome? = nil,
+                    deliveredIDs: [String] = [], failedIDs: [String] = []) {
             self.delivered = delivered
             self.failed = failed
             self.lastFailure = lastFailure
+            self.deliveredIDs = deliveredIDs
+            self.failedIDs = failedIDs
         }
     }
 
@@ -369,15 +376,23 @@ public struct AgentIMOutboundDrain: Sendable {
 
     /// 逐条发；**发成才 ack**。一条失败不挡后面的（别让一条坏目标把整队堵住），
     /// 但会如实记 `lastFailure`。
+    ///
+    /// 一条额外的纪律（判据 ②：断线重连补发**不重复**）：同一趟里同一条 id **只发一次**。
+    /// 队列是追加式 JSONL，理论上不会有重复 id；但 `ack` 落盘失败、或两次 drain 并发时
+    /// 完全可能出现 —— 这一层用 `seen` 挡掉，代价为零，挡不住就是手机上两条一样的结论。
     public func run() async -> Report {
         var report = Report()
+        var seen: Set<String> = []
         for entry in queue.pending() where entry.target != nil {
+            guard seen.insert(entry.id).inserted else { continue }
             let outcome = await send(entry)
             if outcome.isDelivered {
                 try? queue.ack(id: entry.id)
                 report.delivered += 1
+                report.deliveredIDs.append(entry.id)
             } else {
                 report.failed += 1
+                report.failedIDs.append(entry.id)
                 report.lastFailure = outcome
             }
         }

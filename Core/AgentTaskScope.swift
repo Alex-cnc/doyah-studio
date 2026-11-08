@@ -59,9 +59,16 @@ public enum AgentScopeVerdict: Equatable, Sendable {
 public enum AgentScopeGate {
 
     /// 纯函数：这一次动作，能不能在任务范围内代签。
+    ///
+    /// 2026-11-08：代签多了**一条不许代签的口子** —— 删除 / 对外发送 / 凭据 / 越界
+    /// （`AgentApprovalHazard.allowsGrant == false` 那四档）即使落在任务范围内也一律问人。
+    /// 由头：这条代签路径此前只看「工具名 + 受保护片段」，于是 `delete_*` / `send_message`
+    /// 这类调用在任务范围内被**静默代签**；而 IM 通道用的正是同一条路径 ⇒
+    /// 「不可逆操作不因来自 IM 而免审」在真机上不成立（判据 ④）。
     public static func judge(tool: String, preview: String,
                              autoApprovedCount: Int,
-                             scope: AgentTaskScope) -> AgentScopeVerdict {
+                             scope: AgentTaskScope,
+                             hazard: AgentApprovalHazard? = nil) -> AgentScopeVerdict {
         guard scope.mode == .taskScope else {
             return .needsHuman(reason: "askEachAction")
         }
@@ -73,7 +80,26 @@ public enum AgentScopeGate {
         for fragment in scope.protectedFragments where preview.contains(fragment) {
             return .needsHuman(reason: "protected:\(fragment)")
         }
-        // ③ 范围内代签：理由写清"是哪一类动作、在什么范围内"
+        // ③ 危险面：四档不许代签（工具名 + 参数两张网取更严的那一个）。
+        let resolved = hazard ?? Self.hazard(tool: tool, preview: preview)
+        if !resolved.allowsGrant {
+            return .needsHuman(reason: "hazard:\(resolved.rawValue)")
+        }
+        // ④ 范围内代签：理由写清"是哪一类动作、在什么范围内"
         return .autoApproved(reason: "task-scope:\(tool)")
+    }
+
+    /// 工具名 + 参数 ⇒ 危险面（**唯一**一处合成：命令 / SQL / 对外 / 凭据三张网）。
+    public static func hazard(tool: String, preview: String) -> AgentApprovalHazard {
+        var hazard = AgentApprovalHazardRules.merged(AgentApprovalHazardRules.text(tool),
+                                                     AgentApprovalHazardRules.command(preview))
+        // SQL 类工具（生成 / 直跑）再看第一个关键字。
+        let lowered = tool.lowercased()
+        if lowered.contains("sql") || lowered.contains("query") || lowered.contains("database") {
+            hazard = AgentApprovalHazardRules.merged(hazard, AgentApprovalHazardRules.sql(preview))
+        }
+        // 注意：**不拿参数原文再扫一遍「凭据 / 对外」字样** —— 文件名里出现 `token`
+        // （`Core/TokenBudget.swift`）不是读凭据，扫它会把普通改写也判成要审批。
+        return hazard
     }
 }

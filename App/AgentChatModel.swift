@@ -553,6 +553,12 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
             try? await Task.sleep(nanoseconds: 200_000_000)
         }
         if hasPendingApproval { return .awaitingApproval }
+        // **收尾**是一次阶段转折（判据 ③）：结论马上就来，但这一条要说清「在收尾」，
+        // 而不是让手机那头把「最后一跳很慢」当成卡住。
+        if let reporter = progress ?? imProgressReporter {
+            report(IMProgressSnapshot(hop: max(imTurnHops, 1), tool: nil, summary: "",
+                                      stage: .finalizing), to: reporter)
+        }
         // **还在跑**（不是失败）：挂成逾期补发，等 `finish()` 把结论送到同一条聊天里。
         guard !state.isRunning else {
             let elapsed = Date().timeIntervalSince(imTurnStartedAt ?? Date())
@@ -1294,6 +1300,11 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
                 imTurnLastTool = summary.isEmpty ? name : "\(name)：\(summary)"
                 report(IMProgressSnapshot(hop: max(imTurnHops, currentHop + 1),
                                           tool: name, summary: summary), to: reporter)
+            case .approvalRequested:
+                // 停在审批上是一次**阶段转折**：手机那头要知道「去桌面点一下」，
+                // 否则它只会看到「一直在跑」然后突然超时。
+                report(IMProgressSnapshot(hop: max(imTurnHops, 1), tool: nil, summary: "",
+                                          stage: .awaitingApproval), to: reporter)
             default:
                 break
             }
@@ -1351,6 +1362,15 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
         var hop: Int
         var tool: String?
         var summary: String
+        /// 这一条属于哪一阶段（判据 ③：60 秒长任务要能看到「收尾 / 停在审批」这类转折）。
+        var stage: AgentIMRunStage
+
+        init(hop: Int, tool: String?, summary: String, stage: AgentIMRunStage? = nil) {
+            self.hop = hop
+            self.tool = tool
+            self.summary = summary
+            self.stage = stage ?? (tool == nil ? .thinking : .tool)
+        }
     }
 
     private func report(_ snapshot: IMProgressSnapshot, to reporter: AgentIMProgressReporter) {
@@ -1359,7 +1379,8 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
                                           tool: snapshot.tool,
                                           summary: snapshot.summary,
                                           elapsed: elapsed,
-                                          toolCalls: imTurnToolCalls)
+                                          toolCalls: imTurnToolCalls,
+                                          stage: snapshot.stage)
         Task { await reporter.report(progress) }
     }
 

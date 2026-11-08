@@ -404,6 +404,11 @@ final class AppState: ObservableObject {
     /// 最近一次**外发**的结论行（发不出去时面板要说清是凭据不对、限流，还是网络）。
     /// `nil` = 还没发过；发送成功也会写一句（否则「上一条红字」会一直挂着像还在失败）。
     @Published var agentIMOutboundLine: String?
+    /// 通道状态账本（`FR-AGT-LINK-CHAN-003` ⑥）：状态页四读数的**唯一**真值源。
+    /// 连接状态仍取传输层发出来的那一档；这里只记「真的发生过」的收发时刻 / 去重丢弃 / 最近失败。
+    @Published var agentIMStatusBoard = AgentIMChannelStatusBoard()
+    /// 五环自检的逐环读数（`nil` = 还没跑过）。
+    @Published var agentIMSelfCheckReport: AgentIMSelfCheckReport?
     /// **跑一轮**的接线口（与 `agentScheduleRunner` 同形）：由 `DoyahStudioApp` 注入 ——
     /// `AppState` 不认识界面侧的 `AgentChatModel`，这条闭包是唯一通路。
     var agentIMTaskRunner: ((AgentIMTask, AgentIMProgressReporter?) async -> AgentIMTaskRunResult)?
@@ -3934,7 +3939,14 @@ final class AppState: ObservableObject {
                     // 「IM 启动：自动连接」——连没连上、断在哪一档，全看不出来。
                     StartupLog.write("IM 状态：\(state)")
                     // 连上就把官方那条路的未投递结论补发一遍（传输层只补 WebSocket 那一路）。
-                    if state.isOnline { await self.flushAgentIMOutboundQueue() }
+                    if state.isOnline {
+                        await self.flushAgentIMOutboundQueue()
+                        return
+                    }
+                    // 掉线 / 重试：失败原因要落到状态页那一栏（人话，不是「状态：waiting」）。
+                    if case .waiting(let reason, _, _) = state {
+                        self.agentIMStatusBoard.recordFailure(stage: .connect, code: reason)
+                    }
                 }
             }
             await transport.onInbound { [weak self] frame in
@@ -4030,6 +4042,11 @@ final class AppState: ObservableObject {
         AgentIMInboundRunner(sessionMap: AgentIMSessionMap(directory: AgentIMResultQueue.defaultDirectory),
                              resultQueue: agentIMResultQueue,
                              ledger: agentIMInboundLedger,
+                             onDuplicate: { [weak self] _ in
+                                 // 去重丢弃要计数（状态页读数之一）；不记下来，人就只能看到
+                                 // 「怎么没反应」，而真实情况是「这条已经跑过了」。
+                                 Task { @MainActor in self?.agentIMStatusBoard.recordDuplicate() }
+                             },
                              run: { [weak self] task, progress in
                                  guard let self else { return .unavailable(code: "noRunner") }
                                  return await self.runAgentIMTask(task, progress: progress)
@@ -4159,19 +4176,30 @@ final class AppState: ObservableObject {
             guard let sender = makeAgentIMOutboundSender() else {
                 agentIMOutboundLine = AgentIMSendText.line(for: .notReady(code: "environmentMissing"),
                                                             language: agentIMLanguage)
+                agentIMStatusBoard.recordFailure(stage: .send, code: "environmentMissing")
                 return false
             }
             let outcome = await sender.send(entry: entry)
             agentIMOutboundLine = AgentIMSendText.line(for: outcome, language: agentIMLanguage)
+            if outcome.isDelivered {
+                agentIMStatusBoard.recordOutbound()
+            } else {
+                agentIMStatusBoard.recordFailure(stage: .send, code: outcome.code)
+            }
             // 投递失败的原因必须留痕（不然只会看到「没回应」）。
             StartupLog.write("IM 投递 outcome=\(String(describing: outcome)) openid=\(entry.target?.openID.prefix(8) ?? "-")…")
             return outcome.isDelivered
         }
-        guard let transport = agentIMTransport else { return false }
+        guard let transport = agentIMTransport else {
+            agentIMStatusBoard.recordFailure(stage: .connect, code: "notConnected")
+            return false
+        }
         do {
             try await transport.send(AgentIMOutboundFrame.reply(chatID: entry.chatID, text: entry.text))
+            agentIMStatusBoard.recordOutbound()
             return true
         } catch {
+            agentIMStatusBoard.recordFailure(stage: .send, code: "sendFailed")
             return false
         }
     }
@@ -4206,29 +4234,108 @@ final class AppState: ObservableObject {
                                         send: { entry in await sender.send(entry: entry) })
         let report = await drain.run()
         guard report.delivered > 0 || report.failed > 0 else { return }
+        if report.delivered > 0 { agentIMStatusBoard.recordOutbound() }
+        if let failure = report.lastFailure {
+            agentIMStatusBoard.recordFailure(stage: .send, code: failure.code)
+        }
         let last = report.lastFailure ?? .delivered(messageID: nil)
         agentIMOutboundLine = AgentIMSendText.line(for: last, language: agentIMLanguage)
     }
 
-    /// 结局落成面板读数（`ignored` / `duplicate` 不记：它们不是「收了却没做」）。
+    /// 结局落成面板读数（`ignored` / `duplicate` 不记「跑过一轮」，但重复要单独计数）。
     private func recordAgentIMInbound(_ outcome: AgentIMInboundOutcome, message: AgentIMInboundMessage) {
         switch outcome {
-        case .ignored, .duplicate:
+        case .ignored:
+            return
+        case .duplicate:
+            // 去重丢弃在 runner 的 `onDuplicate` 里已记过一次；这里不再重复记。
             return
         case .dropped(let reason):
             agentIMLastInboundDrop = reason
         case .replied(let delivered):
             agentIMLastInboundDrop = nil
             agentIMInboundHandled += 1
+            agentIMStatusBoard.recordInbound()
             if delivered { agentIMInboundReplied += 1 }
             appendAgentIMInboundText(message.text)
         case .failed(let reason, let delivered):
             agentIMLastInboundDrop = nil
             agentIMInboundHandled += 1
+            agentIMStatusBoard.recordInbound()
+            agentIMStatusBoard.recordFailure(stage: .run, code: "taskFailed")
             if delivered { agentIMInboundReplied += 1 }
             appendAgentIMInboundText(message.text)
             print("[Doyah] IM 入站任务失败：\(reason)")
         }
+    }
+
+    /// 状态页四读数（连接 / 上次成功收发 / 待发条数 / 最近失败）—— **现读**队列与账本，
+    /// 不另存一份计数（两份账迟早对不上）。
+    var agentIMStatusReadings: [AgentIMStatusReading] {
+        agentIMStatusBoard.readings(connection: agentIMConnectionState,
+                                    readiness: agentIMReadiness,
+                                    pending: agentIMResultQueue.pending().count,
+                                    language: agentIMLanguage)
+    }
+
+    /// 五环自检（`FR-AGT-LINK-CHAN-003` ⑨）：一键跑通，逐环读数，哪一环红了指到哪一环。
+    ///
+    /// 前一环没过，后面几环**一条都不跑**（记「没跑到」，不记红）—— 否则 Secret 空着
+    /// 会同时点亮四条并不存在的问题。
+    func runAgentIMFiveRingSelfCheck() async -> AgentIMSelfCheckReport {
+        let language = agentIMLanguage
+        let directory = AgentIMCredentialStore.defaultDirectory()
+        let file = directory.appendingPathComponent(AgentIMChannelCredentialKind.qq.configFileName)
+        let facts = AgentIMSelfCheckFacts(
+            appID: agentIMAppID,
+            hasSecret: hasAgentIMSecret,
+            environment: agentIMSettings.environment,
+            receiveTasks: agentIMSettings.receiveTasks,
+            configFileExists: FileManager.default.fileExists(atPath: file.path))
+
+        let session = AgentIMSelfCheckLiveSession(
+            provision: { [weak self] in
+                guard let self else { throw AgentIMQQProvisionProblem.environmentMissing }
+                return try await self.provisionAgentIM()
+            },
+            makeSocket: AgentIMSocketFactories.webSocket(),
+            language: language)
+
+        let probes = AgentIMSelfCheckProbes(
+            facts: facts,
+            token: { [weak self] in
+                guard let self else {
+                    return .fail("noRunner", LocalizedStrings.text(.agentIMSelfCheckNotRun,
+                                                                   language: language))
+                }
+                do {
+                    let token = try await self.fetchAgentIMQQToken()
+                    let secondsLeft = Int64(max(0, token.expiresAt.timeIntervalSinceNow.rounded()))
+                    return .pass(LocalizedStrings.format(.agentIMSelfCheckTokenDetail,
+                                                         language: language,
+                                                         token.redactedPreview, secondsLeft))
+                } catch let problem as AgentIMQQProvisionProblem {
+                    return .fail(problem.code,
+                                 AgentIMQQProvisionText.line(for: problem, language: language))
+                } catch {
+                    return .fail("tokenUnavailable",
+                                 LocalizedStrings.text(.agentIMQQNetworkFailed, language: language))
+                }
+            },
+            handshake: { await session.handshake() },
+            receive: { await session.receive() },
+            send: { await session.send() })
+
+        let report = await AgentIMSelfCheckRunner.run(probes, language: language)
+        await session.close()
+        agentIMSelfCheckReport = report
+        if let red = report.readouts.first(where: { $0.verdict.isFailed }) {
+            StartupLog.write("IM 自检红在第 \(report.readouts.firstIndex { $0.ring == red.ring }.map { $0 + 1 } ?? 0) 环：\(red.line)",
+                             important: true)
+        } else {
+            StartupLog.write("IM 自检五环全绿")
+        }
+        return report
     }
 
     private func appendAgentIMInboundText(_ text: String) {

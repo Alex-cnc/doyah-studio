@@ -18,6 +18,9 @@ public enum AgentIMTaskRunResult: Equatable, Sendable {
     case answered(String)
     /// 停在桌面审批上（IM 不放宽）：这一轮还没结论。
     case awaitingApproval
+    /// 被审批闸挡在**发起侧**（删除 / 对外发送 / 凭据 / 越界那四档）：
+    /// 桌面上已经出了审批单，手机那头先收到一句人话（`FR-AGT-LINK-CHAN-003` ⑧）。
+    case blockedByApproval(reason: AgentIMGateReason, action: String)
     /// 这一轮根本没跑起来（原因码，人话见语言表）。
     case unavailable(code: String)
     /// **跑到一半、超过等待上限但还在跑**（`stillRunning` = 桌面那边确实还在继续）。
@@ -54,6 +57,11 @@ public enum AgentIMReplyText {
             return bounded(answer, language: language)
         case .awaitingApproval:
             return LocalizedStrings.text(.agentIMReplyAwaitingApproval, language: language)
+        case .blockedByApproval(let reason, let action):
+            // 挡在**发起侧**：这一句要说清三件事 —— 是哪一类操作、为什么这里不批、去哪批。
+            let reasonLine = LocalizedStrings.text(reason.textKey, language: language)
+            return LocalizedStrings.format(.agentIMReplyNeedsDesktopApproval, language: language,
+                                           action.isEmpty ? reasonLine : action)
         case .unavailable(let code):
             return LocalizedStrings.format(.agentIMReplyUnavailable, language: language,
                                            reasonLine(code, language: language))
@@ -219,12 +227,16 @@ public struct AgentIMInboundRunner {
     public var deliver: (AgentIMResultQueue.Entry) async -> Bool
     /// 进度行的节流参数（默认 25 秒 / 3 跳 / 封顶 6 条）。
     public var cadence: AgentIMProgressCadence
+    /// 被判为重复（没执行）时通知宿主 —— 状态页的「去重丢弃」读数就是它记的。
+    /// `nil` = 不记（判据里的裸 runner 用得上）。
+    public var onDuplicate: (@Sendable (String) -> Void)?
 
     public init(channel: AgentIMChannelKind = .qq,
                 sessionMap: AgentIMSessionMap,
                 resultQueue: AgentIMResultQueue,
                 ledger: AgentIMInboundLedger,
                 cadence: AgentIMProgressCadence = AgentIMProgressCadence(),
+                onDuplicate: (@Sendable (String) -> Void)? = nil,
                 run: @escaping (AgentIMTask, AgentIMProgressReporter?) async throws -> AgentIMTaskRunResult,
                 deliver: @escaping (AgentIMResultQueue.Entry) async -> Bool) {
         self.channel = channel
@@ -232,6 +244,7 @@ public struct AgentIMInboundRunner {
         self.resultQueue = resultQueue
         self.ledger = ledger
         self.cadence = cadence
+        self.onDuplicate = onDuplicate
         self.run = run
         self.deliver = deliver
     }
@@ -259,6 +272,7 @@ public struct AgentIMInboundRunner {
 
         // ② 去重（先认领再跑：宁可少跑一条，也不许同一条跑两遍）。
         guard ledger.remember(message.platformMessageID, at: now) else {
+            onDuplicate?(message.platformMessageID)
             return .duplicate(platformMessageID: message.platformMessageID)
         }
 

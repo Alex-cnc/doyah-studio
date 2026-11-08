@@ -111,6 +111,23 @@ public enum AgentIMQQProvisionProblem: Error, Equatable, Sendable {
         .credentialsRejected, .permissionDenied, .rateLimited, .serverFailed,
         .tokenMissing, .rejected(status: 418, code: "100016"),
     ]
+
+    /// 机器码（自检逐环读数与失败留痕用；**人话**在 `AgentIMQQProvisionText`）。
+    public var code: String {
+        switch self {
+        case .environmentMissing: return "environmentMissing"
+        case .appIDMissing: return "appIDMissing"
+        case .secretMissing: return "secretMissing"
+        case .networkFailed: return "networkFailed"
+        case .responseNotJSON: return "responseNotJSON"
+        case .credentialsRejected: return "unauthorized"
+        case .permissionDenied: return "forbidden"
+        case .rateLimited: return "rateLimited"
+        case .serverFailed: return "serverFailed"
+        case .tokenMissing: return "tokenMissing"
+        case .rejected(let status, let code): return "rejected:\(status):\(code ?? "-")"
+        }
+    }
 }
 
 /// 一把 `access_token`（**只在内存里**：过期即换，绝不落盘、绝不打进日志/面板）。

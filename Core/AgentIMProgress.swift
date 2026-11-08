@@ -15,6 +15,23 @@ import Foundation
 /// 节流是必须的：一次真机轮次里工具调用 82 次、模型调用 21 次 —— 每次工具都推一条，
 /// QQ 那边就是 82 条消息，比空白更糟。所以按「步数跳够了 **或** 时间到了」二选一放行，
 /// 并且封顶（`maxPushes`）。
+///
+/// 这一轮**走到哪一阶段**（`FR-AGT-LINK-CHAN-003` ⑦：进度不刷屏，但阶段变化要报）。
+///
+/// 为什么有它：只按「步数 / 时间」节流，长任务里会出现「一直在说第 N 步在跑工具」，
+/// 而人真正想知道的那次转折（开始收尾 / 停在审批上）被压掉。
+/// 阶段变化 = 一次值得说的状态改变，单独放行一条（仍受封顶与首条闸约束）。
+public enum AgentIMRunStage: String, CaseIterable, Equatable, Sendable {
+    /// 等模型出话。
+    case thinking
+    /// 正在跑某个工具。
+    case tool
+    /// 停在桌面审批上（IM 不放宽）。
+    case awaitingApproval
+    /// 收尾（写结论 / 汇总）。
+    case finalizing
+}
+
 public struct AgentIMRunProgress: Equatable, Sendable {
 
     /// 当前第几跳（**1 起**：人话里「第 3 步」不是「第 2 步」）。
@@ -27,14 +44,18 @@ public struct AgentIMRunProgress: Equatable, Sendable {
     public var elapsed: TimeInterval
     /// 这一轮累计工具调用次数（进度行与失败行都用它：一眼看出走到哪儿了）。
     public var toolCalls: Int
+    /// 这一跳属于哪一阶段（默认按「有工具 = tool、没工具 = thinking」推）。
+    public var stage: AgentIMRunStage
 
     public init(hop: Int, tool: String? = nil, summary: String = "",
-                elapsed: TimeInterval, toolCalls: Int) {
+                elapsed: TimeInterval, toolCalls: Int,
+                stage: AgentIMRunStage? = nil) {
         self.hop = hop
         self.tool = tool
         self.summary = summary
         self.elapsed = elapsed
         self.toolCalls = toolCalls
+        self.stage = stage ?? (tool == nil ? .thinking : .tool)
     }
 }
 
@@ -62,16 +83,21 @@ public struct AgentIMProgressCadence: Equatable, Sendable {
         self.firstPushAfter = firstPushAfter
     }
 
-    /// 已经推过几条、上一条是什么时候 / 第几跳推的。
+    /// 已经推过几条、上一条是什么时候 / 第几跳 / 哪个阶段推的。
     public struct Track: Equatable, Sendable {
         public var pushes: Int
         public var lastPushAt: Date?
         public var lastHop: Int
+        /// 上一条进度行的阶段（`nil` = 还没推过）。
+        /// 阶段变化要单独放行一条 —— 见 `admits(hop:elapsed:stage:at:track:)`。
+        public var lastStage: AgentIMRunStage?
 
-        public init(pushes: Int = 0, lastPushAt: Date? = nil, lastHop: Int = 0) {
+        public init(pushes: Int = 0, lastPushAt: Date? = nil, lastHop: Int = 0,
+                    lastStage: AgentIMRunStage? = nil) {
             self.pushes = pushes
             self.lastPushAt = lastPushAt
             self.lastHop = lastHop
+            self.lastStage = lastStage
         }
     }
 
@@ -79,10 +105,26 @@ public struct AgentIMProgressCadence: Equatable, Sendable {
     ///
     /// `elapsed` = 这一轮已经跑了多久（用于「别一开跑就播报」那条闸）。
     public func admits(hop: Int, elapsed: TimeInterval, at now: Date, track: Track) -> Bool {
+        admits(hop: hop, elapsed: elapsed, stage: track.lastStage, at: now, track: track)
+    }
+
+    /// 带阶段的那一版（**唯一判定处**）。
+    ///
+    /// 四条闸，按顺序：
+    /// ① 封顶（`maxPushes`）—— 再长的一轮也不会超过它；
+    /// ② 首条要等 `firstPushAfter` —— 别跟 ack 撞在一起；
+    /// ③ **阶段变了就放行**（`thinking → tool → finalizing` 是人最想知道的转折）；
+    /// ④ 步数跳够了 **或** 时间到了。
+    public func admits(hop: Int, elapsed: TimeInterval, stage: AgentIMRunStage?,
+                       at now: Date, track: Track) -> Bool {
         guard track.pushes < maxPushes else { return false }
         guard track.pushes > 0 else {
             // **第一条要等一会儿**：ack 刚发出去，紧接着再来一句「第 1 步」是噪音，
             // 而且它离 ack 只差一秒 —— 人看不出任何进展。
+            return elapsed >= firstPushAfter
+        }
+        if let stage, stage != track.lastStage {
+            // 阶段变化仍守首条闸（跑不到 12 秒的一轮，转折也不推 —— 结论马上就到了）。
             return elapsed >= firstPushAfter
         }
         guard let last = track.lastPushAt else { return true }
@@ -96,6 +138,18 @@ public enum AgentIMProgressText {
 
     public static func line(for progress: AgentIMRunProgress, language: AppLanguage) -> String {
         let duration = durationText(progress.elapsed, language: language)
+        // 阶段转折各有一句话（**不是**拿工具行凑）：停在审批 / 收尾 与「在跑第 N 步」
+        // 是三种不同的处境，读者据此决定继续等还是去桌面点一下。
+        switch progress.stage {
+        case .awaitingApproval:
+            return LocalizedStrings.format(.agentIMProgressAwaiting, language: language,
+                                          Int64(progress.hop), duration)
+        case .finalizing:
+            return LocalizedStrings.format(.agentIMProgressFinalizing, language: language,
+                                          Int64(progress.hop), duration)
+        case .thinking, .tool:
+            break
+        }
         let tool = progress.tool.map { toolName($0, summary: progress.summary) } ?? ""
         return tool.isEmpty
             ? LocalizedStrings.format(.agentIMProgressThinking, language: language,
@@ -163,10 +217,11 @@ public actor AgentIMProgressReporter {
     public func report(_ progress: AgentIMRunProgress) -> Bool {
         let now = clock()
         guard cadence.admits(hop: progress.hop, elapsed: progress.elapsed,
-                             at: now, track: track) else { return false }
+                             stage: progress.stage, at: now, track: track) else { return false }
         track.pushes += 1
         track.lastPushAt = now
         track.lastHop = progress.hop
+        track.lastStage = progress.stage
         outbox.append(AgentIMProgressText.line(for: progress, language: language))
         startPumpIfNeeded()
         return true

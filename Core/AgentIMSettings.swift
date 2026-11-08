@@ -233,6 +233,19 @@ public enum AgentIMStatusText {
         case "stopped": return LocalizedStrings.text(.agentIMReasonStopped, language: language)
         case "receiveDisabled": return LocalizedStrings.text(.agentIMReasonReceiveDisabled, language: language)
         case "settingsChanged": return LocalizedStrings.text(.agentIMReasonSettingsChanged, language: language)
+        // 外发那几档（状态页的「最近一次失败」要说得清是凭据 / 权限 / 限流 / 网络）。
+        case "unauthorized": return LocalizedStrings.text(.agentIMSendUnauthorized, language: language)
+        case "forbidden": return LocalizedStrings.text(.agentIMSendForbidden, language: language)
+        case "rateLimited": return LocalizedStrings.text(.agentIMSendRateLimited, language: language)
+        case "serverFailed": return LocalizedStrings.text(.agentIMSendServerFailed, language: language)
+        case "networkFailed": return LocalizedStrings.text(.agentIMSendNetworkFailed, language: language)
+        case "responseNotJSON": return LocalizedStrings.text(.agentIMSendNotJSON, language: language)
+        case "tokenUnavailable": return LocalizedStrings.text(.agentIMQQNetworkFailed, language: language)
+        // 跑一轮那几档（状态页与回话同一套说法）。
+        case "busy": return LocalizedStrings.text(.agentIMReasonBusy, language: language)
+        case "noRunner": return LocalizedStrings.text(.agentIMReasonNoRunner, language: language)
+        case "noText": return LocalizedStrings.text(.agentIMReasonNoText, language: language)
+        case "taskFailed": return LocalizedStrings.text(.agentIMReplyTaskFailed, language: language)
         default:
             return LocalizedStrings.format(.agentIMReasonUnknown, language: language, code)
         }

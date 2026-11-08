@@ -59,6 +59,8 @@ struct AgentSettingsSheet: View {
     @State private var selectedTab: AgentSettingsTab = .model
     /// 授权粒度（`FR-AI-34`）：任务范围内代签 = 少问；每个动作都问 = 老行为。
     @State private var scopeMode: AgentTaskScope.Mode = .taskScope
+    /// 五环自检的逐环读数（`nil` = 还没跑过；跑过就逐行念，红的指到哪一环）。
+    @State private var imSelfCheckReport: AgentIMSelfCheckReport?
     /// **真值源**（`FR-AI-25` 信息面三格）：上下文窗口 + 每百万 token 价目。
     /// 空串 = 没填（窗口退回内置表、价钱那一格不出现）。
     @State private var contextWindowText = ""
@@ -670,6 +672,19 @@ struct AgentSettingsSheet: View {
                         Button(L(.agentIMTest)) { testIMConnection() }
                             .disabled(isTestingIM)
                         Button(L(.agentIMConnect)) { connectIMChannel() }
+                    // **四个读数**（`FR-AGT-LINK-CHAN-003` ⑥）：连接 / 上次成功收发 /
+                    // 待发条数 / 最近一次失败。真值由 Core 的账本现算，界面只搬。
+                    VStack(alignment: .leading, spacing: Spacing.xs) {
+                        ForEach(Array(appState.agentIMStatusReadings.enumerated()), id: \.offset) { _, reading in
+                            Text("\(reading.title)：\(reading.value)")
+                                .font(Theme.font(.caption))
+                                .foregroundStyle(reading.isFault
+                                                 ? Theme.status(.warning) : Theme.text(.secondary))
+                                .fixedSize(horizontal: false, vertical: true)
+                                .accessibilityIdentifier("agent-im-reading-\(reading.kind.rawValue)")
+                        }
+                    }
+
                         Button(L(.agentIMDisconnect)) { disconnectIMChannel() }
                         Button(L(.agentIMClear), role: .destructive) { clearIMCredentials() }
                     }
@@ -702,6 +717,19 @@ struct AgentSettingsSheet: View {
                         // 两个数**分开**：跑过几轮 ≠ 推回去几条（推不出去的留在队列里等重连补发）。
                         Text(L(.agentIMInboundReceived, Int64(appState.agentIMInboundHandled)))
                             .font(Theme.font(.caption))
+                    // **五环逐环读数**（⑨）：每一条都是真值；红的那一环说清为什么。
+                    if let report = imSelfCheckReport {
+                        VStack(alignment: .leading, spacing: Spacing.xs) {
+                            ForEach(Array(report.readouts.enumerated()), id: \.offset) { _, readout in
+                                Text(readout.line)
+                                    .font(Theme.font(.caption))
+                                    .foregroundStyle(readout.verdict.isFailed
+                                                     ? Theme.status(.warning) : Theme.text(.secondary))
+                                    .fixedSize(horizontal: false, vertical: true)
+                                    .accessibilityIdentifier("agent-im-selfcheck-ring-\(readout.ring.rawValue)")
+                            }
+                        }
+                    }
                             .foregroundStyle(Theme.text(.secondary))
                         Text(L(.agentIMInboundReplied, Int64(appState.agentIMInboundReplied)))
                             .font(Theme.font(.caption))
@@ -1360,32 +1388,13 @@ struct AgentSettingsSheet: View {
                                language: LocalizationManager.shared.effectiveLanguage)
     }
 
-    /// 存通道：**先存配置面（环境 / 中继 / 开关），再存凭据**。
-    /// 两步都走 Core 校验：任何一步不合法，那一步什么都不落盘，原因落在 `imLine`。
-    /// 自检：把「盘上有没有配置 / 有没有 AppID / 钥匙串有没有 Secret / 选没选环境」念出来。
+    /// 自检（`FR-AGT-LINK-CHAN-003` ⑨）：**五环逐环读数** —— 配置完整 / token 可取 /
+    /// 握手成功 / 收一帧 / 发一帧。第一环没过就停，后面几环记「没跑到」（不记红）。
     private func runIMSelfCheck() {
-        let directory = AgentIMCredentialStore.defaultDirectory()
-        let file = directory.appendingPathComponent(AgentIMChannelCredentialKind.qq.configFileName)
-        let facts = AgentIMSelfCheckFacts(
-            appID: imAppID,
-            hasSecret: appState.hasAgentIMSecret,
-            environment: imEnvironment,
-            receiveTasks: imReceiveTasks,
-            configFileExists: FileManager.default.fileExists(atPath: file.path)
-        )
-        let problems = AgentIMSelfCheck.problems(facts)
-        if problems.isEmpty {
-            imSelfCheckLine = L(.agentIMSelfCheckReady)
-        } else {
-            imSelfCheckLine = problems.map { problem in
-                switch problem {
-                case .configFileMissing: return L(.agentIMSelfCheckNoConfig)
-                case .appIDMissing: return L(.agentIMSelfCheckNoAppID)
-                case .appIDNotNumeric: return L(.agentIMSelfCheckBadAppID)
-                case .secretMissing: return L(.agentIMSelfCheckNoSecret)
-                case .environmentMissing: return L(.agentIMSelfCheckNoEnvironment)
-                }
-            }.joined(separator: LocalizationManager.shared.effectiveLanguage == .english ? "; " : "；")
+        Task { @MainActor in
+            let report = await appState.runAgentIMFiveRingSelfCheck()
+            imSelfCheckReport = report
+            imSelfCheckLine = report.summary(language: LocalizationManager.shared.effectiveLanguage)
         }
     }
 

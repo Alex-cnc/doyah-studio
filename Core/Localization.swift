@@ -2325,6 +2325,50 @@ public enum LKey: String, CaseIterable, Sendable {
     case agentMemoryRebuildIndex
     case agentMemoryClearAll
     case agentMemoryClearConfirmTitle
+    // 状态页四读数（`FR-AGT-LINK-CHAN-003` ⑥：连接 / 上次成功收发 / 待发条数 / 最近失败）。
+    case agentIMReadingConnection
+    case agentIMReadingDelivery
+    case agentIMReadingQueue
+    case agentIMReadingFailure
+    case agentIMReadingNoTraffic
+    case agentIMReadingTimes
+    case agentIMReadingPending
+    case agentIMReadingNoFailure
+    case agentIMReadingFailureLine
+    /// 失败落在哪一环（自检五环与状态页共用同一套名字）。
+    case agentIMStageConfiguration
+    case agentIMStageConnect
+    case agentIMStageReceive
+    case agentIMStageSend
+    case agentIMStageRun
+    /// 审批闸的四档「为什么要桌面批」。
+    case agentIMGateIrreversible
+    case agentIMGateOutbound
+    case agentIMGateCredential
+    case agentIMGateOutsideWorkspace
+    /// 被审批闸挡下时回给手机的人话（说清「去哪批」）。
+    case agentIMReplyNeedsDesktopApproval
+    /// 阶段转折的两行（停在审批 / 收尾）。
+    case agentIMProgressAwaiting
+    case agentIMProgressFinalizing
+    // 五环自检（`FR-AGT-LINK-CHAN-003` ⑨：逐环读数，失败了指到哪一环）。
+    case agentIMSelfCheckRingConfiguration
+    case agentIMSelfCheckRingToken
+    case agentIMSelfCheckRingHandshake
+    case agentIMSelfCheckRingReceive
+    case agentIMSelfCheckRingSend
+    case agentIMSelfCheckRingPassed
+    case agentIMSelfCheckRingFailed
+    case agentIMSelfCheckRingBlocked
+    case agentIMSelfCheckConfigDetail
+    case agentIMSelfCheckTokenDetail
+    case agentIMSelfCheckHandshakeDetail
+    case agentIMSelfCheckReceiveDetail
+    case agentIMSelfCheckSendDetail
+    case agentIMSelfCheckFailedAt
+    case agentIMSelfCheckPassedCount
+    case agentIMSelfCheckNotRun
+    case agentIMSelfCheckProbeTimeout
     case agentMemoryClearConfirmMessage
     case agentMemorySkipped
     case agentMemoryMissingHeader
@@ -6023,6 +6067,44 @@ public enum LocalizedStrings {
         .agentMemoryNoticeTruncated: [.simplifiedChinese: "正文超过上限，截掉 %lld 字。", .english: "The note exceeded the limit; %lld characters were dropped."],
         .agentMemoryNoticeEvicted: [.simplifiedChinese: "因条数上限挤出 %lld 条（最近最少用）。", .english: "%lld least-recently-used memories were evicted to stay under the limit."],
         .agentMemoryNoticeRefusedRows: [.simplifiedChinese: "拒收：含结果集行数据 %lld 处（记忆不装行数据）。", .english: "Refused: %lld result-set row(s) detected — memories never store row data."],
+        .agentIMReadingConnection: [.simplifiedChinese: "当前连接状态", .english: "Connection"],
+        .agentIMReadingDelivery: [.simplifiedChinese: "上次成功收发", .english: "Last successful traffic"],
+        .agentIMReadingQueue: [.simplifiedChinese: "待发队列", .english: "Outbox"],
+        .agentIMReadingFailure: [.simplifiedChinese: "最近一次失败", .english: "Last failure"],
+        .agentIMReadingNoTraffic: [.simplifiedChinese: "还没成功收发过", .english: "No successful traffic yet"],
+        .agentIMReadingTimes: [.simplifiedChinese: "收 %@ · 发 %@", .english: "in %@ · out %@"],
+        .agentIMReadingPending: [.simplifiedChinese: "%lld 条还没发出去（连上会自动补发）", .english: "%lld not delivered yet (resent on reconnect)"],
+        .agentIMReadingNoFailure: [.simplifiedChinese: "没有失败记录", .english: "No failures recorded"],
+        .agentIMReadingFailureLine: [.simplifiedChinese: "失败在%@：%@", .english: "%@: %@"],
+        .agentIMStageConfiguration: [.simplifiedChinese: "配置", .english: "Configuration"],
+        .agentIMStageConnect: [.simplifiedChinese: "连接", .english: "Connect"],
+        .agentIMStageReceive: [.simplifiedChinese: "收消息", .english: "Receive"],
+        .agentIMStageSend: [.simplifiedChinese: "发消息", .english: "Send"],
+        .agentIMStageRun: [.simplifiedChinese: "跑一轮", .english: "Run"],
+        .agentIMGateIrreversible: [.simplifiedChinese: "删除 / 覆盖一类的不可逆操作", .english: "an irreversible action such as deleting or overwriting"],
+        .agentIMGateOutbound: [.simplifiedChinese: "对外发送（发出去收不回）", .english: "sending something out (it cannot be recalled)"],
+        .agentIMGateCredential: [.simplifiedChinese: "口令 / 凭据（读到即泄）", .english: "passwords or credentials (reading them leaks them)"],
+        .agentIMGateOutsideWorkspace: [.simplifiedChinese: "工作区之外的文件", .english: "a file outside the workspace"],
+        .agentIMReplyNeedsDesktopApproval: [.simplifiedChinese: "「%@」要在桌面那台机器上批准：IM 这边不替你放行，审批单已经在桌面上等着了，批完我把结论发回来。", .english: "\"%@\" needs your approval on the desktop: IM does not waive it. The approval card is already waiting there; I will send the result once you approve."],
+        .agentIMProgressAwaiting: [.simplifiedChinese: "第 %lld 步 · 停在桌面的审批上 · 已跑 %@", .english: "Step %lld · waiting for approval on the desktop · %@ elapsed"],
+        .agentIMProgressFinalizing: [.simplifiedChinese: "第 %lld 步 · 正在收尾 · 已跑 %@", .english: "Step %lld · wrapping up · %@ elapsed"],
+        .agentIMSelfCheckRingConfiguration: [.simplifiedChinese: "配置完整", .english: "Configuration"],
+        .agentIMSelfCheckRingToken: [.simplifiedChinese: "token 可取", .english: "Access token"],
+        .agentIMSelfCheckRingHandshake: [.simplifiedChinese: "握手成功", .english: "Handshake"],
+        .agentIMSelfCheckRingReceive: [.simplifiedChinese: "收一帧", .english: "Receive a frame"],
+        .agentIMSelfCheckRingSend: [.simplifiedChinese: "发一帧", .english: "Send a frame"],
+        .agentIMSelfCheckRingPassed: [.simplifiedChinese: "%@ —— 通过：%@", .english: "%@ — passed: %@"],
+        .agentIMSelfCheckRingFailed: [.simplifiedChinese: "%@ —— 红：%@", .english: "%@ — failed: %@"],
+        .agentIMSelfCheckRingBlocked: [.simplifiedChinese: "%@ —— 没跑到（%@ 没过）", .english: "%@ — not run (%@ did not pass)"],
+        .agentIMSelfCheckConfigDetail: [.simplifiedChinese: "四样齐（AppID 尾 %@）", .english: "All four present (AppID ends with %@)"],
+        .agentIMSelfCheckTokenDetail: [.simplifiedChinese: "取到 token（尾 %@ · 还剩 %lld 秒）", .english: "Token obtained (ends with %@ · %lld s left)"],
+        .agentIMSelfCheckHandshakeDetail: [.simplifiedChinese: "握手成功（READY · 会话 %@）", .english: "Handshake succeeded (READY · session %@)"],
+        .agentIMSelfCheckReceiveDetail: [.simplifiedChinese: "收到一帧（%@）", .english: "Received a frame (%@)"],
+        .agentIMSelfCheckSendDetail: [.simplifiedChinese: "发出一帧（%@）", .english: "Sent a frame (%@)"],
+        .agentIMSelfCheckFailedAt: [.simplifiedChinese: "第 %lld 环红了 —— 先修这一环，后面的环还没跑", .english: "Ring %lld failed — fix this one first; the rest did not run"],
+        .agentIMSelfCheckPassedCount: [.simplifiedChinese: "五环 %lld/%lld 通过", .english: "%lld/%lld rings passed"],
+        .agentIMSelfCheckNotRun: [.simplifiedChinese: "没有跑（缺少运行条件）", .english: "Not run (missing prerequisites)"],
+        .agentIMSelfCheckProbeTimeout: [.simplifiedChinese: "%lld 秒内没有结果", .english: "No result within %lld s"],
         .agentMemoryNoticeRefusedSecrets: [.simplifiedChinese: "拒收：含密钥 / 令牌片段 %lld 处。", .english: "Refused: %lld key or token fragment(s) detected."],
         .agentMemoryNoticeNeedsConfirmation: [.simplifiedChinese: "模型自己想记的一条需要你先确认（这条没落库）。", .english: "A memory the model wanted to keep needs your confirmation first (nothing was written)."],
         .agentMemoryNoticeDeleted: [.simplifiedChinese: "删掉了，索引已重建。", .english: "Deleted; the index was rebuilt."],
