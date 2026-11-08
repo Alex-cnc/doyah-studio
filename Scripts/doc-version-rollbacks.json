@@ -1,0 +1,18 @@
+{
+  "note": "版本段回退的登记薄：只有人类主人明确拍板撤回某条发布线时才能登记一条；每条必须写清撤销的提交、理由与回退后活书应处的段。判据见 Scripts/check-doc-versions.py 的 rollback 分支。",
+  "rollbacks": [
+    {
+      "id": "2026-11-08-beta1.2-rollback",
+      "date": "2026-11-08",
+      "master_quote": "2（选定：以 beta1.0.x 为主线）",
+      "reverted_commits": [
+        "7d00c804",
+        "c9f32085",
+        "04a495f7"
+      ],
+      "from_version": "v1.2.1",
+      "to_version": "v1.1.11",
+      "reason": "另一侧提前把版本号改 1.2.0 并冻结 v1.2；主人裁定以 beta1.0.x 为主线，撤回该发布线与冻结件，活书回到 v1.1.NNN 连续演进。"
+    }
+  ]
+}

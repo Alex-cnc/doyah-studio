@@ -17,6 +17,7 @@
 """
 from __future__ import annotations
 
+import json
 import argparse
 import hashlib
 import pathlib
@@ -165,6 +166,15 @@ def step_problem(old: str, new: str) -> str | None:
     # 证据 = 该段已有冻结件（在 check_step 里查盘，纯函数这里只放形状）。
     if (nm, nn, nl) == (om, on + 1, 0):
         return None
+    # **主人拍板的回退**：段只升不降是常态纪律；但「撤回一条发布线」由主人定，
+    # 登记在 Scripts/doc-version-rollbacks.json（每条带撤销提交、理由、目标段），登记过的降段放行。
+    try:
+        _p = pathlib.Path(__file__).resolve().parent / "doc-version-rollbacks.json"
+        for _e in json.loads(_p.read_text(encoding="utf-8")).get("rollbacks", []):
+            if _e.get("from_version") == f"v{om}.{on}.{ol}" and _e.get("to_version") == f"v{nm}.{nn}.{nl}":
+                return None
+    except Exception:
+        pass
     return (f"版本跳跃 `v{om}.{on}.{ol}` → `v{nm}.{nn}.{nl}` —— 活书只许末位 +1"
             f"（到 {ROLLOVER_AT} 冻结后再转下一段），不跳段、不降段")
 
