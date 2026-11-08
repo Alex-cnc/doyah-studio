@@ -464,6 +464,16 @@ python3 Scripts/check-req-ids.py --all
 python3 Scripts/check-doc-versions.py
 python3 Scripts/check-doc-invariants.py
 python3 Scripts/check-frozen-sync.py || echo "⚠ 冻结基线有漂移（超阈值 ⇒ 该问人类『冻结到新版本吗』；不是失败）"
+# **冻结号 ⟷ 软件号**（2026-11-08 主人令「冻结了四书哪个版本，软件就应该出哪个版本」）：
+# 最新冻结段 vX.Y ⇒ 台账必须 `betaX.Y` / marketing `X.Y.0`，产物 plist 必须同号；dist 里躺着更旧的包判红。
+# 未出包时返回 2（产物那一半**未知**）—— 打印警告但不中止，跳过 ≠ 通过；台账与冻结件不一致仍是 1（红）。
+_frz_rc=0
+python3 Scripts/check-release-freeze-parity.py || _frz_rc=$?
+if [ "${_frz_rc}" = "2" ]; then
+  echo "⚠ 版本号第二半未知：产物尚未构建（跳过 ≠ 通过）"
+elif [ "${_frz_rc}" != "0" ]; then
+  echo "❌ 冻结号 ⟷ 软件号不一致（见上）"; exit 1
+fi
 # 派生文件不得漂移：终端配色 JSON ↔ Core ↔ 人读文档三方一致（FR-STD-WS-TOOL-001 的跨平台交接物）
 python3 Scripts/check-terminal-palette.py
 # L-55（2026-09-28 第 61 轮）：上面几条管的是**表格结构**（列数 / 计数 / 版本号 / 派生计数），
