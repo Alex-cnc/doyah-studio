@@ -23,8 +23,8 @@
     },
     "evidence": "第 57 轮发布收口时用 `/usr/libexec/PlistBuddy -c \"Print :CFBundleShortVersionString\" dist/DoyahStudio.app/Contents/Info.plist` 实测产物 = `0.2.0` / `2`（当时产物还叫 `DoyahStudio.app`；2026-10-02 起产物名带发布标签、`DoyahStudio.app` 只是软链）"
   },
-  "marketingVersion": "1.0.0",
-  "releaseLabel": "beta1.0",
+  "marketingVersion": "1.2.0",
+  "releaseLabel": "beta1.2",
   "releaseLabelSource": {
     "path": "Scripts/build-app.sh",
     "variable": "RELEASE_LABEL",
