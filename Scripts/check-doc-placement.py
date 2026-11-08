@@ -40,6 +40,10 @@ def load(p):
     return pathlib.Path(p).read_text(encoding="utf-8", errors="replace").split("\n")
 
 def check_file(path):
+    # **冻结快照不查**：`Docs/frozen/**` 是活书的逐字副本（历史证据），
+    # 改它就等于篡改已冻结基线 ⇒ 归位判据只管活书。
+    if "/frozen/" in str(path).replace("\\", "/"):
+        return []
     name = pathlib.Path(path).name
     book = next((k for k in FORBIDDEN if k in name), None)
     if not book:
