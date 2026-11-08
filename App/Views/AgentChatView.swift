@@ -112,6 +112,14 @@ struct AgentChatView: View {
     /// 也不自己算「滚出去了没有」（那样会有第二份定义，还会拿被回收行的旧读数去判）。
     @State private var questionScrolledOut = false
 
+    /// **「回到消息底部」的入口是否出现**（详设 §3.39）：距底 > 40pt 且不在贴底态时出现，
+    /// 回落到 ≤ 4pt 时消失 —— 两档之间保持现状（滞回），判定只走
+    /// `AgentJumpToBottom.isVisible(currently:distanceToBottom:isPinnedToBottom:)` 这一个纯函数。
+    ///
+    /// 它**只是显示态**：不参与跟随判定（跟随的唯一出处仍是读数器里的 `AgentScrollFollow`），
+    /// 也不改任何布局（入口只吃内容底部恒留的那条带）。
+    @State private var showsJumpToBottom = false
+
     /// 当前要钉的那一条（`nil` = 条不出现）：本轮那条问题**已经滚出视口顶**时才有值。
     private var stickyQuestion: AgentStickyQuestion? {
         guard questionScrolledOut else { return nil }
@@ -157,123 +165,149 @@ struct AgentChatView: View {
             //   靠布局让位；判定用的两个量都在**内容坐标**里，条在不在都不改它们 ——
             //   「条出现 ⇒ 内容位移 ⇒ 判定翻转 ⇒ 条消失」那条自激回路因此不存在）；
             // · 条的出现/消失只改视口高度，不改任何一行的高度（契约④）。
-            AgentStickyQuestionColumn(sticky: stickyQuestion, onActivate: {
-                // 契约③：滚回**那条消息的顶部**（不是页面顶部）。落点由 spy 按内容坐标给
-                // （见 `StickyQuestionScroller`：`scrollTo(id)` 会命中 ForEach 条目容器，低 28.5pt）。
-                stickyScroller.scrollQuestionToTop()
-            }) {
-                ScrollView {
-                    // 块间距跟「紧凑模式」（`FR-AGT-UX-CONV-012` ②）：紧档用发丝间距。
-                    LazyVStack(alignment: .leading,
-                               spacing: appState.agentDisplayPreferences.compact ? Spacing.hair : Spacing.xs) {
-                        // **空态**（§9.1.16 ⑦）：新会话一片空白时，给一句能直接发出去的起手话。
-                        // 空白屏不是「干净」，是「不知道该说什么」—— 别的区域都有空态，这里不该例外。
-                        if AgentChatEmptyStateGate.shouldShow(messageCount: model.messages.count,
-                                                              cardCount: model.cards.count,
-                                                              isRunning: model.isRunning) {
-                            startupPanel
-                        }
-                        ForEach(Array(model.messages.enumerated()), id: \.element.id) { index, message in
-                            // **这一行画不画**（详设 §3.37 契约⑩）：过程信息折进三行汇总之后，
-                            // 被折的消息（工具行、轮内中间叙述）内容一个字都不画 —— 但它们的行
-                            // 若还占着，行首栏时间戳 + 悬停操作条就会在「汇总」与「结论」之间
-                            // 堆出空行（beta1.0.9 真机那块空白 = 3 个空行 61pt）。
-                            // 判定只走 `AgentTranscriptRow.draws`（视图与判据同一份）。
-                            let showsProcess = spanByIndex[index]?.anchorIndex == index
-                            let showsMessage = AgentTranscriptRow.draws(
-                                role: message.role,
-                                text: message.text,
-                                isStreaming: message.isStreaming,
-                                isFinalAssistant: finalAssistants.contains(index),
-                                foldedIntoTurnSummary: spanByIndex[index]?.anchorIndex != nil,
-                                streamingEnabled: appState.agentDisplayPreferences.streaming
-                            )
-                            if showsProcess || showsMessage {
-                                // 轮次之间用**一条细横线**分开（§5.3.8.1 ③：分隔用 `Metrics.hairline`，
-                                // 不给每条消息套卡片/底纹）。用户提问就是「新一轮」的起点。
-                                if message.role == .user, index > 0 {
-                                    hairline.padding(.vertical, Spacing.m)
-                                }
-                                // `.id` 是搜索定位用的锚（`⌕` 命中时滚到那一条）。
-                                //
-                                // **行首栏 = 时间戳列**（`FR-AGT-UX-CONV-012` ③）：开关关掉时
-                                // 这一格仍占等宽（不可见填充），所以正文不会左移 —— 不抖动。
-                                HStack(alignment: .top, spacing: 0) {
-                                    leadingColumn(message)
-                                    VStack(alignment: .leading, spacing: Spacing.hair) {
-                                        // **三轮行的过程汇总**（§3.33.4）：只在本轮第一条过程消息那一行画一次函数
-                                        // （`Thinking` / `Tool calls (N)` / `Σ total`）—— 其余消息在这里什么都不画，
-                                        // 这正是「一块一块」消失的机械原因。
-                                        if showsProcess, let span = spanByIndex[index] {
-                                            turnProcessBlock(span: span,
-                                                             zone: thinkingZones[index],
-                                                             usage: usageByTurn[span.startIndex],
-                                                             toolTexts: toolTextsByTurn[span.startIndex] ?? [],
-                                                             isLastTurn: isLastTurn(index))
-                                        }
-                                        // 工具行**收进**「Tool calls」那一行（§3.33.4 契约七）：本轮有过程块时
-                                        // 不再各自成行；明细在那一行展开后逐条 20pt。
-                                        if showsMessage {
-                                            messageRow(message, isFinalAssistant: finalAssistants.contains(index))
+            //
+            // **「回到消息底部」的入口**（§3.39）是另一层：它浮在对话区**底部内侧**、
+            // 落在内容底部**恒留**的那条带里（`AgentJumpToBottom.contentInset`）—— 与条相反，
+            // 它**不改视口高、不改任何一段正文的位置**（所以入口出现/消失不会让距底读数变，
+            // 也就没有「出现 ⇒ 更远 ⇒ 更该出现」的自激）。
+            AgentJumpToBottomOverlay(visible: showsJumpToBottom, onActivate: jumpToBottom) {
+                AgentStickyQuestionColumn(sticky: stickyQuestion, onActivate: {
+                    // 契约③：滚回**那条消息的顶部**（不是页面顶部）。落点由 spy 按内容坐标给
+                    // （见 `StickyQuestionScroller`：`scrollTo(id)` 会命中 ForEach 条目容器，低 28.5pt）。
+                    stickyScroller.scrollQuestionToTop()
+                }) {
+                        ScrollView {
+                        // 块间距跟「紧凑模式」（`FR-AGT-UX-CONV-012` ②）：紧档用发丝间距。
+                        LazyVStack(alignment: .leading,
+                                   spacing: appState.agentDisplayPreferences.compact ? Spacing.hair : Spacing.xs) {
+                            // **空态**（§9.1.16 ⑦）：新会话一片空白时，给一句能直接发出去的起手话。
+                            // 空白屏不是「干净」，是「不知道该说什么」—— 别的区域都有空态，这里不该例外。
+                            if AgentChatEmptyStateGate.shouldShow(messageCount: model.messages.count,
+                                                                  cardCount: model.cards.count,
+                                                                  isRunning: model.isRunning) {
+                                startupPanel
+                            }
+                            ForEach(Array(model.messages.enumerated()), id: \.element.id) { index, message in
+                                // **这一行画不画**（详设 §3.37 契约⑩）：过程信息折进三行汇总之后，
+                                // 被折的消息（工具行、轮内中间叙述）内容一个字都不画 —— 但它们的行
+                                // 若还占着，行首栏时间戳 + 悬停操作条就会在「汇总」与「结论」之间
+                                // 堆出空行（beta1.0.9 真机那块空白 = 3 个空行 61pt）。
+                                // 判定只走 `AgentTranscriptRow.draws`（视图与判据同一份）。
+                                let showsProcess = spanByIndex[index]?.anchorIndex == index
+                                let showsMessage = AgentTranscriptRow.draws(
+                                    role: message.role,
+                                    text: message.text,
+                                    isStreaming: message.isStreaming,
+                                    isFinalAssistant: finalAssistants.contains(index),
+                                    foldedIntoTurnSummary: spanByIndex[index]?.anchorIndex != nil,
+                                    streamingEnabled: appState.agentDisplayPreferences.streaming
+                                )
+                                if showsProcess || showsMessage {
+                                    // 轮次之间用**一条细横线**分开（§5.3.8.1 ③：分隔用 `Metrics.hairline`，
+                                    // 不给每条消息套卡片/底纹）。用户提问就是「新一轮」的起点。
+                                    if message.role == .user, index > 0 {
+                                        hairline.padding(.vertical, Spacing.m)
+                                    }
+                                    // `.id` 是搜索定位用的锚（`⌕` 命中时滚到那一条）。
+                                    //
+                                    // **行首栏 = 时间戳列**（`FR-AGT-UX-CONV-012` ③）：开关关掉时
+                                    // 这一格仍占等宽（不可见填充），所以正文不会左移 —— 不抖动。
+                                    HStack(alignment: .top, spacing: 0) {
+                                        leadingColumn(message)
+                                        VStack(alignment: .leading, spacing: Spacing.hair) {
+                                            // **三轮行的过程汇总**（§3.33.4）：只在本轮第一条过程消息那一行画一次函数
+                                            // （`Thinking` / `Tool calls (N)` / `Σ total`）—— 其余消息在这里什么都不画，
+                                            // 这正是「一块一块」消失的机械原因。
+                                            if showsProcess, let span = spanByIndex[index] {
+                                                turnProcessBlock(span: span,
+                                                                 zone: thinkingZones[index],
+                                                                 usage: usageByTurn[span.startIndex],
+                                                                 toolTexts: toolTextsByTurn[span.startIndex] ?? [],
+                                                                 isLastTurn: isLastTurn(index))
+                                            }
+                                            // 工具行**收进**「Tool calls」那一行（§3.33.4 契约七）：本轮有过程块时
+                                            // 不再各自成行；明细在那一行展开后逐条 20pt。
+                                            if showsMessage {
+                                                messageRow(message, isFinalAssistant: finalAssistants.contains(index))
+                                            }
                                         }
                                     }
-                                }
-                                .id(message.id)
-                                // **当前轮那一行**带一个标记（§3.34）。只有这一行挂：读数由
-                                // `StickyQuestionSpy` 统一取（它按标记实例缓存位置，行被回收也不会丢）。
-                                // 标记带**轮钥**：换轮 = 换钥，读数器据此知道「新一轮开始了」并重定位
-                                // （§3.33.3 契约④：换轮不许靠 `onChange` 的时机）。
-                                .background {
-                                    if message.id == question?.messageID {
-                                        StickyQuestionRowAnchor(turnKey: message.id)
+                                    .id(message.id)
+                                    // **当前轮那一行**带一个标记（§3.34）。只有这一行挂：读数由
+                                    // `StickyQuestionSpy` 统一取（它按标记实例缓存位置，行被回收也不会丢）。
+                                    // 标记带**轮钥**：换轮 = 换钥，读数器据此知道「新一轮开始了」并重定位
+                                    // （§3.33.3 契约④：换轮不许靠 `onChange` 的时机）。
+                                    .background {
+                                        if message.id == question?.messageID {
+                                            StickyQuestionRowAnchor(turnKey: message.id)
+                                        }
                                     }
                                 }
                             }
+                            ForEach(cardItems) { item in
+                                cardRow(item)
+                            }
+                            // **内容末尾的读数点**（§3.39 判据⑤）：一个 1pt 的记号，量得到
+                            // 「最后一行的底边在视口哪里」。入口要证明「不遮正文」，就得有一个
+                            // 可机械取的正文端点 —— 拿文档高减 padding 推算不算（那是同一份
+                            // 布局的第二个答案）。
+                            Color.clear
+                                .frame(height: 1)
+                                .background(AgentTranscriptTailAnchor())
                         }
-                        ForEach(cardItems) { item in
-                            cardRow(item)
-                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, Spacing.l).padding(.vertical, Spacing.m)
+                        // **入口占的那条带恒留**（§3.39）：`contentInset` = 入口高 22 + 呼吸 4。
+                        // 恒留 ⇒ 入口出现/消失不改任何一段正文的位置（判据⑤「逐点相同」），
+                        // 也不会在出现那一刻把「距底」撑大（那样就成了自激）。
+                        .padding(.bottom, AgentJumpToBottom.contentInset)
+                        // 贴底判定（§3.33.3）：读数器一次给三样（吸顶 / 距底 / 贴底），
+                        // 判定本身住在 `StickyQuestionSpy` 的状态机里。挂在内容根上（不是底部哨兵）——
+                        // 哨兵滚出视口会被 `LazyVStack` 回收，回收后就再也收不到读数。
+                        .background(StickyQuestionSpy(scroller: stickyScroller,
+                                                      turnKey: question?.messageID) { reading in
+                            // 一次读数：吸顶判定（§3.34）。**贴底跟随不看这一路** ——
+                            // 它是异步回写的副本，拿它当跟随依据就是「人上翻被拽回」/「新一轮不跟」
+                            // 的两个反例（§3.33.3 契约①：判定只许有一份，住在状态机里）。
+                            if reading.isStuck != questionScrolledOut { questionScrolledOut = reading.isStuck }
+                            // 贴底却还差一截 = 内容刚长高、我们还没跟上 ⇒ 补跟一次
+                            // （补不补由状态机现判，见 `scrollToBottomIfPinned`）。
+                            if reading.isPinned, reading.distanceToBottom > AgentScrollFollow.bottomTolerance {
+                                followRequests &+= 1
+                            }
+                            // **「回到消息底部」入口的出现/消失**（§3.39）：与跟随、吸顶**同一份读数**
+                            // —— 距底与「贴不贴底」都在里面，视图不去别处另取几何。
+                            let jumpVisible = AgentJumpToBottom.isVisible(
+                                currently: showsJumpToBottom,
+                                distanceToBottom: reading.distanceToBottom,
+                                isPinnedToBottom: reading.isPinned
+                            )
+                            if jumpVisible != showsJumpToBottom { showsJumpToBottom = jumpVisible }
+                        })
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, Spacing.l).padding(.vertical, Spacing.m)
-                    // 贴底判定（§3.33.3）：读数器一次给三样（吸顶 / 距底 / 贴底），
-                    // 判定本身住在 `StickyQuestionSpy` 的状态机里。挂在内容根上（不是底部哨兵）——
-                    // 哨兵滚出视口会被 `LazyVStack` 回收，回收后就再也收不到读数。
-                    .background(StickyQuestionSpy(scroller: stickyScroller,
-                                                  turnKey: question?.messageID) { reading in
-                        // 一次读数：吸顶判定（§3.34）。**贴底跟随不看这一路** ——
-                        // 它是异步回写的副本，拿它当跟随依据就是「人上翻被拽回」/「新一轮不跟」
-                        // 的两个反例（§3.33.3 契约①：判定只许有一份，住在状态机里）。
-                        if reading.isStuck != questionScrolledOut { questionScrolledOut = reading.isStuck }
-                        // 贴底却还差一截 = 内容刚长高、我们还没跟上 ⇒ 补跟一次
-                        // （补不补由状态机现判，见 `scrollToBottomIfPinned`）。
-                        if reading.isPinned, reading.distanceToBottom > AgentScrollFollow.bottomTolerance {
-                            followRequests &+= 1
-                        }
-                    })
+                    .onChange(of: followRequests) { _, _ in follow() }
+                    .onChange(of: model.scrollTick) { _ in follow() }
+                    .onChange(of: model.isRunning) { _ in follow() }
+                    // **条出现/消失会让视口少/多一行**：贴底时补跟一次，否则「条一来就已经差
+                    // 一行没贴底」⇒ 下一个滚动事件把跟随判成「用户上翻」，流式就不跟了。
+                    .onChange(of: isStickyVisible) { _, _ in follow() }
+                    // **新轮开始 ⇒ 思考区回到「按阶段默认」**（§3.33 三态之四）：手动态只在本轮内生效。
+                    //
+                    // **重定位不挂在这里**（§3.33.3 契约④）：这个钩子在本视图里不保证触发
+                    // （beta1.0.9 真机「多轮后停在第一轮」实测 `repins = 0`，这些 `onChange` 一次都没跑）。
+                    // 换轮由读数器按**几何事实**（提问行的轮钥变了）自己判、自己重置、自己定位；
+                    // 这里只做「显示态跟着换轮」，判定不进第二次。
+                    .onChange(of: currentTurnKey) { _, _ in
+                        thinkingManual.register(turnKey: currentTurnKey)
+                        // 吸顶的落点跟着换轮：新轮那一行会重新挂标记，Spy 会按新钥重记坐标；
+                        // 这里先把上一轮的结论清掉，避免「新轮一开口就顶着上一轮的问题」。
+                        questionScrolledOut = false
+                    }
+                    .onAppear { thinkingManual.register(turnKey: currentTurnKey) }
+                    // 搜索词一变就**定位到第一条命中**（§9.1.16 缺口 ③）。
+                    .onChange(of: searchText) { _, _ in revealFirstHit(proxy) }
+                    .onAppear { follow() }
                 }
-                .onChange(of: followRequests) { _, _ in follow() }
-                .onChange(of: model.scrollTick) { _ in follow() }
-                .onChange(of: model.isRunning) { _ in follow() }
-                // **条出现/消失会让视口少/多一行**：贴底时补跟一次，否则「条一来就已经差
-                // 一行没贴底」⇒ 下一个滚动事件把跟随判成「用户上翻」，流式就不跟了。
-                .onChange(of: isStickyVisible) { _, _ in follow() }
-                // **新轮开始 ⇒ 思考区回到「按阶段默认」**（§3.33 三态之四）：手动态只在本轮内生效。
-                //
-                // **重定位不挂在这里**（§3.33.3 契约④）：这个钩子在本视图里不保证触发
-                // （beta1.0.9 真机「多轮后停在第一轮」实测 `repins = 0`，这些 `onChange` 一次都没跑）。
-                // 换轮由读数器按**几何事实**（提问行的轮钥变了）自己判、自己重置、自己定位；
-                // 这里只做「显示态跟着换轮」，判定不进第二次。
-                .onChange(of: currentTurnKey) { _, _ in
-                    thinkingManual.register(turnKey: currentTurnKey)
-                    // 吸顶的落点跟着换轮：新轮那一行会重新挂标记，Spy 会按新钥重记坐标；
-                    // 这里先把上一轮的结论清掉，避免「新轮一开口就顶着上一轮的问题」。
-                    questionScrolledOut = false
-                }
-                .onAppear { thinkingManual.register(turnKey: currentTurnKey) }
-                // 搜索词一变就**定位到第一条命中**（§9.1.16 缺口 ③）。
-                .onChange(of: searchText) { _, _ in revealFirstHit(proxy) }
-                .onAppear { follow() }
             }
         }
     }
@@ -417,6 +451,18 @@ struct AgentChatView: View {
     ///    整段流式再也不跟（beta1.0.6 真机「整个界面不滚了，要手工拖」就是这个）。
     private func follow() {
         stickyScroller.scrollToBottomIfPinned()
+    }
+
+    /// **回到消息底部 + 恢复跟随**（详设 §3.39）：人点入口走这一条。
+    ///
+    /// 两步，顺序有意义：
+    /// ① 显示态**当场**收掉 —— 契约要求「点完立刻隐去」，不等下一次读数（滚动落定要一拍）；
+    /// ② 落点与状态机都在读数器里做（`jumpToBottomRestoringFollow()`）：滚到内容底边
+    ///    **且**把状态机重置为贴底 ⇒ 之后的新内容仍贴底（不是「只滚这一次」）。
+    ///    这里不再存第二份「贴不贴底」—— 与 `follow()` 同一条纪律。
+    private func jumpToBottom() {
+        showsJumpToBottom = false
+        stickyScroller.jumpToBottomRestoringFollow()
     }
 
     /// 定位到**第一条**命中（§9.1.16 缺口 ③）。

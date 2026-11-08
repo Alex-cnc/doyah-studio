@@ -38,6 +38,18 @@ struct StickyQuestionRowAnchor: NSViewRepresentable {
     }
 }
 
+/// **内容末尾**的记号（详设 §3.39 判据⑤）：一个 1pt 的 `NSView`，量得到「正文最后一行的底边」。
+///
+/// 为什么需要它：入口要证明「不遮正文」，就得有一个**可机械取的正文端点**。文档高是
+/// 「内容 + padding + 预留带」的合计，减出来的差值要靠推算 —— 那就成了同一份布局的第二个答案。
+/// 这个记号挂在内容根里最后一项，位置由布局给，判据只读它。
+final class AgentTranscriptTailMarker: NSView {}
+
+struct AgentTranscriptTailAnchor: NSViewRepresentable {
+    func makeNSView(context: Context) -> AgentTranscriptTailMarker { AgentTranscriptTailMarker() }
+    func updateNSView(_ view: AgentTranscriptTailMarker, context: Context) {}
+}
+
 /// 点吸顶条时用的**滚动命令**（详设 §3.34 契约③）。
 ///
 /// 为什么不用 `ScrollViewProxy.scrollTo(message.id, anchor: .top)`：那一行的 id 同时是
@@ -68,6 +80,16 @@ final class StickyQuestionScroller {
     /// 把视口滚到**内容底边**（不看状态机；探针 / 显式定位用）。
     func scrollToBottom() {
         spy?.scrollToBottom()
+    }
+
+    /// **回到消息底部**（详设 §3.39）：滚到内容底边 **且把跟随恢复成「贴着底」**。
+    ///
+    /// 与 `scrollToBottom()` 的区别只有一个、但很关键：那条只是「这一次滚到底」，
+    /// 状态机仍是「人上翻」，下一次追加**不再跟** —— 而入口点的语义是「我要回到跟随」。
+    /// 所以这里重置状态机（并撤掉本轮落点），之后 `report()` 见「贴底 + 距底 > 4pt」
+    /// 就自己补跟，无需宿主再发指令。
+    func jumpToBottomRestoringFollow() {
+        spy?.jumpToBottomRestoringFollow()
     }
 
     /// 新轮开口：重置贴底状态机并定位到本轮开始处（§3.33.3 契约④）。
@@ -322,6 +344,24 @@ struct StickyQuestionSpy: NSViewRepresentable {
         /// 只有**状态机说贴着底**时才滚到底（宿主的跟随意图走这条口，§3.33.3 契约①）。
         func scrollToBottomIfPinned() {
             guard follow.isPinnedToBottom else { return }
+            scrollToBottom()
+        }
+
+        /// **回到消息底部并恢复跟随**（详设 §3.39）：人点入口，等于「我要重新贴上」。
+        ///
+        /// 三件事，顺序不能反：
+        /// ① **撤掉本轮落点**（`turnTarget`）—— 点一下之后控制权在「贴底跟随」这边，
+        ///   若落点还在，下一次读数会把视口又摆回本轮开始处（入口当场又出现）；
+        /// ② **重置状态机**为贴底（`AgentScrollFollow()` 的缺省就是贴底），
+        ///    这样下一拍 `report()` 里的「贴底态自愈」就会跟着新内容走；
+        /// ③ **滚到内容底边**（与跟随同一个落点，距底 0pt）。
+        ///
+        /// 为什么不是「滚到底 + 等一个滚动事件把 pinned 改回来」：程序滚没有用户事件，
+        /// 状态机不会自己从「上翻」翻回「贴底」—— 只有距底 ≤ 4pt 这一条能翻，而那条
+        /// 恰好要等我们把视口滚过去才成立（先有鸡）。所以这里显式重置，不是抄近路。
+        func jumpToBottomRestoringFollow() {
+            turnTarget = nil
+            follow = AgentScrollFollow()
             scrollToBottom()
         }
 
