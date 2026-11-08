@@ -39,17 +39,28 @@ public struct AgentJumpToBottom: Sendable {
     /// 不是又一个设计边距 —— 所以单独一个常量、单独一句注释，不和上面三个混用。
     public static let viewportInset: CGFloat = 2
 
-    /// 对话区底部**恒留**的一条带（pt）= 呼吸 4 + 入口 22 + 底边间距 12。
+    /// **保留窄条**的高（pt）= 呼吸 4 + 入口 22 + 底边间距 12 + 视口内衬 2 = 40。
     ///
-    /// **两个决定都必须记下来**：
+    /// 这根条只在入口**出现时**占位；**不出现时它整个不存在（高 0）**，空间还给正文。
+    /// 三个决定都必须记下来：
     ///
-    /// ① **在视口之外**（不是浮在正文上）：带是滚动区下面的兄弟，视口到带的上沿为止 ——
+    /// ① **在视口之外**（不是浮在正文上）：条是滚动区下面的兄弟，视口到条的上沿为止 ——
     ///    所以正文**任何一行**都不会被入口压住（浮在正文上的写法只在「正好贴底」时不遮，
     ///    上翻途中经过入口那一条的正文会被压掉半行，本轮实测截图上就是压住了最后可见的一行）。
-    /// ② **恒留、不随出现/消失伸缩**：带若只在入口出现时才长出来，视口就矮 34pt、距底凭空 +34
-    ///    ⇒ 滚到底时距底仍是 34pt > 4pt ⇒ 入口**永远关不掉**（自激的一个死锁形态，不是理论推导，
-    ///    是按这条口径算出来的数）。恒留之后视口高恒定，距底读数与入口在不在完全无关。
-    public static let bandHeight: CGFloat = topGap + barHeight + bottomGap + viewportInset
+    /// ② **条件占位，不是恒留**：恒留一条 40pt 的空带等于「入口不在时也长期白占一格」。
+    ///    条件占位的反对意见是「出现 ⇒ 视口矮 40 ⇒ 距底凭空 +40 ⇒ 滚到底仍 > 4pt ⇒ 关不掉」——
+    ///    这条推理不成立：滚到内容底边时 `NSClipView` 把偏移**夹到** `内容高 − 视口高`，
+    ///    距底恒为 0 ⇒ 消失条件（≤ 4pt）永远可达（判据②/④ 真跑量的是这个数）。
+    /// ③ **条高 ≤ 出现门槛**（`appearDistance` 40 ≥ 40）：入口出现那一拍视口正好矮一条，
+    ///    而出现要求「距底 > 40」⇒ 出现时偏移离底已超过一条，视口缩短**不需要**夹紧偏移，
+    ///    **正文一行都不跳**（`appearsWithoutShiftingContent` 把这条关系钉在这里）。
+    public static let stripHeight: CGFloat = topGap + barHeight + bottomGap + viewportInset
+
+    /// 这一拍该占的高：出现 ⇒ `stripHeight`；不出现 ⇒ **0**（把空间还给正文）。
+    public static func reservedHeight(visible: Bool) -> CGFloat { visible ? stripHeight : 0 }
+
+    /// 出现门槛是否盖得住保留条（见 `stripHeight` 的第 ③ 条）—— 判据按它判红，不许静默违反。
+    public static var appearsWithoutShiftingContent: Bool { appearDistance >= stripHeight }
 
     /// 这次的读数下，入口该不该出现（滞回：`currently` 决定用哪个门槛）。
     ///

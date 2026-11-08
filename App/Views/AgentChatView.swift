@@ -20,6 +20,13 @@ struct AgentChatView: View {
     /// 这条缺陷恰恰只在展开态出现。不给口，判据就只能靠人点；给了口，探针能把
     /// 「展开 + 300 步」这一面真挂起来量（`AgentChatStepListProbeTests`）。
     var initialStepsExpanded: Bool = false
+    /// **让不让底部出现「回到消息底部」入口**（详设 §3.39；缺省允许）。
+    ///
+    /// 为什么要这个口：判据要证明「入口占的是保留窄条、不是叠在正文上」—— 那就必须有一个
+    /// **同一条消息、同一个滚动位置、但没有入口**的基线视图来对账（正文最后一行可见高、
+    /// 视口高、保留条高都要与它比）。不开口，基线只能靠人手在别的构建上量。
+    /// 与 `initialStepsExpanded` 同一条纪律：生产不传，探针才传。
+    var jumpToBottomEntry: Bool = true
     /// 定时 agent 面板的入口（`FR-AI-27`）：面板本身读的是 `AppState` 里的条目与历史。
     @EnvironmentObject private var appState: AppState
     /// 输入框这一格的高度（§3.35：多行编辑器由内容量出，超过 `maxLines` 行封顶）。
@@ -41,10 +48,14 @@ struct AgentChatView: View {
 
     /// 显式 init 只为下面这一件事：`@State` 的初始值必须在**挂载时**从 `initialStepsExpanded` 取
     /// （成员缺省值会在属性初始化时就把状态钉成 `false`，探针那条口就成摆设了）。
-    init(model: AgentChatModel, readOnly: Bool = false, initialStepsExpanded: Bool = false) {
+    init(model: AgentChatModel,
+         readOnly: Bool = false,
+         initialStepsExpanded: Bool = false,
+         jumpToBottomEntry: Bool = true) {
         self.model = model
         self.readOnly = readOnly
         self.initialStepsExpanded = initialStepsExpanded
+        self.jumpToBottomEntry = jumpToBottomEntry
         _stepsExpanded = State(initialValue: initialStepsExpanded)
     }
 
@@ -116,8 +127,8 @@ struct AgentChatView: View {
     /// 回落到 ≤ 4pt 时消失 —— 两档之间保持现状（滞回），判定只走
     /// `AgentJumpToBottom.isVisible(currently:distanceToBottom:isPinnedToBottom:)` 这一个纯函数。
     ///
-    /// 它**只是显示态**：不参与跟随判定（跟随的唯一出处仍是读数器里的 `AgentScrollFollow`），
-    /// 也不改任何布局（入口只吃内容底部恒留的那条带）。
+    /// 它**只是显示态**：不参与跟随判定（跟随的唯一出处仍是读数器里的 `AgentScrollFollow`）。
+    /// 它决定对话区底部那一条**保留窄条**占不占位：出现时占 40pt、不出现时 0pt（空间还给正文）。
     @State private var showsJumpToBottom = false
 
     /// 当前要钉的那一条（`nil` = 条不出现）：本轮那条问题**已经滚出视口顶**时才有值。
@@ -166,11 +177,15 @@ struct AgentChatView: View {
             //   「条出现 ⇒ 内容位移 ⇒ 判定翻转 ⇒ 条消失」那条自激回路因此不存在）；
             // · 条的出现/消失只改视口高度，不改任何一行的高度（契约④）。
             //
-            // **「回到消息底部」的入口**（§3.39）是另一层：它浮在对话区**底部内侧**、
-            // 落在内容底部**恒留**的那条带里（`AgentJumpToBottom.contentInset`）—— 与条相反，
-            // 它**不改视口高、不改任何一段正文的位置**（所以入口出现/消失不会让距底读数变，
-            // 也就没有「出现 ⇒ 更远 ⇒ 更该出现」的自激）。
-            AgentJumpToBottomOverlay(visible: showsJumpToBottom, onActivate: jumpToBottom) {
+            // **「回到消息底部」的入口**（§3.39）在对话区**底部**：它占的是滚动视口**下面的兄弟**
+            // 那条**保留窄条**（`AgentJumpToBottom.stripHeight`）—— 入口不在时这条**整个不存在**
+            // （高 0，空间还给正文），出现时视口让出 40pt。
+            //
+            // 与吸顶条同一个方向（都挤视口、都不盖正文），差别只在挤的是底部一条。
+            // 「出现 ⇒ 视口矮 ⇒ 距底变大 ⇒ 关不掉」那条自激不成立：滚到内容底边时偏移被夹到
+            // `内容高 − 视口高`，距底恒 0（见 `AgentJumpToBottom.stripHeight` ②）。
+            AgentJumpToBottomReservedStrip(visible: jumpToBottomEntry && showsJumpToBottom,
+                                           onActivate: jumpToBottom) {
                 AgentStickyQuestionColumn(sticky: stickyQuestion, onActivate: {
                     // 契约③：滚回**那条消息的顶部**（不是页面顶部）。落点由 spy 按内容坐标给
                     // （见 `StickyQuestionScroller`：`scrollTo(id)` 会命中 ForEach 条目容器，低 28.5pt）。
@@ -287,6 +302,10 @@ struct AgentChatView: View {
                     // **条出现/消失会让视口少/多一行**：贴底时补跟一次，否则「条一来就已经差
                     // 一行没贴底」⇒ 下一个滚动事件把跟随判成「用户上翻」，流式就不跟了。
                     .onChange(of: isStickyVisible) { _, _ in follow() }
+                    // **保留窄条出现/消失会改视口高**（§3.39）：贴底时把偏移重新夹到
+                    // `内容高 − 视口高`（视口变高之后旧的偏移会落在新底之下）。
+                    // 只在贴底态动手 —— 人上翻时那一条由他自己的滚动位置说了算。
+                    .onChange(of: showsJumpToBottom) { _, _ in follow() }
                     // **新轮开始 ⇒ 思考区回到「按阶段默认」**（§3.33 三态之四）：手动态只在本轮内生效。
                     //
                     // **重定位不挂在这里**（§3.33.3 契约④）：这个钩子在本视图里不保证触发
