@@ -35,8 +35,8 @@
   "distPolicy": {
     "glob": "DoyahStudio-*.app",
     "latestAlias": "dist/DoyahStudio.app",
-    "keepAtLeast": 1,
-    "policy": "**只留最新一版**（2026-11-08 主人令「出一个新版旧版就可以删除了」）：`Scripts/make-dmg.sh` 打成功后删掉其它 `*.dmg` 与 `*.app`；中断/失败不删，保住上一版可装包。不带版本号的路径只作软链",
+    "keepAtLeast": 3,
+    "policy": "只增不删：每个发布标签一个独立目录，重建只覆盖**同名**那一个；不带版本号的路径只作软链（旧的真目录挪 `dist/历史/` 留档，不删）",
     "note": "`dist/` 不进库（见 notInScope）⇒ 干净克隆上这一族**跳过并高声提示**：跳过 ≠ 通过。"
   },
   "mirrors": [
