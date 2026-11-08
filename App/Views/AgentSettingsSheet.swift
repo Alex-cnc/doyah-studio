@@ -18,6 +18,9 @@ struct AgentSettingsSheet: View {
     @State private var webKeyInput = ""
     @State private var webKeyStatus = ""
     @State private var isEnabled = false
+    /// 当前编辑的**模型档**（多端点 · `FR-AGT-LINK-CHAN-001` ⑥）：切档即换一整套端点 / 模型 / 密钥。
+    @State private var selectedProfileID: String?
+    @State private var profileLine: String?
     @State private var endpoint = ""
     @State private var model = ""
     /// 选中的提供商（队列 `L-146`）：**由端点反推**，不在配置里多存一个字段 ——
@@ -127,6 +130,21 @@ struct AgentSettingsSheet: View {
         .frame(width: AgentSettingsSheet.sheetWidth, height: min(sheetHeight, AgentSettingsSheet.maxSheetHeight))
         // 换提供商 ⇒ 自动填端点与模型；手改端点 ⇒ 重认一次「这是谁」。
         // 两条都不自己判，只读契约层（`AgentProviderCatalog`）给的答案。
+        // 切档 = 先把这一档的草稿写回盘，再按新档重载（不许「切过去发现上一档的改动丢了」）。
+        .onChange(of: selectedProfileID) { oldValue, newValue in
+            guard isLoaded, newValue != oldValue else { return }
+            Task {
+                if let oldValue, oldValue == appState.activeAgentProfileID {
+                    _ = await appState.updateActiveAgentProfile(
+                        endpoint: endpoint.trimmingCharacters(in: .whitespacesAndNewlines),
+                        model: model.trimmingCharacters(in: .whitespacesAndNewlines),
+                        timeoutSeconds: TimeInterval(timeoutSeconds) ?? AgentConfiguration.defaultTimeoutSeconds,
+                        pricing: draftPricing)
+                }
+                guard let newValue, await appState.selectAgentProfile(id: newValue) else { return }
+                loadProfileDraft()
+            }
+        }
         .onChange(of: providerID) { _, newValue in applyProvider(newValue) }
         .onChange(of: endpoint) { _, newValue in syncProvider(with: newValue) }
         .task {
@@ -138,6 +156,7 @@ struct AgentSettingsSheet: View {
                 appState.agentSettingsOpenIM = false
             }
             let configuration = appState.agentConfiguration
+            selectedProfileID = configuration.activeProfile?.id
             isEnabled = configuration.isEnabled
             endpoint = configuration.endpoint
             model = configuration.model
@@ -218,6 +237,46 @@ struct AgentSettingsSheet: View {
                 Text(L(.agentEnabledHint))
                     .font(Theme.font(.caption))
                     .foregroundStyle(Theme.text(.secondary))
+
+                // **模型档位**（多端点 · `FR-AGT-LINK-CHAN-001` 判据 ⑥）：档 = 端点 + 模型名 + 超时 + 一把独立密钥。
+                // 2026-11-08 主人令进 beta1.1：「可以做到 beta1.1 里啊」。此前配置层早就支持多档
+                // （`AgentConfiguration.profiles`），但界面只暴露一档 —— 换服务就得把上一组擦掉。
+                Section(L(.agentProfileSection)) {
+                    Picker(L(.agentProfileSection), selection: $selectedProfileID) {
+                        ForEach(appState.agentProfiles) { profile in
+                            Text(profile.name.isEmpty ? profile.id : profile.name).tag(Optional(profile.id))
+                        }
+                    }
+                    HStack(spacing: Spacing.s) {
+                        Button(L(.agentProfileAdd)) {
+                            Task {
+                                guard await appState.addAgentProfile() else { return }
+                                selectedProfileID = appState.activeAgentProfileID
+                                loadProfileDraft()
+                                profileLine = nil
+                            }
+                        }
+                        Button(L(.agentProfileDelete), role: .destructive) {
+                            Task {
+                                guard let id = selectedProfileID,
+                                      await appState.deleteAgentProfile(id: id) else {
+                                    profileLine = L(.agentProfileLastOne)
+                                    return
+                                }
+                                selectedProfileID = appState.activeAgentProfileID
+                                loadProfileDraft()
+                                profileLine = nil
+                            }
+                        }
+                        .disabled(appState.agentProfiles.count <= 1)
+                        .help(appState.agentProfiles.count <= 1 ? L(.agentProfileLastOne) : L(.agentProfileDelete))
+                    }
+                    if let profileLine {
+                        Text(profileLine)
+                            .font(Theme.font(.caption))
+                            .foregroundStyle(Theme.text(.secondary))
+                    }
+                }
 
                 // 提供商预设（FR-AI-01 的配置面 · 队列 L-146）：先选提供商，端点与常用模型
                 // 自动填好，两个输入框**仍然可改**（自建网关 / 代理 / 私有部署照旧能用）。
@@ -910,6 +969,19 @@ struct AgentSettingsSheet: View {
     }
 
     /// 面板里填的窗口 / 价目。**一个字都没填 ⇒ `nil`**（不往配置里写空壳）。
+    /// 载入**当前档**的字段到草稿（切档 / 增删档之后调）。
+    /// 只搬这一档的四个输入格 + 上下文窗口；配置面的全局项（总开关 / 配额 / 授权粒度）不随档变。
+    private func loadProfileDraft() {
+        guard let profile = appState.activeAgentProfile else { return }
+        endpoint = profile.endpoint
+        model = profile.model
+        timeoutSeconds = String(Int(profile.timeoutSeconds))
+        providerID = AgentProviderCatalog.resolved(endpoint: profile.endpoint).id
+        contextWindowText = profile.pricing?.contextWindow.map(String.init) ?? ""
+        appState.refreshActiveAgentKey()
+        profileLine = nil
+    }
+
     private var draftPricing: AgentModelPricing? {
         // 价目不再由用户填（2026-10-25 令）：只保留上下文窗口。
         let pricing = AgentModelPricing(

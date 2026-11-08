@@ -3690,9 +3690,8 @@ final class AppState: ObservableObject {
             // ★00：把**旧签名留下的**条目按当前这套签名重写一遍并记账（同一签名下只做一次）。
             reconcileKeychainCredentials()
         }
-        let key = (try? agentKeyStore.apiKey()) ?? nil
-        agentAPIKey = key
-        hasAgentAPIKey = !(key?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
+        // 多档（`FR-AGT-LINK-CHAN-001` ⑥）：读的是**当前档**自己的条目，不是固定那一个槽位。
+        refreshActiveAgentKey()
 
         // IM 通道凭据：读不到就按「没配」处理（钥匙串不可用不该把设置面板锁死）。
         refreshAgentIMCredentials()
@@ -4336,13 +4335,14 @@ final class AppState: ObservableObject {
 
         if let apiKey {
             let trimmed = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+            let keyStore = agentKeyStore(forProfile: configuration.activeProfile)
             do {
                 if trimmed.isEmpty {
-                    try agentKeyStore.deleteAPIKey()
+                    try keyStore.deleteAPIKey()
                     agentAPIKey = nil
                     hasAgentAPIKey = false
                 } else {
-                    try agentKeyStore.setAPIKey(trimmed)
+                    try keyStore.setAPIKey(trimmed)
                     agentAPIKey = trimmed
                     hasAgentAPIKey = true
                 }
@@ -4354,6 +4354,105 @@ final class AppState: ObservableObject {
         }
 
         statusMessage = L(.agentSaved)
+        return true
+    }
+
+    // MARK: - 模型档（多端点 · `FR-AGT-LINK-CHAN-001` 判据 ⑥ · 2026-11-08 beta1.1）
+
+    /// 每档一把密钥：条目名 = 档的 `secretKey`（`agent.api-key.<档 id>`），
+    /// 老配置那一档仍用 `agent.api-key` —— 迁移过的 key 照旧读得回来。
+    private func agentKeyStore(forProfile profile: AgentProfile?) -> AgentKeyStore {
+        FileAgentSecretStore(entryKey: profile?.secretKey ?? FileAgentSecretStore.apiKeySlot)
+    }
+
+    /// 档清单（界面直接用；顺序即插入序）。
+    var agentProfiles: [AgentProfile] { agentConfiguration.profiles }
+
+    /// 当前档本体（端点 / 模型名 / 超时 / 密钥条目都在这一格里）。
+    var activeAgentProfile: AgentProfile? { agentConfiguration.activeProfile }
+
+    /// 当前档 id（`nil` 只在不该发生时才出现 —— `activeProfile` 有自愈）。
+    var activeAgentProfileID: String? { agentConfiguration.activeProfile?.id }
+
+    /// 把「有没有 Key / Key 本体」对齐到**当前档**。切档、增删档之后都要跑一遍，
+    /// 否则面板显示的还是上一档的结论（「看着配好了、发出去 401」）。
+    func refreshActiveAgentKey() {
+        let key = (try? agentKeyStore(forProfile: agentConfiguration.activeProfile).apiKey()) ?? nil
+        agentAPIKey = key
+        hasAgentAPIKey = !(key?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
+    }
+
+    /// 把界面草稿写回**当前档**（切档 / 关面板之前调，否则切走就丢改动）。
+    @discardableResult
+    func updateActiveAgentProfile(endpoint: String, model: String,
+                                  timeoutSeconds: TimeInterval,
+                                  pricing: AgentModelPricing?) async -> Bool {
+        guard var profile = agentConfiguration.activeProfile else { return false }
+        profile.endpoint = endpoint
+        profile.model = model
+        profile.timeoutSeconds = timeoutSeconds
+        profile.pricing = pricing
+        var configuration = agentConfiguration
+        configuration.updateProfile(profile)
+        do {
+            try await agentConfigurationStore.save(configuration)
+        } catch {
+            errorMessage = L(.agentSaveFailed, ErrorPresenter.message(for: error))
+            return false
+        }
+        agentConfiguration = configuration
+        return true
+    }
+
+    /// 切档。落到盘上的是同一份配置 —— 只有 `activeProfileID` 变。
+    @discardableResult
+    func selectAgentProfile(id: String) async -> Bool {
+        var configuration = agentConfiguration
+        guard configuration.setActiveProfile(id: id) else { return false }
+        do {
+            try await agentConfigurationStore.save(configuration)
+        } catch {
+            errorMessage = L(.agentSaveFailed, ErrorPresenter.message(for: error))
+            return false
+        }
+        agentConfiguration = configuration
+        refreshActiveAgentKey()
+        return true
+    }
+
+    /// 新增一档（空档：端点 / 模型名留给人填）并切过去。
+    @discardableResult
+    func addAgentProfile(name: String? = nil) async -> Bool {
+        var configuration = agentConfiguration
+        let profile = AgentProfile(name: name ?? "档 \(configuration.profiles.count + 1)")
+        configuration.addProfile(profile, makeActive: true)
+        do {
+            try await agentConfigurationStore.save(configuration)
+        } catch {
+            errorMessage = L(.agentSaveFailed, ErrorPresenter.message(for: error))
+            return false
+        }
+        agentConfiguration = configuration
+        refreshActiveAgentKey()
+        return true
+    }
+
+    /// 删一档。**最后一档拒绝删**（`removeProfile` 返回 false）—— 没有档 = 没有可用配置。
+    /// 删掉的档如果存过密钥，条目一并清（不留「看不见但还在」的密钥）。
+    @discardableResult
+    func deleteAgentProfile(id: String) async -> Bool {
+        var configuration = agentConfiguration
+        guard let target = configuration.profiles.first(where: { $0.id == id }),
+              configuration.removeProfile(id: id) else { return false }
+        do {
+            try await agentConfigurationStore.save(configuration)
+        } catch {
+            errorMessage = L(.agentSaveFailed, ErrorPresenter.message(for: error))
+            return false
+        }
+        try? agentKeyStore(forProfile: target).deleteAPIKey()
+        agentConfiguration = configuration
+        refreshActiveAgentKey()
         return true
     }
 

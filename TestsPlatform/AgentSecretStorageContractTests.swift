@@ -62,4 +62,33 @@ final class AgentSecretStorageContractTests: XCTestCase {
         try store.deleteAPIKey()
         XCTAssertNil(try FileAgentSecretStore(directoryURL: directory).apiKey())
     }
+
+    // MARK: - 多档（`FR-AGT-LINK-CHAN-001` ⑥ · 2026-11-08 beta1.1）
+
+    /// 一档一把：同目录下两个 `entryKey` 互不覆盖；删一档不动另一档；老槽位 `agent.api-key` 仍可读。
+    /// 覆盖范围：只判「条目隔离 + 删除隔离 + 老槽位兼容」；不判界面（那在 UI 用例里）。
+    func testEachProfileKeepsItsOwnKeyAndDeletingOneLeavesTheOther() throws {
+        let defaultStore = FileAgentSecretStore(directoryURL: directory)          // agent.api-key（老单档）
+        let alpha = FileAgentSecretStore(directoryURL: directory,
+                                         entryKey: AgentProfile.defaultSecretKey(for: "alpha"))
+        let beta = FileAgentSecretStore(directoryURL: directory,
+                                        entryKey: AgentProfile.defaultSecretKey(for: "beta"))
+
+        try defaultStore.setAPIKey("sk-legacy-0001")
+        try alpha.setAPIKey("sk-alpha-0002")
+        try beta.setAPIKey("sk-beta-0003")
+
+        XCTAssertEqual(try alpha.apiKey(), "sk-alpha-0002")
+        XCTAssertEqual(try beta.apiKey(), "sk-beta-0003")
+        XCTAssertEqual(try defaultStore.apiKey(), "sk-legacy-0001", "老槽位不许被新档挤掉")
+
+        try alpha.deleteAPIKey()
+        XCTAssertNil(try alpha.apiKey(), "删掉的那一档要真空")
+        XCTAssertEqual(try beta.apiKey(), "sk-beta-0003", "删一档不许连坐另一档")
+        XCTAssertEqual(try defaultStore.apiKey(), "sk-legacy-0001")
+
+        // 反例：把 beta 的 key 写到默认实例上 ⇒ 必须有办法判出来（条目不同 = 值不同）
+        try FileAgentSecretStore(directoryURL: directory).setAPIKey("sk-overwritten")
+        XCTAssertEqual(try beta.apiKey(), "sk-beta-0003", "默认实例写盘不许覆盖档位条目")
+    }
 }

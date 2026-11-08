@@ -21,12 +21,17 @@ public struct FileAgentSecretStore: AgentKeyStore, AgentIMSecretStore {
 
     private let fileURL: URL
     private let directoryURL: URL
+    /// 模型 Key 落在哪个条目里。**多档模型接入**（2026-11-08 进 beta1.1）靠它：
+    /// 一档一个条目（`AgentProfile.defaultSecretKey(for:)` = `agent.api-key.<档 id>`），
+    /// 换档不会互相覆盖；老配置那一档仍用 `agent.api-key`（迁移过的 key 照旧读得回来）。
+    private let entryKey: String
     private let lock = NSLock()
 
-    public init(directoryURL: URL? = nil) {
+    public init(directoryURL: URL? = nil, entryKey: String = FileAgentSecretStore.apiKeySlot) {
         let base = directoryURL ?? FileAgentSecretStore.defaultDirectory()
         self.directoryURL = base
         self.fileURL = base.appendingPathComponent("secrets.json")
+        self.entryKey = entryKey
     }
 
     public static func defaultDirectory() -> URL {
@@ -64,9 +69,9 @@ public struct FileAgentSecretStore: AgentKeyStore, AgentIMSecretStore {
 
     // MARK: - AgentKeyStore
 
-    public func setAPIKey(_ key: String) throws { try write(slot: Self.apiKeySlot, value: key) }
-    public func apiKey() throws -> String? { try read(slot: Self.apiKeySlot) }
-    public func deleteAPIKey() throws { try remove(slot: Self.apiKeySlot) }
+    public func setAPIKey(_ key: String) throws { try write(slot: entryKey, value: key) }
+    public func apiKey() throws -> String? { try read(slot: entryKey) }
+    public func deleteAPIKey() throws { try remove(slot: entryKey) }
 
     // **联网检索的 Tavily key**（`FR-AGT-TOOL-INGEST-004`）：与模型 key 分槽位 ——
     // 「换模型服务」不该顺手把搜索后端也换掉。0600 文件，不进日志、不进审计、不回显。

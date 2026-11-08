@@ -2184,6 +2184,10 @@ public enum LKey: String, CaseIterable, Sendable {
     case agentQuotaReset
     case agentQuotaResetDone
     case agentAPIKey
+    case agentProfileSection
+    case agentProfileAdd
+    case agentProfileDelete
+    case agentProfileLastOne
     case agentAPIKeyConfigured
     case agentAPIKeyMissing
     case agentAPIKeyClear
@@ -5872,6 +5876,10 @@ public enum LocalizedStrings {
         .agentQuotaReset: [.simplifiedChinese: "重置用量", .english: "Reset usage"],
         .agentQuotaResetDone: [.simplifiedChinese: "用量已清零（下一次调用从 0 起算）。", .english: "Usage reset — the next call starts from zero."],
         .agentAPIKey: [.simplifiedChinese: "API Key", .english: "API Key"],
+        .agentProfileSection: [.simplifiedChinese: "模型档位（多端点）", .english: "Model profiles (multiple endpoints)"],
+        .agentProfileAdd: [.simplifiedChinese: "新增档", .english: "Add profile"],
+        .agentProfileDelete: [.simplifiedChinese: "删除此档", .english: "Delete profile"],
+        .agentProfileLastOne: [.simplifiedChinese: "至少要留一档，删不了最后一档", .english: "At least one profile is required"],
         .agentAPIKeyConfigured: [.simplifiedChinese: "已配置（存于系统钥匙串，不写入配置文件）", .english: "Configured (kept in Keychain, never in the config file)"],
         .agentAPIKeyMissing: [.simplifiedChinese: "未配置。远端端点需要 API Key；本地端点不需要。", .english: "Not configured. Remote endpoints need one; local endpoints do not."],
         .agentAPIKeyClear: [.simplifiedChinese: "清除已保存的 Key", .english: "Clear saved key"],
