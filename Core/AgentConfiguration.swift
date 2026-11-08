@@ -185,10 +185,77 @@ public struct AgentConfiguration: Codable, Equatable, Sendable {
         profiles[index] = profile
     }
 
-    /// 加一档（默认切过去）。
-    public mutating func addProfile(_ profile: AgentProfile, makeActive: Bool = true) {
+    /// 档数上限。**到顶就拒绝加档**（不是静默截断）—— 面板会说明为什么加不了。
+    public static let maximumProfileCount = 20
+
+    /// 还能不能再加一档。
+    public var canAddProfile: Bool { profiles.count < Self.maximumProfileCount }
+
+    /// 加一档（默认切过去）。到上限返回 `false` 且**一档都不加**。
+    @discardableResult
+    public mutating func addProfile(_ profile: AgentProfile, makeActive: Bool = true) -> Bool {
+        guard canAddProfile else { return false }
         profiles.append(profile)
         if makeActive { activeProfileID = profile.id }
+        return true
+    }
+
+    /// 复制某一档 ⇒ 紧跟在原档后面插入一份**新档**并切过去。
+    ///
+    /// 复制的是「端点 / 模型 / 超时 / 预设 / 价格」这些**非敏感**属性；
+    /// **`id` 与 `secretKey` 一律重新生成** —— 两档共用一条钥匙串条目 = 改一档的 Key
+    /// 等于把另一档的 Key 也换掉（用户填进去的凭据凭空串台）。
+    /// 密钥本体不复制：新档一开始「没有 Key」，要填自己的一把。
+    @discardableResult
+    public mutating func duplicateProfile(id: String, name: String) -> AgentProfile? {
+        guard canAddProfile,
+              let index = profiles.firstIndex(where: { $0.id == id }) else { return nil }
+        let source = profiles[index]
+        let copy = AgentProfile(name: name,
+                                presetID: source.presetID,
+                                endpoint: source.endpoint,
+                                model: source.model,
+                                timeoutSeconds: source.timeoutSeconds,
+                                pricing: source.pricing)
+        profiles.insert(copy, at: index + 1)
+        activeProfileID = copy.id
+        return copy
+    }
+
+    /// 改档名（空名拒绝 —— 空名在界面上等于「没名字」，比原名字更糟）。
+    @discardableResult
+    public mutating func renameProfile(id: String, name: String) -> Bool {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty,
+              let index = profiles.firstIndex(where: { $0.id == id }) else { return false }
+        profiles[index].name = trimmed
+        return true
+    }
+
+    /// 删一档的**结论**（界面要把「回落到哪一档」「为什么删不了」原样说出来）。
+    public enum ProfileDeletion: Equatable, Sendable {
+        /// 删掉了。`fellBackTo` 非 `nil` = 删的正是当前档，现在落到这一档。
+        case deleted(fellBackTo: AgentProfile?)
+        /// 只剩一档：拒绝（没有档 = 没有可用的配置）。
+        case refusedLastProfile
+        /// 指不到这一档（已被删 / id 写错）。
+        case notFound
+    }
+
+    /// 删一档并给出可读结论。
+    ///
+    /// 删的是**当前档**时回落到剩余清单的第一档（`activeProfileID` 不许指向已消失的档）；
+    /// 删的不是当前档时 `fellBackTo` 为 `nil`，当前档一个字不动。
+    public mutating func deleteProfile(id: String) -> ProfileDeletion {
+        guard profiles.contains(where: { $0.id == id }) else { return .notFound }
+        guard profiles.count > 1 else { return .refusedLastProfile }
+        let wasActive = (activeProfileID ?? profiles.first?.id) == id
+        profiles.removeAll { $0.id == id }
+        if wasActive { activeProfileID = profiles.first?.id }
+        if let active = activeProfileID, !profiles.contains(where: { $0.id == active }) {
+            activeProfileID = profiles.first?.id
+        }
+        return .deleted(fellBackTo: wasActive ? activeProfile : nil)
     }
 
     /// 删一档。**至少留一档**（删到空 ⇒ 拒绝，返回 `false`）—— 没有档 = 没有可用的配置。

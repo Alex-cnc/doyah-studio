@@ -4481,24 +4481,40 @@ final class AppState: ObservableObject {
     /// 当前档 id（`nil` 只在不该发生时才出现 —— `activeProfile` 有自愈）。
     var activeAgentProfileID: String? { agentConfiguration.activeProfile?.id }
 
+    /// 某一档**已存的密钥**（按这一档自己的条目取，不是「当前档那把」）。
+    func storedAgentKey(for profile: AgentProfile?) -> String? {
+        guard let profile else { return nil }
+        return (try? agentKeyStore(forProfile: profile).apiKey()) ?? nil
+    }
+
     /// 把「有没有 Key / Key 本体」对齐到**当前档**。切档、增删档之后都要跑一遍，
     /// 否则面板显示的还是上一档的结论（「看着配好了、发出去 401」）。
     func refreshActiveAgentKey() {
-        let key = (try? agentKeyStore(forProfile: agentConfiguration.activeProfile).apiKey()) ?? nil
+        let key = storedAgentKey(for: agentConfiguration.activeProfile)
         agentAPIKey = key
         hasAgentAPIKey = !(key?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
     }
 
-    /// 把界面草稿写回**当前档**（切档 / 关面板之前调，否则切走就丢改动）。
+    /// 把界面草稿写回**当前档**（切档 / 保存面板时调，否则改的只是内存里的输入框）。
+    ///
+    /// 档名与预设 id 也一并写回：档名是这一档的属性，从前草稿里带的是建壳时的 `default`，
+    /// 保存一次就把用户起的名字**改回 `default`**（改名功能等于不存在）。
     @discardableResult
     func updateActiveAgentProfile(endpoint: String, model: String,
                                   timeoutSeconds: TimeInterval,
-                                  pricing: AgentModelPricing?) async -> Bool {
+                                  pricing: AgentModelPricing?,
+                                  name: String? = nil,
+                                  presetID: String? = nil) async -> Bool {
         guard var profile = agentConfiguration.activeProfile else { return false }
         profile.endpoint = endpoint
         profile.model = model
         profile.timeoutSeconds = timeoutSeconds
         profile.pricing = pricing
+        if let name {
+            let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !trimmed.isEmpty { profile.name = trimmed }
+        }
+        if let presetID { profile.presetID = presetID }
         var configuration = agentConfiguration
         configuration.updateProfile(profile)
         do {
@@ -4511,7 +4527,21 @@ final class AppState: ObservableObject {
         return true
     }
 
+    /// 档操作的结论（界面据此说一句人话；`applied` 之外都要说明为什么没成）。
+    enum AgentProfileActionResult: Equatable {
+        case applied
+        /// 到档数上限（`AgentConfiguration.maximumProfileCount`）。
+        case limitReached
+        /// 只剩一档，删不了。
+        case lastProfile
+        /// 指不到这一档。
+        case notFound
+        /// 落盘失败（`errorMessage` 里是原因）。
+        case failed
+    }
+
     /// 切档。落到盘上的是同一份配置 —— 只有 `activeProfileID` 变。
+    /// **切完立刻换密钥读数**：下一次请求用的就是这个档的端点 / 模型 / 密钥（不必重启）。
     @discardableResult
     func selectAgentProfile(id: String) async -> Bool {
         var configuration = agentConfiguration
@@ -4527,39 +4557,72 @@ final class AppState: ObservableObject {
         return true
     }
 
-    /// 新增一档（空档：端点 / 模型名留给人填）并切过去。
-    @discardableResult
-    func addAgentProfile(name: String? = nil) async -> Bool {
-        var configuration = agentConfiguration
-        let profile = AgentProfile(name: name ?? "档 \(configuration.profiles.count + 1)")
-        configuration.addProfile(profile, makeActive: true)
+    private func persistProfileMutation(_ configuration: AgentConfiguration) async -> AgentProfileActionResult {
         do {
             try await agentConfigurationStore.save(configuration)
         } catch {
             errorMessage = L(.agentSaveFailed, ErrorPresenter.message(for: error))
-            return false
+            return .failed
         }
         agentConfiguration = configuration
         refreshActiveAgentKey()
-        return true
+        return .applied
     }
 
-    /// 删一档。**最后一档拒绝删**（`removeProfile` 返回 false）—— 没有档 = 没有可用配置。
+    /// 新增一档（空档：端点 / 模型名留给人填）并切过去。到上限 ⇒ `limitReached`，一档都不加。
+    @discardableResult
+    func addAgentProfile(name: String? = nil) async -> AgentProfileActionResult {
+        var configuration = agentConfiguration
+        guard configuration.canAddProfile else { return .limitReached }
+        let profile = AgentProfile(name: name ?? "档 \(configuration.profiles.count + 1)")
+        guard configuration.addProfile(profile, makeActive: true) else { return .limitReached }
+        return await persistProfileMutation(configuration)
+    }
+
+    /// 复制当前档并切到副本。**密钥不复制**：副本有自己的条目键，第一次用要填一把（`FR-AI-32` ③）。
+    @discardableResult
+    func duplicateAgentProfile(id: String, name: String? = nil) async -> AgentProfileActionResult {
+        var configuration = agentConfiguration
+        guard configuration.canAddProfile else { return .limitReached }
+        let source = configuration.profiles.first { $0.id == id }
+        let copyName = name ?? ((source?.name ?? "档") + " 2")
+        guard configuration.duplicateProfile(id: id, name: copyName) != nil else {
+            return source == nil ? .notFound : .limitReached
+        }
+        return await persistProfileMutation(configuration)
+    }
+
+    /// 删一档。**最后一档拒绝删**（`refusedLastProfile`）—— 没有档 = 没有可用配置。
     /// 删掉的档如果存过密钥，条目一并清（不留「看不见但还在」的密钥）。
     @discardableResult
-    func deleteAgentProfile(id: String) async -> Bool {
+    func deleteAgentProfile(id: String) async -> AgentProfileActionResult {
         var configuration = agentConfiguration
-        guard let target = configuration.profiles.first(where: { $0.id == id }),
-              configuration.removeProfile(id: id) else { return false }
+        guard let target = configuration.profiles.first(where: { $0.id == id }) else { return .notFound }
+        switch configuration.deleteProfile(id: id) {
+        case .refusedLastProfile:
+            return .lastProfile
+        case .notFound:
+            return .notFound
+        case .deleted:
+            let result = await persistProfileMutation(configuration)
+            guard result == .applied else { return result }
+            try? agentKeyStore(forProfile: target).deleteAPIKey()
+            return .applied
+        }
+    }
+
+    /// 改档名（空名拒绝）。
+    @discardableResult
+    func renameAgentProfile(id: String, name: String) async -> Bool {
+        var configuration = agentConfiguration
+        guard configuration.renameProfile(id: id, name: name) else { return false }
         do {
             try await agentConfigurationStore.save(configuration)
         } catch {
             errorMessage = L(.agentSaveFailed, ErrorPresenter.message(for: error))
             return false
         }
-        try? agentKeyStore(forProfile: target).deleteAPIKey()
         agentConfiguration = configuration
-        refreshActiveAgentKey()
         return true
     }
 
@@ -6645,75 +6708,55 @@ final class AppState: ObservableObject {
 
     // MARK: - 连接测试（人类主人 2026-10-16 要求：配置界面要有一个「测试」按钮）
 
-    /// 一次连接测试的结果：**两态如实分开**（通了给模型与用时；不通给原因原文），不合并成一个含混的结论。
-    enum AgentConnectionTest: Equatable {
-        case passed(model: String, millis: Int)
-        case failed(String)
-    }
-
-    /// 真发一次**最小的**模型往返（不是"假装试一下"）。
+    /// 真发一次**最小的**模型往返 —— **测的是传进来的这一档**（端点 / 模型 / 超时 / 这一档的 Key）。
     ///
-    /// 三条纪律：① 走**和 Agent 循环同一个**流式客户端与请求构造（不另起一套、不硬编码 URL）；
-    /// ② **不绕过闸门** —— 总开关关着 / 配置不完整 / 缺密钥时，这次请求会被既有判定挡下，错误原文如实回传
-    /// （测试**不等于**放行，它只是一次真实往返）；③ **不写会话留痕**（它不是对话内容）。
-    /// 如实登记：这条路与循环一样走**默认流式传输**，所以它**不进** `egress-log.jsonl`（那份日志记的是
-    /// 非流式传输那一条路）—— 配通没配通仍以 App 里的结果行为准。
-    /// - Parameter apiKeyOverride: 面板里**刚输入、还没保存**的 Key。测连接必须测「用户眼前这一份」，
-    ///   否则刚填完 Key 点测试仍会用旧值（实机现象：填了新 Key，测试照样 401）。
-    func testAgentConnection(apiKeyOverride: String? = nil) async -> AgentConnectionTest {
-        let configuration = agentConfiguration
-        // **总开关关着 ⇒ 连「测一下」都不发**（`AC-ALL-GATE-AI-001`）。从前这里只核端点与模型名，
-        // 于是开关关着点「测试」仍会真发一次往返 —— 那是「零外发」这条承诺上的一个真洞。
-        // 刻意**不**用整条 `agentOutboundDecision`：面板里刚输入、还没保存的 Key 必须能测
-        // （`apiKeyOverride` 就是为这来的），拿已保存的 Key 判 `missingAPIKey` 会把这条路堵死。
-        guard configuration.isEnabled else {
-            return .failed(AgentEgressSeal.shared.refusal.localizedDescription)
+    /// 四档结局（成功 / 401 凭据 / 超时 / 非 JSON 或其它码）由 Core 的 `AgentConnectionProbe` 认，
+    /// 界面直接把结论那句话摆出来。App 侧只补三件 Core 不知道的事：
+    /// ① **总开关关着 ⇒ 一个字节都不发**（`AC-ALL-GATE-AI-001`），如实说「没试」而不是「连不上」；
+    /// ② **配额闸**（`NFR-ALL-GATE-AI-004`）：这一次也是真调用，超限如实拒（说清是配额，不是网络）；
+    /// ③ 密钥取**这一档自己的条目**（`apiKeyOverride` 优先 = 面板里刚填、还没保存的那把）。
+    /// - Parameter apiKeyOverride: 面板里刚输入、还没保存的 Key。空串视同没填。
+    func testAgentProfileConnection(_ draft: AgentProfile,
+                                    apiKeyOverride: String? = nil) async -> AgentConnectionOutcome {
+        guard agentConfiguration.isEnabled else {
+            return .notAttempted(reason: AgentEgressSeal.shared.refusal.localizedDescription)
         }
-        guard let url = URL(string: configuration.endpoint.trimmingCharacters(in: .whitespacesAndNewlines)),
-              !configuration.model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            return .failed(L(.agentTestMisconfigured))
-        }
-        // **踩过的坑（2026-10-16 实机 401）**：第一版这里漏了 `apiKey` ⇒ 发出去的是**裸请求**，
-        // 端点原样回 401，看上去像"用户的 key 不对"。密钥是靠 `LLMRequest.apiKey` 进 `Authorization` 头的
-        // （`LLMClient.swift` 里那一处唯一出口）—— 任何新造的请求都必须显式带上它，否则必然 401。
-        // **配额闸**（`NFR-ALL-GATE-AI-004` ①②）：这一次也是真发一次模型往返 ——
-        // 超限时如实拒（说清是配额，不是连不通），且一次请求都不发。
         let quotaLedgerBeforeTest = agentQuotaLedgerForNextCall()
         let quotaDecision = agentConfiguration.quota.decision(
             ledger: quotaLedgerBeforeTest,
             requestedOutputTokens: agentConfiguration.quota.maxOutputTokensPerRequest
         )
         guard quotaDecision.isAllowed else {
-            return .failed(quotaDecision.message)
+            return .notAttempted(reason: quotaDecision.message)
         }
-        // 面板里刚输入的那份优先（空 = 没填，退回已保存的那份）
-        let draft = apiKeyOverride?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        let effectiveKey = draft.isEmpty ? agentAPIKey : draft
-        let request = LLMRequest(endpoint: url, model: configuration.model,
-                                 apiKey: effectiveKey,
-                                 timeoutSeconds: configuration.timeoutSeconds,
-                                 systemPrompt: "这是一次连接测试。", userPrompt: "回复两个字：收到。")
-        // 用**与 Agent 循环同一个**流式客户端（`AppState` 里那条循环也是这么造的），不另起一套。
-        // 外发日志同理：这一条同样是真发一次往返，来源单独写清（「测试连接」不该混进对话记录）。
-        let client = OpenAICompatibleStreamingClient(
-            transport: EgressRecordingStreamingTransport(
-                origin: "智能体 · 测试连接",
-                wrapped: URLSessionStreamingTransport()
-            )
+        let typed = apiKeyOverride?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let key = typed.isEmpty ? storedAgentKey(for: draft) : typed
+        // 传输层与聊天循环**同一层装饰器**（`EgressRecordingStreamingTransport`）：测试连接也是
+        // 真发一次往返，外发日志里必须有一条（「只是测一下」不是不留痕的理由）。
+        let outcome = await AgentConnectionProbe.run(
+            profile: draft,
+            apiKey: key,
+            transport: EgressRecordingStreamingTransport(origin: "智能体 · 测试连接",
+                                                         wrapped: URLSessionStreamingTransport())
         )
-        let started = Date()
-        do {
-            let stream = try await client.stream(request)
-            for try await event in stream {
-                if case .done = event { break }
-            }
+        if outcome.isSuccess {
             // 记账（判据 ①）：测试连接也是一次调用 —— 次数 +1（token 端点若不报就不涨）。
-            recordAgentQuota(configuration.quota.record(ledger: quotaLedgerBeforeTest, usedTokens: 0))
-            return .passed(model: configuration.model,
-                           millis: Int(Date().timeIntervalSince(started) * 1000))
-        } catch {
-            return .failed(ErrorPresenter.message(for: error))
+            recordAgentQuota(agentConfiguration.quota.record(ledger: quotaLedgerBeforeTest, usedTokens: 0))
         }
+        return outcome
+    }
+
+    /// 拉这一档端点的模型候选（`FR-AI-32` 第 ⑤ 条）。**拉不到不是错误** ——
+    /// 返回 `unavailable(原因)`，界面把它当一行说明，退回手填。
+    func agentModelCandidates(for draft: AgentProfile,
+                              apiKeyOverride: String? = nil) async -> AgentModelListOutcome {
+        let typed = apiKeyOverride?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let key = typed.isEmpty ? storedAgentKey(for: draft) : typed
+        return await AgentModelListProbe.run(
+            profile: draft,
+            apiKey: key,
+            transport: EgressRecordingTransport(origin: "智能体 · 模型清单", wrapped: URLSessionTransport())
+        )
     }
 
     /// 把生成结果放进**新页签**的编辑器里（不覆盖用户正在写的内容，也不执行）。

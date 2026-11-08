@@ -18,9 +18,18 @@ struct AgentSettingsSheet: View {
     @State private var webKeyInput = ""
     @State private var webKeyStatus = ""
     @State private var isEnabled = false
-    /// 当前编辑的**模型档**（多端点 · `FR-AGT-LINK-CHAN-001` ⑥）：切档即换一整套端点 / 模型 / 密钥。
+    /// 当前编辑的**模型档**（多 Provider / 多模型 · `FR-AI-32`）：切档即换一整套端点 / 模型 / 密钥。
     @State private var selectedProfileID: String?
     @State private var profileLine: String?
+    /// 档名草稿（改名与其它字段一起在保存 / 切档时落盘）。
+    @State private var profileName = ""
+    /// **逐档测试连接**的结论（成功 / 401 / 超时 / 非 JSON 四档的人话）。
+    @State private var profileTestLine: String?
+    @State private var isTestingProfile = false
+    /// 从端点 `/models` 拉到的候选（空 = 用预设内置清单）。
+    @State private var modelCandidates: [String] = []
+    @State private var modelListLine: String?
+    @State private var isFetchingModels = false
     @State private var endpoint = ""
     @State private var model = ""
     /// 选中的提供商（队列 `L-146`）：**由端点反推**，不在配置里多存一个字段 ——
@@ -132,7 +141,8 @@ struct AgentSettingsSheet: View {
         .frame(width: AgentSettingsSheet.sheetWidth, height: min(sheetHeight, AgentSettingsSheet.maxSheetHeight))
         // 换提供商 ⇒ 自动填端点与模型；手改端点 ⇒ 重认一次「这是谁」。
         // 两条都不自己判，只读契约层（`AgentProviderCatalog`）给的答案。
-        // 切档 = 先把这一档的草稿写回盘，再按新档重载（不许「切过去发现上一档的改动丢了」）。
+        // 切档 = 先把这一档的草稿（含档名与预设）写回盘，再按新档重载（不许「切过去发现上一档的改动丢了」）。
+        // 切完下一次请求就用新档的端点 / 模型 / 密钥 —— 不必重启。
         .onChange(of: selectedProfileID) { oldValue, newValue in
             guard isLoaded, newValue != oldValue else { return }
             Task {
@@ -141,7 +151,9 @@ struct AgentSettingsSheet: View {
                         endpoint: endpoint.trimmingCharacters(in: .whitespacesAndNewlines),
                         model: model.trimmingCharacters(in: .whitespacesAndNewlines),
                         timeoutSeconds: TimeInterval(timeoutSeconds) ?? AgentConfiguration.defaultTimeoutSeconds,
-                        pricing: draftPricing)
+                        pricing: draftPricing,
+                        name: profileName,
+                        presetID: currentPresetID)
                 }
                 guard let newValue, await appState.selectAgentProfile(id: newValue) else { return }
                 loadProfileDraft()
@@ -159,6 +171,10 @@ struct AgentSettingsSheet: View {
             }
             let configuration = appState.agentConfiguration
             selectedProfileID = configuration.activeProfile?.id
+            profileName = configuration.activeProfile?.name ?? ""
+            profileTestLine = nil
+            modelCandidates = []
+            modelListLine = nil
             isEnabled = configuration.isEnabled
             endpoint = configuration.endpoint
             model = configuration.model
@@ -240,44 +256,25 @@ struct AgentSettingsSheet: View {
                     .font(Theme.font(.caption))
                     .foregroundStyle(Theme.text(.secondary))
 
-                // **模型档位**（多端点 · `FR-AGT-LINK-CHAN-001` 判据 ⑥）：档 = 端点 + 模型名 + 超时 + 一把独立密钥。
-                // 2026-11-08 主人令进 beta1.1：「可以做到 beta1.1 里啊」。此前配置层早就支持多档
-                // （`AgentConfiguration.profiles`），但界面只暴露一档 —— 换服务就得把上一组擦掉。
+                // **模型档位**（多 Provider / 多模型 · `FR-AI-32`）：档 = 端点 + 模型名 + 超时 + 一把独立密钥。
+                // 2026-11-08 主人令进 beta1.2：「可配置多个 Provider 和大模型」。此前配置层早就支持多档
+                // （`AgentConfiguration.profiles`），界面只暴露一档 —— 换服务就得把上一组擦掉。
+                // 这一节现在把**增删复制、改名、逐档测试**都给到手，动作与读数在 `AgentProfileEditor` 里。
                 Section(L(.agentProfileSection)) {
-                    Picker(L(.agentProfileSection), selection: $selectedProfileID) {
-                        ForEach(appState.agentProfiles) { profile in
-                            Text(profile.name.isEmpty ? profile.id : profile.name).tag(Optional(profile.id))
-                        }
-                    }
-                    HStack(spacing: Spacing.s) {
-                        Button(L(.agentProfileAdd)) {
-                            Task {
-                                guard await appState.addAgentProfile() else { return }
-                                selectedProfileID = appState.activeAgentProfileID
-                                loadProfileDraft()
-                                profileLine = nil
-                            }
-                        }
-                        Button(L(.agentProfileDelete), role: .destructive) {
-                            Task {
-                                guard let id = selectedProfileID,
-                                      await appState.deleteAgentProfile(id: id) else {
-                                    profileLine = L(.agentProfileLastOne)
-                                    return
-                                }
-                                selectedProfileID = appState.activeAgentProfileID
-                                loadProfileDraft()
-                                profileLine = nil
-                            }
-                        }
-                        .disabled(appState.agentProfiles.count <= 1)
-                        .help(appState.agentProfiles.count <= 1 ? L(.agentProfileLastOne) : L(.agentProfileDelete))
-                    }
-                    if let profileLine {
-                        Text(profileLine)
-                            .font(Theme.font(.caption))
-                            .foregroundStyle(Theme.text(.secondary))
-                    }
+                    AgentProfileEditor(
+                        profiles: appState.agentProfiles,
+                        selectedProfileID: $selectedProfileID,
+                        name: $profileName,
+                        canAdd: appState.agentProfiles.count < AgentConfiguration.maximumProfileCount,
+                        canDelete: appState.agentProfiles.count > 1,
+                        line: profileLine,
+                        testLine: profileTestLine,
+                        isTesting: isTestingProfile,
+                        onAdd: addProfileDraft,
+                        onDuplicate: duplicateProfileDraft,
+                        onDelete: deleteProfileDraft,
+                        onTest: testCurrentProfileDraft
+                    )
                 }
 
                 // 提供商预设（FR-AI-01 的配置面 · 队列 L-146）：先选提供商，端点与常用模型
@@ -301,7 +298,7 @@ struct AgentSettingsSheet: View {
                 HStack(spacing: Spacing.s) {
                     TextField(L(.agentModel), text: $model, prompt: Text(L(.agentModelPlaceholder)))
                     Menu {
-                        ForEach(selectedPreset.modelOptions(currentModel: model), id: \.self) { name in
+                        ForEach(modelChoices, id: \.self) { name in
                             Button(name) { model = name }
                         }
                     } label: {
@@ -312,8 +309,28 @@ struct AgentSettingsSheet: View {
                     }
                     .menuStyle(.borderlessButton)
                     .fixedSize()
-                    .disabled(selectedPreset.models.isEmpty)
+                    .disabled(modelChoices.isEmpty)
                     .help(L(.agentModelPresetHint))
+                }
+                // **模型候选的第二个来源**（`FR-AI-32` ⑤）：预设内置清单会过时，能拉就拉一次。
+                // 拉不到**不是错误** —— 一行说明 + 退回手填（`AgentModelListProbe` 的结论只有两档）。
+                HStack(spacing: Spacing.s) {
+                    Button(L(.agentModelListFetch)) {
+                        fetchModelCandidates()
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .disabled(isFetchingModels || !selectedPreset.supportsModelListing || endpoint.isEmpty)
+                    .help(selectedPreset.supportsModelListing ? L(.agentModelListFetch)
+                          : L(.agentModelPresetHint))
+                    .accessibilityIdentifier("agent-model-list-fetch")
+                    if let modelListLine {
+                        Text(modelListLine)
+                            .font(Theme.font(.caption))
+                            .foregroundStyle(Theme.text(.secondary))
+                            .fixedSize(horizontal: false, vertical: true)
+                            .accessibilityIdentifier("agent-model-list-line")
+                    }
                 }
                 TextField(L(.agentTimeout), text: $timeoutSeconds)
 
@@ -853,17 +870,12 @@ struct AgentSettingsSheet: View {
                 Button(L(.agentTestConnection)) {
                     isTesting = true
                     testLine = L(.agentTestRunning)
+                    // 量的是**面板里这份草稿**（刚改的端点 / 模型 / Key 都算数），不是盘上那份。
+                    let draft = draftProfile
                     Task {
-                        // 用面板里刚输入的那份 Key 去测（否则刚填完 Key 点测试仍会用旧值）
-                        let result = await appState.testAgentConnection(apiKeyOverride: apiKeyInput)
-                        switch result {
-                        case .passed(let model, let millis):
-                            // `%d` 槽必须收数字：原来把毫秒转成字符串传进去，`String(format:)`
-                            // 会把指针/垃圾数印在「（… 毫秒）」里（门禁 A′ 抓到的）。直接传 Int。
-                            testLine = L(.agentTestPassed, model, millis)
-                        case .failed(let reason):
-                            testLine = L(.agentTestFailed, reason)
-                        }
+                        let outcome = await appState.testAgentProfileConnection(draft,
+                                                                                apiKeyOverride: apiKeyInput)
+                        testLine = outcome.line(language: LocalizationManager.shared.effectiveLanguage)
                         isTesting = false
                     }
                 }
@@ -969,12 +981,36 @@ struct AgentSettingsSheet: View {
 
     // MARK: - 输入 → 配置
 
+    /// 面板里这一档的**草稿**。测试连接 / 拉模型清单都用它 —— 量的必须是**眼前这一份**，
+    /// 不是盘上那份（否则刚改完端点就点测试，测的还是旧的）。
+    private var draftProfile: AgentProfile {
+        guard var profile = appState.activeAgentProfile ?? appState.agentProfiles.first else {
+            return AgentProfile(name: profileName.isEmpty ? "default" : profileName,
+                                endpoint: endpoint.trimmingCharacters(in: .whitespacesAndNewlines),
+                                model: model.trimmingCharacters(in: .whitespacesAndNewlines),
+                                timeoutSeconds: TimeInterval(timeoutSeconds)
+                                    ?? AgentConfiguration.defaultTimeoutSeconds)
+        }
+        profile.endpoint = endpoint.trimmingCharacters(in: .whitespacesAndNewlines)
+        profile.model = model.trimmingCharacters(in: .whitespacesAndNewlines)
+        profile.timeoutSeconds = TimeInterval(timeoutSeconds) ?? AgentConfiguration.defaultTimeoutSeconds
+        profile.pricing = draftPricing
+        profile.presetID = currentPresetID
+        let trimmedName = profileName.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmedName.isEmpty { profile.name = trimmedName }
+        return profile
+    }
+
+    /// 草稿里的预设 id（「自定义」不写 —— 那不是一个预设）。
+    private var currentPresetID: String? {
+        providerID == AgentProviderCatalog.customID ? nil : providerID
+    }
+
     private var draftConfiguration: AgentConfiguration {
-        var draft = AgentConfiguration(
+        // 单档形状交给宿主按档合并（`saveAgentConfiguration`）；档 id / 档名 / 预设都随草稿走，
+        // 否则保存一次就把用户起的名字改回建壳时的 `default`（改名等于不存在）。
+        AgentConfiguration(
             isEnabled: isEnabled,
-            endpoint: endpoint,
-            model: model,
-            timeoutSeconds: Double(timeoutSeconds.trimmingCharacters(in: .whitespaces)) ?? 0,
             quota: AgentQuota(
                 maxRequestsPerSession: positiveInt(maxRequests),
                 maxOutputTokensPerRequest: positiveInt(maxOutputTokens),
@@ -985,29 +1021,130 @@ struct AgentSettingsSheet: View {
             // `AgentConfigurationStore.save` 是**整份覆写**、不做字段合并（L-146 顺带修）。
             guardPolicy: appState.agentConfiguration.guardPolicy,
             // 授权粒度（`FR-AI-34`）：默认 `.taskScope`（少问）；设置里可改回逐次批。
-            scopeMode: scopeMode
+            scopeMode: scopeMode,
+            profiles: [draftProfile],
+            activeProfileID: draftProfile.id
         )
-        // 真值源（`FR-AI-25`）是**档的属性**：草稿是「单档形状」，把它塞进这一档，
-        // 由宿主按档合并（别档原样留住）。
-        if var profile = draft.activeProfile {
-            profile.pricing = draftPricing
-            draft.updateProfile(profile)
-        }
-        return draft
     }
 
-    /// 面板里填的窗口 / 价目。**一个字都没填 ⇒ `nil`**（不往配置里写空壳）。
     /// 载入**当前档**的字段到草稿（切档 / 增删档之后调）。
-    /// 只搬这一档的四个输入格 + 上下文窗口；配置面的全局项（总开关 / 配额 / 授权粒度）不随档变。
+    /// 只搬这一档的输入格 + 档名 + 上下文窗口；配置面的全局项（总开关 / 配额 / 授权粒度）不随档变。
+    /// 顺带清掉上一档留下的「测试结论 / 模型候选」—— 那些读数属于另一档，留着就是说谎。
     private func loadProfileDraft() {
         guard let profile = appState.activeAgentProfile else { return }
         endpoint = profile.endpoint
         model = profile.model
+        profileName = profile.name
         timeoutSeconds = String(Int(profile.timeoutSeconds))
         providerID = AgentProviderCatalog.resolved(endpoint: profile.endpoint).id
         contextWindowText = profile.pricing?.contextWindow.map(String.init) ?? ""
+        modelCandidates = []
+        modelListLine = nil
+        profileTestLine = nil
         appState.refreshActiveAgentKey()
         profileLine = nil
+    }
+
+    // MARK: - 档的增删复制 / 改名 / 逐档测试（`FR-AI-32`）
+
+    /// 模型下拉的内容：拉到过端点清单就以它为准（那是**这个端点此刻**的事实），
+    /// 否则用预设内置清单；两条路都把「用户手填的那个名字」补进去（不许被吞）。
+    private var modelChoices: [String] {
+        if !modelCandidates.isEmpty {
+            // 拉到过端点清单：那是**这个端点此刻**的事实，排在最前；手填的名字仍补在后面。
+            let trimmed = model.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !trimmed.isEmpty, !modelCandidates.contains(trimmed) { return modelCandidates + [trimmed] }
+            return modelCandidates
+        }
+        return selectedPreset.modelOptions(currentModel: model)
+    }
+
+    private func addProfileDraft() {
+        Task {
+            switch await appState.addAgentProfile() {
+            case .applied:
+                selectedProfileID = appState.activeAgentProfileID
+                loadProfileDraft()
+            case .limitReached:
+                profileLine = L(.agentProfileLimitReached, Int64(AgentConfiguration.maximumProfileCount))
+            case .lastProfile:
+                profileLine = L(.agentProfileLastOne)
+            case .notFound, .failed:
+                let message = appState.errorMessage ?? ""
+                profileLine = message.isEmpty ? L(.agentProfileOperationFailed) : message
+            }
+        }
+    }
+
+    private func duplicateProfileDraft() {
+        guard let id = selectedProfileID else { return }
+        Task {
+            switch await appState.duplicateAgentProfile(id: id) {
+            case .applied:
+                selectedProfileID = appState.activeAgentProfileID
+                loadProfileDraft()
+            case .limitReached:
+                profileLine = L(.agentProfileLimitReached, Int64(AgentConfiguration.maximumProfileCount))
+            case .lastProfile:
+                profileLine = L(.agentProfileLastOne)
+            case .notFound, .failed:
+                let message = appState.errorMessage ?? ""
+                profileLine = message.isEmpty ? L(.agentProfileOperationFailed) : message
+            }
+        }
+    }
+
+    private func deleteProfileDraft() {
+        guard let id = selectedProfileID else { return }
+        Task {
+            switch await appState.deleteAgentProfile(id: id) {
+            case .applied:
+                selectedProfileID = appState.activeAgentProfileID
+                loadProfileDraft()
+                // 删的正是当前档 ⇒ 说清回落到哪一档（回落到哪一档由 Core 定，界面不自己猜）
+                if let active = appState.activeAgentProfile {
+                    let fallenBackName: String = active.name.isEmpty ? active.id : active.name
+                    profileLine = L(.agentProfileDeletedFellBack, fallenBackName)
+                }
+            case .lastProfile:
+                profileLine = L(.agentProfileLastOne)
+            case .limitReached, .notFound, .failed:
+                let message = appState.errorMessage ?? ""
+                profileLine = message.isEmpty ? L(.agentProfileOperationFailed) : message
+            }
+        }
+    }
+
+    /// 测试**眼前这一档**（草稿）。四档结局各说各的话（成功 / 401 / 超时 / 非 JSON），
+    /// 测的时候按钮置灰；测完把结论留在档位那一节里。
+    private func testCurrentProfileDraft() {
+        isTestingProfile = true
+        profileTestLine = L(.agentTestRunning)
+        let draft = draftProfile
+        let keyOverride = apiKeyInput
+        Task {
+            let outcome = await appState.testAgentProfileConnection(draft, apiKeyOverride: keyOverride)
+            await MainActor.run {
+                profileTestLine = outcome.line(language: LocalizationManager.shared.effectiveLanguage)
+                isTestingProfile = false
+            }
+        }
+    }
+
+    /// 从端点拉一次模型候选。拉不到只写一行说明（**不弹框**），候选仍可用预设清单 / 手填。
+    private func fetchModelCandidates() {
+        isFetchingModels = true
+        let draft = draftProfile
+        let keyOverride = apiKeyInput
+        Task {
+            let outcome = await appState.agentModelCandidates(for: draft,
+                                                              apiKeyOverride: keyOverride)
+            await MainActor.run {
+                modelCandidates = outcome.models
+                modelListLine = outcome.line(language: LocalizationManager.shared.effectiveLanguage)
+                isFetchingModels = false
+            }
+        }
     }
 
     private var draftPricing: AgentModelPricing? {
@@ -1460,6 +1597,12 @@ struct AgentSettingsSheet: View {
     }
 
     private func save() {
+        // 档名空白不许保存：空名在界面上等于「这一档没有名字」，比原名更糟（renameProfile 同样拒绝）。
+        if profileName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            profileLine = L(.agentProfileNameEmpty)
+            selectedTab = .model
+            return
+        }
         let key: String?
         if !apiKeyInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             key = apiKeyInput

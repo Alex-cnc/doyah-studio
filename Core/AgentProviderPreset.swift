@@ -36,6 +36,19 @@ public struct AgentProviderPreset: Identifiable, Equatable, Sendable {
     /// 是否「自定义」条目（没有预设端点）。
     public var isCustom: Bool { id == AgentProviderCatalog.customID }
 
+    /// 这一条预设**声明自己支持** `/models` 拉取模型清单（`FR-AI-32` 第 ⑤ 条）。
+    ///
+    /// 声明在这里而不是写成「一律去试」：有些端点的模型标识根本不是模型名（火山方舟要的是
+    /// 接入点 ID），拉回来一列只会误导人。声明为真 ≠ 一定拉得到 —— 拉不到就退回手填，
+    /// **不是错误**（`AgentModelListProbe` 的结论只有「拉到了」与「拉不到（原因）」两档）。
+    public var supportsModelListing: Bool {
+        guard !endpoint.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return false }
+        return !Self.modelListingUnsupportedPresetIDs.contains(id)
+    }
+
+    /// 声明**不支持** `/models` 的预设（理由见 `supportsModelListing`）。
+    public static let modelListingUnsupportedPresetIDs: Set<String> = ["volcano"]
+
     /// 端点是否指向本机 / 局域网（NFR-AI-06 本地模型优先）。
     ///
     /// **口径只有一处**：转发给 `AgentConfiguration.isLocalEndpoint` —— 预设表不自己判一遍，

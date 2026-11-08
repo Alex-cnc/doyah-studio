@@ -217,7 +217,8 @@ final class AgentQuotaPersistenceTests: XCTestCase {
         XCTAssertTrue(editAssist.contains("recordAgentQuota("),
                       "这条路的调用也要记进账本")
 
-        let connectionTest = try block("func testAgentConnection", in: source)
+        // 测试连接（`FR-AI-32` ④）按**档**发：量的是面板里那一档的草稿，闸门与记账一样不许少。
+        let connectionTest = try block("func testAgentProfileConnection", in: source)
         XCTAssertTrue(connectionTest.contains("guard quotaDecision.isAllowed else"),
                       "测试连接也是一次真调用：闸门同样要是真的")
         XCTAssertTrue(connectionTest.contains("recordAgentQuota("))

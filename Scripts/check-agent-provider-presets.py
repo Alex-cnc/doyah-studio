@@ -83,6 +83,14 @@ OUT_OF_FACE_LEDGER = {
     "Tests/AgentProviderPresetTests.swift": (
         "单测夹具：判「端点匹配 / 模型下拉内容 / 本地判定同源」必须拿真端点当输入，"
         "没有真地址这条单测判不了（= 老 :34 那条豁免的落地形态）"),
+    "Tests/AgentProfileManagementTests.swift": (
+        "单测夹具：判据「切到第 2 档之后发出去的请求是这一档的端点」必须以**两个不同的真端点**"
+        "作输入（断言 URL / 模型 / Authorization 逐字对应），假地址会让这条断言失去意义"
+        "—— 与 `Tests/AgentProfileTests.swift` 同类，逐条登记不整目录豁免"),
+    "Tests/AgentConnectionProbeTests.swift": (
+        "单测夹具：测试连接的四档结局（成功 / 401 / 超时 / 非 JSON）与 `/models` 解析要按真端点串"
+        "断言「请求 URL / Authorization 头逐字对得上」，换成假地址就判不出「测的是不是这一档」"
+        "—— 与 `Tests/AgentProfileTests.swift` 同一类，逐条登记不整目录豁免"),
     "Tests/AgentProfileTests.swift": (
         "单测夹具：档案（profile）合并 / 覆盖 / 掩码三组断言要以真端点串作输入，"
         "换成假地址就判不出「模型与端点是否一起被覆盖」—— 逐条登记，不整目录豁免"),

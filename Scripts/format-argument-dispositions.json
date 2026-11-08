@@ -454,12 +454,6 @@
    "reason": "模型名：`App/Views/AgentChatView.swift:411` 的 `if case .ready(let modelName, let endpoint) = model.endpointState` ⇒ 同 `Core/AgentChat.swift:139` 的 `ready(model: String, …)`，是 String；模板 `agentStatusModel` 那一槽是 `%@`"
   },
   {
-   "shape": "<millis>",
-   "kind": "number",
-   "maxSites": 1,
-   "reason": "连接测试耗时：`App/AppState.swift:3856` 的 `AgentConnectionTest.passed(model: String, millis: Int)` ⇒ Int；模板 `连接正常：%@（%d 毫秒）` 第 2 槽是 `%d`。2026-10-18（队列 9）：这一处原先传字符串插值（`\\(millis)`，判据 A′ 红、界面会印垃圾数），改成传 Int 后裸标识符按类型不明计数 ⇒ 登记为 number，让槽位交叉检查真起作用"
-  },
-  {
    "shape": "URL(…)",
    "kind": "text",
    "maxSites": 1,
@@ -734,6 +728,12 @@
    "kind": "text",
    "maxSites": 1,
    "reason": "`App/Views/WorkspaceImageView.swift:45` `(path as NSString).lastPathComponent`：`NSString.lastPathComponent` 返回 String，`path` 本身是 `App/Views/WorkspaceImageView.swift:20` 的 `let path: String`；形状算子对这种强制转换只切到 `?`，故以 `?` 登记；模板 `.workspaceImageUnreadable` 唯一的 `%@` 槽"
+  },
+  {
+   "shape": "<fallenBackName>",
+   "kind": "text",
+   "maxSites": 1,
+   "reason": "`App/Views/AgentSettingsSheet.swift` `let fallenBackName: String = active.name.isEmpty ? active.id : active.name`（三元两边是 `AgentProfile.name` / `.id`，均 String）⇒ String；模板 `.agentProfileDeletedFellBack` 唯一槽位 `%@`"
   }
  ],
  "exceptions": []

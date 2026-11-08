@@ -2188,6 +2188,29 @@ public enum LKey: String, CaseIterable, Sendable {
     case agentProfileAdd
     case agentProfileDelete
     case agentProfileLastOne
+    // 多档配置面的其余几枚（`FR-AI-32`）：改名 / 复制 / 逐档测试 / 上限 / 回落提示。
+    case agentProfileName
+    case agentProfileNameEmpty
+    case agentProfileDuplicate
+    case agentProfileTest
+    case agentProfileLimitReached
+    case agentProfileDeletedFellBack
+    case agentProfileKeyHint
+    case agentProfileOperationFailed
+    /// 测试连接的四档结论（`AgentConnectionOutcome`）+「没发请求」那一档。
+    case agentConnectionSuccess
+    case agentConnectionUnauthorized
+    case agentConnectionTimeout
+    case agentConnectionUnexpected
+    case agentConnectionNotAttempted
+    /// 测试连接的两段提示词（**给模型读**的，界面不显示）。
+    case agentConnectionProbeSystemPrompt
+    case agentConnectionProbeUserPrompt
+    /// 模型候选拉取（`/models`）。
+    case agentModelListFetch
+    case agentModelListFetched
+    case agentModelListUnavailable
+    case agentModelListMalformed
     case agentAPIKeyConfigured
     case agentAPIKeyMissing
     case agentAPIKeyClear
@@ -2711,9 +2734,6 @@ public enum LKey: String, CaseIterable, Sendable {
     case agentChatStepNo
     case agentTestConnection
     case agentTestRunning
-    case agentTestPassed
-    case agentTestFailed
-    case agentTestMisconfigured
     case workspaceReloadedFromDisk
     /// `FR-STD-WS-FS-009`：脏页签上方那条提示里的动作（以磁盘为准重载）。
     case workspaceReloadFromDiskAction
@@ -5292,9 +5312,6 @@ public enum LocalizedStrings {
                                 .english: "Budget reached: steps %ld/%ld — ran %ld hops, completed %ld tool calls (%ld rejected), tokens %@/%@"],
         .agentBudgetTokensStop: [.simplifiedChinese: "预算触顶：令牌 %@/%@ —— 已跑 %ld 跳、完成 %ld 次工具调用（被拒 %ld 次），停在发送下一跳之前",
                                  .english: "Budget reached: tokens %@/%@ — ran %ld hops, completed %ld tool calls (%ld rejected), stopped before the next hop"],
-        .agentTestPassed: [.simplifiedChinese: "连接正常：%@（%d 毫秒）", .english: "Connection OK: %@ (%d ms)"],
-        .agentTestFailed: [.simplifiedChinese: "连接失败：%@", .english: "Connection failed: %@"],
-        .agentTestMisconfigured: [.simplifiedChinese: "端点或模型还没填", .english: "Endpoint or model is empty"],
         .workspaceReloadedFromDisk: [.simplifiedChinese: "已按磁盘重载「%@」", .english: "Reloaded 「%@」 from disk"],
         .workspaceReloadFromDiskAction: [.simplifiedChinese: "以磁盘为准重载", .english: "Reload from disk"],
         .workspaceReloadFailedHint: [.simplifiedChinese: "磁盘上「%@」读不出来（可能已被移走）—— 页签里的内容没动", .english: "「%@」 can't be read from disk (maybe it was moved) — the tab's text was left as is"],
@@ -5924,6 +5941,25 @@ public enum LocalizedStrings {
         .agentProfileAdd: [.simplifiedChinese: "新增档", .english: "Add profile"],
         .agentProfileDelete: [.simplifiedChinese: "删除此档", .english: "Delete profile"],
         .agentProfileLastOne: [.simplifiedChinese: "至少要留一档，删不了最后一档", .english: "At least one profile is required"],
+        .agentProfileName: [.simplifiedChinese: "档名", .english: "Profile name"],
+        .agentProfileNameEmpty: [.simplifiedChinese: "档名不能为空", .english: "The profile name cannot be empty"],
+        .agentProfileDuplicate: [.simplifiedChinese: "复制此档", .english: "Duplicate profile"],
+        .agentProfileTest: [.simplifiedChinese: "测试此档", .english: "Test this profile"],
+        .agentProfileLimitReached: [.simplifiedChinese: "最多 %d 档，已经到上限了", .english: "At most %d profiles"],
+        .agentProfileDeletedFellBack: [.simplifiedChinese: "已删除这一档，当前档回落到「%@」", .english: "Profile deleted; switched to \"%@\""],
+        .agentProfileKeyHint: [.simplifiedChinese: "每档一把密钥（各自一条钥匙串条目，互不覆盖）", .english: "One key per profile (each in its own Keychain item)"],
+        .agentProfileOperationFailed: [.simplifiedChinese: "这一档的操作没成功（面板没拿到错误原文）", .english: "The profile operation did not go through (no error text available)"],
+        .agentConnectionSuccess: [.simplifiedChinese: "连接成功：%@ · %d 毫秒", .english: "Connected: %@ · %d ms"],
+        .agentConnectionUnauthorized: [.simplifiedChinese: "端点拒绝了凭据（HTTP %d）：这一档的 API Key 不对，或这把 Key 没有该模型的权限", .english: "The endpoint rejected the credentials (HTTP %d): this profile's API key is wrong or lacks access to the model"],
+        .agentConnectionTimeout: [.simplifiedChinese: "超时：%d 秒内没有响应（端点、网络或代理）", .english: "Timed out: no response within %d seconds (endpoint, network or proxy)"],
+        .agentConnectionUnexpected: [.simplifiedChinese: "端点有响应，但不是模型结果（HTTP %@）：%@", .english: "The endpoint answered but not with a model result (HTTP %@): %@"],
+        .agentConnectionNotAttempted: [.simplifiedChinese: "没有发出请求：%@", .english: "No request was sent: %@"],
+        .agentConnectionProbeSystemPrompt: [.simplifiedChinese: "这是一次连接测试。", .english: "This is a connectivity check."],
+        .agentConnectionProbeUserPrompt: [.simplifiedChinese: "回复两个字：收到。", .english: "Reply with one word: ok."],
+        .agentModelListFetch: [.simplifiedChinese: "从端点拉取模型", .english: "Fetch models from endpoint"],
+        .agentModelListFetched: [.simplifiedChinese: "拉到 %d 个模型", .english: "Fetched %d model(s)"],
+        .agentModelListUnavailable: [.simplifiedChinese: "拉不到模型清单（%@）—— 可以直接手填模型名", .english: "Could not fetch the model list (%@) — type the model name instead"],
+        .agentModelListMalformed: [.simplifiedChinese: "端点返回的不是模型清单（没有 id 列表）", .english: "The endpoint did not return a model list (no id entries)"],
         .agentAPIKeyConfigured: [.simplifiedChinese: "已配置（存于系统钥匙串，不写入配置文件）", .english: "Configured (kept in Keychain, never in the config file)"],
         .agentAPIKeyMissing: [.simplifiedChinese: "未配置。远端端点需要 API Key；本地端点不需要。", .english: "Not configured. Remote endpoints need one; local endpoints do not."],
         .agentAPIKeyClear: [.simplifiedChinese: "清除已保存的 Key", .english: "Clear saved key"],
