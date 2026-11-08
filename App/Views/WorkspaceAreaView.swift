@@ -23,6 +23,7 @@ struct WorkspaceAreaView: View {
             Divider()
             content
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            originNoticeBar
             messageBar
         }
         .onAppear { syncPreviewCursor() }
@@ -345,6 +346,38 @@ struct WorkspaceAreaView: View {
             .padding(.horizontal, Spacing.s)
             .padding(.vertical, Spacing.xs)
             .background(Theme.status(.warning).opacity(0.12))
+        }
+    }
+
+    /// 工作区来源换了（旧数据迁移）那一条：**必须看得见** —— 根被换成默认根而界面不说，
+    /// 用户会以为自己的文件都不见了（`FR-STD-WS-FS-011` ④）。
+    @ViewBuilder
+    private var originNoticeBar: some View {
+        if let notice = workspace.originNotice {
+            HStack(spacing: Spacing.xs) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(Theme.font(.caption))
+                    .foregroundStyle(Theme.status(.warning))
+                Text(notice)
+                    .font(Theme.font(.caption))
+                    .foregroundStyle(Theme.text(.secondary))
+                    .lineLimit(2)
+                    .textSelection(.enabled)
+                    .accessibilityIdentifier("workspaceOriginNoticeBar")
+                    .accessibilityLabel(notice)
+                Spacer(minLength: Spacing.s)
+                Button {
+                    workspace.dismissOriginNotice()
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(Theme.font(.caption))
+                }
+                .buttonStyle(.borderless)
+                .accessibilityLabel(Text(L(.commonClose)))
+            }
+            .padding(.horizontal, Spacing.s)
+            .padding(.vertical, Spacing.xs)
+            .background(Theme.status(.warning).opacity(0.10))
         }
     }
 

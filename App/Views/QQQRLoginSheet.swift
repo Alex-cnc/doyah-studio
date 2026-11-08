@@ -101,7 +101,11 @@ final class QQLoginController: ObservableObject {
         }
     }
 
-    /// 桥脚本位置：先看环境变量，再看「应用旁边的仓库」，最后看本机开发路径。
+    /// 桥脚本位置：先看环境变量，再看「打进包里的」，再看应用数据目录下的落点。
+    ///
+    /// 最后一条**不许**指向开发仓库（`dev/doyah/lead/studio/…`）：装到 `/Applications` 的正式包
+    /// 在别人的机器上没有那个目录，而它一旦被写成候选路径，错误提示里就会漏出一条本机才存在的
+    /// 位置 —— 用户照着去找，找不到任何东西。落到用户目录下的真实落点（与其它数据同一目录）。
     static var defaultBridgePath: String {
         if let override = ProcessInfo.processInfo.environment["DOYAH_QQ_BRIDGE"], !override.isEmpty {
             return override
@@ -110,16 +114,25 @@ final class QQLoginController: ObservableObject {
         let candidates = [
             // 先找**打进包里的**（正式安装就靠这一条）
             (Bundle.main.resourceURL ?? bundleURL).appendingPathComponent("qq-qr-bridge.mjs"),
-            // 再找应用旁边的仓库（开发期）
+            // 再找应用旁边的仓库（开发期：`dist/xxx.app` 旁边的仓）
             bundleURL.deletingLastPathComponent().deletingLastPathComponent()
                 .appendingPathComponent(AgentIMQRLogin.bridgeRelativePath),
-            URL(fileURLWithPath: NSHomeDirectory())
-                .appendingPathComponent("dev/doyah/lead/studio/" + AgentIMQRLogin.bridgeRelativePath),
+            // 最后看用户数据目录（运维手工放一份进去就是这个位置）
+            Self.dataDirectoryBridgeURL,
         ]
         for candidate in candidates where FileManager.default.fileExists(atPath: candidate.path) {
             return candidate.path
         }
         return candidates[0].path
+    }
+
+    /// 用户数据目录里的桥脚本落点：`~/Library/Application Support/<数据目录名>/qq-qr-bridge.mjs`。
+    static var dataDirectoryBridgeURL: URL {
+        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            ?? URL(fileURLWithPath: NSHomeDirectory(), isDirectory: true)
+        return base
+            .appendingPathComponent(DoyahIdentity.applicationSupportDirectoryName, isDirectory: true)
+            .appendingPathComponent("qq-qr-bridge.mjs", isDirectory: false)
     }
 
     func start(bridgePath: String) {

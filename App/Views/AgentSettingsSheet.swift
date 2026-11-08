@@ -101,6 +101,10 @@ struct AgentSettingsSheet: View {
             }
             .frame(minHeight: 380, maxHeight: .infinity)
 
+            // 工作区根 + 来源 + 恢复默认（`FR-STD-WS-FS-011`）：Agent 的读写边界就在这一格里，
+            // 放在页签外 —— 不论用户翻到哪一页都看得见它在哪儿动文件。
+            AgentWorkspaceSection()
+
             statusSection
 
             footerRow

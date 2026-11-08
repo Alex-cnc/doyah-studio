@@ -12,5 +12,12 @@
 	     只有 user-selected 权限时，本次会话内可写，但下次启动解析书签会失败。 -->
 	<key>com.apple.security.files.bookmarks.app-scope</key>
 	<true/>
+	<!-- 默认工作区 `~/.doyah`（FR-STD-WS-FS-011）：它在容器之外，沙箱下必须显式放行，
+	     否则「默认根」这一态在沙箱构建里根本写不进去（Agent 的工具全都会失败）。
+	     只放行这一个目录，不是整个家目录。 -->
+	<key>com.apple.security.temporary-exception.files.home-relative-path.read-write</key>
+	<array>
+		<string>/.doyah/</string>
+	</array>
 </dict>
 </plist>

@@ -1740,6 +1740,36 @@
 - 禁止在渲染处**改写** `message.text` 来去掉壳（原文是审计与复制的唯一来源）；剥壳只能发生在 `AgentAnswerLabel`；
 - 禁止扩大剥壳范围（句中「结论」、`结论是：…` 都是正文）。
 
+### 3.38 工作区根的两态来源：默认 `~/.doyah` 与用户打开
+
+- 对应概设条款：「工作区」行（一次只握一份工作区授权）+「越界授权」行对工作区根的定义
+- 对应需求：`FR-STD-WS-FS-011`；受它约束的边界 = `FR-AGT-CORE-LOOP-006`、`FR-STD-WS-AI-002`
+
+**为什么单列**：工作区根以前是**推**出来的 —— 活动书签（`workspace-bookmark.json` 里记的那一条）
+和会话快照里的 `workspacePath` 一起决定它。同一个 bundle 标识的所有包共用一份数据目录，
+于是装到 `/Applications` 的正式包会继承开发时打开的开发目录，Agent 的读写边界就锁在某个开发树里。
+根不是「上次刚好打开过哪儿」的副产品：它必须是一个**有来源的决定**。
+
+| 环节 | 契约 | 落点 |
+|---|---|---|
+| 两种来源 | 根只有 `默认`（`~/.doyah`）与 `用户打开`（用户经「打开文件夹…」选定）两态。不承认第三态；**不许从别处推断**（编译目录、进程工作目录、书签表第一条都不是来源） | `Core/WorkspaceRootOrigin.swift`（`WorkspaceRootOrigin`） |
+| 首次运行 | 数据目录里没有来源标记 ⇒ 根 = `~/.doyah`；目录不存在则**创建**，建完**验证可写**，不可写如实报一句（不装作能干活） | `WorkspaceStore.adoptDefaultRoot` |
+| 用户显式打开 | 根 = 那个目录；来源落 `用户打开` 并持久化；重启仍用它。书签缺失也不许静默落回默认根 | `WorkspaceStore.choose` / `switchTo` / `markUserOpened` |
+| 旧数据迁移 | 盘上有 `workspacePath`（活动书签 / 会话快照）但**没有来源标记** ⇒ 视为未显式选择：根落默认根，并写一条**可见提示**；提示写明新根与原目录，重启后不再重复 | `WorkspaceRootPlanning.plan` + `WorkspaceStore.originNotice` |
+| 可见性 | 「智能体工作区」一格常驻设置页（页签之外，翻到哪页都在）：绝对路径 + 来源（默认 / 用户打开）+「恢复默认（`~/.doyah`）」按钮；已停在默认根时按钮置灰。工作区编辑区顶部另有一行迁移提示条 | `App/Views/AgentWorkspaceSection.swift`、`WorkspaceAreaView.originNoticeBar` |
+| 恢复默认 | 一键回默认根，来源同步落盘。已知工作区表**不清空**：用户还能从列表切回某个目录，那一次重新记成「用户打开」 | `WorkspaceStore.restoreDefaultRoot` |
+| Agent 作用域 | 工具（读 / 写 / 搜索 / 命令）的边界一律取这个根；宿主只有一条路把它交给工具：`workspacePathProvider` ⇒ `AgentWorkspaceTools(root:)` | `DoyahStudioApp`（`appState.workspacePathProvider`）、`AppState.makeAgentChatLoop` |
+| 沙箱 | `~/.doyah` 在容器之外：沙箱构建必须持有 home-relative 读写例外，否则默认根这一态在沙箱下写不进去（非沙箱构建不受影响） | `App/DoyahStudio.entitlements` |
+| 扫码桥脚本 | 桥脚本的候选路径落在用户数据目录（`<应用数据目录>/qq-qr-bridge.mjs`），不写开发仓库路径 | `QQLoginController.defaultBridgePath` |
+
+**禁止行为**：禁止从书签表 / 会话快照直接推出根（那是「继承」，不是「来源」）；禁止迁移静默
+（换了根而界面不说一句话）；禁止把默认根写进书签表（下次会被当成「用户打开」的候选）；
+禁止在默认根建不出来 / 不可写时假装工作区已就绪；禁止把开发仓库路径写进产品代码的候选路径。
+
+**测试 ID**：`T-3.38-01`（空数据目录 ⇒ 默认根、目录被创建且可写）· `T-3.38-02`（旧数据 ⇒ 默认根 + 可见提示，重启不再重复）·
+`T-3.38-03`（用户打开 `/tmp/ws-x` ⇒ 根与来源成立，重载仍是它）· `T-3.38-04`（恢复默认 ⇒ 回默认根且重启保持）·
+`T-3.38-05`（根内写成功、根外写出越界单且不落盘）
+
 ## 4. 数据与状态
 
 ### 4.1 内部结构映射
@@ -2408,6 +2438,7 @@ HStack(spacing: 0) {
 | `Tests/ConnectionFailureTests.swift` | 错误码呈现 | 单元 | §6.1 |
 | `Tests/AgentPlanRowsTests.swift` | 影响行数预估 | 单元 | §3.16 |
 | `TestsPlatform/`（快照面） | 视图六态 | 快照 | §5.3、§5.8 |
+| `TestsUISnapshot/AgentWorkspaceRootProbeTests.swift` | `WorkspaceStore` 根来源判定、`AgentWorkspaceTools` 边界、`AgentWorkspaceSection` 可见性 | 探针（`DOYAH_UI_SNAPSHOT=1`） | §3.38 |
 | `Scripts/verify-core.sh` | 全能力层回归 | 集成 | §9.3 |
 
 ### 9.2 必测用例清单（后端）

@@ -46,6 +46,22 @@ final class WorkspaceStore: ObservableObject {
     /// 界面用的那一份（把 `activeID` 折成每一行的 `isActive`）。
     var knownWorkspaces: [KnownWorkspace] { registry.candidates }
 
+    // MARK: 工作区根的两态来源（`FR-STD-WS-FS-011`）
+
+    /// 当前根的来源：`默认`（`~/.doyah`）或 `用户打开`。**只有这两态**，别处推出来的目录不算来源。
+    @Published private(set) var rootOrigin: WorkspaceRootOrigin = .defaultRoot
+
+    /// 需要用户看见的一句话（现在只有「旧数据迁移」与「默认根不可用」两种）。
+    /// `nil` = 没有要说的。界面必须画出来 —— 迁移静默 == 偷偷换掉用户的工作区。
+    @Published private(set) var originNotice: String?
+
+    /// 默认根（`~/.doyah`）。与用户路径无关：装到哪儿、从哪个目录启动都一样。
+    let defaultRootURL: URL
+
+    private let originStore: WorkspaceRootOriginStore
+    /// 旧数据的判据之一：快照里记的「上次工作区」（旧版本唯一的落点）。
+    private let sessionStore: WorkspaceSessionStore
+
     /// 活动书签 id 的落点：书签表只记「有哪些」，不记「在用哪个」。
     private static let activeDefaultsKey = "workspace.activeBookmarkID"
 
@@ -109,8 +125,14 @@ final class WorkspaceStore: ObservableObject {
     /// 注入一个临时目录的 store，就能把"保存 → 读回 → 解析"这条链路真正跑通。
     private let store: DirectoryBookmarkStore
 
-    init(store: DirectoryBookmarkStore = DirectoryBookmarkStore(fileName: "workspace-bookmark.json")) {
+    init(store: DirectoryBookmarkStore = DirectoryBookmarkStore(fileName: "workspace-bookmark.json"),
+         originStore: WorkspaceRootOriginStore = .standard(),
+         sessionStore: WorkspaceSessionStore = .standard(),
+         defaultRoot: URL = AgentWorkspaceRoot.defaultURL()) {
         self.store = store
+        self.originStore = originStore
+        self.sessionStore = sessionStore
+        self.defaultRootURL = defaultRoot.standardizedFileURL
     }
 
     var rootPath: String? { rootURL?.path }
@@ -126,31 +148,64 @@ final class WorkspaceStore: ObservableObject {
 
     // MARK: 生命周期
 
-    /// 启动时调用：读回书签 → 重建已知工作区表 → 判定可用性 → 取用授权 → 读根目录。
+    /// 启动时调用：定来源（默认 / 用户打开）→ 重建已知工作区表 → 判定可用性 → 取用授权 → 读根目录。
+    ///
+    /// 顺序很要紧：**先定来源，再碰书签**。旧版本里根是从书签表推出来的（活动书签 = 上次那个目录），
+    /// 于是同一个 bundle 的正式包会继承开发时打开的开发目录 —— 那条路现在必须先过来源这一关。
     func load() async {
         isBusy = true
         defer { isBusy = false }
         do {
             let bookmarks = try await store.all()
-            // 活动那条：**落盘的 id 优先**；老版本只存过一条书签、从没记过活动 id
-            // ⇒ 把第一条当活动（与升级前的行为一致，不让人一升级就「没打开工作区」）。
+            // 已知工作区表照旧（它是「可切过去的目录清单」，不是「这次用哪个」）。
             registry = WorkspaceRegistry.reconciled(
                 bookmarks: bookmarks,
                 activeID: storedActiveID ?? bookmarks.first?.id,
                 availability: Self.availability(of:)
             )
-            guard let activeID = registry.activeID,
-                  let activeBookmark = bookmarks.first(where: { $0.id == activeID })
-            else {
-                apply(status: .notAuthorized, bookmark: nil)
-                return
+            let record = try? originStore.load()
+            let activeBookmark = registry.activeID.flatMap { id in
+                bookmarks.first(where: { $0.id == id })
+            } ?? bookmarks.first
+            // 旧数据的两个出处：书签表里活动那条的路径、会话快照里的 `workspacePath`。
+            // 两者都只在**没有来源标记**时才被读（有标记时它们不参与决定根）。
+            let legacyPath = activeBookmark?.lastKnownPath ?? ((try? sessionStore.load())?.workspacePath)
+            switch WorkspaceRootPlanning.plan(record: record, legacyPath: legacyPath) {
+            case .defaultRoot(let migratedFrom):
+                rootOrigin = .defaultRoot
+                bookmark = nil
+                rememberActive(nil)
+                // 标记落盘之后，下次启动就走 ③ 的分支（不再重复提示）。
+                try? originStore.save(WorkspaceRootRecord(origin: .defaultRoot))
+                // 提示**只在迁移那一刻**产生，之后不再改：宿主启动路径会走两次 `load()`
+                // （App 层一次、窗口一次），第二遍若把提示抹成 nil，用户就永远看不见它。
+                if let migratedFrom {
+                    originNotice = WorkspaceRootCopy.migratedNotice(
+                        previousPath: migratedFrom, LocalizationManager.shared.language)
+                }
+                adoptDefaultRoot()
+            case .userOpened(let path):
+                rootOrigin = .userOpened
+                originNotice = nil
+                try? originStore.save(WorkspaceRootRecord(origin: .userOpened, path: path))
+                // 书签还在（用户是用面板选的，一定有过一条）：走原来的解析 + 取用授权那条路，
+                // 书签没了（被外部删了 / 换了机器）就把它当成一个普通目录用起来 —— 不静默落回默认根。
+                if let matching = bookmarks.first(where: {
+                    WorkspaceRootPlanning.normalize($0.lastKnownPath) == path
+                }) {
+                    bookmark = matching
+                    rememberActive(matching.id)
+                    adopt(matching)
+                } else {
+                    bookmark = nil
+                    adoptPlainRoot(URL(fileURLWithPath: path, isDirectory: true))
+                }
             }
-            bookmark = activeBookmark
-            adopt(activeBookmark)
-            rememberActive(activeID)
         } catch {
             loadError = error.localizedDescription
-            apply(status: nil, bookmark: nil)
+            // 书签表都读不出来时**仍然要有根**：默认根不依赖任何书签。
+            rootOrigin = .defaultRoot
+            adoptDefaultRoot()
         }
     }
 
@@ -179,9 +234,42 @@ final class WorkspaceStore: ObservableObject {
             rememberActive(saved.id)
             bookmark = saved
             adopt(saved)
+            // 用户显式选了目录 ⇒ 来源就是「用户打开」，并落盘（重启仍用它）。
+            markUserOpened(path: saved.lastKnownPath ?? rootURL?.path)
         } catch {
             loadError = ErrorPresenter.message(for: error)
         }
+    }
+
+    /// 用户显式打开了某个目录（`choose` / `switchTo` 的共同收尾）。
+    ///
+    /// 为什么收成一处：这两条路都会把根换成一个**用户选的**目录，来源标记必须同时落地 ——
+    /// 漏一处，重启之后那一次选择就退回默认根，而界面上什么都不会说。
+    private func markUserOpened(path: String?) {
+        guard let path = WorkspaceRootPlanning.normalize(path) else { return }
+        rootOrigin = .userOpened
+        originNotice = nil
+        try? originStore.save(WorkspaceRootRecord(origin: .userOpened, path: path))
+    }
+
+    /// 「恢复默认」：根回到 `~/.doyah`（`FR-STD-WS-FS-011` 的可见性按钮就接这里）。
+    ///
+    /// 已知工作区表**不清空**：用户随时能从列表里再切回某个目录（那一次会重新记成「用户打开」）。
+    func restoreDefaultRoot() async {
+        isBusy = true
+        defer { isBusy = false }
+        rootOrigin = .defaultRoot
+        originNotice = nil
+        bookmark = nil
+        rememberActive(nil)
+        try? originStore.save(WorkspaceRootRecord(origin: .defaultRoot))
+        adoptDefaultRoot()
+    }
+
+    /// 用户看过了那条提示（界面上那枚叉）：把它收起来。
+    /// **只收提示，不动根** —— 提示与根是两件事，收提示不该把工作区又切回去。
+    func dismissOriginNotice() {
+        originNotice = nil
     }
 
     /// 切到另一个**已知**工作区（`FR-STD-WS-FS-010`）。
@@ -225,6 +313,8 @@ final class WorkspaceStore: ObservableObject {
                 bookmark = target
                 registry.activate(id)
                 rememberActive(id)
+                // 切到一个用户选过的目录，也是「用户打开」——切过去之后重启必须停在这一条。
+                markUserOpened(path: target.lastKnownPath ?? rootURL?.path)
             } catch {
                 loadError = ErrorPresenter.message(for: error)
             }
@@ -259,6 +349,10 @@ final class WorkspaceStore: ObservableObject {
         registry = WorkspaceRegistry()
         rememberActive(nil)
         try? await store.removeAll()
+        // 来源标记一起清掉：下次启动按「首次运行」处理，落回默认根。
+        rootOrigin = .defaultRoot
+        originNotice = nil
+        try? originStore.clear()
         apply(status: .notAuthorized, bookmark: nil)
     }
 
@@ -613,6 +707,85 @@ final class WorkspaceStore: ObservableObject {
         rootURL = URL(fileURLWithPath: path, isDirectory: true)
         childrenCache[""] = listChildren(relativePath: "")
         apply(status: resolved, bookmark: bookmark)
+    }
+
+    /// 采用**默认根**（`~/.doyah`）：不存在就建，建完确认可写。
+    ///
+    /// 它不经过书签：默认根是产品自己的目录，没有「用户选过它」这件事，也不该在书签表里留一条
+    /// （留了，下次就会被当成「用户打开」的候选）。
+    private func adoptDefaultRoot() {
+        grant?.stopAccessing()
+        grant = nil
+        childrenCache.removeAll()
+        expandedPaths.removeAll()
+        loadError = nil
+        bookmark = nil
+
+        let url = defaultRootURL
+        var isDirectory: ObjCBool = false
+        if FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory) {
+            guard isDirectory.boolValue else {
+                rootURL = nil
+                originNotice = WorkspaceRootCopy.defaultRootUnavailable(
+                    path: url.path,
+                    reason: L(.workspaceFileOpNotADirectory, url.lastPathComponent),
+                    LocalizationManager.shared.language)
+                apply(status: .denied(path: url.path), bookmark: nil)
+                return
+            }
+        } else {
+            do {
+                try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+            } catch {
+                rootURL = nil
+                originNotice = WorkspaceRootCopy.defaultRootUnavailable(
+                    path: url.path,
+                    reason: ErrorPresenter.message(for: error),
+                    LocalizationManager.shared.language)
+                apply(status: .notAuthorized, bookmark: nil)
+                return
+            }
+        }
+        // **可写**是契约的一部分（Agent 要在这里真的落文件）：不可写就如实说，不装作能干活。
+        guard FileManager.default.isWritableFile(atPath: url.path) else {
+            rootURL = nil
+            originNotice = WorkspaceRootCopy.defaultRootUnavailable(
+                path: url.path,
+                reason: L(.workspaceUnavailableDenied),
+                LocalizationManager.shared.language)
+            apply(status: .denied(path: url.path), bookmark: nil)
+            return
+        }
+        rootURL = url
+        childrenCache[""] = listChildren(relativePath: "")
+        apply(status: .granted(path: url.path, isStale: false), bookmark: nil)
+    }
+
+    /// 采用一个**普通目录**（没有书签那条路）：只用在「来源记录说用户打开过它，但书签表里没有它」。
+    ///
+    /// 这一档不许静默落回默认根：用户上一次显式选的就是它，按默认根处理等于把选择抹掉。
+    private func adoptPlainRoot(_ url: URL) {
+        grant?.stopAccessing()
+        grant = nil
+        childrenCache.removeAll()
+        expandedPaths.removeAll()
+        loadError = nil
+        bookmark = nil
+
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory),
+              isDirectory.boolValue
+        else {
+            // 目录没了（被删 / 换机器）：如实说，根回到默认根 —— 但那是**下一档**的决定，这里只报事实。
+            loadError = L(.workspaceUnavailableMissing)
+            rootOrigin = .defaultRoot
+            try? originStore.save(WorkspaceRootRecord(origin: .defaultRoot))
+            adoptDefaultRoot()
+            return
+        }
+        rootURL = url.standardizedFileURL
+        childrenCache[""] = listChildren(relativePath: "")
+        apply(status: .granted(path: rootURL?.path ?? url.path, isStale: false), bookmark: nil)
     }
 
     private func apply(status: DirectoryAccessStatus?, bookmark: DirectoryBookmark?) {
