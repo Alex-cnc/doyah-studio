@@ -57,11 +57,12 @@ struct AgentJumpToBottomBar: View {
     }
 }
 
-/// 对话区**底部内侧**那一条：内容 +（出现时）浮在底边内侧的入口。
+/// 对话区底下那一条：滚动视口 + **恒留**的一条带（入口出现时落在带里）。
 ///
-/// 为什么单独做成一件：契约「入口不遮正文」落在**布局关系**上 —— 入口不进 `VStack`、
-/// 不改视口高（与 §3.34 吸顶条相反：那条是挤视口、这条是浮在预留带里）。把这段关系摊在
-/// `AgentChatView` 的私有 `@ViewBuilder` 里，判据就只能读整页读数，说不出「入口没挪动正文」。
+/// 为什么单独做成一件：契约「入口不遮正文」落在**布局关系**上 —— 带是视口**下面的兄弟**，
+/// 视口到带的上沿为止，所以入口压不到任何一行正文（不是靠半透明遮一下）。
+/// 把这段关系摊在 `AgentChatView` 的私有 `@ViewBuilder` 里，判据就只能读整页读数，
+/// 说不出「入口在视口之外」。
 struct AgentJumpToBottomOverlay<Content: View>: View {
 
     /// `false` = 不出现（连视图都不建 ⇒ 判据读到的高度就是 0）。
@@ -78,14 +79,19 @@ struct AgentJumpToBottomOverlay<Content: View>: View {
     }
 
     var body: some View {
-        ZStack(alignment: .bottom) {
+        VStack(spacing: 0) {
             content()
-            if visible {
-                AgentJumpToBottomBar(onActivate: onActivate)
-                    // 底边距对话区底边 = 块间距（`Spacing.m`）：入口落在内容底部**恒留**的
-                    // 那条带里（`AgentJumpToBottom.contentInset`），一个字都不压。
-                    .padding(.bottom, AgentJumpToBottom.bottomGap)
+            // 这一条带**恒留**（入口不在时也留）：见 `AgentJumpToBottom.bandHeight` 的两条理由
+            // —— 恒留才不会有「出现 ⇒ 视口矮 ⇒ 距底变远 ⇒ 关不掉」的死锁。
+            ZStack(alignment: .bottom) {
+                if visible {
+                    AgentJumpToBottomBar(onActivate: onActivate)
+                        // 底边距对话区底边 = 块间距（`Spacing.m`）；上方留 4pt 呼吸。
+                        .padding(.bottom, AgentJumpToBottom.bottomGap)
+                }
             }
+            .frame(height: AgentJumpToBottom.bandHeight)
+            .frame(maxWidth: .infinity)
         }
     }
 }

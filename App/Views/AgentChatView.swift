@@ -257,10 +257,6 @@ struct AgentChatView: View {
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.horizontal, Spacing.l).padding(.vertical, Spacing.m)
-                        // **入口占的那条带恒留**（§3.39）：`contentInset` = 入口高 22 + 呼吸 4。
-                        // 恒留 ⇒ 入口出现/消失不改任何一段正文的位置（判据⑤「逐点相同」），
-                        // 也不会在出现那一刻把「距底」撑大（那样就成了自激）。
-                        .padding(.bottom, AgentJumpToBottom.contentInset)
                         // 贴底判定（§3.33.3）：读数器一次给三样（吸顶 / 距底 / 贴底），
                         // 判定本身住在 `StickyQuestionSpy` 的状态机里。挂在内容根上（不是底部哨兵）——
                         // 哨兵滚出视口会被 `LazyVStack` 回收，回收后就再也收不到读数。

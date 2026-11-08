@@ -18,14 +18,14 @@ import DoyahCore
 /// ② 上翻 100pt ⇒ 高 **20–24pt**，底边到对话区底边 == 块间距 **12pt**；
 /// ③ 点它 ⇒ 距底 **0pt**、高 **0**，之后再追加 5 次**仍距底 0**（跟随真的恢复了）；
 /// ④ 再上翻 ⇒ **再出现**（不是一次性）；
-/// ⑤ 不遮正文：入口底边**不低于**最后一行的底边；贴底时正文尾部恒留的那条带
-///    == 入口高 + 呼吸 + 块间距（39pt）；
+/// ⑤ 不遮正文：入口**整体在滚动视口之外**（视口到带的上沿为止）；带**恒留** ⇒
+///    显示 / 不显示两态滚动视口高逐点相同（正文一行都不动）；
 /// ⑥ 与吸顶条共存：上翻时吸顶条 **20pt** 与入口 **22pt** 同时在场、互不重叠。
 ///
 /// ## 边界（如实登记）
-/// · 入口是**浮动**的：上翻之后经过入口那一条带的正文是**从它下面滚过去**的（半透明毛玻璃）——
-///   判据⑤ 钉的是「**最后一行**永远不被压」与「正文尾部恒留了入口的位置」这两件事，
-///   不是「任何偏移下都不与任何一行重合」（那只有把入口挤出视口才做得到，代价是视口永远矮一截）；
+/// · 入口**不在视口里**：它住在滚动区下面那条**恒留**的带里，所以任何一行正文都压不到它；
+///   代价是对话区底部长期留一条 38pt 的带（入口不在时是空的）—— 这是「不遮正文」与
+///   「带不能随出现伸缩」（伸缩会让视口高参与距底判定，到底时入口永远关不掉）两条约束的交点；
 /// · **读数要走 `pumpAsync`**：本文件全是 `async` 用例，`RunLoop` 泵循环期间主队列块不落地
 ///   （§3.33.3 已登记），读数永远回不到宿主 ⇒ 入口不出现那种「假红」；
 /// · 点击走**真 `NSButton`**（`AgentJumpToBottomClickButton.performClick(nil)`）——
@@ -142,7 +142,9 @@ final class AgentJumpToBottomProbeTests: XCTestCase {
         guard let scroll = page.outer, let document = scroll.documentView else { return reading }
         let clip = scroll.contentView
         reading.documentHeight = document.bounds.height
-        reading.viewportFrame = page.live.hosting.convert(scroll.bounds, from: scroll)
+        // 视口 = **clip**（可见内容区）的框，不是 `NSScrollView` 自己的框：
+        // 后者底部比可见区多出 2pt（滚动条的边），拿它量「入口离视口/对话区底边多少」会差 2pt。
+        reading.viewportFrame = page.live.hosting.convert(clip.bounds, from: clip)
         let flipped = document.isFlipped
         let maxOffset = max(0, document.bounds.height - clip.bounds.height)
         reading.offsetFromTop = flipped ? clip.bounds.origin.y : (maxOffset - clip.bounds.origin.y)
@@ -204,8 +206,9 @@ final class AgentJumpToBottomProbeTests: XCTestCase {
 
     // MARK: - 判据函数（真读数与反例共用一套，反例才证明判据有牙齿）
 
-    /// ② 出现：高落在 20–24 的带里，且底边到对话区底边 == 块间距。
+    /// ② 出现：高落在 20–24 的带里、整体在视口**下方**的带里、底边到对话区底边 == 块间距。
     static func appearViolations(height: CGFloat,
+                                 buttonTop: CGFloat,
                                  buttonBottom: CGFloat,
                                  viewportBottom: CGFloat) -> [String] {
         var issues: [String] = []
@@ -213,8 +216,16 @@ final class AgentJumpToBottomProbeTests: XCTestCase {
         if !(20...24).contains(height) {
             issues.append("入口高 \(height)pt 不在 20–24 的带里")
         }
-        let gap = viewportBottom - buttonBottom
-        if abs(gap - AgentJumpToBottom.bottomGap) > 1 {
+        // 两处都留 ±3pt：视口内衬 2pt + 布局取整，量到的与设计值的差落在这个带里。
+        // **硬约束是符号**：`upper < 0` 就是入口伸进了视口（压住正文），那一条按 0.5pt 判。
+        let upper = buttonTop - viewportBottom
+        if upper < -0.5 || abs(upper - AgentJumpToBottom.topGap) > 3 {
+            issues.append("入口上沿离视口底 \(upper)pt（应 ≈ 呼吸 \(AgentJumpToBottom.topGap)pt）"
+                          + "（< 0 就是浮进了视口、压住正文）")
+        }
+        let transcriptBottom = viewportBottom + AgentJumpToBottom.bandHeight
+        let gap = transcriptBottom - buttonBottom
+        if abs(gap - AgentJumpToBottom.bottomGap) > 3 {
             issues.append("入口底边到对话区底边 \(gap)pt ≠ 块间距 \(AgentJumpToBottom.bottomGap)pt")
         }
         return issues
@@ -240,23 +251,21 @@ final class AgentJumpToBottomProbeTests: XCTestCase {
                 + "pt > 容差 ⇒ 跟随没恢复"]
     }
 
-    /// ⑤ 不遮正文：入口底边不得低于最后一行的底边（预留言出的带里）。
-    static func occlusionViolations(buttonBottom: CGFloat, lastLineBottom: CGFloat) -> [String] {
-        let overlap = buttonBottom - lastLineBottom
-        guard overlap > 0.5 else { return [] }
-        return ["入口底边压过最后一行 \(String(format: "%.1f", overlap))pt ⇒ 遮正文"]
+    /// ⑤ 不遮正文：入口**整体在视口之外**（上沿不低于视口底边）⇒ 它压不到任何一行。
+    static func occlusionViolations(buttonTop: CGFloat, viewportBottom: CGFloat) -> [String] {
+        let intrusion = viewportBottom - buttonTop
+        guard intrusion > 0.5 else { return [] }
+        return ["入口上沿伸进视口 \(String(format: "%.1f", intrusion))pt ⇒ 会压住正文"]
     }
 
-    /// ⑤ **预留带恒在**：贴底时「最后一行底边 → 内容底边」必须正好是
-    /// 入口高 + 呼吸 4 + 块间距 12（+ 1pt 记号）。
+    /// ⑤ **恒留带不随出现/消失伸缩**：入口显示与不显示两态，**滚动视口高**必须逐点相同。
     ///
     /// 为什么不比文档总高：`LazyVStack` 会分几批物化行，文档高自己就会跳，那个读数分不清
-    /// 「入口挤了正文」与「又物化了几行」。尾随带是**布局给的事实**：入口若只在出现时才补
-    /// inset（条件式），贴底读数就会是 12 + 1。
-    static func reservedBandViolations(measured: CGFloat, expected: CGFloat) -> [String] {
-        // ±2pt：`LazyVStack` 对相邻行的位置有半行以内的估值误差（与 §3.34 的 28.5pt 同源，量级小得多）。
-        guard abs(measured - expected) <= 2 else {
-            return ["贴底时尾随带 \(measured)pt ≠ 预留带 \(expected)pt ⇒ 正文底部没有给入口留位"]
+    /// 「入口挤了正文」与「又物化了几行」。视口高是**布局给的事实**：带若只在出现时才长出来，
+    /// 视口就会矮一条带（反例⑤b 就是这种形态），而且那条口径下滚到底距底恒 ≈ 34pt ⇒ 入口关不掉。
+    static func viewportStabilityViolations(shown: CGFloat, hidden: CGFloat) -> [String] {
+        guard abs(shown - hidden) <= 0.5 else {
+            return ["入口显示时视口高 \(shown)pt / 不显示时 \(hidden)pt ⇒ 带是条件伸缩的（正文会被挤一行）"]
         }
         return []
     }
@@ -306,26 +315,34 @@ final class AgentJumpToBottomProbeTests: XCTestCase {
         let up = read(page)
         print("🧪 ② 上翻 100pt：距底 \(up.distanceToBottom)pt / 入口高 \(up.buttonHeight)pt"
               + " / 入口 frame \(NSStringFromRect(up.buttonFrame))"
-              + " / 视口底 \(up.viewportFrame.maxY)pt / 入口底 \(up.buttonFrame.maxY)pt"
-              + " / 间距 \(up.viewportFrame.maxY - up.buttonFrame.maxY)pt"
+              + " / 视口 \(NSStringFromRect(up.viewportFrame))"
+              + " / 入口上沿在视口底之下 \(up.buttonFrame.minY - up.viewportFrame.maxY)pt"
               + " / 输入区上沿 \(up.composerTop.map { String(format: "%.1f", $0) } ?? "nil")")
         XCTAssertGreaterThan(up.distanceToBottom, AgentJumpToBottom.appearDistance,
                              "上翻 100pt 后距底只有 \(up.distanceToBottom)pt ⇒ 没滚出去，判据测错了场景")
         let upIssues = Self.appearViolations(height: up.buttonHeight,
+                                             buttonTop: up.buttonFrame.minY,
                                              buttonBottom: up.buttonFrame.maxY,
                                              viewportBottom: up.viewportFrame.maxY)
         print("🧪 ② 判定：" + (upIssues.isEmpty ? "绿 ✅" : "红 ❌ — " + upIssues.joined(separator: "；")))
         XCTAssertTrue(upIssues.isEmpty, upIssues.joined(separator: "；"))
 
-        // 反例②a：入口不出现；反例②b：压到输入区上去（间距 0）。
-        let missing = Self.appearViolations(height: 0, buttonBottom: 0, viewportBottom: 620)
+        // 取证图（形态也看得到：胶囊 + 毛玻璃 + 一行文案；中文一张、英文一张）。
+        await page.live.pumpAsync(seconds: 0.4)
+        try? page.live.capture(name: "agent-jump-to-bottom", language: .simplifiedChinese)
+        try? page.live.capture(name: "agent-jump-to-bottom-en", language: .english)
+
+        // 反例②a：入口不出现；反例②b：入口浮进视口（压住正文）。
+        let missing = Self.appearViolations(height: 0, buttonTop: 0, buttonBottom: 0, viewportBottom: 620)
         print("🧪 反例②a（入口不出现）：" + (missing.isEmpty ? "假绿 ❌" : "判红 ✅ — \(missing[0])"))
         XCTAssertFalse(missing.isEmpty, "入口不出现判据仍绿 ⇒ 没有牙齿")
-        let glued = Self.appearViolations(height: 22,
-                                          buttonBottom: up.viewportFrame.maxY,
-                                          viewportBottom: up.viewportFrame.maxY)
-        print("🧪 反例②b（入口贴着底边、间距 0）：" + (glued.isEmpty ? "假绿 ❌" : "判红 ✅ — \(glued[0])"))
-        XCTAssertFalse(glued.isEmpty, "间距 0 判据仍绿 ⇒ 没有牙齿")
+        let floating = Self.appearViolations(height: 22,
+                                             buttonTop: up.viewportFrame.maxY - 10,
+                                             buttonBottom: up.viewportFrame.maxY + 12,
+                                             viewportBottom: up.viewportFrame.maxY)
+        print("🧪 反例②b（入口浮进视口 10pt）："
+              + (floating.isEmpty ? "假绿 ❌" : "判红 ✅ — \(floating[0])"))
+        XCTAssertFalse(floating.isEmpty, "入口浮进视口判据仍绿 ⇒ 没有牙齿")
 
         // ④ 先回到底部（入口消失），再上翻 ⇒ 必须**再出现**（不是一次性）。
         await scroll(page, toOffsetFromTop: .greatestFiniteMagnitude)
@@ -337,6 +354,7 @@ final class AgentJumpToBottomProbeTests: XCTestCase {
         let again = read(page)
         print("🧪 ④b 再上翻 120pt：距底 \(again.distanceToBottom)pt / 入口高 \(again.buttonHeight)pt")
         let againIssues = Self.appearViolations(height: again.buttonHeight,
+                                                buttonTop: again.buttonFrame.minY,
                                                 buttonBottom: again.buttonFrame.maxY,
                                                 viewportBottom: again.viewportFrame.maxY)
         print("🧪 ④ 判定：" + (againIssues.isEmpty ? "绿 ✅" : "红 ❌ — " + againIssues.joined(separator: "；")))
@@ -391,55 +409,55 @@ final class AgentJumpToBottomProbeTests: XCTestCase {
         XCTAssertFalse(stale.isEmpty, "跟随没恢复判据仍绿 ⇒ 判据没有牙齿")
     }
 
-    // MARK: - ⑤ 不遮正文（最后一行的底边在入口之上，且正文尾部恒留了入口的位置）
+    // MARK: - ⑤ 不遮正文（入口在视口之外，且带恒留、正文一行不动）
 
     @MainActor
     func testTheBarNeverCoversTheLastLine() async {
         let page = Page(messages: Self.messages())
         defer { page.live.window.contentView = nil }
 
-        // ⑤b **预留带恒在**：一挂载就贴底，此刻「最后一行底边 → 对话区底边」= 预留 26 + 块间距 12
-        // = 38pt（入口不显示，可它占的那条带一直在）。条件式 inset（入口出现时才补）会是 12pt。
         await page.settleContent()
-        let initial = read(page)
-        let expectedBand = AgentJumpToBottom.contentInset + AgentJumpToBottom.bottomGap
-        print("🧪 ⑤ 贴底时尾随带（最后一行底边 → 对话区底边）= \(initial.trailingBand)pt"
-              + " / 期望 \(expectedBand)pt（预留 \(AgentJumpToBottom.contentInset) + 块间距 "
-              + "\(AgentJumpToBottom.bottomGap)）"
-              + " / 最后一行底边 \(String(format: "%.1f", initial.tailFrame.maxY))pt"
-              + " / 视口底 \(String(format: "%.1f", initial.viewportFrame.maxY))pt")
-        let band = Self.reservedBandViolations(measured: initial.trailingBand, expected: expectedBand)
-        print("🧪 ⑤ 判定（正文底部给入口留了位）："
-              + (band.isEmpty ? "绿 ✅" : "红 ❌ — " + band.joined(separator: "；")))
-        XCTAssertTrue(band.isEmpty, band.joined(separator: "；"))
+        let hidden = read(page)
+        XCTAssertLessThanOrEqual(hidden.buttonHeight, 0.5, "贴底时入口不该出现（高 \(hidden.buttonHeight)pt）")
+        print("🧪 ⑤ 贴底：视口 \(NSStringFromRect(hidden.viewportFrame)) / 入口高 \(hidden.buttonHeight)pt"
+              + " / 最后一行底边 \(String(format: "%.1f", hidden.tailFrame.maxY))pt")
 
-        // 反例⑤b：条件式 inset（只在入口出现时才补 26pt）⇒ 尾随带 12pt ⇒ 判红。
-        let conditional = Self.reservedBandViolations(measured: AgentJumpToBottom.bottomGap,
-                                                      expected: expectedBand)
-        print("🧪 反例⑤b（只在入口出现时才补 inset）："
-              + (conditional.isEmpty ? "假绿 ❌" : "判红 ✅ — \(conditional[0])"))
-        XCTAssertFalse(conditional.isEmpty, "条件式 inset 判据仍绿 ⇒ 判据没有牙齿")
-
-        // ⑤a **不压最后一行**：距底 45pt（刚过出现门槛）时，最后一行还在视口下沿附近，
-        // 入口也在场 —— 两者不许相交。
+        // ⑤a **不遮正文**：入口整体在**视口之外**（视口到带的上沿为止）——
+        // 不是「压不住最后一行」，而是任何一行都压不到。
         await scrollUp(page, by: 45)
         let shown = read(page)
         XCTAssertGreaterThan(shown.buttonHeight, 0.5, "距底 45pt 时入口没出现 ⇒ 这一条判的是空")
-        let lastLineBottom = shown.tailFrame.minY
-        print("🧪 ⑤ 入口 frame \(NSStringFromRect(shown.buttonFrame))"
-              + " / 最后一行底边 \(String(format: "%.1f", lastLineBottom))pt"
-              + " / 入口底边 \(String(format: "%.1f", shown.buttonFrame.maxY))pt"
-              + " / 留白 \(String(format: "%.1f", lastLineBottom - shown.buttonFrame.maxY))pt")
-        let occlusion = Self.occlusionViolations(buttonBottom: shown.buttonFrame.maxY,
-                                                 lastLineBottom: lastLineBottom)
-        print("🧪 ⑤ 判定（不压最后一行）：" + (occlusion.isEmpty ? "绿 ✅" : "红 ❌ — " + occlusion.joined(separator: "；")))
+        let outside = shown.buttonFrame.minY - shown.viewportFrame.maxY
+        print("🧪 ⑤ 入口在场：入口 frame \(NSStringFromRect(shown.buttonFrame))"
+              + " / 视口 \(NSStringFromRect(shown.viewportFrame))"
+              + " / 入口上沿在视口底之下 \(String(format: "%.1f", outside))pt（= 呼吸 \(AgentJumpToBottom.topGap)pt）")
+        let occlusion = Self.occlusionViolations(buttonTop: shown.buttonFrame.minY,
+                                                 viewportBottom: shown.viewportFrame.maxY)
+        print("🧪 ⑤ 判定（不压正文）：" + (occlusion.isEmpty ? "绿 ✅" : "红 ❌ — " + occlusion.joined(separator: "；")))
         XCTAssertTrue(occlusion.isEmpty, occlusion.joined(separator: "；"))
 
-        // 反例⑤a：把入口往下挪 20pt（= 没预留 inset 的形态）⇒ 必须压到正文。
-        let covered = Self.occlusionViolations(buttonBottom: shown.buttonFrame.maxY + 20,
-                                               lastLineBottom: lastLineBottom)
-        print("🧪 反例⑤a（入口下移 20pt）：" + (covered.isEmpty ? "假绿 ❌" : "判红 ✅ — \(covered[0])"))
+        // 反例⑤a：把入口抬 10pt 进视口（= 浮在正文上的写法）⇒ 必须判红。
+        let covered = Self.occlusionViolations(buttonTop: shown.viewportFrame.maxY - 10,
+                                               viewportBottom: shown.viewportFrame.maxY)
+        print("🧪 反例⑤a（入口伸进视口 10pt）：" + (covered.isEmpty ? "假绿 ❌" : "判红 ✅ — \(covered[0])"))
         XCTAssertFalse(covered.isEmpty, "入口压住正文判据仍绿 ⇒ 判据没有牙齿")
+
+        // ⑤b **恒留带不伸缩**：入口显示 / 不显示两态，滚动视口高逐点相同。
+        print("🧪 ⑤ 视口高：入口显示时 \(shown.viewportFrame.height)pt / 不显示时 \(hidden.viewportFrame.height)pt"
+              + "（恒留带 \(AgentJumpToBottom.bandHeight)pt）")
+        let stability = Self.viewportStabilityViolations(shown: shown.viewportFrame.height,
+                                                         hidden: hidden.viewportFrame.height)
+        print("🧪 ⑤ 判定（带恒留、正文不跳）："
+              + (stability.isEmpty ? "绿 ✅" : "红 ❌ — " + stability.joined(separator: "；")))
+        XCTAssertTrue(stability.isEmpty, stability.joined(separator: "；"))
+
+        // 反例⑤b：带随出现伸缩（显示时视口矮一条带）⇒ 判红。
+        let conditional = Self.viewportStabilityViolations(shown: shown.viewportFrame.height
+                                                           - AgentJumpToBottom.bandHeight,
+                                                           hidden: hidden.viewportFrame.height)
+        print("🧪 反例⑤b（带只在出现时留）："
+              + (conditional.isEmpty ? "假绿 ❌" : "判红 ✅ — \(conditional[0])"))
+        XCTAssertFalse(conditional.isEmpty, "条件式带判据仍绿 ⇒ 判据没有牙齿")
     }
 
     // MARK: - ⑥ 与吸顶条共存

@@ -63,10 +63,16 @@ final class AgentJumpToBottomTests: XCTestCase {
     func testGeometryIsInsideTheDeclaredBand() {
         XCTAssertTrue((20...24).contains(AgentJumpToBottom.barHeight),
                       "入口高 \(AgentJumpToBottom.barHeight)pt 不在 20–24 的带里")
-        XCTAssertGreaterThan(AgentJumpToBottom.contentInset, AgentJumpToBottom.barHeight,
-                             "内容底部恒留的带必须比入口高（留出呼吸），否则入口会贴着最后一行")
-        XCTAssertEqual(AgentJumpToBottom.contentInset - AgentJumpToBottom.barHeight, 4,
-                       "呼吸 = 4pt（与出现门槛是两件事，别混成一个数）")
+        XCTAssertEqual(AgentJumpToBottom.bandHeight,
+                       AgentJumpToBottom.topGap + AgentJumpToBottom.barHeight
+                       + AgentJumpToBottom.bottomGap + AgentJumpToBottom.viewportInset,
+                       "恒留带 = 呼吸 + 入口高 + 底边间距 + 视口那 2pt，四段都得算进去")
+        XCTAssertEqual(AgentJumpToBottom.topGap, 4, "入口与视口之间留 4pt 呼吸")
         XCTAssertEqual(AgentJumpToBottom.bottomGap, 12, "底边到对话区底边 = 块间距 Spacing.m = 12pt")
+        // 带在**视口之外**：它比入口本身高，多出来的就是底边间距 ⇒ 入口不会落进视口里压正文。
+        XCTAssertEqual(AgentJumpToBottom.bandHeight - AgentJumpToBottom.barHeight,
+                       AgentJumpToBottom.bottomGap + AgentJumpToBottom.topGap
+                       + AgentJumpToBottom.viewportInset,
+                       "带减入口 = 上下两段间距 + 视口那 2pt（入口整体在视口之外）")
     }
 }
