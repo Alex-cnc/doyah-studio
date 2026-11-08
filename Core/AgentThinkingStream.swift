@@ -184,6 +184,70 @@ public enum AgentProcessBody {
     }
 }
 
+// MARK: - 三行汇总的几何口径（详设 §3.33.4 契约九 / §3.37）
+
+/// **一轮三行汇总**（`Thinking` / `Tool calls (N)` / `Σ total`）的尺寸口径。
+///
+/// 三行各是一行（`Metrics.listRowHeight` = 20pt），**行间不留间距** —— 折叠态过程区高
+/// 就是三行之和 **60pt**。改前这里是 `Spacing.hair`（2pt）× 2 = 4pt 的额外竖向空隙，
+/// 视觉上就是「汇总区自己空了一块」，读数上也对不上「三行之和」。
+public enum AgentProcessBlock {
+
+    /// 三行之间的间距：**0**（三行是同一条读数带，不是三个卡片）。
+    public static let rowSpacing: CGFloat = 0
+
+    /// 折叠态过程区高 = 三行之和（60pt）。
+    public static var collapsedHeight: CGFloat { 3 * Metrics.listRowHeight }
+
+    /// **汇总区与结论之间的块间距**：取转写区**既有的块间距**（`Spacing.xs` = 4pt）。
+    ///
+    /// 为什么要有这个常量：这条距离是契约（§3.37 契约⑩），不许由「中间还夹了几条
+    /// 被折进汇总的行」决定 —— 那些行必须**一个都不占位**（`AgentTranscriptRow.draws`），
+    /// 于是「Σ 行底边 → 结论首行顶边」恒等于一个块间距，与轮内步数无关。
+    public static var answerGap: CGFloat { Spacing.xs }
+}
+
+// MARK: - 转写区一行「画不画」（详设 §3.37 契约⑩）
+
+/// **这一条消息在转写区里占不占一行**（唯一判定；视图与判据读同一份）。
+///
+/// 为什么必须有一个显式判定：过程信息被折进三行汇总之后，被折的那些消息
+/// （工具行、轮内中间叙述）**内容一个字都不画了**，可它们的行还在 —— 行首栏的时间戳
+/// 与悬停操作条（`.opacity(0)` 仍然占布局）各占一行高。beta1.0.9 真机
+/// 「汇总与结论部分仍然有一块空白」就是这些**空行**堆出来的：
+/// 一条 6 条消息的轮次里，Σ 行到结论之间有 3 个空行 ⇒ 空白 61pt。
+///
+/// 判据（`AgentSummaryGapProbeTests` ①）量的就是「这些空行是否真的不占位」。
+public enum AgentTranscriptRow {
+
+    /// 这一条消息要不要占一行。
+    ///
+    /// - Parameters:
+    ///   - foldedIntoTurnSummary: 这一条的内容已经被折进本轮三行汇总（工具行）⇒ 不再单独成行。
+    public static func draws(role: AgentChatRole,
+                             text: String,
+                             isStreaming: Bool,
+                             isFinalAssistant: Bool,
+                             foldedIntoTurnSummary: Bool,
+                             streamingEnabled: Bool) -> Bool {
+        switch role {
+        case .user, .notice:
+            return true
+        case .tool:
+            // 折进汇总的工具行不占位（明细在 `Tool calls` 那一行展开后逐条 20pt）。
+            return !foldedIntoTurnSummary
+        case .assistant:
+            // 「流式输出 = 关」时这一条收齐前一个字都不画（`FR-AGT-UX-CONV-012`）。
+            if isStreaming && !streamingEnabled { return false }
+            // 还在收、还没有第一个字 ⇒ 有占位行（加载中），要占位。
+            if isStreaming && text.isEmpty { return true }
+            // 轮内中间叙述整条进思考区 ⇒ 正文区不画、行也不占。
+            guard isFinalAssistant else { return false }
+            return !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
+    }
+}
+
 // MARK: - 条件跟随（详设 §3.33.2）
 
 /// 「内容变了要不要自动跟到底」的**唯一判定**（详设 §3.33.2 ③）。

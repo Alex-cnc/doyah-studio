@@ -458,6 +458,17 @@ struct AgentThinkingSegmentAnchor: NSViewRepresentable {
 /// 一个**工具块实例**的记号（判据⑤：合并思考区之后工具的个数与行高都不许变）。
 final class AgentToolBlockMarker: NSView {}
 
+/// **结论正文**的记号（判据：汇总区与结论之间的间距 —— §3.37 契约⑩）。
+///
+/// 判据要的那条距离是「Σ 行底边 → 结论首行顶边」，两端各要一个可机械取的几何点：
+/// Σ 行有 `AgentTurnUsageRowMarker`（`.total`），结论这一侧就是它。
+final class AgentAnswerStartMarker: NSView {}
+
+struct AgentAnswerStartAnchor: NSViewRepresentable {
+    func makeNSView(context: Context) -> AgentAnswerStartMarker { AgentAnswerStartMarker() }
+    func updateNSView(_ view: AgentAnswerStartMarker, context: Context) {}
+}
+
 struct AgentToolBlockAnchor: NSViewRepresentable {
     func makeNSView(context: Context) -> AgentToolBlockMarker { AgentToolBlockMarker() }
     func updateNSView(_ view: AgentToolBlockMarker, context: Context) {}

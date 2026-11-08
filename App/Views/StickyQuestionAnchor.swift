@@ -14,15 +14,28 @@ import DoyahCore
 /// during view update, this will cause undefined behavior`）—— 写进去的值会被丢掉，
 /// 条永远不出现。所以读数与缓存都只放在**长命**的那一件上（`StickyQuestionSpy`，
 /// 挂在滚动内容根上、内容多长它都在）。
-final class StickyQuestionRowMarker: NSView {}
+final class StickyQuestionRowMarker: NSView {
+    /// **轮钥**（= 当前轮那条提问消息的 id）：换轮就换钥。
+    ///
+    /// 为什么标记要带钥而不是只靠「实例是不是同一个」：`LazyVStack` 会重建行，
+    /// 同一轮的行重建会造出新实例 —— 那样「换轮」与「行重建」就分不开，重定位会误触发。
+    var turnKey: UUID?
+}
 
 /// 把标记挂到当前轮那一行上（零行为，只提供身份与坐标）。
 struct StickyQuestionRowAnchor: NSViewRepresentable {
+    /// 轮钥（= 这条提问消息的 id）。读数器拿它判「是不是换了一轮」。
+    let turnKey: UUID
+
     func makeNSView(context: Context) -> StickyQuestionRowMarker {
-        StickyQuestionRowMarker()
+        let view = StickyQuestionRowMarker()
+        view.turnKey = turnKey
+        return view
     }
 
-    func updateNSView(_ view: StickyQuestionRowMarker, context: Context) {}
+    func updateNSView(_ view: StickyQuestionRowMarker, context: Context) {
+        view.turnKey = turnKey
+    }
 }
 
 /// 点吸顶条时用的**滚动命令**（详设 §3.34 契约③）。
@@ -42,12 +55,22 @@ final class StickyQuestionScroller {
         spy?.scrollQuestionToTop()
     }
 
-    /// 把视口滚到**内容底边**（贴底跟随的唯一落点，§3.33.3 契约①）。
+    /// 把视口滚到**内容底边**（贴底跟随的唯一落点，§3.33.3 契约①）—— **先问状态机**。
+    ///
+    /// 为什么落点判定在读数器里而不是宿主：宿主那份「贴不贴底」是**异步回写**的副本，
+    /// 读数在路上时副本就是旧的 —— 人往上翻之后它还会是 `true`，于是下一次内容长高又把人
+    /// 拽回底部（「上翻被抢回」），反过来副本卡在 `false` 时新一轮再也不跟（「停在第一轮」）。
+    /// 两副本 = 必漂移；所以只留这一份：宿主只发「想跟」的意图，**跟不跟由状态机答**。
+    func scrollToBottomIfPinned() {
+        spy?.scrollToBottomIfPinned()
+    }
+
+    /// 把视口滚到**内容底边**（不看状态机；探针 / 显式定位用）。
     func scrollToBottom() {
         spy?.scrollToBottom()
     }
 
-    /// 新轮开口：重置贴底状态机并贴底（§3.33.3）。
+    /// 新轮开口：重置贴底状态机并定位到本轮开始处（§3.33.3 契约④）。
     func repinToBottom() {
         spy?.repinToBottom()
     }
@@ -93,17 +116,26 @@ struct StickyQuestionSpy: NSViewRepresentable {
 
     /// 点条时的滚动命令（`nil` = 不需要 / 探针自己滚）。
     var scroller: StickyQuestionScroller?
+    /// **当前轮的轮钥**（= 本轮那条提问消息的 id；`nil` = 还没有提问）。
+    ///
+    /// 为什么要从外面喂进来、而不是靠 `.onChange(of: currentTurnKey)` 通知：
+    /// 换轮的重定位**不许**依赖那个钩子的时机（beta1.0.9 真机实测它一次都没触发 ⇒
+    /// 「多轮后停在第一轮」）。`updateNSView` 是布局驱动的，视图一更新它就被调 ——
+    /// 轮钥一变就在这里重置状态机并定位，与 `onChange` 无关。
+    var turnKey: UUID?
     let onReading: (Reading) -> Void
 
     func makeNSView(context: Context) -> SpyView {
         let view = SpyView()
         view.onReading = onReading
+        view.setTurnKey(turnKey)
         scroller?.spy = view
         return view
     }
 
     func updateNSView(_ view: SpyView, context: Context) {
         view.onReading = onReading
+        view.setTurnKey(turnKey)
         scroller?.spy = view
         view.attachIfNeeded()
     }
@@ -134,6 +166,46 @@ struct StickyQuestionSpy: NSViewRepresentable {
         /// 当前轮提问顶边在内容坐标里的位置，以及它是从哪个标记实例量来的。
         private var questionTop: CGFloat?
         private weak var questionMarker: StickyQuestionRowMarker?
+
+        /// **当前轮的轮钥**（= 当前轮那条提问消息的 id）。
+        ///
+        /// 换钥 = 新一轮开始了 ⇒ 状态机整个重置、视口回到本轮开始处再贴回来（§3.33.3 契约④）。
+        /// 为什么这件事在这里做，而不是在宿主的 `.onChange(of: currentTurnKey)` 里：
+        /// 那个钩子在本视图里**不保证触发**（beta1.0.9 真机「多轮后停在第一轮、要手工拖」
+        /// 就是这么来的 —— 实测 `repins = 0`，视图侧那些 `onChange` 一次都没跑）。
+        /// 换轮是**几何事实**：新的提问行出现 ⇒ 文档里换了一个带不同轮钥的标记 ⇒
+        /// 这条路只依赖「内容变了」，而内容变化是这个读数器本来就在订阅的东西。
+        private var turnKey: UUID?
+
+        /// **本轮的落点**（`nil` = 用户已经上手，控制权交还给他）。
+        ///
+        /// 为什么不是「滚一次就完」：换轮那一拍的几何还是旧的，我们把视口滚到位之后，
+        /// 紧接着这次布局可能又按旧锚点把它摆回去（实测：滚到 2611.5pt，下一拍读数变回 0.0pt）。
+        /// 所以落点要**整轮有效**：每次读数发现「不在落点上」就再落一次 —— 这也正是
+        /// 「当前轮一直贴着最新内容」的意思。用户一上手（滚轮 / 拖滚动条）就撤掉，交还控制权。
+        private var turnTarget: CGFloat?
+        /// 本轮已经落了几次（封顶：不许无限追 —— 40 次 ≈ 一轮流式的读数数量级）。
+        private var turnTargetApplies = 0
+
+        /// **换轮重定位的计数点**（判据用：换轮有没有真的触发一次重置）。
+        /// 为什么要这个：离屏宿主在换轮重排那一拍会把滚动视口约束丢掉（实测视口高读成 3526pt），
+        /// 落点几何量不到；「有没有换轮、往哪落」这两个读数在任何宿主里都读得到。
+        static private(set) var turnResetCount = 0
+        static private(set) var lastTurnTarget: CGFloat = -1
+        /// **轮钥变了 ⇒ 新一轮开始**（§3.33.3 契约④）：状态机重置、视口回到本轮开始处。
+        ///
+        /// 走下一拍再滚：`updateNSView` 发生在 SwiftUI 的一次布局里，当场 `clip.scroll`
+        /// 会在「布局进行中改几何」这条路上抖动（与 `onReading` 拖一拍同一个理由）。
+
+        func setTurnKey(_ key: UUID?) {
+            let previous = turnKey
+            guard key != turnKey else { return }
+            turnKey = key
+            // 只有「从另一个轮换过来」才算新一轮。**首次挂上**（`nil → 本轮`）不重定位：
+            // 打开会话时的初始位置不归这里抢（抢了就会和用户/系统的初始滚动打架）。
+            if previous != nil { repinToBottom() }
+        }
+
 
         override func viewDidMoveToWindow() {
             super.viewDidMoveToWindow()
@@ -192,7 +264,18 @@ struct StickyQuestionSpy: NSViewRepresentable {
             let flipped = document.isFlipped
             let offsetFromTop = flipped ? clip.bounds.origin.y : (maxOffset - clip.bounds.origin.y)
 
-            refreshQuestionTopIfNeeded(in: document, flipped: flipped)
+            let newTurn = refreshQuestionTopIfNeeded(in: document, flipped: flipped)
+            // **换轮 ⇒ 先重置状态机、回到本轮开始处，再贴回来**（§3.33.3 契约④）。
+            //
+            // 重置在前（上一轮「人上翻」的意图当场作废），定位在后（`applyScroll` 会夹到
+            // `maxOffset`：新轮内容不足一屏时落点就是底部）。这里只置待办，落点在下面那段
+            // 「跟着内容变化重试」里执行 —— 换轮那一拍的几何还是旧的，当场滚会被这次布局摆回去。
+            if newTurn { beginTurnReset() }
+
+            if settleTurnTarget(contentHeight: contentHeight, offsetFromTop: offsetFromTop) {
+                // 已经滚过去了：由 `applyScroll` 内部那次 `report()` 送读数，本拍不再用旧偏移判一次。
+                return
+            }
 
             // 贴底判定：一次完整读数进状态机（分得清「人上翻」与「内容长高」）。
             follow.update(contentHeight: contentHeight,
@@ -236,13 +319,63 @@ struct StickyQuestionSpy: NSViewRepresentable {
             applyScroll(offsetFromTop: .greatestFiniteMagnitude)
         }
 
-        /// **新轮开口**：状态机整个重置（上一轮翻到哪都作废）再贴底。
-        ///
-        /// 为什么不只是「贴底一次」：人刚发了消息就该看见这一轮的回答 —— 哪怕他上一轮
-        /// 翻到半路停着。重置状态机是刻意的：那一刻的「上翻」意图已经失效了。
-        func repinToBottom() {
-            follow = AgentScrollFollow()
+        /// 只有**状态机说贴着底**时才滚到底（宿主的跟随意图走这条口，§3.33.3 契约①）。
+        func scrollToBottomIfPinned() {
+            guard follow.isPinnedToBottom else { return }
             scrollToBottom()
+        }
+
+        /// **新轮开口**：状态机整个重置，视口回到**本轮开始处**（§3.33.3 契约④）。
+        ///
+        /// 为什么要重置而不只是「贴底一次」：人刚发了消息就该看见这一轮的回答 —— 哪怕他上一轮
+        /// 翻到半路停着。重置状态机是刻意的：那一刻的「上翻」意图已经失效了（只在本轮内有效）。
+        ///
+        /// 落点 = **本轮提问行的顶边**（`questionTop`），由 `applyScroll` 夹到 `maxOffset`：
+        /// 新一轮刚开口时内容还没有一屏 ⇒ 夹到的就是底部（两条规则同解，不会互相打架）。
+        func repinToBottom() {
+            beginTurnReset()
+            _ = settleTurnTarget(contentHeight: -1, offsetFromTop: -1)
+        }
+
+        /// 起一次「本轮落点」（状态机当场重置 —— 上一轮的上翻意图立刻作废）。
+        private func beginTurnReset() {
+            follow = AgentScrollFollow()
+            // 缓存的提问顶边若属于上一轮（新行还没物化），它在这一轮毫无意义 ⇒ 落点取底部：
+            // 新一轮刚开口时内容不足一屏，「本轮开始处」本来就夹到底部（两条规则同解）。
+            turnTarget = questionTop ?? .greatestFiniteMagnitude
+            turnTargetApplies = 0
+            Self.turnResetCount += 1
+            Self.lastTurnTarget = turnTarget ?? -1
+        }
+
+        /// 落本轮落点：不在位就再落一次；用户上手就撤。
+        ///
+        /// 返回 `true` = 本拍刚滚过去（调用方直接返回，由 `applyScroll` 内部那次 `report()`
+        /// 去送读数）。
+        private func settleTurnTarget(contentHeight: CGFloat, offsetFromTop: CGFloat) -> Bool {
+            // **用户上手（滚轮 / 拖滚动条）⇒ 交还控制权**：判定用真实事件，
+            // 而不是「偏移变小了」——后者分不清「人上翻」与「布局把我们摆回去」，
+            // 而后者恰恰是换轮那一拍必然发生的事。
+            if Self.isUserScrollEvent() { turnTarget = nil }
+            guard let target = turnTarget, !isScrolling,
+                  let clip = attachedClip, let scroll = clip.enclosingScrollView,
+                  let document = scroll.documentView else { return false }
+            let maxOffset = max(0, document.bounds.height - clip.bounds.height)
+            // 落点 = **本轮开始处**；它比底部更靠上（本轮下面还有内容）时就停在开始处，
+            // 行还没物化（`questionTop == nil`）才退回底部。两个数都夹到 `maxOffset`。
+            let resolved = min(target, questionTop ?? target)
+            let goal = min(resolved, maxOffset)
+            guard abs(offsetFromTop - goal) > 2, turnTargetApplies < 40 else { return false }
+            turnTargetApplies += 1
+            applyScroll(offsetFromTop: resolved)
+            return true
+        }
+
+        /// 这一拍是不是**人**在滚（滚轮 / 拖滚动条）。程序滚（`applyScroll`）没有当前事件。
+        private static func isUserScrollEvent() -> Bool {
+            guard let type = NSApp.currentEvent?.type else { return false }
+            return type == .scrollWheel || type == .leftMouseDragged
+                || type == .rightMouseDragged || type == .otherMouseDragged
         }
 
         /// 把视口顶滚到「当前轮那一行提问的顶边」（§3.34 契约③）。
@@ -275,17 +408,24 @@ struct StickyQuestionSpy: NSViewRepresentable {
         }
 
         /// 找到那一行的标记就重记它的顶边；标记换了实例就作废重记；找不到就**留着**上一份。
-        private func refreshQuestionTopIfNeeded(in document: NSView, flipped: Bool) {
+        ///
+        /// **换轮检测**（§3.33.3 契约④）也在这里：标记带轮钥，钥一变就是新一轮 ——
+        /// 返回 `true`，由 `report()` 重置状态机并回到本轮开始处。
+        private func refreshQuestionTopIfNeeded(in document: NSView, flipped: Bool) -> Bool {
             let markers = Self.findMarkers(in: document).filter { $0.window != nil && $0 !== self }
-            guard let marker = markers.first else { return }
+            guard let marker = markers.first else { return false }
             if marker !== questionMarker {
                 questionMarker = marker
                 questionTop = nil
             }
+            // 轮钥（只有换了钥才算换轮；同一轮的行被重建不算）。
+            let changed = marker.turnKey != turnKey
+            if changed { turnKey = marker.turnKey }
             let rect = marker.convert(marker.bounds, to: document)
             let top = flipped ? rect.minY : (document.bounds.height - rect.maxY)
-            if let last = questionTop, abs(last - top) <= 0.5 { return }
+            if !changed, let last = questionTop, abs(last - top) <= 0.5 { return false }
             questionTop = top
+            return changed
         }
 
         private static func findMarkers(in view: NSView) -> [StickyQuestionRowMarker] {
