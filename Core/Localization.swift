@@ -2305,26 +2305,6 @@ public enum LKey: String, CaseIterable, Sendable {
     case agentIMSelfCheckBadAppID
     case agentIMSelfCheckNoSecret
     case agentIMSelfCheckNoEnvironment
-    case agentTabModel
-    case agentTabRuntime
-    case agentTabIM
-    case agentTabExtensions
-    case agentTabDisplay
-    // **对话记忆**（`FR-AGT-KNOW-MEM-003` 的面板与结论行）
-    case menuAgentMemory
-    case agentMemoryTitle
-    case agentMemoryHint
-    case agentMemoryEmpty
-    case agentMemoryNoWorkspace
-    case agentMemoryWorkspace
-    case agentMemoryConnection
-    case agentMemoryAllConnections
-    case agentMemoryIndexOn
-    case agentMemoryIndexOff
-    case agentMemoryIndexStale
-    case agentMemoryRebuildIndex
-    case agentMemoryClearAll
-    case agentMemoryClearConfirmTitle
     // 状态页四读数（`FR-AGT-LINK-CHAN-003` ⑥：连接 / 上次成功收发 / 待发条数 / 最近失败）。
     case agentIMReadingConnection
     case agentIMReadingDelivery
@@ -2369,6 +2349,26 @@ public enum LKey: String, CaseIterable, Sendable {
     case agentIMSelfCheckPassedCount
     case agentIMSelfCheckNotRun
     case agentIMSelfCheckProbeTimeout
+    case agentTabModel
+    case agentTabRuntime
+    case agentTabIM
+    case agentTabExtensions
+    case agentTabDisplay
+    // **对话记忆**（`FR-AGT-KNOW-MEM-003` 的面板与结论行）
+    case menuAgentMemory
+    case agentMemoryTitle
+    case agentMemoryHint
+    case agentMemoryEmpty
+    case agentMemoryNoWorkspace
+    case agentMemoryWorkspace
+    case agentMemoryConnection
+    case agentMemoryAllConnections
+    case agentMemoryIndexOn
+    case agentMemoryIndexOff
+    case agentMemoryIndexStale
+    case agentMemoryRebuildIndex
+    case agentMemoryClearAll
+    case agentMemoryClearConfirmTitle
     case agentMemoryClearConfirmMessage
     case agentMemorySkipped
     case agentMemoryMissingHeader
@@ -6030,43 +6030,6 @@ public enum LocalizedStrings {
         .agentIMSelfCheckBadAppID: [.simplifiedChinese: "AppID 必须是纯数字", .english: "AppID must be digits only"],
         .agentIMSelfCheckNoSecret: [.simplifiedChinese: "钥匙串里没有 App Secret", .english: "No App Secret in the keychain"],
         .agentIMSelfCheckNoEnvironment: [.simplifiedChinese: "没选环境（正式 / 沙箱）", .english: "No environment chosen"],
-        .agentTabModel: [.simplifiedChinese: "模型", .english: "Model"],
-        .agentTabRuntime: [.simplifiedChinese: "运行", .english: "Runtime"],
-        .agentTabIM: [.simplifiedChinese: "IM 通道", .english: "IM channel"],
-        .agentTabExtensions: [.simplifiedChinese: "扩展", .english: "Extensions"],
-        .agentTabDisplay: [.simplifiedChinese: "外观", .english: "Appearance"],
-        .menuAgentMemory: [.simplifiedChinese: "对话记忆…", .english: "Conversation Memory…"],
-        .agentMemoryTitle: [.simplifiedChinese: "对话记忆", .english: "Conversation memory"],
-        .agentMemoryHint: [.simplifiedChinese: "跨会话记着的东西：只在你说「记住：…」时写入；按工作区（与你选的连接）隔离；结构上没有承载结果集行数据的字段，密钥片段会被挡下。删掉的是真删 —— 下一次组装上下文不会再带上它。", .english: "What is kept across sessions. Written only when you say \"remember: …\", isolated per workspace (and per selected connection), with no field that can hold result-set rows and with key fragments rejected. A delete is real: the next context assembly will not include it."],
-        .agentMemoryEmpty: [.simplifiedChinese: "这个工作区还没有记忆。在对话里说一句「记住：以后默认用简体中文回答」，这里就会出现一条。", .english: "No memories in this workspace yet. Say \"remember: …\" in the chat and one shows up here."],
-        .agentMemoryNoWorkspace: [.simplifiedChinese: "还没打开工作区：对话记忆按工作区分文件，先打开一个工作区再来看。", .english: "No workspace is open — conversation memory is filed per workspace. Open one first."],
-        .agentMemoryWorkspace: [.simplifiedChinese: "工作区", .english: "Workspace"],
-        .agentMemoryConnection: [.simplifiedChinese: "连接", .english: "Connection"],
-        .agentMemoryAllConnections: [.simplifiedChinese: "全部连接", .english: "All connections"],
-        .agentMemoryIndexOn: [.simplifiedChinese: "索引：在盘（%lld 条）", .english: "Index: on disk (%lld items)"],
-        .agentMemoryIndexOff: [.simplifiedChinese: "索引：不在盘（下一次读取会从事实源重建）", .english: "Index: not on disk (rebuilt from the source of truth on the next read)"],
-        .agentMemoryIndexStale: [.simplifiedChinese: "索引与事实源不一致（索引 %lld 条 ≠ 事实 %lld 条）—— 点「重建索引」对齐", .english: "Index and source disagree (%lld vs %lld items) — rebuild to line them up"],
-        .agentMemoryRebuildIndex: [.simplifiedChinese: "重建索引", .english: "Rebuild index"],
-        .agentMemoryClearAll: [.simplifiedChinese: "清空这个工作区的记忆", .english: "Clear this workspace's memory"],
-        .agentMemoryClearConfirmTitle: [.simplifiedChinese: "清空对话记忆？", .english: "Clear conversation memory?"],
-        .agentMemoryClearConfirmMessage: [.simplifiedChinese: "记忆会真删：事实源整份重写、索引重建。删掉的不再进上下文，也没有副本可恢复。", .english: "This is a real delete: the source is rewritten and the index rebuilt. Deleted memories no longer enter the context, and no copy remains."],
-        .agentMemorySkipped: [.simplifiedChinese: "读不进来：跳过 %lld 行 · 认不出 %lld 条 · 别的工作区 %lld 条 · 坏文件 %lld 份", .english: "Not read: %lld lines skipped · %lld unrecognised · %lld from other workspaces · %lld unreadable files"],
-        .agentMemoryMissingHeader: [.simplifiedChinese: "事实源找不到头一行：这一层现在写不进去（覆盖它等于把读不出来的东西悄悄清掉）。", .english: "The source has no header line, so nothing can be written right now (overwriting it would silently wipe what cannot be read)."],
-        .agentMemoryWorkspaceMismatch: [.simplifiedChinese: "这份事实源声明的是别的工作区：看不到、也不许写。", .english: "This source declares another workspace: it is invisible here and refuses writes."],
-        .agentMemoryUseCount: [.simplifiedChinese: "用到 %lld 次", .english: "Used %lld times"],
-        .agentMemoryKept: [.simplifiedChinese: "仍会进上下文", .english: "Still enters the context"],
-        .agentMemoryForgotten: [.simplifiedChinese: "按生命周期该忘了（不再进上下文）", .english: "Due to be forgotten (no longer enters the context)"],
-        .agentMemoryReasonLabel: [.simplifiedChinese: "为什么记着它", .english: "Why it is kept"],
-        .agentMemorySource: [.simplifiedChinese: "来源：第 %lld 轮", .english: "Source: round %lld"],
-        .agentMemoryKindRoutine: [.simplifiedChinese: "例行", .english: "Routine"],
-        .agentMemoryKindTroubleshooting: [.simplifiedChinese: "排障", .english: "Troubleshooting"],
-        .agentMemoryKindPinned: [.simplifiedChinese: "已钉住", .english: "Pinned"],
-        .agentMemoryKindGeneral: [.simplifiedChinese: "通用写法", .english: "General"],
-        .agentMemoryNoticeRemembered: [.simplifiedChinese: "记下了。", .english: "Remembered."],
-        .agentMemoryNoticeMerged: [.simplifiedChinese: "同一条已更新（累计 %lld 次）。", .english: "Updated the same memory (%lld uses in total)."],
-        .agentMemoryNoticeTruncated: [.simplifiedChinese: "正文超过上限，截掉 %lld 字。", .english: "The note exceeded the limit; %lld characters were dropped."],
-        .agentMemoryNoticeEvicted: [.simplifiedChinese: "因条数上限挤出 %lld 条（最近最少用）。", .english: "%lld least-recently-used memories were evicted to stay under the limit."],
-        .agentMemoryNoticeRefusedRows: [.simplifiedChinese: "拒收：含结果集行数据 %lld 处（记忆不装行数据）。", .english: "Refused: %lld result-set row(s) detected — memories never store row data."],
         .agentIMReadingConnection: [.simplifiedChinese: "当前连接状态", .english: "Connection"],
         .agentIMReadingDelivery: [.simplifiedChinese: "上次成功收发", .english: "Last successful traffic"],
         .agentIMReadingQueue: [.simplifiedChinese: "待发队列", .english: "Outbox"],
@@ -6105,6 +6068,43 @@ public enum LocalizedStrings {
         .agentIMSelfCheckPassedCount: [.simplifiedChinese: "五环 %lld/%lld 通过", .english: "%lld/%lld rings passed"],
         .agentIMSelfCheckNotRun: [.simplifiedChinese: "没有跑（缺少运行条件）", .english: "Not run (missing prerequisites)"],
         .agentIMSelfCheckProbeTimeout: [.simplifiedChinese: "%lld 秒内没有结果", .english: "No result within %lld s"],
+        .agentTabModel: [.simplifiedChinese: "模型", .english: "Model"],
+        .agentTabRuntime: [.simplifiedChinese: "运行", .english: "Runtime"],
+        .agentTabIM: [.simplifiedChinese: "IM 通道", .english: "IM channel"],
+        .agentTabExtensions: [.simplifiedChinese: "扩展", .english: "Extensions"],
+        .agentTabDisplay: [.simplifiedChinese: "外观", .english: "Appearance"],
+        .menuAgentMemory: [.simplifiedChinese: "对话记忆…", .english: "Conversation Memory…"],
+        .agentMemoryTitle: [.simplifiedChinese: "对话记忆", .english: "Conversation memory"],
+        .agentMemoryHint: [.simplifiedChinese: "跨会话记着的东西：只在你说「记住：…」时写入；按工作区（与你选的连接）隔离；结构上没有承载结果集行数据的字段，密钥片段会被挡下。删掉的是真删 —— 下一次组装上下文不会再带上它。", .english: "What is kept across sessions. Written only when you say \"remember: …\", isolated per workspace (and per selected connection), with no field that can hold result-set rows and with key fragments rejected. A delete is real: the next context assembly will not include it."],
+        .agentMemoryEmpty: [.simplifiedChinese: "这个工作区还没有记忆。在对话里说一句「记住：以后默认用简体中文回答」，这里就会出现一条。", .english: "No memories in this workspace yet. Say \"remember: …\" in the chat and one shows up here."],
+        .agentMemoryNoWorkspace: [.simplifiedChinese: "还没打开工作区：对话记忆按工作区分文件，先打开一个工作区再来看。", .english: "No workspace is open — conversation memory is filed per workspace. Open one first."],
+        .agentMemoryWorkspace: [.simplifiedChinese: "工作区", .english: "Workspace"],
+        .agentMemoryConnection: [.simplifiedChinese: "连接", .english: "Connection"],
+        .agentMemoryAllConnections: [.simplifiedChinese: "全部连接", .english: "All connections"],
+        .agentMemoryIndexOn: [.simplifiedChinese: "索引：在盘（%lld 条）", .english: "Index: on disk (%lld items)"],
+        .agentMemoryIndexOff: [.simplifiedChinese: "索引：不在盘（下一次读取会从事实源重建）", .english: "Index: not on disk (rebuilt from the source of truth on the next read)"],
+        .agentMemoryIndexStale: [.simplifiedChinese: "索引与事实源不一致（索引 %lld 条 ≠ 事实 %lld 条）—— 点「重建索引」对齐", .english: "Index and source disagree (%lld vs %lld items) — rebuild to line them up"],
+        .agentMemoryRebuildIndex: [.simplifiedChinese: "重建索引", .english: "Rebuild index"],
+        .agentMemoryClearAll: [.simplifiedChinese: "清空这个工作区的记忆", .english: "Clear this workspace's memory"],
+        .agentMemoryClearConfirmTitle: [.simplifiedChinese: "清空对话记忆？", .english: "Clear conversation memory?"],
+        .agentMemoryClearConfirmMessage: [.simplifiedChinese: "记忆会真删：事实源整份重写、索引重建。删掉的不再进上下文，也没有副本可恢复。", .english: "This is a real delete: the source is rewritten and the index rebuilt. Deleted memories no longer enter the context, and no copy remains."],
+        .agentMemorySkipped: [.simplifiedChinese: "读不进来：跳过 %lld 行 · 认不出 %lld 条 · 别的工作区 %lld 条 · 坏文件 %lld 份", .english: "Not read: %lld lines skipped · %lld unrecognised · %lld from other workspaces · %lld unreadable files"],
+        .agentMemoryMissingHeader: [.simplifiedChinese: "事实源找不到头一行：这一层现在写不进去（覆盖它等于把读不出来的东西悄悄清掉）。", .english: "The source has no header line, so nothing can be written right now (overwriting it would silently wipe what cannot be read)."],
+        .agentMemoryWorkspaceMismatch: [.simplifiedChinese: "这份事实源声明的是别的工作区：看不到、也不许写。", .english: "This source declares another workspace: it is invisible here and refuses writes."],
+        .agentMemoryUseCount: [.simplifiedChinese: "用到 %lld 次", .english: "Used %lld times"],
+        .agentMemoryKept: [.simplifiedChinese: "仍会进上下文", .english: "Still enters the context"],
+        .agentMemoryForgotten: [.simplifiedChinese: "按生命周期该忘了（不再进上下文）", .english: "Due to be forgotten (no longer enters the context)"],
+        .agentMemoryReasonLabel: [.simplifiedChinese: "为什么记着它", .english: "Why it is kept"],
+        .agentMemorySource: [.simplifiedChinese: "来源：第 %lld 轮", .english: "Source: round %lld"],
+        .agentMemoryKindRoutine: [.simplifiedChinese: "例行", .english: "Routine"],
+        .agentMemoryKindTroubleshooting: [.simplifiedChinese: "排障", .english: "Troubleshooting"],
+        .agentMemoryKindPinned: [.simplifiedChinese: "已钉住", .english: "Pinned"],
+        .agentMemoryKindGeneral: [.simplifiedChinese: "通用写法", .english: "General"],
+        .agentMemoryNoticeRemembered: [.simplifiedChinese: "记下了。", .english: "Remembered."],
+        .agentMemoryNoticeMerged: [.simplifiedChinese: "同一条已更新（累计 %lld 次）。", .english: "Updated the same memory (%lld uses in total)."],
+        .agentMemoryNoticeTruncated: [.simplifiedChinese: "正文超过上限，截掉 %lld 字。", .english: "The note exceeded the limit; %lld characters were dropped."],
+        .agentMemoryNoticeEvicted: [.simplifiedChinese: "因条数上限挤出 %lld 条（最近最少用）。", .english: "%lld least-recently-used memories were evicted to stay under the limit."],
+        .agentMemoryNoticeRefusedRows: [.simplifiedChinese: "拒收：含结果集行数据 %lld 处（记忆不装行数据）。", .english: "Refused: %lld result-set row(s) detected — memories never store row data."],
         .agentMemoryNoticeRefusedSecrets: [.simplifiedChinese: "拒收：含密钥 / 令牌片段 %lld 处。", .english: "Refused: %lld key or token fragment(s) detected."],
         .agentMemoryNoticeNeedsConfirmation: [.simplifiedChinese: "模型自己想记的一条需要你先确认（这条没落库）。", .english: "A memory the model wanted to keep needs your confirmation first (nothing was written)."],
         .agentMemoryNoticeDeleted: [.simplifiedChinese: "删掉了，索引已重建。", .english: "Deleted; the index was rebuilt."],
