@@ -64,6 +64,15 @@ set -euo pipefail
 # 由头：静默回退把「一个治不好的缺陷」伪装成「构建成功」，而症状要等用户下次启动才出现。
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd -P)"
+# **出包前必须工作区干净**（2026-11-08 教训：从含未提交 WIP 的工作区打过一次包，
+# 装到主人机器上的二进制包含未验证代码；回退时又 stash 错条目，把无关文件带进树）。
+if [ -z "${DOYAH_ALLOW_DIRTY_BUILD:-}" ] && [ -n "$(git -C "$(dirname "$0")/.." status --porcelain 2>/dev/null)" ]; then
+  echo "错误：工作区不干净，拒绝出包（先 commit 或 stash，并确认这批已验）。" >&2
+  echo "      确要出脏包时显式给 DOYAH_ALLOW_DIRTY_BUILD=1（不建议）。" >&2
+  git -C "$(dirname "$0")/.." status --porcelain | head -10 >&2
+  exit 1
+fi
+
 CONFIGURATION="debug"
 DEVELOPER_DIR="${DEVELOPER_DIR:-/Applications/Xcode.app/Contents/Developer}"
 SWIFT="${DEVELOPER_DIR}/Toolchains/XcodeDefault.xctoolchain/usr/bin/swift"
