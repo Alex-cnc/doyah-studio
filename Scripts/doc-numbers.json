@@ -116,17 +116,17 @@
     {
       "key": "core-tests",
       "label": "Core 单测项数（verify-core.sh 实测）",
-      "value": 5618,
+      "value": 5633,
       "unit": "项",
       "measure": {
         "kind": "count-file",
         "file": ".build/core-test-count.txt",
         "regex": "(\\d+)",
         "expect": [
-          5618
+          5633
         ],
         "writtenBy": "Scripts/verify-core.sh（同一次运行写出；verify-all.sh 在第 1 项之前删掉它 ⇒ 本轮没跑第 1 项时它不存在，判据如实报『跳过』而不是拿旧值当现状）",
-        "note": " 2026-11-09（判据搬家第一批 · 本地化/文案 8 条）：8 条 `check-*.py` 搬进 `swift test`，新增 5 类 46 例（Localization* / LanguageRegistryShape）+ TestsUISnapshot 14 例（MenuLanguageGate / UISnapshotLanguageCoverage，默认 skip 2 例）⇒ 实测 5572 → **5618**。"
+        "note": " 2026-11-09（判据搬家第一批 · 本地化/文案 8 条）：8 条 `check-*.py` 搬进 `swift test`，新增 5 类 46 例（Localization* / LanguageRegistryShape）+ TestsUISnapshot 14 例（MenuLanguageGate / UISnapshotLanguageCoverage，默认 skip 2 例）⇒ 实测 5572 → **5618**；**2026-11-09（判据搬家第二批 · 设计令牌 5 条）：`check-design-tokens.py` 搬进 `Tests/DesignTokenRatchetTests.swift`（15 例）⇒ 实测 5618 → **5633**。"
       },
       "anchors": [
         {
@@ -156,7 +156,7 @@
           "note": "契约侧闸门表：同上"
         }
       ],
-      "expect": 5618
+      "expect": 5633
     },
     {
       "key": "ui-snapshots",

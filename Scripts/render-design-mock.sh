@@ -9,9 +9,10 @@ set -euo pipefail
 # （+ `AccentTheme.swift` / `ColorContrast.swift` / `Localization.swift`）一起 swiftc 编译再运行。
 #
 #   · 令牌换值 → 样张自动跟着换（不需要改渲染脚本）；
-#   · `Scripts/check-design-mock-tokens.py`（闭环第 6 项）钉住这条接线：渲染脚本里不许有色值字面量、
-#     本入口必须真的把 `Core/DesignTokens.swift` **与 `Core/DesignTheme.swift`** 编进来、
-#     深色样张必须量得出方案 D 的蓝调。
+#   · 这条接线由**编译期**保证（2026-11-09 起）：本入口必须真的把 `Core/DesignTokens.swift`
+#     **与 `Core/DesignTheme.swift`** 编进来，缺一份就编不过 —— 样张里写不出产品没有的颜色。
+#     （原判据 `Scripts/check-design-mock-tokens.py` 2026-11-09 摘离：拦截史 0，且它的判据 D 在 HEAD
+#     上就红（`Plugins/Retro` 未进台账面）⇒ 规则比事实旧；理由见 `Scripts/archive/` 该文件头一行。）
 #
 # 2026-09-29（L-80 ㈠）：值表按**主题**分组后落到 `Core/DesignTheme.swift`（角色语义仍在
 # `Core/DesignTokens.swift`）⇒ 两份都要编进来，缺一份就是"样张回到自带调色板"。

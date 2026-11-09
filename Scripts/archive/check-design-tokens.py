@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# [ARCHIVED 2026-11-09] 搬进 Tests/DesignTokenRatchetTests.swift（判据搬家第二批 · 15 例）：六条规则 / 逐行切(代码,注释) / 逃逸口台账三态 / 白名单只许语义色 / 面下限 + Package.swift 对账 / 棘轮双口径，全部照搬；HEAD 上那两处红（ProductOverviewSheet bare-textstyle 5 / bare-foreground 3）以 knownDrift 精确钉在测试里、读数逐位相同。基线 / 白名单 / 豁免台账三份 JSON 仍在 Scripts/ 继续被测试读取。
 """设计令牌防回潮校验（棘轮式 / ratchet）。
 
 背景：外观改造前 App/ 里量出来这些——显式字号只有 3 个、padding 里 `2` 出现 139 次

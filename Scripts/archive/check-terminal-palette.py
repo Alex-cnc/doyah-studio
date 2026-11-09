@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# [ARCHIVED 2026-11-09] 摘离闭环：判据搬家第二批。拦截史 0 次（唯一一次相关提交 19df1fa0 是它抓自己的自检缺陷）；三方一致现在由 Scripts/test-terminal-palette.sh（真跑 CLI terminal-palette --json + WCAG 独立复算 + 文档落点）与 Core/TerminalPalette 单测覆盖。
 """终端配色三方一致性校验（FR-STD-WS-TOOL-001 的跨平台交接物）。
 
 为什么需要这个门禁：

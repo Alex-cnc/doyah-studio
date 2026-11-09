@@ -474,7 +474,9 @@ elif [ "${_frz_rc}" != "0" ]; then
   echo "❌ 冻结号 ⟷ 软件号不一致（见上）"; exit 1
 fi
 # 派生文件不得漂移：终端配色 JSON ↔ Core ↔ 人读文档三方一致（FR-STD-WS-TOOL-001 的跨平台交接物）
-python3 Scripts/check-terminal-palette.py
+# 2026-11-09：`check-terminal-palette.py` 摘离（拦截史 0 —— 唯一一次相关提交 19df1fa0 是它抓自己的自检缺陷）。
+# 三方一致改由 `Scripts/test-terminal-palette.sh` 跑（真跑 `CLI terminal-palette --json` + 从 hex 独立复算
+# WCAG + 文档落点；alpha 链的 assert 项），色板本身由 `TerminalPaletteTests` 逐槽钉住。
 # L-55（2026-09-28 第 61 轮）：上面几条管的是**表格结构**（列数 / 计数 / 版本号 / 派生计数），
 # 管不了「独立写在各处的**工程设施数字**」—— 闭环项数、单测数、快照张数。真现场：
 # `Docs/Doyah产品概要设计说明书.md` §8.3 闸门表写着 `verify-core.sh`（**760** 项），实测 2056 项（那是 09-23 的旧值）；
@@ -613,91 +615,25 @@ python3 Scripts/check-plan-coverage.py --self-test
 #   负例（2026-11-03 实测）：手改 `plan.yaml` 一条 `next_try` ⇒ rc=1 点名该 id；还原后复绿。
 python3 Scripts/plan-batches.py --check
 
-echo "==> 6/19 设计令牌棘轮 + 外观样张与产品同源 + 主题集（三选一）"
-python3 Scripts/check-design-tokens.py
-# L-79 ㈡（2026-09-29 第 76 轮）：上面那条棘轮管的是 **App/ 里的裸颜色 / 裸字号 / 裸间距**，
-# 管不了「**样张到底是不是照着产品画的**」。真现场：`Scripts/design-mock.swift` 自带一份调色板
-# （头部注释写着「未来会变成 Core/DesignTokens.swift 的真身」）⇒ 方案 D 换值后，它照样出**旧配色**
-# 的图（深色中性灰 + 旧强调色），而逐屏复查 / 定调 / 跨端对照全都建立在这张图上。
-# 判据 `Scripts/check-design-mock-tokens.py`（项数仍十九）：
-#   A 脚本面 `Scripts/**/*.swift` 全登记（新脚本出现即红）：不许有色值字面量（形状全集 = 6/8 位 `0x…`、
-#     `#RRGGBB[AA]`、浮点分量 `NSColor(…Red:…)`；判定物**先剥注释与字符串**；只豁免 3 个 macOS 交通灯
-#     系统外壳色）+ 两条「第二份调色板形态」回归钉
-#   B 渲染脚本必须真的引用令牌（8 类符号**每族 ≥1** = 族级下限 + 总处数下限 —— 引用被删光 / 只留一族
-#     补够处数都是空跑）
-#   C 渲染入口 `Scripts/render-design-mock.sh` 里**未注释掉的** `swiftc` 命令行（含 `\` 续行）必须同时含
-#     `main.swift` + `Core/DesignTokens.swift` + `Core/DesignTheme.swift`（把编译命令注释掉即红）
-#   D **逐屏复查 · 双向**：扫描面 = `Package.swift` 各 target 的 `sources:`/`path:`（**现读对账**，现 10 个面 /
-#     632 个文件）：① 不许残留**方案 D 之前的旧调色板值**（27 个色值）；② 不许**硬写方案 D 真值**（从令牌源
-#     现读 119 个色值）而不过令牌 —— 只放行真值源自身与断言位（Tests / TestsUISnapshot / TestsPlatform）；
-#     豁免两条轴：`Core/AccentTheme.swift` + 单测（交互强调色）、`Core/TerminalPalette.swift` + 单测
-#     （终端 16 色 ANSI 色板）；目录面 / 后缀面 / 文件数 / 真值数四处与 `Scripts/design-mock-baseline.json` 上账
-#   E **行为证据**：真跑一遍渲染入口（要求 exit 0 + 自检收尾行 + 张数 ≥ 15），并判**深色样张的内容底
-#     必须带蓝调**（方案 D 深海军蓝实测 B−R ≈ 45；旧中性灰 ≈ 11 ⇒ 门槛 20）—— 非 macOS 跳过并高声提示；
-#     **跳过时末行不许出现 ✅**，只出 `RESULT=SKIPPED`
-# L-79 ㈡ 的负例 **31 例**（红/绿成对，夹具一律在临时目录，末例核对真仓库三份文件逐字节未变）。
-python3 Scripts/check-design-mock-tokens.py
-python3 Scripts/check-design-mock-tokens.py --self-test
-# L-80 ㈠（2026-09-29 第 77 轮）：上面两条管的是**一套值**（方案 D = 默认主题）画出来的样子，
-# 管不了「**三套值**（主题三选一）各自成不成立」。真现场：需求提出者要「一个 theme 主题选项」，
-# Linux 版早有豆芽绿 / 玫瑰金 / 科技蓝三选一 ⇒ 令牌从一套变三套，而这件事有三个缝：
-#   ① 单测与值表**用同一份实现**算对比度（判据与被判对象同源）⇒ 新加一套表时，
-#      "漏了某个角色""某个值不过门槛"只会在同一个实现里红；
-#   ② 主题名要与 Linux 侧对齐、推导出来的两套值**不许静默当实际值**—— 这两件事单测根本看不见；
-#   ③ 「语法六档挂家族」这条口径在换表时最容易脱钩（有人直接把某个语法色写回十六进制）。
-# 判据 `Scripts/check-design-themes.py`（项数仍十九）：
-#   A 主题集 = 台账里那三个（id 与顺序），`DesignTheme.all` 不许漏列主题，`ThemePalette.of` 三支齐全
-#   B 每套值表必须含全部 20 个字段（18 色角色 + 发丝线两参数），缺一个即红
-#   C **独立复算**：本脚本自己重新实现 WCAG，从 Swift 源里解析出三套值，逐主题 × 深浅两态复算
-#     186 条门槛（正文 ≥4.5 / 强对比 ≥7 且强于正文 / 辅助 ≥3.0 / 禁用更淡且 ≥1.5 /
-#     状态色在两表面 ≥3.0 / 强调家族按角色 4.5 与 3.0 / 语法六档两两不同 / 深色五档明度递增 /
-#     浅色 content 最亮 / 表面距离 ≥0.02 / 浅色发丝线比 content 暗）
-#   D `SyntaxTone.color(in:)` 的六行映射逐行对账（keyword→accentGlow / string→warm / number→teal /
-#     function→accent / identifier→primary / comment→tertiary）
-#   E 名对齐（三个主题名 = Linux 侧的名，**认 §9 主题表里那一行**，正文提到不算）+
-#     推导主题 ↔ 待值登记成对（值表紧挨的注释块里必须有「推导草案」标记 +
-#     `Docs/archive/root-20261026/发布计划.md` 的待输入表还登记着「豆芽绿 / 玫瑰金 色值（Linux 侧）」）
-#   F 空跑防护（主题数 / 字段数 / 复算条数 / 文档落点四条下限）
-# L-80 ㈠+㈡ 的负例 **54 例**（53 个红/绿成对 + 末例核对真仓库二十一份文件逐字节未变，
-# 夹具一律在临时目录）。**2026-10-13（合册 T-20261013-027 · 原单 T-20261010-068）判定物补钉**：
-# 判据 D 只在 `switch` 块内找并剥注释 / 判据 A 判身份与顺序（`DesignTheme.all` 逐格）/ 判据 G
-# 五处判定物剥注释 / 判据 H 串轴剥注释 + 组合数按真断言形状 / 判据 I ④ 的面 = 宿主 target 的
-# `sources:` 现读（`App` + `Plugins/Notes/Views`）/ 判据面与 `Package.swift` 源码目录双向对账。**两条是自检当场抓出来的门禁太松**：⑨ 文档侧原先只查"正文里提过这个名"
-# ⇒ 表被改坏也放过；⑮ 推导标记原先只认"推导"两个字 ⇒ 抹掉标记行、说明段里的"推导口径"照样顶数。
-# ㈡ 那六例（第 78 轮）钉的是**入口**这一层：入口被削成非 `DesignTheme.all` / 少一个真实场景 /
-# 推导不逐条标注 / 强调色入口被静默删 / 宿主语境覆盖写了盘 / 主题行被掏空。
-# L-85 那三例（第 83 轮）钉的是**两轴正交**：深浅轴少一态 / 两轴串键（配色轴的运行时对象里出现
-# 深浅轴的键）/ 组合没到像素（面板快照不再取角像素）。
-# 2026-10-13（合册 T-20261013-027 · 原单 T-20261010-036）**判据 I ② 扩面**：扫描面从 Core/App/
-# Platform/CLI 四根（338/586=58%）扩到**入库源码面**（十根 + 仓根 `*.swift`；`Vendor/` 与点目录显式排除
-# 并写明理由）—— 扩面前 `Tests/NebulaSkinPreferenceTests.swift:44` 的正当第二份在面外、判据看不见；
-# 由头 = 判据 I ⑥ 自己要它存在的「规则单测」，手里拿着判据看不见的第二份。面由
-# `Scripts/design-themes-key-baseline.json` 上账（根表增减报红 / 面内文件数棘轮 / 允许持有点白名单三态：
-# 未登记 ⇒ 红、登记了却不在盘 ⇒ 陈旧豁免 ⇒ 红、理由为空 ⇒ 红）。
-python3 Scripts/check-design-themes.py
-python3 Scripts/check-design-themes.py --self-test
-# L-142（2026-10-01 第 139 轮）：上面三条管的是**令牌本身**（值表 / 样张 / 主题集），
-# 管不了「**某个编辑面干脆没走令牌**」。真现场（内测清单 **甲2**，需求提出者 2026-09-30 原话）：
-# 「笔记的正文编辑区背景色明显不符合其他 2 个的配色方案」—— 笔记正文是 SwiftUI `TextEditor`，
-# **默认画系统的 `textBackgroundColor`**，而工作区代码编辑器与数据库 SQL 编辑器早就在用
-# `Theme.nsColor(Surface.content)`（`L-111` 那一批）。棘轮扫的是「写坏的值」，
-# 这里的问题是**什么都没写** ⇒ 门禁全绿、观感不对（这正是覆盖面缺口）。
-# 判据 `Scripts/check-editor-surface-tokens.py`（项数仍十九）：
-#   A 台账双向对账（`App/` 下每处多行编辑面都登记；登记的必须真的还在 ⇒ 新加编辑面要登记）
-#   B 每个编辑面都挂 `.editorSurface()`（处数棘轮：挂了的处数 == 编辑面的处数）
-#   C 唯一出处 `App/Views/EditorSurface.swift`（函数体必须 `scrollContentBackground(.hidden)`
-#     + `Theme.surface(.content)` + `Theme.text(.primary)`，不许出现裸色 / 系统色 / 字号字面量；
-#     且只此一处定义）
-#   D 另两个编辑面（AppKit `NSTextView`）仍是令牌色，不许退回 `NSColor.textBackgroundColor`
-#   E 空跑防护（扫描面文件数 / 编辑面处数 / 台账条数）
-#   F 编辑面不许自己再画一层底色（除唯一出处；与 B 共用同一条修饰链，允许空行）
-#   G 面对账（扫描面 ↔ `Package.swift` 生产 target 的 path:/sources:；面外出现编辑面标识 ⇒ 红）
-#   2026-10-13 升级（合册 T-20261013-027 · 原单 T-20261010-071）：判定物先剥注释与字符串
-#   （行尾注释 / 块注释中间行不再假阳）· 未登记字形判红点名 · 判据 C 取配对花括号函数体 ·
-#   禁用令牌收窄（`#if` / `#available` / `#Preview` 不再假阳）· 基线削面无钉
-# L-142 的负例 `--self-test` **25 例**（红 / 绿成对，夹具一律在临时副本，末例核对真仓库逐字节未变）。
-python3 Scripts/check-editor-surface-tokens.py
-python3 Scripts/check-editor-surface-tokens.py --self-test
+echo "==> 6/19 设计令牌棘轮（2026-11-09 搬进 swift test；同批摘离四条，理由见各脚本头一行）"
+# 判据 `Scripts/check-design-tokens.py` → `Tests/DesignTokenRatchetTests.swift`（15 例，随本项跑的 swift test 一起）：
+#   ① 六条规则逐处判：裸色（**字面色值永远判红**；`NSColor` 语义色按白名单放行）/ 裸字号 / 裸间距 / 裸圆角 /
+#      系统文本样式 / 系统语义前景色 —— 判定物只认**代码**那半（块注释 / 行尾注释 / 字符串与多行串都先切开）；
+#   ② 棘轮双口径：按「文件 × 规则」与「规则合计」都不得高于 `Scripts/design-token-baseline.json`；
+#   ③ 逃逸口台账三态：未登记 / 理由为空 / 陈旧（盘上已无标记）都判红；白名单只许 `NSColor` 角色色；
+#   ④ 空跑防护：面下限 105 份 / 25000 代码行 + 与 `Package.swift` 的 `DoyahStudioApp` `sources:` 对账。
+#   **HEAD 上本来就红的两处照实保留**：`App/Views/ProductOverviewSheet.swift` 的 bare-textstyle 0 → 5 /
+#   bare-foreground 0 → 3 以 `knownDrift` **精确**钉在测试里（少一处 / 多一处都红）—— 不改判据、不改产品代码。
+#   **与老脚本的读数逐位相等**：187 份 / 45888 代码行 / 331 处（bare-color 2 · bare-foreground 97 ·
+#   bare-spacing 52 · bare-textstyle 180），逐文件 19/19 完全一致。
+#
+# 同批摘离（移 `Scripts/archive/`，一行理由写在各自文件头）：外观样张同源（L-79 ㈡）/ 主题集（L-80 ㈠㈡ ·
+# L-85 · L-155）/ 编辑面令牌（L-142）/ 终端配色三方一致。四条**拦截史为零或仅拦过自己的自检**（主人令：
+# 没拦过就删）。现在由什么拦住：样张与产品**编译期同源**（`render-design-mock.sh` 与 `Core/DesignTokens.swift`
+# 一起 `swiftc`，样张里写不出产品没有的颜色）；主题值表由 `Tests/DesignThemeTests` + `Tests/AppearanceAxesTests`
+# （判据侧**独立复算** WCAG）与样张像素探针；编辑面底色由 `TestsUISnapshot/EditorSurfaceTokenParityProbeTests`
+# （三面同底 · 切主题切深浅成套 · 7 例）与 `NotesEditorSaveProbeTests`；终端配色由
+# `Scripts/test-terminal-palette.sh`（真跑 `CLI terminal-palette --json` + WCAG 独立复算 + 文档落点）。
 
 echo "==> 7/19 平台等价矩阵 + P-* 平台差异登记对账"
 # L-26（2026-09-27 第 25 轮）：这一项跑两条 ——
@@ -971,10 +907,17 @@ if [ "${PLATFORM}" = "macos" ]; then
   # 判据已搬进 `TestsUISnapshot/MenuLanguageGateTests.swift`（判定逻辑的 9 条负例每次 swift test 都跑；
   # 这里只补**真启动两档**那一半 —— 它要刚构建出来的 `dist/DoyahStudio.app`）。
   MENU_DEVELOPER_DIR="${DEVELOPER_DIR:-/Applications/Xcode.app/Contents/Developer}"
-  DOYAH_MENU_LANGUAGE_GATE=1 DEVELOPER_DIR="${MENU_DEVELOPER_DIR}" \
-    "${MENU_DEVELOPER_DIR}/Toolchains/XcodeDefault.xctoolchain/usr/bin/swift" test \
-      --disable-sandbox --package-path "${ROOT}" --scratch-path "${ROOT}/.build" \
-      --manifest-cache local --filter MenuLanguageGateTests -Xswiftc -disable-sandbox
+  # 2026-11-09：真启动两档要**本仓的 swift 包**。门禁自己的桩仓（`Scripts/test-verify-all-gate.py`
+  # 的夹具：只有 `Scripts/` 下的桩，没有 `Package.swift`）里这一档没有意义 —— 如实说「跳过」，
+  # 不让桩仓里的 `swift test` 把这一项判红（那是夹具的形态，不是产品的缺陷）。
+  if [ -f "${ROOT}/Package.swift" ]; then
+    DOYAH_MENU_LANGUAGE_GATE=1 DEVELOPER_DIR="${MENU_DEVELOPER_DIR}" \
+      "${MENU_DEVELOPER_DIR}/Toolchains/XcodeDefault.xctoolchain/usr/bin/swift" test \
+        --disable-sandbox --package-path "${ROOT}" --scratch-path "${ROOT}/.build" \
+        --manifest-cache local --filter MenuLanguageGateTests -Xswiftc -disable-sandbox
+  else
+    echo "⚠️  本仓没有 Package.swift（桩仓 / 夹具）：菜单栏真启动两档**跳过**（跳过 ≠ 通过）"
+  fi
   # 平台矩阵（NFR-ALL-GATE-COMP-004 / -005）：**部署目标只有一个值**（包定义 / 工程文件 /
   # 生成物 pbxproj / Info.plist 模板四处）+ 产物信息带 `LSMinimumSystemVersion`（老机器上
   # 系统那句「需要 macOS 14.0 或更高版本」的唯一依据）+ 构建脚本认 arm64 / x86_64 / universal

@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# [ARCHIVED 2026-11-09] 摘离闭环：判据搬家第二批（设计令牌 5 条）。拦截史 0 次（10 次改动全是扩判据/加主题/判据自身补钉，没有一次是「报红 ⇒ 改产品」）；主题值表的真实性现由 Tests/DesignThemeTests.swift + Tests/AppearanceAxesTests.swift（独立复算 WCAG）与样张像素探针拦住。原文见 git 历史。
 """主题集（配色方案）门禁（队列 L-80 ㈠，闭环第 6 项，与设计令牌棘轮 / 样张同源门禁同项）。
 
 存在的理由（真现场）

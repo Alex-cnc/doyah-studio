@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# [ARCHIVED 2026-11-09] 摘离闭环：判据搬家第二批。拦截史 1 次（6abecaf5：QuickCaptureSheet 的 TextEditor 漏挂 .editorSurface() ⇒ 改用唯一出处）；同类错现由渲染级探针拦住 —— TestsUISnapshot/EditorSurfaceTokenParityProbeTests（三面同底 / 切主题切深浅成套，7 例）+ TestsUISnapshot/NotesEditorSaveProbeTests（编辑面底色 = 令牌）。摘离前一在 HEAD 上是红的，但两条都是按名字猜出来的假阳（AgentComposerEditor 透明底、AgentProfileEditor 根本不是编辑面）⇒ 按「同类错能由测试可靠拦住 ⇒ 删」。
 # -*- coding: utf-8 -*-
 """门禁：**编辑面（能编辑多行文本的那一块）的底色与字色只用主题令牌**
 （队列 `L-142` 判据 · 内测清单 **甲2**，闭环第 6 项）。

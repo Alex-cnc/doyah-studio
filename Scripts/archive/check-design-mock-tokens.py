@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# [ARCHIVED 2026-11-09] 摘离闭环：判据搬家第二批。拦截史 0 次（生产源码残留旧调色板 0 处、样张同源从未漂移）；而且它的判据 D 在 HEAD 上就红（Plugins/Retro 三个 target 未进台账面）—— 规则比事实旧。样张与产品同源现在由编译期保证：Scripts/render-design-mock.sh 与 Core/DesignTokens.swift 一起 swiftc，样张里写不出产品没有的颜色。
 """外观样张 ↔ 产品令牌「同源」门禁（队列 L-79 ㈡，闭环第 6 项）。
 
 存在的理由（真现场）
