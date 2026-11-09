@@ -125,14 +125,23 @@ fi
 # ⇒ 冻结 v1.2 ⇒ 出 `beta1.2`（marketing 1.2.0）。历史：beta1.0.x 系列建在 v1.1 冻结件上，编号不符实，只登记不改。
 # 旧注：当前 **Beta 1 = 全量功能** ⇒ `beta1.0`（2026-10-21 出包齐套 · 派单 `T-20261021-001`：产物身份与所有 `alpha3.1` 包不同 ⇒ 换里程碑，避免「同标签不同身份」；改前值 = `alpha3.1`）。
 # **软件号 = 文档段 + 段内序号**（主人 2026-11-08 定）：包标签从同端详设活书头部的版本号派生，
-# 不再手填一个与文档无关的流水号（曾出现软件 1.0.12 对着 v1.1.16 的书、以及另一侧提前拉到 1.2.0）。
-# 只认**版本行**（`> **版本** **vX.Y.Z**`）——正文里会提到别的版本号，按全文 grep 会抓错。
-DOC_VERSION="$(grep -m1 -oE '^> \*\*版本\*\* \*\*v[0-9]+\.[0-9]+\.[0-9]+\*\*' "${ROOT}/Docs/Doyah产品详细设计说明书-macOS.md" 2>/dev/null | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+' | head -1)"
+# **软件号 = 冻结段**（2026-11-08 主人令「冻结了四书哪个版本，软件就应该出哪个版本」）。
+# 取法：`Docs/frozen/` 里最新的 `-vX.Y-YYYYMMDD.md` ⇒ 标签 `betaX.Y`、marketing `X.Y.0`。
+# 为什么不是活书头部版本：活书改一行（v1.2.1、v1.2.2…）就跟着换包号，等于每次改文档都要重出包，
+# 而且会出现「软件 1.2.7 对着冻结 v1.2」这种没人看得懂的错位。判据 `Scripts/check-release-freeze-parity.py`。
+DOC_VERSION="$(ls "${ROOT}/Docs/frozen" 2>/dev/null | grep -oE '\-v[0-9]+\.[0-9]+\-[0-9]+\.md$' | grep -oE 'v[0-9]+\.[0-9]+' | sort -V | tail -1)"
 if [ -z "${DOC_VERSION}" ]; then
-  echo "错误：读不到详设活书版本号，无法派生软件号（不许猜）。" >&2
+  echo "错误：Docs/frozen 里没有冻结件，读不到冻结版本号（不许猜）。" >&2
   exit 1
 fi
-RELEASE_LABEL="beta${DOC_VERSION#v}"
+# 标签写**一处字面量**（判据 `check-release-version.py` 要求唯一字面量 + 产物名/plist 两处派生），
+# 紧接着用冻结段硬校验一次：对不上就停，不许带着错位号出包。
+RELEASE_LABEL="beta1.2"
+if [ "beta${DOC_VERSION#v}" != "${RELEASE_LABEL}" ]; then
+  echo "错误：发布标签 ${RELEASE_LABEL} 与冻结段 ${DOC_VERSION} 不一致（软件号必须等于冻结号）。" >&2
+  echo "      改法：把本行 RELEASE_LABEL 改成 beta${DOC_VERSION#v}，再重出包。" >&2
+  exit 1
+fi
 
 # ── 构建戳（**每次构建都不一样**，用来分清新旧）──────────────────────────────────
 # 主人 2026-10-30：「这个 beta1.0.app 始终不增长子版本号，我也分不清哪个是新哪个是旧」。

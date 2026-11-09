@@ -83,17 +83,19 @@ def judge(frozen_dir: pathlib.Path, ledger: dict, dist_dir: pathlib.Path) -> tup
     seg = latest_frozen_version(frozen_dir)
     if seg is None:
         return "FAIL", ["Docs/frozen/ 里一份冻结件都没有 ⇒ 没有基线可比（空跑判红）"], readings
-    want_marketing = f"{seg[0]}.{seg[1]}.0"
+    want_prefix = f"{seg[0]}.{seg[1]}"
     want_label = f"beta{seg[0]}.{seg[1]}"
-    readings.append(f"最新冻结段 = v{seg[0]}.{seg[1]} ⇒ 软件应为 `{want_label}` / marketing `{want_marketing}`")
+    readings.append(f"最新冻结段 = v{seg[0]}.{seg[1]} ⇒ 软件必须出 `{want_label}` 段（marketing `{want_prefix}.x`）")
 
     got_marketing = ledger.get("marketingVersion")
     got_label = ledger.get("releaseLabel")
     readings.append(f"台账 release-version.json = `{got_label}` / marketing `{got_marketing}`")
-    if got_marketing != want_marketing:
-        problems.append(f"[A] 台账 marketingVersion = `{got_marketing}`，冻结 v{seg[0]}.{seg[1]} 要求 `{want_marketing}`")
-    if got_label != want_label:
-        problems.append(f"[A] 台账 releaseLabel = `{got_label}`，冻结 v{seg[0]}.{seg[1]} 要求 `{want_label}`")
+    # A 只判**段**：`v1.2` ⇒ marketing 必须以 `1.2.` 开头、标签必须是 `beta1.2` 或 `beta1.2.N`。
+    # 末位留给活书演进（v1.2.1 对应 1.2.1 是合法的；`1.1.x` 建在 v1.2 上的那种错位才是要判红的）。
+    if not (got_marketing or "").startswith(want_prefix + "."):
+        problems.append(f"[A] 台账 marketingVersion = `{got_marketing}`，冻结 v{seg[0]}.{seg[1]} 要求 `{want_prefix}.x`")
+    if not (got_label or "").startswith(want_label):
+        problems.append(f"[A] 台账 releaseLabel = `{got_label}`，冻结 v{seg[0]}.{seg[1]} 要求以 `{want_label}` 开头")
 
     # C：盘上不许躺着比冻结号更旧的包
     if dist_dir.is_dir():
@@ -113,18 +115,18 @@ def judge(frozen_dir: pathlib.Path, ledger: dict, dist_dir: pathlib.Path) -> tup
             readings.append(f"dist 产物 `{app.name}` ⇒ v{on_disk[0]}.{on_disk[1]}")
 
     # B：产物跟随
-    target = dist_dir / f"DoyahStudio-{want_label}.app" if dist_dir.is_dir() else None
+    target = dist_dir / f"DoyahStudio-{got_label}.app" if dist_dir.is_dir() and got_label else None
     if target is None or not target.exists():
-        readings.append(f"产物 `DoyahStudio-{want_label}.app` 尚未构建 ⇒ 版本号对不对**未知**（跳过 ≠ 通过）")
+        readings.append(f"产物 `DoyahStudio-{got_label}.app` 尚未构建 ⇒ 版本号对不对**未知**（跳过 ≠ 通过）")
         return ("FAIL" if problems else "INCOMPLETE"), problems, readings
 
     got_plist = plist_value(target, "CFBundleShortVersionString")
     got_plist_label = plist_value(target, "DoyahReleaseLabel")
     readings.append(f"产物 plist = `{got_plist_label}` / `{got_plist}`")
-    if got_plist != want_marketing:
-        problems.append(f"[B] 产物 CFBundleShortVersionString = `{got_plist}`，应为 `{want_marketing}`")
-    if got_plist_label != want_label:
-        problems.append(f"[B] 产物 DoyahReleaseLabel = `{got_plist_label}`，应为 `{want_label}`")
+    if got_plist != got_marketing:
+        problems.append(f"[B] 产物 CFBundleShortVersionString = `{got_plist}`，台账 / 应为 `{got_marketing}`")
+    if got_plist_label != got_label:
+        problems.append(f"[B] 产物 DoyahReleaseLabel = `{got_plist_label}`，台账 / 应为 `{got_label}`")
 
     return ("FAIL" if problems else "PASS"), problems, readings
 
@@ -162,7 +164,7 @@ def self_test() -> int:
         (frozen / "Doyah产品需求规格说明书-v1.3-20261201.md").write_text("x", encoding="utf-8")
         dist = base / "dist"
         dist.mkdir()
-        ledger = {"marketingVersion": "1.2.0", "releaseLabel": "beta1.2"}
+        ledger = {"marketingVersion": "1.2.1", "releaseLabel": "beta1.2.1"}
         verdict, problems, _ = judge(frozen, ledger, dist)
         if verdict != "FAIL" or not any("[A]" in p for p in problems):
             print(f"✗ 负例 1（冻结 v1.3 而台账 1.2.0）没判红：{verdict} {problems}")

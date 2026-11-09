@@ -939,6 +939,28 @@ def check_structure(root: pathlib.Path, ledger: dict, targets, pbx, report: Repo
         report.note("本机没有 `%s`（判据不需要它 —— 比对的是文件内容，不是「谁跑过」）" % generator.get("tool"))
 
 
+
+def doc_version_label(root: pathlib.Path) -> str:
+    """发布标签由**冻结段**派生（2026-11-08 主人令「冻结了四书哪个版本，软件就应该出哪个版本」）。
+
+    出处 = `Docs/frozen/` 里最新的 `-vX.Y-YYYYMMDD.md`；派生 = `beta` + `X.Y`。
+    为什么不是活书头部版本：活书改一行就换包号，等于每改一句文档都要重出包，
+    还会出现「软件 1.2.7 对着冻结 v1.2」的错位。取不到就返回空串（调用方按「未知」处理，不当通过）。
+    """
+    frozen = root / "Docs" / "frozen"
+    if not frozen.is_dir():
+        return ""
+    best = None
+    for path in frozen.glob("*.md"):
+        m = re.search(r"-v(\d+)\.(\d+)-(\d{8})\.md$", path.name)
+        if not m:
+            continue
+        seg = (int(m.group(1)), int(m.group(2)))
+        if best is None or seg > best:
+            best = seg
+    return "beta%d.%d" % best if best else ""
+
+
 def check_release_label(root: pathlib.Path, ledger: dict, report: Report, derived_vars: dict):
     """B4 —— 发布标签：一处定义，产物名与 Info.plist 两处派生（派活单 `T-20261002-028`）。"""
     label = ledger["releaseLabel"]
@@ -949,6 +971,15 @@ def check_release_label(root: pathlib.Path, ledger: dict, report: Report, derive
     text = read_text(root, relative, report)
     if text is None:
         return
+    # 发布标签派生自详设版本时，模板里的 `${RELEASE_LABEL}` 要按**详设头部**展开（不是按脚本里的式子原样串）。
+    doc_label = doc_version_label(root)
+    if doc_label:
+        derived_vars[variable] = doc_label
+    # 模板里还有 `${MARKETING_VERSION}`：它由标签去掉里程碑前缀而来，这里一并按同一口径算好，
+    # 免得解析模板时因为「变量没定义」把整条 B4 判成「无基准」。
+    mv = marketing_version_from_label(label)
+    if mv:
+        derived_vars.setdefault("MARKETING_VERSION", mv)
     sites = shell_assignments(text).get(variable) or []
     if not sites:
         report.bad("%s：没有 `%s=\"…\"` —— 发布标签没有出处，产物名与 Info.plist 从哪派生？"
@@ -958,9 +989,21 @@ def check_release_label(root: pathlib.Path, ledger: dict, report: Report, derive
                    % (relative, variable, len(sites),
                       "、".join("第 %d 行" % line for _, line, _computed in sites)))
     else:
-        value, line, _computed = sites[0]
+        value, line, computed = sites[0]
         report.sites += 1
-        if value != label:
+        if "${DOC_VERSION" in value:
+            # 派生自详设版本（不是字面量）：按 macOS 详设头部复算一遍再比 —— 只认「派生出同一个标签」，
+            # 不接受「写个式子但算出来是别的号」。
+            doc_label = doc_version_label(root)
+            if not doc_label:
+                report.note("%s:%d 的 `%s` 派生自详设版本，但取不到详设头部版本 ⇒ **未知**（不当通过）"
+                            % (relative, line, variable))
+            else:
+                derived_vars[variable] = doc_label
+                if doc_label != label:
+                        report.bad("%s:%d 的 `%s` 派生自详设 = `%s`，台账 `releaseLabel` = `%s`"
+                               % (relative, line, variable, doc_label, label))
+        elif value != label:
             report.bad("%s:%d 的 `%s` = `%s`，台账 `releaseLabel` = `%s`"
                        % (relative, line, variable, value, label))
     anchor = source["derivationAnchor"]

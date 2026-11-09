@@ -105,6 +105,27 @@ def main() -> int:
     (FROZEN / "README.md").write_text("\n".join(manifest))
     print(f"清单已重写：Docs/frozen/README.md（基线 {args.version}）")
 
+    # 冻结即刻自检「平台详设跟没跟上」（2026-11-08 主人令：macOS 冻结一版，马上更新到 Linux / Windows ——
+    # 好让公司那台机器 `git pull` 拿到同版本详设去同步开发）。范围 = 判据里会表态且**要求必须跟上**的端：
+    # Linux / Windows（PC 全量端，详设跟版），Android 跳过（移动族基准本体），HarmonyOS 不冻（主人已表态不做）。
+    # 缺节 ⇒ 冻结不算成立（exit 1）：跳过 ≠ 通过。
+    REQUIRED = ("Linux", "Windows")
+    derivation = subprocess.run([sys.executable, str(ROOT / "Scripts/check-platform-derivation.py")],
+                                capture_output=True, text=True)
+    print("—" * 60)
+    lagging = []
+    for line in derivation.stdout.strip().split("\n"):
+        name = next((n for n in ("Linux", "Windows", "Android", "iOS", "HarmonyOS") if n in line), None)
+        if not name or not re.search(r"已表态|跳过|没做到", line):
+            continue
+        print(line)
+        if name in REQUIRED and "✅" not in line:
+            lagging.append(name)
+    if lagging:
+        print(f"✗ 平台详设未跟上本次冻结：{'、'.join(lagging)} —— 先按基准补齐逐节表态（§0.2 + 正文）再冻结。")
+        print("  跳过 ≠ 通过：不补就冻结，别人 pull 到的是「基准已新段、平台还停在上一个段」的半套书。")
+        return 1
+
     rc = subprocess.run([sys.executable, str(ROOT / "Scripts/check-frozen-sync.py"), "--strict"],
                         cwd=ROOT).returncode
     print(f"自证 check-frozen-sync --strict → rc={rc}")
