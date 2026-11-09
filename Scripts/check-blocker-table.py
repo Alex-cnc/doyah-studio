@@ -43,7 +43,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 LEDGER_REL = "Docs/Doyah产品开发计划任务清单-macOS.md"
 LEDGER_FLOOR = 400
-TABLE_FLOOR = 5
+TABLE_FLOOR = 2        # 2026-11-09：真值只剩 2 条（三书合一后按台账复算）；解析失败时行数为 0，空跑防护照旧生效
 
 HEADING_RE = re.compile(r"^###\s*7\.1\s*智能体剩余\s*(\d+)\s*条")
 AGT_RE = re.compile(r"^\|\s*`?(FR-AGT-[A-Z0-9-]+)`?\s*\|")
