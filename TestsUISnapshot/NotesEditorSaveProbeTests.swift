@@ -13,7 +13,7 @@ import DoyahCore
 ///
 /// 那一行原先要需求提出者点三下：**空着灰 / 有内容亮 / 删回灰**。已经有的两层是：
 ///   ① **模型**：`AppState.noteEditorHasContent` 三态断言（`UISnapshotPanelsTests` 的空态那批）；
-///   ② **源码**：`Scripts/check-empty-action-buttons.py` 钉「`.disabled(!appState.noteEditorHasContent)`
+///   ② **源码**：`Tests/EmptyActionButtonGateTests.swift`（2026-11-10 从 `Scripts/check-empty-action-buttons.py` 搬入）钉「`.disabled(!appState.noteEditorHasContent)`
 ///      这一处还在、判据属性没有第二处定义、视图没有自己再算一遍」。
 ///
 /// 但这两层合起来**判不到「渲染出来的那只按钮真的跟着变」** —— 谓词对了、`.disabled(!…)`
@@ -498,7 +498,7 @@ final class NotesEditorSaveProbeTests: XCTestCase {
     /// `.keyboardShortcut(…)` 都**在块里**。
     ///
     /// 判据与界面**认同一处**：三处锚点（动作 / 悬停 / 内容守卫）无论形态怎么改都得在（内容守卫那
-    /// 一处另有门禁 `check-empty-action-buttons.py` 看着）—— 找不到就返回空串，调用方据此判红
+    /// 一处另有 `Tests/EmptyActionButtonGateTests` 看着）—— 找不到就返回空串，调用方据此判红
     /// （「锚点被改了」不许静默当作「那一块干干净净」）。
     private static func saveButtonBlock(in text: String) -> String {
         sourceRegion(

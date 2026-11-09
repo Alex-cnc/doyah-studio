@@ -23,7 +23,8 @@ set -euo pipefail
 #
 # `TestsUISnapshot/PaletteWiringProbeTests.swift` 判的是清单里 `FR-STD-WS-UI-005` 那一句人话
 # 「**每个命令都真的打开了对应面板（不是点了没反应）**」—— 静态判据
-# （`Scripts/check-palette-wiring.py`：清单 id ↔ 分派器 case ↔ 标志位有没有视图读）判不住这件事，
+# （原 `Scripts/check-palette-wiring.py` 判的是清单 id ↔ 分派器 case ↔ 标志位有没有视图读；它只判源码、判不住这件事，
+#  2026-11-10 摘离 —— 那一半由本文件里的 `PaletteWiringProbe` 接手），
 # 所以它拿真 `AppState` 把**每一条命令都点一遍**、断言登记在案的**落点**确实发生
 # （面板标志位 / 新页签 / 编辑器命令 / 状态栏说法 / 页签上的可读错误），
 # 落点表与命令清单**双向对账**（新增命令没登记落点 ⇒ 判红）。
@@ -210,7 +211,7 @@ set -euo pipefail
 #
 # `TestsUISnapshot/NotesEditorSaveProbeTests.swift` 判清单那一行原先要人点三下的三态
 # （**空着灰 / 有内容亮 / 删回灰**）。模型那一半（`AppState.noteEditorHasContent` 三态）与源码
-# 那一半（`check-empty-action-buttons.py`）都已经在判，但两层合起来判不到「**渲染出来的那只按钮
+# 那一半（现为 `Tests/EmptyActionButtonGateTests.swift`，2026-11-10 从 `check-empty-action-buttons.py` 搬入）都已经在判，但两层合起来判不到「**渲染出来的那只按钮
 # 真的跟着变**」⇒ 本条在**像素**上补这一层：三态各渲染一遍真视图，
 # ① 空 ⇒ 按钮那一带只有灰墨水（最暗亮度 ≥ 80，实测 91）；
 # ② 有字 ⇒ 同一带出现深墨水（≤ 60，实测 34）且按钮带变了 ≥ 2000 像素（实测 5028）；
