@@ -25,10 +25,6 @@
     "note": "『有判据、没闭环』那一族的机械防线：目录里的每个判据脚本都必须被闭环引用，或者在本台账里逐条登记理由。 **第二张网（合册 `T-20261013-027` · 原单 `T-20261010-037`）**：「门禁自己的证据」脚本 `Scripts/test-*.py` 原先同时落在两条网外（本 `glob` 只收 `check-*.py`，第 4 项只做「台账 → 盘」）⇒ 盘上新增一份 `test-*.py` 时两条网都静默。现加 `testGlob` 第二张网：权威面 = `Scripts/self-test-counts.json` 的 `families[].script`，**双向**对账（盘上未登记 ⇒ 红；台账指到不在盘的脚本 ⇒ 红）+ 面下限 `testFloor` + `testExempt`（与 `exempt` 同形）。",
     "exempt": [
       {
-        "script": "Scripts/check-ui-snapshot-languages.py",
-        "reason": "随 ./Scripts/make-ui-snapshots.sh 的收尾跑（快照按 L-01 纪律不进每轮闭环）；`Docs/Doyah产品概要设计说明书.md` §8.3 与本台账都指向它。"
-      },
-      {
         "script": "Scripts/check-notes-capability-sync.py",
         "reason": "跨仓判据（要读 ../notes 仓），不进本仓每轮闭环：干净克隆 / 另一平台没有 Notes 仓时报「跳过（Notes 仓不在盘上）」，跳过 ≠ 通过，故不能当作本仓门禁的一项。主开发机上手动跑，以及两仓同批改动时跑。"
       },
@@ -51,7 +47,7 @@
     ],
     "testGlob": "Scripts/test-*.py",
     "testAuthority": "Scripts/self-test-counts.json",
-    "testFloor": 17,
+    "testFloor": 12,
     "testExempt": []
   },
   "numbers": [
@@ -120,16 +116,17 @@
     {
       "key": "core-tests",
       "label": "Core 单测项数（verify-core.sh 实测）",
-      "value": 5572,
+      "value": 5618,
       "unit": "项",
       "measure": {
         "kind": "count-file",
         "file": ".build/core-test-count.txt",
         "regex": "(\\d+)",
         "expect": [
-          5572
+          5618
         ],
-        "writtenBy": "Scripts/verify-core.sh（同一次运行写出；verify-all.sh 在第 1 项之前删掉它 ⇒ 本轮没跑第 1 项时它不存在，判据如实报『跳过』而不是拿旧值当现状）"
+        "writtenBy": "Scripts/verify-core.sh（同一次运行写出；verify-all.sh 在第 1 项之前删掉它 ⇒ 本轮没跑第 1 项时它不存在，判据如实报『跳过』而不是拿旧值当现状）",
+        "note": " 2026-11-09（判据搬家第一批 · 本地化/文案 8 条）：8 条 `check-*.py` 搬进 `swift test`，新增 5 类 46 例（Localization* / LanguageRegistryShape）+ TestsUISnapshot 14 例（MenuLanguageGate / UISnapshotLanguageCoverage，默认 skip 2 例）⇒ 实测 5572 → **5618**。"
       },
       "anchors": [
         {
@@ -159,7 +156,7 @@
           "note": "契约侧闸门表：同上"
         }
       ],
-      "expect": 5572
+      "expect": 5618
     },
     {
       "key": "ui-snapshots",

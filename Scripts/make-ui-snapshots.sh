@@ -122,13 +122,23 @@ PY
 # 「判据太松」就是这么漏过去的）。判据与理由见 Scripts/check-ui-snapshot-languages.py。
 echo
 echo "==> 语言覆盖（中英成对 + 语言到像素）"
-# 筛选跑给 `--partial`：这一份清单只含被筛中的那一族，注册表里其余条目**不在**里面 ——
-# 那是「这一次没拍」，不是「条目陈旧」（不分开的话每次筛选跑都自报 ❌、实测 18 条假红）。
-if [ "${FILTER}" = "UISnapshotTests" ]; then
-    python3 Scripts/check-ui-snapshot-languages.py --manifest "${OUT}/manifest.json"
-else
-    python3 Scripts/check-ui-snapshot-languages.py --manifest "${OUT}/manifest.json" --partial
+# 判据已搬进 `TestsUISnapshot/UISnapshotLanguageCoverageTests.swift`（2026-11-09 判据搬家）：
+# 它读同一份 manifest + 注册表 `Scripts/ui-snapshot-language-exemptions.json`，逐字节比 PNG。
+# 筛选跑给 `DOYAH_SNAPSHOT_PARTIAL=1`：这一份清单只含被筛中的那一族，注册表里其余条目**不在**
+# 里面 —— 那是「这一次没拍」，不是「条目陈旧」（不分开的话每次筛选跑都自报 ❌、实测 18 条假红）。
+LANGUAGE_PARTIAL=0
+if [ "${FILTER}" != "UISnapshotTests" ]; then
+    LANGUAGE_PARTIAL=1
 fi
+DOYAH_SNAPSHOT_LANGUAGE_GATE=1 DOYAH_SNAPSHOT_PARTIAL="${LANGUAGE_PARTIAL}" \
+    "${SWIFT}" test \
+      --disable-sandbox \
+      --package-path . \
+      --cache-path "${CACHE}" \
+      --scratch-path "${SCRATCH}" \
+      --manifest-cache local \
+      -Xswiftc -disable-sandbox \
+      --filter "UISnapshotLanguageCoverageTests"
 
 # ── 全量跑凭证（第 98 轮）：**判据的输入必须只有一个写者** ──
 # 真现场：`.build/ui-snapshots/manifest.json` 是**共享产物** —— 本机人工点验会话跑筛选子集时也往那儿写，

@@ -342,21 +342,26 @@ python3 Scripts/check-script-portability.py
 # + 入口证据 `Scripts/test-language-registry-gate.py` **例数 4**（走的是**命令行路径**：
 # 真仓库 exit 0 / 写坏 exit 1 并点名到文件 / 参数错 exit 2 / 真仓库逐字节未变 —— 函数路径与
 # 命令行路径的坏法不同，两条都要有人跑）。
-python3 Scripts/check-language-registry.py
-python3 Scripts/check-language-registry.py --self-test
-python3 Scripts/test-language-registry-gate.py
+# **2026-11-09 判据搬家（第一批 · 本地化 / 文案 8 条）**：下面这 8 条原先各是一份
+# `Scripts/check-*.py`，已搬进 `swift test`（`./Scripts/verify-core.sh` 会真的跑到）：
+#   check-language-registry      → Tests/LanguageRegistryShapeTests.swift
+#   check-core-localization      → Tests/LocalizationCoreRatchetTests.swift
+#   check-effective-language     → Tests/LocalizationEffectiveLanguageTests.swift
+#   check-format-arguments       → Tests/LocalizationFormatArgumentTests.swift
+#   check-copy-emphasis          → Tests/LocalizationCopyGateTests.swift
+#   check-literal-language       → Tests/LocalizationLiteralLanguageTests.swift
+#   check-menu-language          → TestsUISnapshot/MenuLanguageGateTests.swift（打包之后那一步，要真 App）
+#   check-ui-snapshot-languages  → TestsUISnapshot/UISnapshotLanguageCoverageTests.swift（快照收尾）
+# 旧脚本与它们的负例 runner 原样留在 `Scripts/archive/`（不删，只摘离闭环）。
 
 echo "==> 3/19 本地化：Core 展示文本棘轮（R-037）+「当前语言只有一个来源」（L-13）+「文案即所见」（L-19）+「语言是传进来的」（L-47）"
-python3 Scripts/check-core-localization.py
 # L-109（2026-10-11 第 487 轮）：同一条命令跑**两条**棘轮 —— ① 含汉字的字面量（R-037，基线
 # `Scripts/core-localization-baseline.json`）② 写死的英文展示文案（白名单
 # `Scripts/core-localization-english.json`：白名单之外一律报红、只许缩小；每条登记项带 `kind`）。
-python3 Scripts/check-core-localization.py --self-test
 # L-13：界面语言有两条路 —— `L(...)` 与**显式传语言下去**（`summary(language:)` 之类）。
 # 后者原先取的是**用户选择**（`LocalizationManager.shared.language`），绕过了渲染语境：
 # 第 13 轮读图抓到的真缺陷就是它 —— 中文界面的行详情侧栏写着 `Text · 12 characters`。
 # 收成一个口子 `effectiveLanguage`（宿主语境优先），并把这个口径变成机械判据。
-python3 Scripts/check-effective-language.py
 # L-46（2026-09-27 第 37 轮）：上面两条只比**模板与模板**，没有人比过**模板与实参**。
 # 真缺陷就长在这条缝里（第 37 轮实测）：`App/Views/AboutLicenseSheet.swift` 三处
 # `L(.licAboutEdition)` / `L(.licAboutAppVersion)` / `L(.licAboutActivityItems)` 不传实参，
@@ -368,8 +373,6 @@ python3 Scripts/check-effective-language.py
 # 登记成 text/number 的形状带出处、进 A/A′ 槽位交叉检查，不占预算。
 # 第二条是**门禁自己的证据**：16 例负例（A / A′ / B / C / D / F / G /
 # 例外陈旧 / 空跑不许通过 …，夹具一律在临时目录，末例核对真仓库文件逐字节未变）。
-python3 Scripts/check-format-arguments.py
-python3 Scripts/check-format-arguments.py --self-test
 # L-19（2026-09-28 第 43 轮）：上面几条比的都是「文案内部」（汉字棘轮 / 语言来源 / 模板与实参），
 # 谁都没管**文案与渲染口径**。真缺陷正长在这条缝里（第 13 轮读图 `routine-candidates-empty-zh`）：
 # 语言表里 17 个键写着 markdown 强调 `**…**`，其中 `routineCandidatesHint` **一个键同时被两条路用**
@@ -383,8 +386,6 @@ python3 Scripts/check-format-arguments.py --self-test
 # `LocalizedStringKey` / C 解析条目数下限（正则失配 ⇒ 零命中假绿当场报红）/ D 例外两端对账
 # （条目陈旧报红）/ E 本门禁与它的负例必须在闭环里被真的跑到。负例 `test-copy-emphasis-gate.py`
 # 一律在临时副本上写坏，末例核对真仓库逐字节未变。
-python3 Scripts/check-copy-emphasis.py
-python3 Scripts/test-copy-emphasis-gate.py
 # L-47（2026-09-28 第 46 轮）：上面几条比的都是「文案怎么取」，谁都没管**语言从哪来**。
 # 真缺陷正长在这条缝里（第 46 轮读图 `diagnosis-empty-en`）：英文界面上界面文案都是英文，
 # 唯独「给模型的资料」整块中文 —— `Core/DiagnosisContext.swift` 的文件私有取值助手把
@@ -402,8 +403,6 @@ python3 Scripts/test-copy-emphasis-gate.py
 # 台账 `Scripts/literal-language-dispositions.json`；负例 `test-literal-language-gate.py` **22 例**（判定物第 39 轮升代码面后 +5 例）
 # （第 46 轮落地时 9 例，L-65 第 2/3/4 批又各补了 1~3 例、第 5 批 +3 例 —— 例数的唯一来源与逐处对账见
 # `Scripts/self-test-counts.json`，一律在临时副本上写坏）。
-python3 Scripts/check-literal-language.py
-python3 Scripts/test-literal-language-gate.py
 # 人类主人令 2026-10-13（信箱 `T-20261013-042`）+ 2026-10-14 裁决（`T-20261014-003`）：
 # 「界面任何按钮都用图标」的**机械判据**。第二段批 1–6 把 277 处水平按钮落到纯图标（`ToolbarIconButton`，
 # 提示 + 无障碍标签装在组件本体）；批 7 修判据 F 的观察窗（控件本体 + 修饰链）；余 20 处（弹框 7 / 菜单件 4 /
@@ -969,8 +968,13 @@ if [ "${PLATFORM}" = "macos" ]; then
   # 判据 L-145 的负例 `--self-test` **19 例**（含「停启动语言」「认不出没登记」「缺系统菜单」「展开族缺项」
   # 「缺 C 段」「同一条 dump 改一字节即判红」「第 140 轮那份留档在第 2 代必须判红」）。
   # 放在打包之后：它要跑刚构建出来的那个包（`dist/DoyahStudio.app`）。
-  python3 Scripts/check-menu-language.py
-  python3 Scripts/check-menu-language.py --self-test
+  # 判据已搬进 `TestsUISnapshot/MenuLanguageGateTests.swift`（判定逻辑的 9 条负例每次 swift test 都跑；
+  # 这里只补**真启动两档**那一半 —— 它要刚构建出来的 `dist/DoyahStudio.app`）。
+  MENU_DEVELOPER_DIR="${DEVELOPER_DIR:-/Applications/Xcode.app/Contents/Developer}"
+  DOYAH_MENU_LANGUAGE_GATE=1 DEVELOPER_DIR="${MENU_DEVELOPER_DIR}" \
+    "${MENU_DEVELOPER_DIR}/Toolchains/XcodeDefault.xctoolchain/usr/bin/swift" test \
+      --disable-sandbox --package-path "${ROOT}" --scratch-path "${ROOT}/.build" \
+      --manifest-cache local --filter MenuLanguageGateTests -Xswiftc -disable-sandbox
   # 平台矩阵（NFR-ALL-GATE-COMP-004 / -005）：**部署目标只有一个值**（包定义 / 工程文件 /
   # 生成物 pbxproj / Info.plist 模板四处）+ 产物信息带 `LSMinimumSystemVersion`（老机器上
   # 系统那句「需要 macOS 14.0 或更高版本」的唯一依据）+ 构建脚本认 arm64 / x86_64 / universal

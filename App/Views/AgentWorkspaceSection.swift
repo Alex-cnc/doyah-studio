@@ -18,7 +18,7 @@ struct AgentWorkspaceSection: View {
     @EnvironmentObject private var workspace: WorkspaceStore
     @ObservedObject private var localization = LocalizationManager.shared
 
-    private var language: AppLanguage { localization.language }
+    private var language: AppLanguage { LocalizationManager.shared.effectiveLanguage }
 
     /// 现在是不是已经停在默认根（按钮据此变灰：点了也没变化的那一下不该可点）。
     private var isAtDefaultRoot: Bool {

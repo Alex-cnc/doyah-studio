@@ -181,7 +181,7 @@ final class WorkspaceStore: ObservableObject {
                 // （App 层一次、窗口一次），第二遍若把提示抹成 nil，用户就永远看不见它。
                 if let migratedFrom {
                     originNotice = WorkspaceRootCopy.migratedNotice(
-                        previousPath: migratedFrom, LocalizationManager.shared.language)
+                        previousPath: migratedFrom, LocalizationManager.shared.effectiveLanguage)
                 }
                 adoptDefaultRoot()
             case .userOpened(let path):
@@ -729,7 +729,7 @@ final class WorkspaceStore: ObservableObject {
                 originNotice = WorkspaceRootCopy.defaultRootUnavailable(
                     path: url.path,
                     reason: L(.workspaceFileOpNotADirectory, url.lastPathComponent),
-                    LocalizationManager.shared.language)
+                    LocalizationManager.shared.effectiveLanguage)
                 apply(status: .denied(path: url.path), bookmark: nil)
                 return
             }
@@ -741,7 +741,7 @@ final class WorkspaceStore: ObservableObject {
                 originNotice = WorkspaceRootCopy.defaultRootUnavailable(
                     path: url.path,
                     reason: ErrorPresenter.message(for: error),
-                    LocalizationManager.shared.language)
+                    LocalizationManager.shared.effectiveLanguage)
                 apply(status: .notAuthorized, bookmark: nil)
                 return
             }
@@ -752,7 +752,7 @@ final class WorkspaceStore: ObservableObject {
             originNotice = WorkspaceRootCopy.defaultRootUnavailable(
                 path: url.path,
                 reason: L(.workspaceUnavailableDenied),
-                LocalizationManager.shared.language)
+                LocalizationManager.shared.effectiveLanguage)
             apply(status: .denied(path: url.path), bookmark: nil)
             return
         }
