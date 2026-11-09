@@ -29,6 +29,8 @@ def split_cells(line):
 
 
 def capability_floors():
+    if not CAP.exists():   # 2026-11-09 三书合一后能力书已并入需求书，能力字段留空即可
+        return {}
     text = CAP.read_text(encoding="utf-8")
     out = {}
     for block in re.split(r"(?m)^### ", text)[1:]:

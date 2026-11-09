@@ -25,7 +25,7 @@ PLAT = re.compile(r"macOS|Windows|Linux|iOS|iPadOS|watchOS|Android|鸿蒙")
 CROSS = re.compile(r"Doyah产品|AGENT-SPEC|核心契约|计划书|规划书|需求规范书|开发记录|清单|SRS|proposal|外观方案|\.md|第[一二三四五六七八九十]+章|本书|本册|旧本|旧版|契约|需求书|需求分析|概要设计|能力规划")
 META = re.compile(r"(20\d\d-\d\d-\d\d)|(队列\s*[LNT]-\d+)|(第\s*\d+\s*轮)|((已上移))")
 CJK = re.compile(r"[\u4e00-\u9fff]")
-DOCS = {"cap": "Docs/Doyah产品能力规划说明书.md",
+DOCS = {
         "req": "Docs/Doyah产品需求规格说明书.md",
         "design": "Docs/Doyah产品概要设计说明书.md"}
 

@@ -101,8 +101,6 @@ DEFAULT_TARGETS = [
     "Docs/规范/界面设计节-写作规范.md",
     "Docs/archive/root-20261026/人工点验清单-20261018.md",
     "Docs/archive/root-20261026/人工点验清单-20261018-重分版.md",
-    "Docs/Doyah产品能力规划说明书.md",
-    "Docs/frozen/Doyah产品能力规划说明书-v1.0-20261025.md",
     "Docs/frozen/Doyah产品需求规格说明书-v1.0-20261025.md",
     "Docs/frozen/Doyah产品概要设计说明书-v1.0-20261025.md",
     "Docs/frozen/Doyah产品详细设计说明书-macOS-v1.0-20261025.md",
@@ -626,6 +624,7 @@ def check_requirement_counts() -> list[str]:
     statuses = Counter(row[3] for row in fr if len(row) > 3) if has_status else Counter()
     derived = (len(fr), statuses.get("✅", 0), statuses.get("🟡", 0), statuses.get("⬜", 0))
 
+    # 2026-11-09 三书合一后能力书已并入本书（本节号校验随书退役）
     if not capability.exists():
         return problems
     text = capability.read_text(encoding="utf-8")
@@ -653,6 +652,14 @@ STATUS_MARKS = ("⬜", "🟡", "✅")
 
 
 def check_capability_book_purity() -> list[str]:
+    """已退役（2026-11-09 三书合一）：能力规划说明书并入需求规格说明书，本判据随书下线。
+
+    替代口径：合并后的需求书里**能力说明块不带状态符号**，由 `check-doc-tables.py` 主表校验
+    （「其余三书里出现状态符号即为疏漏」那条）覆盖；`Scripts/check-doc-tables.py` 的表格列检查照旧。
+    """
+    if True:
+        return []
+
     """能力书「不写状态」判据（2026-10-20 · 人类主人问「能力说明书怎么会有状态字段呢」）。
 
     **为什么要它**：能力书 1.1 维护约定① 与陈述 S-04 都写明「本文件不写状态 —— 状态与条数的
@@ -819,8 +826,6 @@ SELF_TEST_TRACKED = [
     "Docs/规范/界面设计节-写作规范.md",
     "Docs/archive/root-20261026/人工点验清单-20261018.md",
     "Docs/archive/root-20261026/人工点验清单-20261018-重分版.md",
-    "Docs/Doyah产品能力规划说明书.md",
-    "Docs/frozen/Doyah产品能力规划说明书-v1.0-20261025.md",
     "Docs/frozen/Doyah产品需求规格说明书-v1.0-20261025.md",
     "Docs/frozen/Doyah产品概要设计说明书-v1.0-20261025.md",
     "Docs/frozen/Doyah产品详细设计说明书-macOS-v1.0-20261025.md",
@@ -1207,7 +1212,7 @@ def run_self_test() -> int:
 
         # 例 17（㈡）·在场下限：删掉一份 tracked 文档（不在 .gitignore 名单里）⇒ 本件自己判红并点名
         total += 1
-        capability_doc = clone / "Docs/Doyah产品能力规划说明书.md"
+        capability_doc = clone / "Docs/Doyah产品概要设计说明书.md"
         capability_backup = capability_doc.read_text(encoding="utf-8")
         capability_doc.unlink()
         code, output = run([], clone)
@@ -1215,7 +1220,7 @@ def run_self_test() -> int:
             failures.append(
                 f"例 17 失败：删掉 tracked 文档（不在 .gitignore 名单里）仍 exit 0 —— 面无下限（原单 ㈡）\n{output}"
             )
-        elif "Doyah产品能力规划说明书.md" not in output or "被删或路径写错" not in output:
+        elif "Doyah产品概要设计说明书.md" not in output or "被删或路径写错" not in output:
             failures.append(
                 f"例 17 失败：判红了但没有点名被删的文档 / 没说「被删或路径写错」\n{output}"
             )

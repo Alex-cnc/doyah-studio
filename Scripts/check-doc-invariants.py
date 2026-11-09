@@ -19,7 +19,6 @@ DOCS = ROOT / "Docs"
 
 # 四书一单（Docs 根 17 份）：3 书 + 6 端详设 + 6 端单 + 2 规范
 BOOKS_AND_SHEETS = [
-    "Doyah产品能力规划说明书.md",
     "Doyah产品需求规格说明书.md",
     "Doyah产品概要设计说明书.md",
     "Doyah产品详细设计说明书-macOS.md",

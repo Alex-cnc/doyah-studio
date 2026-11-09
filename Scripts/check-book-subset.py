@@ -35,7 +35,6 @@ L0_BOOKS = [                       # 编号集合来源（需求书 + 概设；�
 ]
 # 逐行比对用的**正文池**：四本全量书（能力 / 需求 / 概设 / 详设-Android）都算来源
 POOL_BOOKS = L0_BOOKS + [
-    ROOT / "Docs/Doyah产品能力规划说明书.md",
     ROOT / "Docs/Doyah产品详细设计说明书-Android.md",
 ]
 # 分册仓：独立产品仓，其 Docs/ 是分册（任务清单除外，本判据不看进度）

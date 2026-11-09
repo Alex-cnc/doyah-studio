@@ -197,6 +197,8 @@ def check_step(path: pathlib.Path, current: str | None,
     # 冻结升段（vX.Y.NNN → vX.(Y+1).0）必须有证据：该段的冻结件在盘上。
     # 没有冻结件就升段 = 跳段，照旧判红。
     if is_segment_roll(old, current):
+        if path.name.startswith("Doyah产品开发计划任务清单"):
+            return []      # 一单是活件（`check-end-sheets.py` 口径：不拍快照）⇒ 升段不需要冻结件
         seg = ".".join(current.split(".")[:2])          # v1.1
         if not frozen_baselines(frozen_dir or FROZEN_DIR, path.stem, seg):
             return [f"{rel}: 升段到 {seg} 但没有该段冻结件 —— 先跑 "

@@ -30,12 +30,14 @@ FROZEN = ROOT / "Docs/frozen"
 BOOKS = [
     ("Docs/Doyah产品需求规格说明书.md", "Doyah产品需求规格说明书"),
     ("Docs/Doyah产品概要设计说明书.md", "Doyah产品概要设计说明书"),
-    ("Docs/Doyah产品能力规划说明书.md", "Doyah产品能力规划说明书"),
+    # 2026-11-09 三书合一：能力规划说明书并入需求规格说明书，不再单独冻结（旧快照仍在 v1.2 段里）。
+    # 一单不进冻结集（`check-end-sheets.py` 口径：任务清单是活件，不拍快照）。
     ("Docs/Doyah产品详细设计说明书-macOS.md", "Doyah产品详细设计说明书-macOS"),
     ("Docs/Doyah产品详细设计说明书-Android.md", "Doyah产品详细设计说明书-Android"),
-    # 冻结口径（主人 2026-11-05）：「只有 Linux 版本的冻结，其他平台都还没大规模开发，也可能不会开发，暂时不考虑冻结」⇒ Windows / iOS / 鸿蒙 不纳入冻结集。
+    # 冻结口径（主人 2026-11-05）：「只有 Linux 版本的冻结，其他平台都还没大规模开发，也可能不会开发，暂时不考虑冻结」⇒ iOS / 鸿蒙 不纳入冻结集。
+    # 2026-11-08 主人令追加：「Windows 版本也保持同步，虽然现在不会开发，但详设可以同步跟进」⇒ Windows 详设从 v1.3 起纳入冻结集。
     ("Docs/Doyah产品详细设计说明书-Linux.md", "Doyah产品详细设计说明书-Linux"),
-    ("Docs/Doyah产品开发计划任务清单-macOS.md", "Doyah产品开发计划任务清单-macOS"),
+    ("Docs/Doyah产品详细设计说明书-Windows.md", "Doyah产品详细设计说明书-Windows"),
 ]
 
 

@@ -136,7 +136,7 @@ if [ -z "${DOC_VERSION}" ]; then
 fi
 # 标签写**一处字面量**（判据 `check-release-version.py` 要求唯一字面量 + 产物名/plist 两处派生），
 # 紧接着用冻结段硬校验一次：对不上就停，不许带着错位号出包。
-RELEASE_LABEL="beta1.2"
+RELEASE_LABEL="beta1.3"
 if [ "beta${DOC_VERSION#v}" != "${RELEASE_LABEL}" ]; then
   echo "错误：发布标签 ${RELEASE_LABEL} 与冻结段 ${DOC_VERSION} 不一致（软件号必须等于冻结号）。" >&2
   echo "      改法：把本行 RELEASE_LABEL 改成 beta${DOC_VERSION#v}，再重出包。" >&2

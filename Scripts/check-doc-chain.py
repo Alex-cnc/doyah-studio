@@ -43,7 +43,6 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 
 # 层序：越靠上越是上游（①不引下游编号，所以它的引用数按规矩应为 0）
 LAYERS: list[tuple[str, str, str]] = [
-    ("①能力规划", "Docs/Doyah产品能力规划说明书.md", "capability"),
     ("②需求规格", "Docs/Doyah产品需求规格说明书.md", "requirement"),
     ("③概要设计", "Docs/Doyah产品概要设计说明书.md", "design"),
     ("④详细设计", "Docs/Doyah产品详细设计说明书-macOS.md", "detail"),
