@@ -22,7 +22,7 @@
   例 3 默认跑法第 1 项红 ⇒ 未执行从第 2 项起、**不含第 1 项**
   例 4 `DOYAH_PLATFORM=linux` + 第 16 项红 ⇒ 未执行里**不许**出现被跳过的第 1 / 11 项
   例 5 `--keep-going` + 第 3 项红 ⇒ **第 4 项到第 19 项真的跑了**（输出里有它们的项块头）
-  例 6 `--keep-going` + 两处红（第 3 / 16 项）⇒ 汇总**两项都点名**（不许只报第一个）
+  例 6 `--keep-going` + 两处红（第 3 / 12 项，两个不同的项）⇒ 汇总**两项都点名**（不许只报第一个）
   例 7 `--keep-going` 绿 ⇒ 逐项判定表十九行全 ✅ 且收尾仍报「十九项全过」
   例 8 末例：真仓库 `Scripts/verify-all.sh` 逐字节未变（「只在副本上写坏」这句话本身要被验证）
 
@@ -133,7 +133,12 @@ def main() -> int:
          rc == 0 and "✅ 验证闭环全部通过（十九项）" in out and "未执行" not in out and side_ok,
          f"rc={rc} side_ok={side_ok} argv={' | '.join(argv_lines[:3])}")
 
-    rc, out = run_gate(root, failures=("check-effective-language.py",))
+    # 注入点 = 第 3 项**现在真实存在**的那条 python 判据。
+    # 2026-11-10：原注入点是 `check-effective-language.py`，它已整体搬进 swift test（`Tests/Localization…`），
+    # 不再是闭环里的一项 ⇒ 桩根本不会被调用（`rc=0`、例 2/5/6 假红）。第 3 项现在只剩
+    # `check-button-icon-only.py`（+ 它的 `--self-test`），项号与 `set -e` 中止位置一字未变，
+    # 所以「点名第 3 项 + 未执行从第 4 项起」这两句断言的语义保持原样。
+    rc, out = run_gate(root, failures=("check-button-icon-only.py",))
     line = unexecuted_line(out)
     case("例 2 默认跑法 · 第 3 项红 ⇒ 点名第 3 项 + **未执行**从第 4 项列到第 19 项",
          rc != 0 and "⛔ 第 3 项失败" in out and line.startswith("   **未执行**")
@@ -153,7 +158,7 @@ def main() -> int:
          and "第 1 项" not in line and "第 11 项" not in line and out.count("⏭ 跳过") == 2,
          f"rc={rc} 未执行行={line!r} 跳过行数={out.count('⏭ 跳过')}")
 
-    rc, out = run_gate(root, failures=("check-effective-language.py",), args=("--keep-going",))
+    rc, out = run_gate(root, failures=("check-button-icon-only.py",), args=("--keep-going",))
     case("例 5 --keep-going · 第 3 项红 ⇒ 第 4 项到第 19 项**真的跑了**（项块头在输出里）",
          rc != 0 and "==> 4/19" in out and "==> 19/19" in out
          and re.search(r"第\s+3 项\s+❌ 失败", out) is not None
@@ -161,11 +166,15 @@ def main() -> int:
          and "❌ --keep-going 汇总" in out,
          f"rc={rc}")
 
-    rc, out = run_gate(root, failures=("check-effective-language.py", "check-exclusive-sections.py"),
+    # 第二处红改用第 12 项（`check-shell-locale-safety.py`，整项只调一次）：
+    # 第 3 项现在有两次调用（判据 + `--self-test`），配上第 16 项那两次（`--mine` + `--self-test`）
+    # 会变成「4 处 / 2 项」；而这一例要验的是**处 ≠ 项 且两个项都被点名**（不许只报第一个），
+    # 不是某个具体项号 ⇒ 取两个「一项一处」的项，`3 处 / 2 项` 的读数原样保留。
+    rc, out = run_gate(root, failures=("check-button-icon-only.py", "check-shell-locale-safety.py"),
                        args=("--keep-going",))
-    case("例 6 --keep-going · 两处红（第 3 项 + 第 16 项各一处）⇒ 汇总**两项都点名**（不许只报第一个）",
+    case("例 6 --keep-going · 两处红（第 3 项 + 第 12 项，两个不同的项）⇒ 汇总**两项都点名**（不许只报第一个）",
          rc != 0 and "失败 3 处 / 2 项" in out
-         and "第 3 项（脚本第" in out and "第 16 项（脚本第" in out,
+         and "第 3 项（脚本第" in out and "第 12 项（脚本第" in out,
          f"rc={rc}")
 
     rc, out = run_gate(root, args=("--keep-going",))
