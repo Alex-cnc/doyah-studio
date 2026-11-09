@@ -17,7 +17,7 @@ import sys
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 DOCS = ROOT / "Docs"
 
-# 四书一单（Docs 根 17 份）：3 书 + 6 端详设 + 6 端单 + 2 规范
+# 三书一单（Docs 根 16 份）：3 书 + 6 端详设 + 6 端单 + 2 规范（2026-11-09 能力书并入需求书）
 BOOKS_AND_SHEETS = [
     "Doyah产品需求规格说明书.md",
     "Doyah产品概要设计说明书.md",
@@ -43,13 +43,13 @@ def read(name: str) -> str:
 
 
 def inv_root_exact() -> list[str]:
-    """铁律：`Docs` 根只有四书一单 + 两件规范，共 17 份。"""
+    """铁律：`Docs` 根只有三书一单 + 两件规范，共 16 份。"""
     actual = sorted(p.name for p in DOCS.glob("*.md"))
     if actual == EXPECTED_ROOT:
         return []
     extra = [n for n in actual if n not in EXPECTED_ROOT]
     missing = [n for n in EXPECTED_ROOT if n not in actual]
-    return [f"Docs 根不是 17 份白名单：多 {extra or '无'} / 少 {missing or '无'}"]
+    return [f"Docs 根不是 16 份白名单：多 {extra or '无'} / 少 {missing or '无'}"]
 
 
 def inv_no_changelog_in_books() -> list[str]:
@@ -109,7 +109,7 @@ def inv_full_requirement_codes() -> list[str]:
 
 
 RULES = [
-    ("Docs 根 17 份白名单", inv_root_exact),
+    ("Docs 根 16 份白名单", inv_root_exact),
     ("四书一单里零「变更记录」", inv_no_changelog_in_books),
     ("版本号只在头部且三段式 ≤999", inv_version_in_header),
     ("一单只认同端详设", inv_sheet_upstream_same_end),
