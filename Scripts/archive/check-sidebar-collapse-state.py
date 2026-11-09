@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# [ARCHIVED 2026-11-10] 摘离闭环：判据搬家第三批。拦截史 1 次（`6abecaf5`：`AgentChatView.collapsedToolBlocks` 未登记 ⇒ 进例外表），且是**静态形状**判据；它要拦的「重建后折叠状态归零」现由**行为探针**拦：`TestsUISnapshot/UISnapshotSidebarStateTests`（活动栏切换前后像素逐字节相同；把状态改回视图局部 `@State` 当场判红 —— 红/绿成对已实测）。行为探针比源码扫描强一档，覆盖同一件事。
 # -*- coding: utf-8 -*-
 """门禁：**侧边栏的折叠状态住在 `AppState`，不住在视图里**（队列 L-59 / `FR-STD-DB-CONN-012`）。
 

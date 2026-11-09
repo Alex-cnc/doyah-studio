@@ -60,7 +60,7 @@ WS_LOCAL=(
   "终端-输入编码|test-terminal-modes.sh|assert|鼠标上报 / DECCKM / DA1·DSR 应答逐条核对（FR-STD-WS-TOOL-001）"
   "终端-配色|test-terminal-palette.sh|assert|两套色板 + WCAG 门槛：单测与脚本各算一遍，同结论才算成立（FR-STD-WS-TOOL-001）"
   "终端-配色门禁|test-terminal-palette.sh|gate|配色不达标即红（check-terminal-palette.py 2026-11-09 摘离：拦截史 0；三方一致改由 test-terminal-palette.sh 自己判）"
-  "命令面板-接线|check-palette-wiring.py|gate|设了标志位必须有人读（FR-STD-WS-UI-005 的老毛病）"
+  "命令面板-接线|run-manual-verification-probes.sh|gate|设了标志位必须有人读（FR-STD-WS-UI-005 的老毛病）—— check-palette-wiring.py 2026-11-10 摘离（拦截史 1 次）；接线改由 TestsUISnapshot/PaletteWiringProbeTests 拿真 AppState 逐条调 performPaletteCommand 判"
 )
 # 引用段：工作区模块要的「结果集 / 导出」的真库现场就在数据库模块里，登记指向、不重跑。
 WS_REF=(

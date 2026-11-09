@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# [ARCHIVED 2026-11-10] 摘离闭环：判据搬家第三批。拦截史 1 次（`7507af20` 笔记面 6 条命令落点补登记 ⇒ 补完转绿）。它判的是源码级三件事（清单 ↔ 分派器 ↔ 标志位有没有视图读），现由 `TestsUISnapshot/PaletteWiringProbeTests` 以**真调用**拦：每条命令拿真 `AppState` 调一遍 `performPaletteCommand`，断言登记在案的落点真的变了 + 落点表与命令清单双向对账（新增命令没写落点 ⇒ 红）。真调用比源码锚点强一档。
 """命令面板接线校验（FR-STD-WS-UI-005）。
 
 存在的理由：

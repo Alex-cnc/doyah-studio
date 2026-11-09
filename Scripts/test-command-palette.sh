@@ -17,7 +17,11 @@ fail=0
 check() { if [ "$2" -eq 0 ]; then echo "  ✅ $1"; else echo "  ❌ $1"; fail=1; fi; }
 
 echo "== 1) 接线契约（清单 ↔ 分派器 ↔ 视图绑定）=="
-OUT="$(python3 Scripts/check-palette-wiring.py 2>&1)"
+# 2026-11-10：源码级判据 `check-palette-wiring.py` 已摘离（判据搬家第三批）—— 它只判「标志位有没有
+# 视图读」，判不住「点下去真的会发生」。现在这一步跑**真调用**探针：每条命令拿真 `AppState` 调一遍
+# `performPaletteCommand`，断言登记在案的落点真的变了 + 落点表 ↔ 命令清单双向对账。
+DEVELOPER_DIR="${DEVELOPER_DIR:-/Applications/Xcode.app/Contents/Developer}"
+OUT="$(DEVELOPER_DIR="${DEVELOPER_DIR}" ./Scripts/run-manual-verification-probes.sh --filter PaletteWiringProbe 2>&1)"
 STATUS=$?
 echo "$OUT" | sed 's/^/  /'
 check "命令清单 / 分派器 / 视图绑定三边对齐" "$STATUS"

@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# [ARCHIVED 2026-11-10] 摘离闭环：判据搬家第三批（UI 交互 9 条）。拦截史 1 次且是**台账跟版**（`31990bd0` scannedFiles 89→90，不是产品回潮）；它要拦的那一类真缺陷（固定尺寸面板根里内容浮着 / 底部动作区被裁，`9904e61e` L-61）现由像素探针拦：`TestsUISnapshot/ImportSheetLayoutProbeTests`（IO-007 导入 Sheet 底部动作区）、`UISnapshotPanelsTests`（侧栏与面板空态尺寸）、`NotesLayoutProbeTests`。原文见 git 历史与 `git mv` 前的脚本。
 """面板根固定尺寸 `.frame(width:height:)` 的对齐纪律（队列 L-61，闭环第 9 项）。
 
 为什么需要这条判据（第 41 轮修 L-58 时实测出来的**一类**问题）：

@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# [ARCHIVED 2026-11-10] 搬进 `swift test`：`Tests/EmptyActionButtonGateTests.swift`（判据搬家第三批）。判定物逐条同口径搬过去（守卫扫描 / 台账双向对账 / explain 必有人话 / view-disabled 唯一出处 / 空跑防护），读数与老脚本相等：守卫 50 条 / 台账 50 条。旧脚本留档供对照。
 """「空数据时按钮到底怎么表现」的门禁（队列 L-50）。
 
 ## 这一项在守什么

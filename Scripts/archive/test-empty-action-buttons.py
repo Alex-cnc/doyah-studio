@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# [ARCHIVED 2026-11-10] `check-empty-action-buttons.py` 的负例 runner，随被判脚本搬进 `Tests/EmptyActionButtonGateTests.swift`（该文件的解析器自检 + 本批反例红读数承接同一批断言）。
 """队列 L-50 的负例：`Scripts/check-empty-action-buttons.py` 自己的证据。
 
 判据写完不对已知改动报红，等于没有（第 33 起的老规矩）。11 例全部在**临时夹具仓**上写坏

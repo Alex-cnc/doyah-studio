@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# [ARCHIVED 2026-11-10] 摘离闭环：`check-sidebar-collapse-state.py` 的负例 runner（24 例），随被判脚本一起归档。判定物已由 `TestsUISnapshot/UISnapshotSidebarStateTests` 接手。
 # -*- coding: utf-8 -*-
 """负例：`Scripts/check-sidebar-collapse-state.py`（折叠状态归属门禁）**红得出来吗**。
 

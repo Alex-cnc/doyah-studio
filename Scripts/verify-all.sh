@@ -62,12 +62,11 @@ set -euo pipefail
 #      当时这一项只做 §10.10 ↔ 台账的矩阵对账，`§10.9 ↔ §4` 一个判据都没有 —— 第 36 轮（L-45）
 #      补上第三个脚本后，这句话才成立；注释里的假话先被改正，判据随后补上）
 #   8. 平台中立性棘轮（需求规范书里的平台专属词汇不得比基线更差）
-#   9. 命令面板接线（清单 ↔ 分派器 ↔ 视图绑定；见脚本注释里的真实缺陷）
-#      + 侧边栏折叠状态归属（L-59：状态住在 `AppState`、写入口唯一、默认全展开、未分组不给折叠）
-#      + **面板根固定尺寸 frame 的对齐纪律**（L-61：`App/Views/` 里每一处「宽高都是数字字面量」的
-#        `.frame(width:height:)` 都要在台账 `panel-root-frames.json` 里有处置；面板根必须**把意图
-#        写出来** —— 显式写 `alignment:` 或登记一个在该视图类型里真的存在的撑满令牌，
-#        见 `check-panel-root-frames.py`）
+#   9. 界面台账三条（大结果集滚动阈值 / 性能读数表 / 模型服务预设）。
+#      **2026-11-10 判据搬家第三批（UI 交互 9 条）**把原先挤在这一项里的六条界面判据逐条处置掉了：
+#      空数据按钮（L-50）与编辑面行号（L-111）搬进 `swift test`；命令面板接线、侧边栏折叠状态（L-59）、
+#      面板根对齐（L-61）、终端多会话页签（L-84）摘离 —— 它们的那几件事各有更强的接手方
+#      （真调用探针 / 像素逐字节探针 / Core 单测 + 真 shell 探针），逐条对照见本项正文那段留痕。
 #  10. 插件装配链（笔记模块解耦 FR-STD-ALL-PLUG-007 + 装配与许可 FR-STD-ALL-PLUG-001/02/03/06 + ADR-35）
 #      + 笔记模块的**零网络出口**（FR-STD-ALL-PLUG-005 ②：数据不外发，见 `check-notes-offline.py`）
 #      + **界面检索走库 + 路线如实标注**（L-44：唯一生产点 / 视图不许内存过滤 /
@@ -427,10 +426,10 @@ echo "==> 4/19 文档表格与派生计数"
 # `git check-ignore` 实测 + 真跑它一遍）再与本文件 / 该脚本 / `AGENT-SPEC.md` 逐处对账。
 if [ "${REQUIRE_ALL}" = "1" ]; then
   python3 Scripts/check-doc-tables.py --require-all
-  python3 Scripts/check-ui-design-section.py --platform macos
-  python3 Scripts/check-ui-design-section.py --platform windows
-  python3 Scripts/check-ui-design-section.py --platform linux
-  python3 Scripts/check-ui-design-section.py --platform ios
+  # 2026-11-10 摘离 `check-ui-design-section.py`（判据搬家第三批）：拦截史 0 次，且它在 HEAD 上就红
+  # （文档层级改版后「找不到 `## 9.1` 节」）—— 规则比事实旧。界面设计节够不够格现由
+  # `Scripts/check-doc-layout.py`（结构 / 标题 / 节序 / 章内完整）+ `Docs/规范/界面设计节-写作规范.md`
+  # （写作规范里那几项主题清单）+ 评审管。
 else
   python3 Scripts/check-doc-tables.py
   python3 Scripts/check-agents-index.py
@@ -441,8 +440,8 @@ fi
 # **末例核对真仓库逐字节未变**）。
 # **本项里那几处「要看本机台账」的地方在干净克隆 / 并行工作树 / 另一平台上如实报「跳过」**
 # （2026-10-08 · 任务 `t_004a679b` · 口径 = `AGENT-SPEC.md` §9 第 147 条 ④）：`check-doc-tables
-# --self-test` 的例 4 / 例 5、`check-doc-numbers` 的 `[doc-tables-files]`、`check-terminal-tabs`
-# 的队列口径锚点、`check-self-test-counts` 里登记了 `hostLedgerSelfTest` 的那几族 ——
+# --self-test` 的例 4 / 例 5、`check-doc-numbers` 的 `[doc-tables-files]`、
+# `check-self-test-counts` 里登记了 `hostLedgerSelfTest` 的那几族 ——
 # **跳过 ≠ 通过**（逐条打印跳过的是哪几例 / 哪几处锚点），**主开发机上这几处一条都不放宽**。
 python3 Scripts/check-doc-tables.py --self-test
 python3 Scripts/check-req-index.py   # 机器视图（requirement-index.jsonl）与正文表格逐条对账
@@ -680,84 +679,27 @@ echo "==> 8/19 平台中立性棘轮"
 python3 Scripts/check-platform-neutrality.py
 
 echo "==> 9/19 界面接线与状态归属（命令面板 FR-STD-WS-UI-005 / 侧边栏折叠 FR-STD-DB-CONN-012 / 空数据按钮 L-50 / 终端多会话页签 L-84）"
-# 2026-10-14（派单 T-20261010-044 · 合册 T-20261013-027）：命令面板这条判据的判定物由「`is*=true`
-# 字面形状」改成**分派器函数体里赋值全集**（含同行 `case "…": <名> = <值>` / 名字带数字 / 非 `is`
-# 前缀的状态，如 `notesSearchScope`）；「读」改按**剥注释与字符串后的代码行**判（原先整份文件里
-# 注释提一次就算读过、扫描面也只有 App/）；落点表 ↔ 命令清单**双向对账**进每轮（未登记差集判红、
-# 已登记缺口要有理由、登记陈旧判红）；负例自检 **14 例**。**调用方式一字未动**（下面那条照旧）、
-# 登记表 2026-11-02 已清零（笔记面 6 条命令补完落点、同一轮销账），落点表 40 条 = 命令清单 40 条。
-# 自检与它同批接进本项（与同项另五条门禁同形）。
-python3 Scripts/check-palette-wiring.py
-python3 Scripts/check-palette-wiring.py --self-test
-# L-59：**侧边栏的折叠状态住在 `AppState`，不住在视图里** —— 人工点验批次 1 第 3 条实测为挂
-# （「记不住折叠状态」）：`ConnectionListView` 的局部 `@State` 随活动栏分支重建归零，而当时
-# 所有门禁全绿。判据 = 视图不许有局部折叠状态 / 状态必须是 `@State`-free 的 `AppState` 属性
-# 且 `private(set)`、写入口唯一、默认全展开 / 视图绑定必须经 appState / 未分组那一段不许有折叠 /
-# 空跑防护；台账式常量在脚本里，负例 `Scripts/test-sidebar-collapse-state.py`（24 例）。
-# 行为那一半（重建前后像素逐字节相同）在 `TestsUISnapshot/UISnapshotSidebarStateTests.swift`，
-# 按 L-01 的纪律不进每轮门禁（要 `DOYAH_UI_SNAPSHOT=1`）。
-python3 Scripts/check-sidebar-collapse-state.py
-python3 Scripts/test-sidebar-collapse-state.py
-# L-50：**空数据时按钮必须有个说法**（灰着 / 可点给理由 / 够不着按钮），不许「可点却静默无反应」。
-# 2026-09-26 读图在笔记编辑器上抓到过第三种（「保存」满色可点、点下去静默 return）。这一项把
-# `App/AppState.swift` 里每条「内容为空」守卫与它的处置逐条对账（双向：未登记 ⇒ 红、陈旧 ⇒ 红），
-# 并钉住 `view-disabled` 那一档的**唯一出处**（判据属性全局只定义一次 / 守卫必须用它 /
-# 指定视图必须真的 `.disabled` 它 / 视图不许再自己算一遍）。台账与词表见脚本 docstring，
-# 台账 `Scripts/empty-action-button-dispositions.json`；负例 `Scripts/test-empty-action-buttons.py`
-# 11 例（视图处置被删 / 守卫改回裸判断 / 新增未登记守卫 / explain 其实没话 / 视图本地锚点被删 /
-# 判据两处定义 / 视图重新推导 / 台账陈旧 / 台账写坏 / 前提自检 / 真仓库逐字节未变）。
-python3 Scripts/check-empty-action-buttons.py
-python3 Scripts/test-empty-action-buttons.py
-# L-61（2026-09-28 第 64 轮）：上面两条管的是「按钮有没有说法」与「状态该活多久」，
-# 管不到**面板根自己的尺寸与对齐**。真现场（第 41 轮修 L-58 时实测）：`PrivilegePanel` 的
-# 内容在它自己的 `720×620` 里被**垂直居中**（顶上约 150pt 空白）—— `.frame(width:height:)`
-# 不写 `alignment:` ⇒ SwiftUI 取默认 `.center`，而那个 `VStack` 里没有可伸缩高度的子视图。
-# 当时编译过、Core 单测全绿、文档与快照门禁全绿（「内容在自己尺寸里浮着」没人看）。
-# 判据判的是**把意图写出来**（不判居中对不对 —— 静态查不出可伸缩子视图，docstring 里写清了）：
-# A 扫描完整性 · 双向对账（每一处「宽高都是数字字面量」的 `.frame` 恰好一条台账；新增没登记 /
-# 台账陈旧 / 处数不符都判红）/ B 面板根（width ≥ 台账门槛 400）与装饰的分类对账 /
-# C 面板根必须选一条路线并留下盘上锚点 —— `explicit-alignment`（源码**真的**写了 `alignment:`，
-# 值逐字对账）或 `content-stretches`（`stretchProbe` 取自台账 `probeVocab`，且在**该视图类型
-# 范围内真的存在**）/ D 理由不许空 / E 空跑防护（文件数 · 命中数 · 面板根数 · 台账数下限，
-# 台账声明的扫描事实与磁盘相等）/ F 范围外（用设计令牌 / 变量给尺寸的 `.frame`）**显式打印**数量。
-# 负例 `--self-test` 19 例（含「现造一块既没写 alignment、类型里又没有撑满容器的面板根 ⇒
-# 三条路线全红」这一组，与一条「显式对齐被删但登记还在」；夹具只拷 `App/`，末例核对真仓库逐字节未变）。
-python3 Scripts/check-panel-root-frames.py
-python3 Scripts/check-panel-root-frames.py --self-test
-# L-111（2026-09-30 第 121 轮）：**编辑面的行号列**判据。行号一半是口径（在 `Core/CodeLines`，
-# 15 项单测早就钉住了），另一半是画法 —— 画法这一半此前**没有判据**：工作区编辑器自己长了一套
-# 列宽算法 + 行起点计算，数据库侧 SQL 编辑器一行都没有，于是在队列上挂了 4 天的「要不要一起加」。
-# 判据：A 双向对账（`App/**/*.swift` 里每个 `NSTextView` / `NSTextField` 子类都要在台账
-# `Scripts/editor-line-number-surfaces.json` 登记「画 / 不画 + 为什么」）/ B 挂法齐备（登记为「画」的
-# 编辑面必须真的 `gutter.reload(` + `gutter.draw(in:`）/ C 唯一出处（`CodeLines.lineStarts(` 在 `App/`
-# 里恰好一处、列宽算法全工程恰好一处、别处的 `gutterWidth(digits:` 只许转发）/ D 三书里的口径语句
-# 锚点仍在（`Docs/` 不在盘上时跳过并高声提示，跳过 ≠ 通过）/ E 空跑防护。
-# `Scripts/check-editor-line-numbers.py` 的负例 `--self-test` **10 例**（夹具 = 真源文件与真文档的拷贝，
-# 末例核对真仓库逐字节未变）。
-python3 Scripts/check-editor-line-numbers.py
-python3 Scripts/check-editor-line-numbers.py --self-test
-# L-84 ㈠㈡（2026-09-29 第 81 / 82 轮）：终端**多会话（页签）**判据。需求提出者把它提为刚需
-# 时给的原话是「一个 terminal 在执行 dsh-tui，遇到要执行命令只能去开系统终端，违背了我这个软件的初衷」。
-# 判据判的是「新建 / 关闭 / 切换 / 标题推导 / 关闭确认 / 按键映射」这**六组判断真的在 `Core/TerminalTabs.swift` 里**、
-# 且被 `Tests/TerminalTabsTests.swift` 逐组钉住（另加「Core 不出用户可见文案」与「页签文案键中英齐」）；
-# **㈡ 起同一判据还判界面接线**（App 侧锚点 **41 处**，L-89 ㈡ ③ 第 96 轮扩）：页签头在工具条
-# `Spacer` **之前**（口径①「左侧」，位置也判）/ 右侧那排按钮**六个符号一个不少**（清单数的是五个动作，
-# 第 6 个是折叠态的展开箭头）**且新画的按钮必须登记**（反向对账棘轮 `RIGHT_SIDE_CALL_SITES` ——
-# 只判「登记过的还在」拦不住「新画一个没登记的」）/ 每页签一条独立会话（不是「一个模型切屏」）/
-# ⌘T ⌘W ⌘1…9 的接线点（判定仍只有 Core 一处）/ 双击重命名 / 二次确认 / 退出标记 / 重启作用在当前页签 /
-# 工具条那一行是**独立视图** `LowerPaneTabStrip`（抽出来才能单独离屏渲染）。
-# App 侧探针**六个用例**锚点（`TestsUISnapshot/TerminalTabsProbeTests.swift`：前三个真开 shell 验
-# 独立性与退出、确认链路；后三个 = 版面（页签头在左 / 右侧按钮位置不动的**像素**判据）、按钮按状态齐备、
-# ⌘1…9 / ⌘⇧[ ⌘⇧] / 改名落到对的会话）。
-# 真人点验 = 主诉场景（一个页签跑 `dsh-tui`、另一个执行命令，互不干扰）。
-# **2026-10-13 修（合册 T-20261013-027 · 原单 T-20261010-065 · 样本 68）**：判定物一律先**剥注释**
-# （字符串感知、等长替换 ⇒ 行号列位不动）/ 位置判据判**非注释上下文** / 反向棘轮判**调用点与画法形状**
-# （二级条数 `Button {` 块数 —— 标识符换个前缀绕不过去）/ Core 的「不出人话」认**转义**写法 /
-# 行尾 `//` 与 `/*…*/` 里的中文不再误伤 / **判定面与 `Package.swift` 现读对账**（面内未登记件承载
-# 子终端件 ⇒ 判红）/ `TEST_FLOOR` 收到**实测 42** 并加「用例函数体非空 + 断言下限」。
-# 负例 `--self-test` **25 例**（红 / 绿成对，夹具一律在临时目录，末例核对真仓库十七份文件逐字节未变）。
-python3 Scripts/check-terminal-tabs.py
-python3 Scripts/check-terminal-tabs.py --self-test
+# **2026-11-10 判据搬家第三批（UI 交互 9 条）**：按「先查拦截史，没拦过就删」逐条处置。
+# 本项原先跑六个 `Scripts/check-*.py`，现在**一条 python 都不跑**（项号仍是第 9 项）：
+#   · 命令面板接线（FR-STD-WS-UI-005）—— 拦截史 1 次（`7507af20` 笔记面 6 条落点补登记）⇒ 摘离。
+#     现由 `TestsUISnapshot/PaletteWiringProbeTests` 以**真调用**拦：每条命令拿真 `AppState` 调一遍
+#     `performPaletteCommand`，断言登记在案的落点真的变了 + 落点表 ↔ 命令清单双向对账。
+#   · 侧边栏折叠状态归属（L-59）—— 拦截史 1 次（`6abecaf5` `AgentChatView.collapsedToolBlocks` 进例外表）
+#     ⇒ 摘离。现由 `TestsUISnapshot/UISnapshotSidebarStateTests` 拦：活动栏切换前后**像素逐字节相同**，
+#     把状态改回视图局部 `@State` 当场判红（行为探针强于源码形状扫描）。
+#   · 空数据按钮处置（L-50）—— 拦截史 4 次（`fb539b30` / `d55a2617` / `da2d4bfb` / `6abecaf5`）
+#     ⇒ **搬进 `Tests/EmptyActionButtonGateTests.swift`**（7 例；守卫 50 条 = 台账 50 条，与老脚本读数相等）。
+#   · 面板根固定尺寸 frame 的对齐纪律（L-61）—— 拦截史 1 次且是台账跟版（`31990bd0`）⇒ 摘离。
+#     真缺陷那一类（固定尺寸面板根里内容浮着 / 底部动作区被裁）现由像素探针
+#     `TestsUISnapshot/ImportSheetLayoutProbeTests` + `UISnapshotPanelsTests` 量。
+#   · 编辑面行号（L-111）—— 拦截史 3 次（`8e4690c8` 第二处行起点算法 / `0371913b` 未登记预览面 /
+#     `fb539b30` 同族）⇒ **搬进 `Tests/EditorLineNumberSurfacesTests.swift`**（7 例；190 份源文件 /
+#     7 个编辑面，与老脚本读数相等）。
+#   · 终端多会话页签（L-84）—— 拦截史 0 次产品回潮 ⇒ 摘离。Core 七组由 `Tests/TerminalTabsTests`（27 例）、
+#     真 PTY 行为由 `TestsUISnapshot/TerminalTabsProbeTests`（真开 shell）、「Core 不出中文字面量」由第一批
+#     搬进 swift test 的 `Tests/LocalizationCoreRatchetTests` 各自拦。
+# 六份脚本与两份负例 runner 原样归档在 `Scripts/archive/`（每个文件头一行写着「本来拦什么 / 现在由什么拦」）。
+# 本项现在只剩三条**与上述九条同批处置无关**的台账判据（大结果集滚动阈值 / 性能读数表 / 模型服务预设）。
 
 # L-89 ㈡ ④（第 97 轮）：**大结果集滚动**（清单 §4 FR-STD-DB-RES-011）那一行的阈值台账 ——
 # 探针 `TestsUISnapshot/LargeResultScrollProbeTests.swift` 的每一条上界都从
@@ -860,31 +802,14 @@ python3 Scripts/test-note-search-route.py
 # 末例真仓库逐字节未变）。
 python3 Scripts/check-markdown-single-source.py
 python3 Scripts/check-markdown-single-source.py --self-test
-# L-149 ③④（2026-10-01 第 134 轮）：**内置浏览器页签的归属 = 工作区**判据。由头 = 需求提出者
-# 2026-09-30 原话「浏览器内置到工作区 Tab 页，而不是放到数据库 SQL 查询界面，本质上 html 也是一种文件」
-# （数据库侧的口径 = **SQL 这门语言的工作台**）。第 131 轮把展示层搬到了工作区，但这件事此前没有任何
-# 东西看得见：挪回数据库侧、或搬走了没接上，编译照过、单测照绿。判据是一份**双向对账**的允许落点台账 ——
-# A 允许落点 ⊆ 台账（`App/` 下出现 `browserPages` / `selectedBrowserPage` / `selectedBrowserID` /
-# `browserEngines` / `BrowserTabView` / `openBrowserTab` / `browserTabButton` 的文件必须登记过；
-# 唯一豁免 = 视图定义 `BrowserTabView.swift`）—— 数据库侧 `App/Views/QueryWorkspaceView.swift` 命中即红；
-# B 台账 ⊆ 允许落点（登记过的落点必须真的命中 —— 拦「搬走了没接上」「引用删了只留注释」）；
-# C 两条文档条文（SRS 的 `FR-STD-WS-WEB-001` 定义格 / `Docs/Doyah产品概要设计说明书.md` §3.12 的「视图契约」行）必须写
-# 「工作区」且不得回写「编辑器区」（订正过程留在证据格里，判据只看条文格）；
-# D 空跑防护（`App/` 扫描面文件数下限 · 台账文件存在性 · 七个标识各自至少一处命中 · 状态所有者类在位）。
-# **状态所有者另判一处（队列 `L-149` 剩余①，第 135 轮）**：浏览器状态必须住在
-# `App/WorkspaceBrowserModel.swift`（那个类只此一处定义）—— 挂回 `AppState` 的 `@Published` 上，
-# 引擎每回报一次标题 / 加载中都要重算整个窗口（同族的病见 `QueryEditorBuffer`）。
-# 判据见 `Scripts/check-browser-tab-ownership.py`；负例 `--self-test` 26 例（判定物在代码上判 + SRS 定义行锚点唯一化 + 面与 `Package.swift` 对账）
-# （绿对照 / 数据库侧塞回状态引用 / 数据库侧塞回视图渲染 / 页签条不再引用 / 内容区不再渲染 /
-#  状态被写回 AppState / 数据库侧读 selectedBrowserID / 状态所有者类被改名 /
-#  SRS 条文改回旧措辞 / 契约视图契约行改回旧措辞 / SRS 条文行被删 / 工作区视图被删 /
-#  契约行被删 / 无关文件改动不误报 / 末例真仓库逐字节未变 /
-#  2026-10-13（合册 T-20261013-027 · 原单 T-20261010-061）新增十一例：真用法改名只留一行注释 /
-#  同名改名不留注释（对照）/ DB 侧注释提标识 / DB 侧字符串提标识 / SRS 定义行整行删 /
-#  定义行标题改名 / 定义行行首形状 / 归属格反义 / 面外回流（`Platform/macOS`）/
-#  新增生产 target 落面外 / 面内新增无关 `.swift` 不误报）。
-python3 Scripts/check-browser-tab-ownership.py
-python3 Scripts/check-browser-tab-ownership.py --self-test
+# L-149 ③④（2026-10-01 第 134 轮）**内置浏览器页签的归属 = 工作区**：2026-11-10 摘离（判据搬家第三批）。
+# 拦截史 1 次（`292516a9` 建判据时订正归属；`db609bd5` 是结构债收口），且它在 HEAD 上红在「Retro 插件三个
+# 源码根未登记进面」（纯台账跟版）。路由那一半现由 `TestsUISnapshot/WorkspaceFileRoutingProbeTests` 真跑
+# 登记表拦：`.html` / `.htm` / 大写扩展名都交给浏览器侧且**不同时**开成文本页签，非标记文件照旧进编辑器。
+# 遗留（如实登记，别当已验）：「数据库侧不许再出现浏览器页签」这一条在摘离后**没有探针覆盖** ——
+# 本批为了不制造真空，把它的 A 面（`App/` 下出现 `browserPages` / `BrowserTabView` 等七个标识的文件必须
+# 在台账里登记、`QueryWorkspaceView.swift` 命中即红）留在归档件里备查，下一步要么补一条离屏探针
+# （把浏览器页签渲染进数据库侧应不可达），要么把这条判定并进 `WorkspaceFileRoutingProbeTests`。
 
 if [ "${PLATFORM}" = "macos" ]; then
   echo "==> 11/19 打包 .app（沙箱）"

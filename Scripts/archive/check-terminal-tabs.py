@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# [ARCHIVED 2026-11-10] 摘离闭环：判据搬家第三批。拦截史 0 次产品回潮（全部改动是扩判据 / 跟版 / 文件搬家后重算）。它判的三半各有更强的接手方：Core 七组判定 → `Tests/TerminalTabsTests`（27 例穷举）；真 PTY 行为（独立会话 / 退出标记 / 关前确认 / ⌘1…9）→ `TestsUISnapshot/TerminalTabsProbeTests`（真开 shell 六个用例）；「Core 不许出中文字面量」→ 第一批已搬进 `swift test` 的 `Tests/LocalizationCoreRatchetTests`（本脚本摘离前在 HEAD 上红的 7 条正是这一族，与页签无关 —— 判据比它的判定物宽）。
 """终端多会话（页签）的判据（队列 L-84，闭环第 9 项）。
 
 存在的理由（真现场）

@@ -56,6 +56,16 @@
       "reason": "**只读**预览面（`configure(_:)` 里 `isEditable = false`，判据读的就是这一条）：它不是编辑面 —— 在这块正文上按下即切到编辑面（N2-10），多行文本的行号能力由 `CodeTextView` 承担。这是口径，不是漏做。"
     },
     {
+      "editor": "智能体对话的输入框（多行 composer）",
+      "kind": "NSTextView",
+      "name": "AgentComposerTextView",
+      "file": "App/Views/AgentComposerEditor.swift",
+      "hasGutter": false,
+      "component": "",
+      "registry": "编辑区 AI 辅助（`FR-STD-WS-AI-001`）的对话输入框 —— 2026-11-10 判据搬家时补登",
+      "reason": "**单行语义的多行输入框**：⏎ 即提交（`insertNewline` 只触发 `onSubmit`），用户看的是「我这一句话」而不是一篇文章 —— 行号在这里没有意义，画上去反而暗示「这里可以写代码 / 可以换行」。代码行号能力由两个代码编辑面（`CodeTextView` / `SQLTextView`）承担。"
+    },
+    {
       "editor": "笔记正文的富文本编辑面",
       "kind": "NSTextView",
       "name": "NotesTextView",
