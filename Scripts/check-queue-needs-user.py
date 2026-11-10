@@ -67,6 +67,8 @@ SIBLING_REPOS = {"Notes 队列": "DoyahNotes", "Retro 队列": "DoyahRetro"}
 
 STATUS_WORDS = ("todo", "doing", "done", "blocked", "needs-user")
 PENDING_WORDS = ("⏳ 待拍板", "⏳ 待确认", "⏳ 待提供", "⏳ 待授权")
+# 2026-11-10 补：状态列只许词表词（《项目管理规范》§4「状态只写词表词」的机判）
+ALLOWED_STATUS = PENDING_WORDS + ("✅", "已随分工转移")
 SUSPEND_WORD = "挂起"
 SUSPEND_REASONS = ("≠ 待拍板", "不重复追问", "不具备条件")
 # 空跑防护下限（低于即判红：「一个都没解析到」不许当通过）
@@ -315,14 +317,36 @@ def judge(section: str, cells: list[str], q_state: dict[str, set[int]],
 
 
 
+def bad_status_words(path: pathlib.Path) -> list[str]:
+    """状态列词表校验（《项目管理规范》§4「状态只写词表词」的机判）。
+
+    覆盖范围：只扫 §4 待拍板队列表的状态列；其他表格不归本条。
+    """
+    if not path.exists():
+        return []
+    lines = path.read_text(encoding="utf-8").split("\n")
+    section = section_lines(lines, H2_SIX)
+    bad: list[str] = []
+    for lineno, cells in table_rows(section):
+        if len(cells) < 3:
+            continue
+        status = plain(cells[2]).strip()
+        if status and not any(status.startswith(w) for w in ALLOWED_STATUS):
+            bad.append("第 %d 行「%s」状态为「%s」，不在词表内" % (lineno, plain(cells[0])[:12], status[:12]))
+    return bad
+
+
 def check(root: pathlib.Path) -> tuple[list[str], list[str], dict[str, int]]:
     """返回 (判红项, 随行说明, 计数)。"""
     problems: list[str] = []
     notes: list[str] = []
+    bad_words = bad_status_words(root / SPEC_REL)
     counts = {"specRows": 0, "specNumbers": 0, "queueRows": 0, "needsUser": 0,
               "pendingQ": 0, "suspendedQ": 0, "pendingProposals": 0}
     queue = root / QUEUE_REL
     pending_q, suspended_q, known_q, spec_counts, skip = spec_q_state(root / SPEC_REL)
+    for item in bad_words:
+        problems.append("状态词表外（《项目管理规范》§4「状态只写词表词」）：" + item)
     counts.update(spec_counts)
     q_state = {"pending": pending_q, "suspended": suspended_q, "known": known_q}
     pending_props, known_props, prop_counts = proposal_state(root)
