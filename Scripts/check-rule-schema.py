@@ -80,13 +80,18 @@ def split_clauses(text: str, field_names: set[str], require_judge: bool = True) 
 
 def audit(text: str, schema: dict) -> tuple[int, int, list[str]]:
     """返回 (总数, 完整数, 问题列表)。问题列表只列「缺了必填字段」的条文。"""
-    required = [f for f, spec in schema["字段"].items() if spec.get("必填")]
+    required = [f for f, spec in schema["字段"].items() if spec.get("必填")]  # 「是什么」由首行承载，不在此列
     names = set(schema["字段"].keys())
     total = complete = 0
     problems: list[str] = []
     for title, body in split_clauses(text, names):
         total += 1
         missing = [f for f in required if f"**{f}**" not in body]
+        head = body.split("\n")[0]
+        head_text = head.split("：", 1)[1].strip() if "：" in head else ""
+        # 「是什么」两种合法承载：单列 `- **是什么**：` 一行，或直接写在条文首行标题之后
+        if "**是什么**" not in body and len(head_text) < 8:
+            missing.insert(0, "是什么（既无独立字段，首行正文也不足 8 字）")
         has_judge = "**判据**" in body
         if has_judge and ("【机判】" not in body and "【人判】" not in body):
             problems.append(f"「{title}」判据没标【机判】还是【人判】")
@@ -141,7 +146,7 @@ def main(argv: list[str]) -> int:
 
 
 def self_test(schema: dict) -> int:
-    good = """- **样例条文**：示例
+    good = """- **样例条文**：这条条文的首行正文承载「是什么」，长度必须够八个字
 - **是什么**：一句话。
 - **不是什么**：边界。
 - **判据**：【机判】`true`。
