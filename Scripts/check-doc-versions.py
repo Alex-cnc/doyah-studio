@@ -247,6 +247,19 @@ def check_doc(path: pathlib.Path, frozen_dir: pathlib.Path | None = None) -> lis
             problems.append(
                 f"{rel}:{index} 引用 `-变更记录.md` —— 该体系已废弃（版本号升在头部，历史看 git）"
             )
+    # 「文档版本：」行必须等于头部最新版本（2026-11-09 补：Linux 详设曾出现
+    # 头 v1.3.0 / 文档版本 v1.2.1 / 仍引用已并入需求书的能力规划书 v1.0.266 —— 三个号互不相干）
+    row = next((ln for ln in lines if "文档版本：" in ln), None)
+    if row is not None and version is not None:
+        found = re.search(r"文档版本：\*{0,2}(v\d+\.\d+\.\d+)", row)
+        if found is None:
+            problems.append(f"{rel}: 「文档版本」行读不出三段式版本号")
+        elif found.group(1) != version:
+            problems.append(
+                f"{rel}: 「文档版本：{found.group(1)}」与头部最新版本 {version} 不一致 "
+                f"—— 正文改动必须同步这一行（判据：本脚本）"
+            )
+
     return problems
 
 
@@ -293,6 +306,9 @@ def self_test() -> int:
         "超上限": ("| 版本 | **v1.0.1000** |\n\n正文\n", False),
         "带变更记录": ("| 版本 | **v1.0.3** |\n\n## 11. 变更记录\n\n| v | d |\n", False),
         "引旧文件": ("| 版本 | **v1.0.4** |\n\n见《X-变更记录.md》。\n", False),
+        # 文档版本行与头部一致 ⇒ 绿；不一致 ⇒ 红（Linux 详设那次事故的负例）
+        "文版行一致": ("| 版本 | **v1.0.6** |\n\n- 文档版本：v1.0.6（正文改动同步）\n", True),
+        "文版行漂移": ("| 版本 | **v1.0.6** |\n\n- 文档版本：v1.0.5（忘了改）\n", False),
     }
     ok = True
     with tempfile.TemporaryDirectory() as tmp:
