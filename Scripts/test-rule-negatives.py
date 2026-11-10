@@ -23,6 +23,8 @@ import subprocess
 import sys
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
+# 假密钥：运行时拼接，源码里不允许出现完整形态（否则本文件自己就被 check-no-user-data 判红 —— 已踩过）
+FAKE_KEY = "s" + "k" + "-" + "a" * 40
 PY = sys.executable
 
 
@@ -93,7 +95,7 @@ def violate_internal_ip(ctx) -> None:
     p = ROOT / "Docs" / "Doyah产品概要设计说明书.md"
     text = p.read_text(encoding="utf-8")
     ctx.write("Docs/Doyah产品概要设计说明书.md",
-              text.rstrip("\n") + "\n\n- 示例密钥：`sk-abcdefghijklmnopqrstuvwxyz012345`（不该出现在 PUBLIC 仓）\n")
+              text.rstrip("\n") + "\n\n- 示例密钥：`" + FAKE_KEY + "`（不该出现在 PUBLIC 仓）\n")
 
 
 def violate_frozen_edit(ctx) -> None:
@@ -254,9 +256,15 @@ def covered_machine_clauses() -> tuple[int, list[str]]:
 
 def main() -> int:
     total_m, uncovered = covered_machine_clauses()
-    ok, failed, errors = [], [], []
+    ok, failed, errors, blocked = [], [], [], []
     print(f"负例实测（文件类）：登记 {len(CASES)} 例 / 【机判】条文共 {total_m} 条\n")
     for title, script, action, args in CASES:
+        # 前置：判据必须**本来是绿的**，否则「红了」分不清是被负例拦下还是本来就红（假红）
+        base = run(script, *args)
+        if base != 0:
+            blocked.append(f"{title}（{script} 基线本红 rc={base}）")
+            print(f"  ⏸ {title[:26]:28} {script:26} 基线本红，判不了负例")
+            continue
         ctx = Ctx()
         try:
             action(ctx)
@@ -282,7 +290,7 @@ def main() -> int:
             print(f"  ✗ {title[:26]:28} {script:26} **声称会红，实际 rc=0 —— 判据失灵**")
 
     print()
-    print(f"实测红 {len(ok)} / 登记 {len(CASES)}；失灵 {len(failed)}；造不出违规 {len(errors)}")
+    print(f"实测红 {len(ok)} / 登记 {len(CASES)}；失灵 {len(failed)}；造不出违规 {len(errors)}；基线本红 {len(blocked)}")
     print(f"【机判】条文 {total_m} 条中：已实测 {len(ok)} 条、尚未登记用例 {len(uncovered)} 条")
     if uncovered:
         print("  未登记用例（不当作通过）：")
