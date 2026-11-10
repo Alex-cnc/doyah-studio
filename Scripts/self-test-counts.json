@@ -767,6 +767,15 @@
       "countRegex": "自检：(\\d+) 例全过",
       "why": "v0.6.0 C3 · FR-STD-ALL-PLUG-008 判据 ①②③（一份 DDL / 附件只存路径 / schema 版本单一写者 / WAL 在位 / 存储层无平台分支）——7 例：控制组 + note 表被改名 + note_attachment 加 BLOB 列 + 在别处再抄一份 DDL + supportedVersion 落后链尾 + journal_mode 不是 WAL + 存储层出现 #if os(Windows)。行为面（真写 / 真 SIGKILL 崩写）由 `Tests/NoteCrashSafetyTests` 取，不在本族。",
       "noAnchorReason": "例数只在 runner 的收尾行里；闭环第 17 项注释写的是机制与调用，不写负例例数。"
+    },
+    {
+      "key": "rule-negatives",
+      "script": "Scripts/test-rule-negatives.py",
+      "args": [],
+      "cases": 8,
+      "countRegex": "实测红 (\\d+) / 登记",
+      "why": "负例执行器（2026-11-10）：把条文里的「必须判红」从声称变成实测 —— 就地制造违规、跑判据、断言 rc!=0、字节级还原。首跑抓出 3 条判据失灵（req-ids 只扫 diff 且不认新文件名、no-user-data 用 git ls-files 按行读把中文名全漏掉、frozen-sync 根本不看冻结件被改），已全部修好。",
+      "noAnchorReason": "新族（2026-11-10）：尚未写进 AGENT-SPEC §6 资产表，下次动 §6 时补。"
     }
   ]
 }

@@ -24,6 +24,7 @@ from __future__ import annotations
 import argparse
 import difflib
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -75,6 +76,20 @@ def drift(frozen: Path, live: Path) -> tuple[int, int, int]:
     return added, removed, added + removed
 
 
+
+def frozen_tampered() -> list[str]:
+    """冻结件只能由 freeze-books 生成：工作区里对 Docs/frozen/** 的任何改动都算手改。
+
+    覆盖范围：**只看已改未提交**（git status）。已提交但非 freeze-books 生成的版本，
+    git 层面无法区分 —— 那部分靠提交信息与评审，本条不假装覆盖。
+    """
+    out = subprocess.run(["git", "status", "--porcelain", "--", "Docs/frozen"],
+                         cwd=ROOT, capture_output=True, text=True)
+    if out.returncode != 0:
+        return []
+    return [ln.strip() for ln in out.stdout.splitlines() if ln.strip()]
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--strict", action="store_true", help="任何差异即判红（冻结后自证用）")
@@ -83,6 +98,8 @@ def main() -> int:
 
     problems: list[str] = []
     over: list[str] = []
+    for line in frozen_tampered():
+        problems.append("冻结件被手改（只能由 freeze-books 生成）：" + line)
     print(f"活书 ↔ 最新冻结版（阈值 {args.threshold} 行{ ' · strict' if args.strict else '' }）")
     for live_rel, stem in BOOKS:
         live = ROOT / live_rel

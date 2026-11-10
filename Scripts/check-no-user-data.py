@@ -51,8 +51,11 @@ EXEMPT_PATH = re.compile(r"(^|/)tests?/fixtures/")
 
 
 def tracked_files() -> list[str]:
-    out = subprocess.run(["git", "ls-files"], cwd=ROOT, capture_output=True, text=True, check=True)
-    return [l for l in out.stdout.splitlines() if l]
+    """跟踪文件清单。**必须用 -z**：git 默认把中文名转义成 "Docs/Doyah\344\272\247…"，
+    按行读会让 `ROOT / rel` 全部指向不存在的路径 ⇒ 中文名文档一个都没扫到（2026-11-10 实测：
+    `git ls-files | grep 通用开发规范` = 0 条，而文件明明在库）。同一坑在 check-doc-sync 上犯过一次。"""
+    out = subprocess.run(["git", "ls-files", "-z"], cwd=ROOT, capture_output=True, text=True, check=True)
+    return [l for l in out.stdout.split("\0") if l]
 
 
 def audit(files: list[str]) -> tuple[list[str], list[str]]:
