@@ -110,6 +110,56 @@ def violate_bold_heading(ctx) -> None:
     ctx.write("Docs/项目管理规范.md", text.rstrip("\n") + "\n\n### 带**加粗**的标题\n\n标题里不许有加粗。\n")
 
 
+
+def violate_dup_q(ctx) -> None:
+    """编号唯一：把 Q37 行复制一份（同号两行）。"""
+    p = ROOT / "Docs" / "项目管理规范.md"
+    t = p.read_text(encoding="utf-8")
+    line = next(l for l in t.split("\n") if l.startswith("| **Q37**"))
+    ctx.write("Docs/项目管理规范.md", t.replace(line, line + "\n" + line, 1))
+
+
+def violate_version_regress(ctx) -> None:
+    """冻结 = 升一段 ⇒ 版本号不许回退到更早的段。"""
+    p = ROOT / "Docs" / "项目管理规范.md"
+    ctx.write("Docs/项目管理规范.md",
+              p.read_text(encoding="utf-8").replace("> **版本** v1.0.7", "> **版本** v0.9.99", 1))
+
+
+def violate_changelog(ctx) -> None:
+    """不许有「变更记录」文件。"""
+    ctx.create("Docs/变更记录.md", "# 变更记录\n\n不许有这个文件。\n")
+
+
+def violate_end_sheet_snapshot(ctx) -> None:
+    """一单永远只有一份活件：给同一端再建一份带版本号的快照。"""
+    ctx.create("Docs/Doyah产品开发计划任务清单-macOS-v1.2.md", "# 一单快照\n\n不许有。\n")
+
+
+def violate_release_label(ctx) -> None:
+    """包标签 = 出包序号：台账标签与 `build-app.sh` 的 RELEASE_LABEL 不一致即红。"""
+    p = ROOT / "Scripts" / "release-version.json"
+    d = json.loads(p.read_text(encoding="utf-8"))
+    d["releaseLabel"] = "beta9.9"
+    ctx.write("Scripts/release-version.json", json.dumps(d, ensure_ascii=False, indent=2) + "\n")
+
+
+def violate_freeze_parity(ctx) -> None:
+    """冻结号 = 软件号：台账 marketingVersion 与最新冻结段不符即红。"""
+    p = ROOT / "Scripts" / "release-version.json"
+    d = json.loads(p.read_text(encoding="utf-8"))
+    d["marketingVersion"] = "1.9.9"
+    ctx.write("Scripts/release-version.json", json.dumps(d, ensure_ascii=False, indent=2) + "\n")
+
+
+def violate_linux_sync(ctx) -> None:
+    """macOS 冻结 ⇒ 同日同步 Linux：拿掉同日那份 Linux 冻结件。"""
+    cands = sorted((ROOT / "Docs" / "frozen").glob("*-Linux-v1.3-*.md"))
+    assert cands, "没有 Linux v1.3 冻结件"
+    victim = cands[-1]
+    ctx.move(victim)
+
+
 CASES = [
     ("状态只写词表词",                 "check-queue-needs-user.py", violate_status_word, ()),
     ("版本只写头部",                   "check-doc-versions.py",     violate_doc_version_row, ()),
@@ -117,9 +167,13 @@ CASES = [
     ("编号形制五段式",                 "check-req-ids.py",          violate_bad_req_id, ("--all",)),
     ("数字与路径都不写死",             "check-doc-numbers.py",      violate_doc_numbers, ()),
     ("存量条文允许暂缺字段",           "check-rule-schema.py",      violate_bare_clause, ()),
-    # 未登记：一单用例 —— 实测六端一单都在（Android/HarmonyOS/Linux/Windows/iOS/macOS），
-    # 与「只给正在开发的端建」冲突，先核口径再定负例，不硬造。
-    # ("一单只给正在开发的端建、每端一份活件", "check-end-sheets.py", violate_extra_end_sheet, ()),
+    ("编号唯一",                       "check-doc-versions.py",     violate_dup_q, ()),
+    ("冻结 = 升一段",                  "check-doc-versions.py",     violate_version_regress, ()),
+    ("不许有「变更记录」文件",          "check-doc-versions.py",     violate_changelog, ()),
+    ("一单永远只有一份活件，不做版本快照", "check-end-sheets.py",     violate_end_sheet_snapshot, ()),
+    ("包标签 = 出包序号",              "check-release-version.py",  violate_release_label, ()),
+    ("冻结号 = 软件号",                "check-release-freeze-parity.py", violate_freeze_parity, ()),
+    ("macOS 冻结 ⇒ 同日同步 Linux",     "check-platform-derivation.py",   violate_linux_sync, ()),
     ("Studio 仓是 PUBLIC（凭据）",       "check-no-user-data.py",     violate_internal_ip, ()),
     ("冻结件只能冻结、不许手改",       "check-frozen-sync.py",      violate_frozen_edit, ()),
     # 未登记：check-doc-layout 的「含加粗」实测未拦 `### 带**加粗**的标题`（覆盖范围待核），先不写用例。
@@ -132,6 +186,7 @@ class Ctx:
     def __init__(self) -> None:
         self.backup: dict[pathlib.Path, bytes] = {}
         self.created: list[pathlib.Path] = []
+        self.moved: list[tuple[pathlib.Path, pathlib.Path]] = []
 
     def _remember(self, path: pathlib.Path) -> None:
         if path not in self.backup and path.exists():
@@ -149,6 +204,12 @@ class Ctx:
         self._remember(p)
         p.write_text(text, encoding="utf-8")
 
+    def move(self, path: pathlib.Path) -> None:
+        """把文件挪到 scratch（删除类违规），还原时挪回。"""
+        tmp = pathlib.Path("/tmp") / ("neg_move_" + path.name)
+        path.rename(tmp)
+        self.moved.append((path, tmp))
+
     def create(self, rel: str, text: str) -> None:
         p = ROOT / rel
         assert not p.exists(), f"{rel} 已存在，不能当负例"
@@ -165,6 +226,9 @@ class Ctx:
         for p in self.created:
             if p.exists():
                 p.unlink()
+        for orig, tmp in self.moved:
+            if tmp.exists():
+                tmp.replace(orig)
         return bad
 
 

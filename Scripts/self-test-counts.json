@@ -772,9 +772,9 @@
       "key": "rule-negatives",
       "script": "Scripts/test-rule-negatives.py",
       "args": [],
-      "cases": 8,
+      "cases": 15,
       "countRegex": "实测红 (\\d+) / 登记",
-      "why": "负例执行器（2026-11-10）：把条文里的「必须判红」从声称变成实测 —— 就地制造违规、跑判据、断言 rc!=0、字节级还原。首跑抓出 3 条判据失灵（req-ids 只扫 diff 且不认新文件名、no-user-data 用 git ls-files 按行读把中文名全漏掉、frozen-sync 根本不看冻结件被改），已全部修好。",
+      "why": "负例执行器（2026-11-10）：把条文里的「必须判红」从声称变成实测 —— 就地制造违规、跑判据、断言 rc!=0、字节级还原。首跑抓出 3 条判据失灵（req-ids 只扫 diff 且不认新文件名、no-user-data 用 git ls-files 按行读把中文名全漏掉、frozen-sync 根本不看冻结件被改），已全部修好。 第二批（2026-11-10）补到 15 例：编号唯一 / 冻结=升一段 / 不许变更记录 / 一单不拍快照 / 包标签=出包序号 / 冻结号=软件号 / macOS 冻结⇒同步 Linux；并抓出「跨端视图不是书」条文判据指错门（placement 不判根目录，改指 invariants）。",
       "noAnchorReason": "新族（2026-11-10）：尚未写进 AGENT-SPEC §6 资产表，下次动 §6 时补。"
     }
   ]
