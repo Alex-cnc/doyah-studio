@@ -461,6 +461,7 @@ python3 Scripts/check-req-ids.py --all
 # 本项现在跑三个脚本，与第 3 / 7 / 10 / 15 项同一做法（**项数不变**）。
 python3 Scripts/check-doc-versions.py
 python3 Scripts/check-doc-invariants.py
+python3 Scripts/check-rule-schema.py
 python3 Scripts/check-frozen-sync.py || echo "⚠ 冻结基线有漂移（超阈值 ⇒ 该问人类『冻结到新版本吗』；不是失败）"
 # **冻结号 ⟷ 软件号**（2026-11-08 主人令「冻结了四书哪个版本，软件就应该出哪个版本」）：
 # 最新冻结段 vX.Y ⇒ 台账必须 `betaX.Y` / marketing `X.Y.0`，产物 plist 必须同号；dist 里躺着更旧的包判红。

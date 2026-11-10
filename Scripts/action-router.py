@@ -50,6 +50,7 @@ ACTIONS: dict[str, dict] = {
             ("check-doc-tables.py", []),
             ("check-doc-numbers.py", []),
             ("check-doc-invariants.py", []),
+            ("check-rule-schema.py", []),
             ("check-doc-layout.py", []),
             ("check-plan-coverage.py", []),
             ("check-agents-index.py", []),

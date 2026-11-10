@@ -249,7 +249,8 @@ def check_doc(path: pathlib.Path, frozen_dir: pathlib.Path | None = None) -> lis
             )
     # 「文档版本：」行必须等于头部最新版本（2026-11-09 补：Linux 详设曾出现
     # 头 v1.3.0 / 文档版本 v1.2.1 / 仍引用已并入需求书的能力规划书 v1.0.266 —— 三个号互不相干）
-    row = next((ln for ln in lines if "文档版本：" in ln), None)
+    # 只认元信息行（`- 文档版本：vX` 或表行 `| 文档版本 | vX |`），不认正文里提到「文档版本：」的条文
+    row = next((ln for ln in lines if re.match(r"^(?:- |\|\s*)文档版本[：:]", ln.strip())), None)
     if row is not None and version is not None:
         found = re.search(r"文档版本：\*{0,2}(v\d+\.\d+\.\d+)", row)
         if found is None:
