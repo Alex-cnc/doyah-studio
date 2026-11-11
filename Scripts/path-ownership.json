@@ -231,6 +231,12 @@
       "reason": "数字对账台账：2026-11-11 给新建的按需分析脚本 check-lld-parity.py 登记未闭环理由（Windows 未对齐，接进去会让全量长期红）",
       "by": "macos",
       "at": "2026-11-11"
+    },
+    {
+      "glob": "Scripts/test-rule-negatives.py",
+      "reason": "负例执行器：2026-11-11 撤掉「冻结件只能冻结」那条用例（判据基线红，改 baseline-red 处置），保留动作函数待冻结后复活",
+      "by": "macos",
+      "at": "2026-11-11"
     }
   ]
 }

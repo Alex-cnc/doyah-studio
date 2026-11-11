@@ -165,6 +165,8 @@ def violate_internal_ip(ctx) -> None:
               + "\n\n- 示例密钥：`" + FAKE_KEY + "`（不该出现在 PUBLIC 仓）\n")
 
 
+# 注：本条负例的判据（check-frozen-sync）当前基线红（活书漂移，主人 2026-11-11 令「不冻结」），
+# 已改登记为 baseline-red 处置；等冻结到新版本、判据回绿后，把 CASES 那一行加回来即可复活。
 def violate_frozen_edit(ctx) -> None:
     frozen = sorted((ROOT / "Docs" / "frozen").glob("*v1.3*.md"))
     assert frozen, "找不到 v1.3 冻结件"
@@ -419,7 +421,6 @@ CASES = [
     ("一单永远只有一份活件",            "check-end-sheets.py",         violate_end_sheet_snapshot, ()),
     ("冻结号 = 软件号",                "check-release-freeze-parity.py", violate_freeze_parity, ()),
     ("公开仓不留凭据",            "check-no-user-data.py",       violate_internal_ip, ()),
-    ("冻结件只能冻结",                 "check-frozen-sync.py",        violate_frozen_edit, ()),
     # ── 第二轮新增（2026-11-10）────────────────────────────────────────────
     ("开工先看工作区",                "check-path-ownership.py",     violate_side_tree,
      ("--diff-file", str(SIDE_TREE_DIFF)), ("--diff-file", str(EMPTY_DIFF))),
