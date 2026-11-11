@@ -365,7 +365,47 @@ def violate_doc_gate_skipped(ctx) -> None:
     ctx.write(PM, t.replace(line, line + "\n" + line, 1))
 
 
+# ── 2026-11-10 触发实验新增：把「只有登记」的条文逐条真撞一遍 ─────────────────
+def violate_shell_needs_user(ctx) -> None:
+    """不弹窗要授权：造一条 `needs-user` 行，既不点名拍板号也不写挂起理由（L-10 的旧形态）。"""
+    rel = "Docs/design/开发循环-任务队列.md"
+    t = (ROOT / rel).read_text(encoding="utf-8")
+    row = "| **L-9999** | 负例：needs-user 未点名 | needs-user | 无 |\n\n"
+    ctx.write(rel, t.replace("\n## ", "\n" + row + "## ", 1))
+
+
+def violate_verify_all_abort_removed(ctx) -> None:
+    """首红即退：把 verify-all 的 ERR 陷阱拿掉 ⇒ 判据 `test-verify-all-gate.py` 必须判红。
+
+    注意不能改成 `set -uo`（`set -e` 拿掉不会变红 —— 中止是靠 ERR 陷阱，2026-11-10 实测：
+    改 `set -e` 后自检仍 rc=0；拿掉陷阱才红，所以「负例必须撞到真正的机关」）。
+    """
+    rel = "Scripts/verify-all.sh"
+    t = (ROOT / rel).read_text(encoding="utf-8")
+    anchor = 'trap \'on_failure "$?" "$LINENO" "$BASH_COMMAND"\' ERR'
+    assert anchor in t, "verify-all.sh 里找不到 ERR 陷阱那一行"
+    ctx.write(rel, t.replace(anchor, "# 负例：ERR 陷阱被拿掉", 1))
+
+
+def violate_build_sandbox_flip(ctx) -> None:
+    """交付包口径：把默认 entitlements 从 unsandboxed 换成沙箱（注释与代码行都换，避免只换到注释）。"""
+    rel = "Scripts/build-app.sh"
+    t = (ROOT / rel).read_text(encoding="utf-8")
+    assert "App/DoyahStudio-unsandboxed.entitlements" in t
+    ctx.write(rel, t.replace("App/DoyahStudio-unsandboxed.entitlements", "App/DoyahStudio.entitlements"))
+
+
 CASES = [
+    ("不弹窗要授权",                  "check-queue-needs-user.py",    violate_shell_needs_user, ("--require-all",)),
+    ("报数报「还剩多少」",             "check-doc-numbers.py",         violate_doc_numbers, ()),
+    ("做了一半的写明「还剩多少", "check-doc-numbers.py", violate_handover_count, ()),
+    ("首红即退",                      "test-verify-all-gate.py",      violate_verify_all_abort_removed, ("--self-test",)),
+    ("提案通道",                      "check-exclusive-sections.py",  violate_contract_layer, EXCLUSIVE_ARGS),
+    ("三书版本一律由大河马输出",        "check-exclusive-sections.py",  violate_contract_layer, EXCLUSIVE_ARGS),
+    ("两侧平等、按平台分任务",          "check-exclusive-sections.py",  violate_contract_layer, EXCLUSIVE_ARGS),
+    ("隔离撤销但红线还在",             "check-no-user-data.py",        violate_internal_ip, ()),
+    ("未出包就写「未出包」",            "check-release-freeze-parity.py", violate_freeze_parity, ()),
+    ("交付包口径",                    "check-build-policy.py",        violate_build_sandbox_flip, ()),
     ("文档改动必过门禁",               "action-router.py",             violate_doc_gate_skipped, ("--changed", "--check", "--fast")),
     ("状态只写词表词",                "check-queue-needs-user.py",   violate_status_word, ()),
     ("版本只写头部",                  "check-doc-versions.py",       violate_doc_version_row, ()),

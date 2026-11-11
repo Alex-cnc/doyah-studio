@@ -772,7 +772,7 @@
       "key": "rule-negatives",
       "script": "Scripts/test-rule-negatives.py",
       "args": [],
-      "cases": 37,
+      "cases": 47,
       "countRegex": "实测红 (\\d+) / 登记",
       "why": "负例执行器（2026-11-10）：把条文里的「必须判红」从声称变成实测 —— 就地制造违规、跑判据、断言 rc!=0、字节级还原。首跑抓出 3 条判据失灵（req-ids 只扫 diff 且不认新文件名、no-user-data 用 git ls-files 按行读把中文名全漏掉、frozen-sync 根本不看冻结件被改），已全部修好；第二批补到 15 例；第三批（2026-11-10 同日）补到 36 例并做到「未处置 = 0」：36 例全部实测红（新增 23 例，含 2 条判据转绿后由登记升级为真用例：对侧子树 / 跨册状态括注 / 自测计数台账 / 需求书严格档端专属实现 / 野端一单 / 引别端详设 / 台账多编号 / Docs 根过程件 / Docs 根派生件 / 风险冒充需求 / 索引未跟 / 缺负例字段 / 交接计数 / 契约节越界 / 笔记条款越界 / 带标记放行对照 / 流水 1000 / 降号），另 17 条造不出文件层违规的按 needs-build 8 · baseline-red 5 · wrong-gate 8 · unsupported 1 登记进 `Scripts/rule-negative-dispositions.json`，2 条原【机判】经实测无门可指改【人判】。本轮另改正 7 条错指向（报数报还剩多少 / 不弹窗要授权 / 三书由大河马 / 提案通道 / PC 一体化负例指错册 / 一单端清单负例指向已在清单的端 / 版本规则不在本节）与 check-req-ids 的中文名 diff 全盲（core.quotepath）。",
       "noAnchorReason": "新族（2026-11-10）：例数只在 runner 收尾行里（`实测红 N / 登记 M`），AGENT-SPEC §6 资产表尚未收录该族；下次动 §6 时补落点。"

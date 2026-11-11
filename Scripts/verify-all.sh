@@ -474,6 +474,9 @@ if [ "${_frz_rc}" = "2" ]; then
 elif [ "${_frz_rc}" != "0" ]; then
   echo "❌ 冻结号 ⟷ 软件号不一致（见上）"; exit 1
 fi
+# **出包口径**（2026-11-10 新增）：默认交付的必须是非沙箱包。原来这条没有门 —— 把默认 entitlements
+# 改成沙箱，check-release-version 与 freeze-parity 双双 rc=0（实测），等于没判。
+python3 Scripts/check-build-policy.py
 # 派生文件不得漂移：终端配色 JSON ↔ Core ↔ 人读文档三方一致（FR-STD-WS-TOOL-001 的跨平台交接物）
 # 2026-11-09：`check-terminal-palette.py` 摘离（拦截史 0 —— 唯一一次相关提交 19df1fa0 是它抓自己的自检缺陷）。
 # 三方一致改由 `Scripts/test-terminal-palette.sh` 跑（真跑 `CLI terminal-palette --json` + 从 hex 独立复算
