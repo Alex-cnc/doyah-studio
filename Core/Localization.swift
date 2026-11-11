@@ -2312,6 +2312,8 @@ public enum LKey: String, CaseIterable, Sendable {
     case agentIMReasonNotStarted
     /// 跑完了但没有可读正文（工具轮没给结论）。
     case agentIMReasonNoText
+    /// 逾期补发时同样没有正文 —— 带上步数与最后一步，别只丢一句「没有正文」。
+    case agentIMLateNoText
     case agentIMSendDelivered
     case agentIMSendNotReady
     case agentIMSendUnauthorized
@@ -6044,12 +6046,13 @@ public enum LocalizedStrings {
         .agentIMProgressThinking: [.simplifiedChinese: "第 %lld 步 · 在等模型出话 · 已跑 %@（还在跑）", .english: "Step %lld · waiting for the model · %@ in (still running)"],
         .agentIMProgressTool: [.simplifiedChinese: "第 %lld 步 · 正在 %@ · 已跑 %@（还在跑）", .english: "Step %lld · running %@ · %@ in (still running)"],
         .agentIMReplyStillRunning: [.simplifiedChinese: "这一轮已经跑了 %@ 还没收尾，还在继续跑（进度我会接着报）。有结论我再发一条；急的话可以在桌面点停止。", .english: "This turn has been running for %@ and is still going (I will keep reporting progress). I will send the result when it lands; you can stop it on the desktop if you need to."],
-        .agentIMReasonBusy: [.simplifiedChinese: "上一轮还在跑", .english: "the previous run is still going"],
+        .agentIMReasonBusy: [.simplifiedChinese: "上一轮还在跑（它的结论跑完会补一条）", .english: "the previous run is still going (its result will be sent when it finishes)"],
         .agentIMReasonNoWorkspace: [.simplifiedChinese: "没有打开工作区", .english: "no workspace is open"],
         .agentIMReasonNoAnswer: [.simplifiedChinese: "这一轮没有产出结论", .english: "this run produced no answer"],
         .agentIMReasonNoRunner: [.simplifiedChinese: "对话循环没有接上", .english: "the conversation loop is not wired"],
         .agentIMReasonNotStarted: [.simplifiedChinese: "这一轮没能开跑（本地拦下：端点没配 / 同一句刚问过 / 日配额用完 —— 面板上那句话写着是哪一种）", .english: "this run never started (blocked locally: endpoint not configured, the same question was just asked, or the daily quota is used up — the desktop pane says which)"],
         .agentIMReasonNoText: [.simplifiedChinese: "这一轮跑完了，但没有可读的正文（过程与步骤在桌面面板上）", .english: "this run finished but produced no readable text (the steps are on the desktop pane)"],
+        .agentIMLateNoText: [.simplifiedChinese: "这一轮跑完了（%lld 步），但没有可读正文 —— 每一步都在桌面面板上（最后一步：%@）。要看细节请打开桌面对话。", .english: "This run finished (%lld steps) but produced no readable text — every step is on the desktop pane (last step: %@). Open the desktop chat for details."],
         .agentIMSendDelivered: [.simplifiedChinese: "结论已经发回聊天里了", .english: "The result was sent back to the chat."],
         .agentIMSendNotReady: [.simplifiedChinese: "这条结论没发出去（%@）：还没到发的那一步。", .english: "This result was not sent (%@): it never reached the sending step."],
         .agentIMSendUnauthorized: [.simplifiedChinese: "发不出去：AppID 或 Secret 不对（401）。重新填一次凭据再试。", .english: "Could not send: the AppID or Secret is wrong (401). Re-enter the credentials and try again."],

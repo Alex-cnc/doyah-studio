@@ -1405,7 +1405,11 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
             sink(AgentIMReplyText.text(for: .unavailable(code: "taskFailed"), language: language))
             return
         }
-        sink(LocalizedStrings.text(.agentIMReasonNoText, language: language))
+        // 跑完没正文：不许只丢一句「没有正文」—— 带上步数与最后一步，
+        // 手机那头才知道「它真跑了、跑了几步、卡在哪一步」，也知道该去桌面看。
+        let lastTool = result.executedTools.last?.name ?? "—"
+        sink(LocalizedStrings.format(.agentIMLateNoText, language: language,
+                                     Int64(result.steps), lastTool))
     }
 
     /// 带来源的一版（`FR-AGT-TOOL-SYS-002` ①）：**主对话只收主循环自己的事件**。

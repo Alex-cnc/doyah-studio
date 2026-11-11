@@ -196,3 +196,31 @@ private final class QuietDispatcher: AgentToolDispatcher, @unchecked Sendable {
         .file(AgentToolFileOutput(path: "a.txt", text: "", truncated: false, totalBytes: 0))
     }
 }
+
+/// **跑完没正文时的补发文案**（2026-11-11 真机：QQ 通道测试收到
+/// 「this run finished but produced no readable text … No result to report.」——
+/// 只有一句「没正文」，手机那头看不出它跑了几步、卡在哪一步）。
+///
+/// 判据三条：① 带上步数；② 带上最后一步的工具名；③ 没有工具时给「—」而不是空串。
+final class AgentIMLateNoTextTests: XCTestCase {
+
+    func testCarriesStepCountAndLastTool() {
+        let text = LocalizedStrings.format(.agentIMLateNoText, language: .simplifiedChinese,
+                                           Int64(7), "run_command")
+        XCTAssertTrue(text.contains("7 步"), "应带步数：\(text)")
+        XCTAssertTrue(text.contains("run_command"), "应带最后一步：\(text)")
+        XCTAssertTrue(text.contains("桌面"), "应指出去哪看细节：\(text)")
+    }
+
+    func testEnglishVariantAlsoCarriesThem() {
+        let text = LocalizedStrings.format(.agentIMLateNoText, language: .english,
+                                           Int64(3), "fetch_url")
+        XCTAssertTrue(text.contains("3 steps"))
+        XCTAssertTrue(text.contains("fetch_url"))
+    }
+
+    func testBusyLineSaysResultWillFollow() {
+        let text = LocalizedStrings.text(.agentIMReasonBusy, language: .simplifiedChinese)
+        XCTAssertTrue(text.contains("补一条"), "忙的时候要说明「结论会补发」：\(text)")
+    }
+}
