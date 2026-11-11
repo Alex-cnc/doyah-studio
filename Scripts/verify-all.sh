@@ -461,6 +461,11 @@ python3 Scripts/check-req-ids.py --all
 # 本项现在跑三个脚本，与第 3 / 7 / 10 / 15 项同一做法（**项数不变**）。
 python3 Scripts/check-doc-versions.py
 python3 Scripts/check-doc-invariants.py
+# **派生详设与基准的逐节对齐**（主人 2026-11-11 令「只看 Linux」）：
+# 节号集合 + 判据编号集合 + 契约级阈值常量 三件逐节比；脚本里写死了范围声明
+# （只把「判据行 / 契约段」里的 Npt 当契约级；实现推理段的读数不算）。
+# 只判 Linux —— Windows 详设（v1.0.8 · 511 行 · 缺 62 节）若一并判会让全量长期红，而主人明确暂不开发。
+python3 Scripts/check-lld-parity.py --target Linux
 python3 Scripts/check-rule-schema.py
 python3 Scripts/test-rule-negatives.py
 python3 Scripts/check-frozen-sync.py || echo "⚠ 冻结基线有漂移（超阈值 ⇒ 该问人类『冻结到新版本吗』；不是失败）"
