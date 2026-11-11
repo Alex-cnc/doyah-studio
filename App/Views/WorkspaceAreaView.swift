@@ -337,9 +337,13 @@ struct WorkspaceAreaView: View {
                     .lineLimit(2)
                     .textSelection(.enabled)
                 Spacer(minLength: Spacing.s)
-                Button(L(.workspaceReloadFromDiskAction)) {
+                Button {
                     tabs.reloadFromDisk(tabID: tab.id, force: true)
+                } label: {
+                    Image(systemName: "arrow.clockwise")
                 }
+                .help(L(.workspaceReloadFromDiskAction))
+                .accessibilityLabel(L(.workspaceReloadFromDiskAction))
                 .font(Theme.font(.caption))
                 .buttonStyle(.borderless)
             }

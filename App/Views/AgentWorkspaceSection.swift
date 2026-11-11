@@ -58,12 +58,20 @@ struct AgentWorkspaceSection: View {
             )
 
             HStack(spacing: Spacing.s) {
-                Button(WorkspaceRootCopy.openFolderButton(language)) {
+                Button {
                     Task { await workspace.pickAndChoose() }
+                } label: {
+                    Image(systemName: "folder")
                 }
-                Button(WorkspaceRootCopy.restoreDefaultButton(language)) {
+                .help(WorkspaceRootCopy.openFolderButton(language))
+                .accessibilityLabel(WorkspaceRootCopy.openFolderButton(language))
+                Button {
                     Task { await workspace.restoreDefaultRoot() }
+                } label: {
+                    Image(systemName: "arrow.uturn.backward")
                 }
+                .help(WorkspaceRootCopy.restoreDefaultButton(language))
+                .accessibilityLabel(WorkspaceRootCopy.restoreDefaultButton(language))
                 .disabled(isAtDefaultRoot)
                 .accessibilityIdentifier("agentWorkspaceRestoreDefault")
                 Spacer(minLength: 0)

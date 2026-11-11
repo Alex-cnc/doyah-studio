@@ -1,292 +1,299 @@
 {
- "_说明": "图标语义台账（加令 T-20261013-051 ②）：symbol → 动作 + 语义依据。判据读它做「符号已登记 / 同一动作同一符号」。　**2026-10-14 批 7**：判据 F 的观察窗改成「控件本体 + 修饰链」后，判据 G/H 的对账面 58 → 78 处，暴露 8 枚已用未登记的符号（本批补登，依据栏里的动作取自同控件的 `.help(L(.key))`）。",
- "symbols": {
-  "checkmark": {
-   "动作": "commonSave",
-   "依据": "保存 = 打勾（就地改那一行的提交按钮）"
-  },
-  "arrow.counterclockwise": {
-   "动作": "todoUndoRemoval",
-   "依据": "撤销 = 回转箭头（清单顶部那条「撤销删除」）"
-  },
-  "icloud": {
-   "动作": "accountSyncToggle",
-   "依据": "云同步开关 = iCloud 语义"
-  },
-  "lock": {
-   "动作": "agentReadOnlyMode",
-   "依据": "只读/写保护 = 锁"
-  },
-  "tablecells": {
-   "动作": "agentSQLIncludeTables",
-   "依据": "表结构 = 表格格"
-  },
-  "doc.plaintext": {
-   "动作": "agentSQLIncludeStatement",
-   "依据": "语句原文 = 纯文本文档"
-  },
-  "cpu": {
-   "动作": "agentEnabled",
-   "依据": "启用智能体 = 芯片/算力"
-  },
-  "key.slash": {
-   "动作": "agentAPIKeyClear",
-   "依据": "清除已存密钥 = 钥匙划掉"
-  },
-  "sparkles": {
-   "动作": "appearanceNebulaSkin",
-   "依据": "星云皮肤 = 闪光"
-  },
-  "cursorarrow": {
-   "动作": "terminalCursorBlink",
-   "依据": "光标闪烁 = 光标"
-  },
-  "eraser": {
-   "动作": "backupRestoreClean",
-   "依据": "恢复前清空 = 擦除"
-  },
-  "terminal": {
-   "动作": "sshEnableLabel",
-   "依据": "启用 SSH = 终端通道"
-  },
-  "lock.doc": {
-   "动作": "sshKeyEncryptedLabel",
-   "依据": "私钥已加密 = 上锁的文档"
-  },
-  "waveform.path.ecg": {
-   "动作": "connectionSettingsKeepAliveToggle",
-   "依据": "保活 = 心跳波形"
-  },
-  "line.3.horizontal.decrease.circle": {
-   "动作": "dataTaskOnlyEnabled",
-   "依据": "只显示已启用 = 筛选"
-  },
-  "play.circle": {
-   "动作": "dataTaskEnabled",
-   "依据": "启用 = 播放（与批次 5 既有「启用」符号同形）"
-  },
-  "stethoscope": {
-   "动作": "planAnalyze",
-   "依据": "EXPLAIN ANALYZE = 诊断"
-  },
-  "memorychip": {
-   "动作": "planBuffers",
-   "依据": "缓冲块 = 内存芯片"
-  },
-  "curlybraces": {
-   "动作": "planFormatJSON",
-   "依据": "JSON 格式 = 花括号"
-  },
-  "list.dash.header.rectangle": {
-   "动作": "importHasHeader",
-   "依据": "首行是表头 = 带表头的列表"
-  },
-  "square.stack.3d.up": {
-   "动作": "maintenanceAllowMultiple",
-   "依据": "允许并发多个 = 堆叠"
-  },
-  "archivebox": {
-   "动作": "archiveEnable",
-   "依据": "归档 = 档案盒"
-  },
-  "trash": {
-   "动作": "schemaDiffAllowDrop",
-   "依据": "允许 DROP = 删除"
-  },
-  "person.badge.key": {
-   "动作": "serverObjectsCanLogin",
-   "依据": "角色可登录 = 人 + 钥匙"
-  },
-  "crown": {
-   "动作": "serverObjectsSuperuser",
-   "依据": "超级用户 = 王冠"
-  },
-  "arrow.triangle.2.circlepath": {
-   "动作": "syntheticOverwrite",
-   "依据": "覆盖写 = 循环替换"
-  },
-  "equal.circle": {
-   "动作": "tableDesignIndexUnique",
-   "依据": "唯一索引 = 值两两相等（不重复）"
-  },
-  "calendar.badge.clock": {
-   "动作": "todoHasDueLabel",
-   "依据": "有待办截止 = 日历带钟"
-  },
-  "pencil": {
-   "动作": "commonEdit",
-   "依据": "编辑 = 铅笔"
-  },
-  "sidebar.trailing": {
-   "动作": "rowDetailTitle",
-   "依据": "行详情侧栏 = 右侧栏"
-  },
-  "record.circle": {
-   "动作": "memoryGovernanceRecordingToggle",
-   "依据": "录制动作 = 录制圆点"
-  },
-  "doc.text.magnifyingglass": {
-   "动作": "agentAllowlistKind.readQuery",
-   "依据": "白名单·只读查询 = 文档 + 放大镜"
-  },
-  "square.and.pencil": {
-   "动作": "agentAllowlistKind.dataChange",
-   "依据": "白名单·数据变更 = 方框 + 笔"
-  },
-  "wrench.and.screwdriver": {
-   "动作": "agentAllowlistKind.schemaChange",
-   "依据": "白名单·结构变更 = 扳手改结构"
-  },
-  "lock.open": {
-   "动作": "agentAllowlistKind.privilegeChange",
-   "依据": "白名单·权限变更 = 开锁改权限"
-  },
-  "arrow.clockwise.circle": {
-   "动作": "agentAllowlistKind.sessionControl",
-   "依据": "白名单·会话控制 = 事务循环"
-  },
-  "key.horizontal": {
-   "动作": "privilegeWithGrantOption",
-   "依据": "可再授权（WITH GRANT OPTION）= 钥匙（授权语义；`key.badge.plus` 本机 SF Symbols 实读不存在）"
-  },
-  "minus.magnifyingglass": {
-   "动作": "erDiagramZoomOut",
-   "依据": "关系图缩小 = 减号放大镜"
-  },
-  "plus.magnifyingglass": {
-   "动作": "erDiagramZoomIn",
-   "依据": "关系图放大 = 加号放大镜"
-  },
-  "magnifyingglass": {
-   "动作": "objectSearchTitle",
-   "依据": "对象搜索 = 放大镜"
-  },
-  "arrow.clockwise": {
-   "动作": [
-    "treeRefreshHelp",
-    "terminalRestartTab"
-   ],
-   "依据": "刷新 / 重启 = 顺时针箭头（都是「重来一遍」）"
-  },
-  "plus": {
-   "动作": "resultFilterAdd",
-   "依据": "加筛选条件 = 加号"
-  },
-  "chevron.left.2": {
-   "动作": "resultPageFirst",
-   "依据": "首页 = 双左箭头"
-  },
-  "chevron.left": {
-   "动作": "resultPagePrevious",
-   "依据": "上一页 = 左箭头"
-  },
-  "chevron.right": {
-   "动作": "resultPageNext",
-   "依据": "下一页 = 右箭头"
-  },
-  "chevron.right.2": {
-   "动作": "resultPageLast",
-   "依据": "末页 = 双右箭头"
-  },
-  "plus.circle": {
-   "动作": "tableDesignAddConstraint",
-   "依据": "加约束 = 圆加号"
-  },
-  "link.badge.plus": {
-   "动作": "tableDesignAddForeignKey",
-   "依据": "加外键 = 链加号"
-  },
-  "plus.square": {
-   "动作": "tableDesignAddIndex",
-   "依据": "加索引 = 方加号"
-  },
-  "minus.circle": {
-   "动作": "tableDesignRemoveColumn",
-   "依据": "删列 = 圆减号"
-  },
-  "doc.text": {
-   "动作": "workspaceOpenFileButton",
-   "依据": "打开文件 = 文档"
-  },
-  "folder": {
-   "动作": "workspaceChooseFolderButton",
-   "依据": "选工作区文件夹 = 文件夹"
-  },
-  "bubble.left.and.text.bubble.right": {
-   "动作": "agentChatTabTitle",
-   "依据": "智能体会话页签 = 对话气泡"
-  },
-  "xmark": {
-   "动作": "workspaceCloseTab",
-   "依据": "关闭页签 = 叉"
-  },
-  "square.and.arrow.down": {
-   "动作": "notesSave",
-   "依据": "保存笔记 = 存储箭头"
-  },
-  "arrow.up.doc": {
-   "动作": "historyLoadHelp",
-   "依据": "把这条历史载入页签 = 文档向上"
-  },
-  "play.fill": {
-   "动作": "toolbarExecuteHelp",
-   "依据": "执行查询 = 实心播放"
-  },
-  "arrow.up.arrow.down.circle": {
-   "动作": "resultSortClear",
-   "依据": "清除排序 = 圆内上下箭头"
-  },
-  "doc.on.doc": {
-   "动作": "rowDetailCopyValue",
-   "依据": "复制单元格值 = 叠文档"
-  },
-  "arrow.left.arrow.right": {
-   "动作": "commandReplace",
-   "依据": "替换 = 左右箭头（成对）"
-  },
-  "xmark.circle.fill": {
-   "动作": "commonClose",
-   "依据": "关闭 / 收起搜索字段 = 实心圆叉"
-  },
-  "bell": {
-   "动作": "reminderAttach",
-   "依据": "加提醒 = 铃铛"
-  },
-  "bell.slash": {
-   "动作": "reminderRemove",
-   "依据": "移除提醒 = 划掉的铃铛"
-  },
-  "clock.arrow.circlepath": {
-   "动作": "agentScheduleOpen",
-   "依据": "定时 = 时钟（面板入口）"
-  },
-  "clock.badge.exclamationmark": {
-   "动作": "agentScheduleMissed",
-   "依据": "错过窗口 = 带感叹号的时钟"
-  },
-  "photo.on.rectangle.angled": {
-   "动作": "appearanceWallpaperSkinToggle",
-   "依据": "壁纸皮肤 = 一张铺在表面之下的照片（相框图标）"
-  },
-  "paperclip": {
-   "动作": "notesAttachTip",
-   "依据": "回形针 = 附件 / 附带文件（笔记工具条「插入附件」）"
-  },
-  "macwindow.on.rectangle": {
-   "动作": "workspaceHTMLPreviewOpenInBrowser",
-   "依据": "窗口 + 向右上箭头 = 在浏览器里另开（HTML 预览）"
-  },
-  "arrow.up.forward.square": {
-   "动作": "todoLinkOpen",
-   "依据": "打开对应的那一头 = 指向右上方的方框箭头（待办 ↔ 笔记互链的「打开」出口）"
-  },
-  "arrow.uturn.backward": {
-   "动作": "todoLinkUndo",
-   "依据": "撤销 = 回转箭头（撤销这次待办↔笔记转换）"
-  },
-  "note.text": {
-   "动作": "todoLinkCreateNote",
-   "依据": "新建笔记 = 带文字的纸页（从待办建一条笔记）"
+  "_说明": "图标语义台账（加令 T-20261013-051 ②）：symbol → 动作 + 语义依据。判据读它做「符号已登记 / 同一动作同一符号」。　**2026-10-14 批 7**：判据 F 的观察窗改成「控件本体 + 修饰链」后，判据 G/H 的对账面 58 → 78 处，暴露 8 枚已用未登记的符号（本批补登，依据栏里的动作取自同控件的 `.help(L(.key))`）。",
+  "symbols": {
+    "checkmark": {
+      "动作": "commonSave",
+      "依据": "保存 = 打勾（就地改那一行的提交按钮）"
+    },
+    "arrow.counterclockwise": {
+      "动作": "todoUndoRemoval",
+      "依据": "撤销 = 回转箭头（清单顶部那条「撤销删除」）"
+    },
+    "icloud": {
+      "动作": "accountSyncToggle",
+      "依据": "云同步开关 = iCloud 语义"
+    },
+    "lock": {
+      "动作": "agentReadOnlyMode",
+      "依据": "只读/写保护 = 锁"
+    },
+    "tablecells": {
+      "动作": "agentSQLIncludeTables",
+      "依据": "表结构 = 表格格"
+    },
+    "doc.plaintext": {
+      "动作": "agentSQLIncludeStatement",
+      "依据": "语句原文 = 纯文本文档"
+    },
+    "cpu": {
+      "动作": "agentEnabled",
+      "依据": "启用智能体 = 芯片/算力"
+    },
+    "key.slash": {
+      "动作": "agentAPIKeyClear",
+      "依据": "清除已存密钥 = 钥匙划掉"
+    },
+    "sparkles": {
+      "动作": "appearanceNebulaSkin",
+      "依据": "星云皮肤 = 闪光"
+    },
+    "cursorarrow": {
+      "动作": "terminalCursorBlink",
+      "依据": "光标闪烁 = 光标"
+    },
+    "eraser": {
+      "动作": "backupRestoreClean",
+      "依据": "恢复前清空 = 擦除"
+    },
+    "terminal": {
+      "动作": "sshEnableLabel",
+      "依据": "启用 SSH = 终端通道"
+    },
+    "lock.doc": {
+      "动作": "sshKeyEncryptedLabel",
+      "依据": "私钥已加密 = 上锁的文档"
+    },
+    "waveform.path.ecg": {
+      "动作": "connectionSettingsKeepAliveToggle",
+      "依据": "保活 = 心跳波形"
+    },
+    "line.3.horizontal.decrease.circle": {
+      "动作": "dataTaskOnlyEnabled",
+      "依据": "只显示已启用 = 筛选"
+    },
+    "play.circle": {
+      "动作": "dataTaskEnabled",
+      "依据": "启用 = 播放（与批次 5 既有「启用」符号同形）"
+    },
+    "stethoscope": {
+      "动作": "planAnalyze",
+      "依据": "EXPLAIN ANALYZE = 诊断"
+    },
+    "memorychip": {
+      "动作": "planBuffers",
+      "依据": "缓冲块 = 内存芯片"
+    },
+    "curlybraces": {
+      "动作": "planFormatJSON",
+      "依据": "JSON 格式 = 花括号"
+    },
+    "list.dash.header.rectangle": {
+      "动作": "importHasHeader",
+      "依据": "首行是表头 = 带表头的列表"
+    },
+    "square.stack.3d.up": {
+      "动作": "maintenanceAllowMultiple",
+      "依据": "允许并发多个 = 堆叠"
+    },
+    "archivebox": {
+      "动作": "archiveEnable",
+      "依据": "归档 = 档案盒"
+    },
+    "trash": {
+      "动作": "schemaDiffAllowDrop",
+      "依据": "允许 DROP = 删除"
+    },
+    "person.badge.key": {
+      "动作": "serverObjectsCanLogin",
+      "依据": "角色可登录 = 人 + 钥匙"
+    },
+    "crown": {
+      "动作": "serverObjectsSuperuser",
+      "依据": "超级用户 = 王冠"
+    },
+    "arrow.triangle.2.circlepath": {
+      "动作": "syntheticOverwrite",
+      "依据": "覆盖写 = 循环替换"
+    },
+    "equal.circle": {
+      "动作": "tableDesignIndexUnique",
+      "依据": "唯一索引 = 值两两相等（不重复）"
+    },
+    "calendar.badge.clock": {
+      "动作": "todoHasDueLabel",
+      "依据": "有待办截止 = 日历带钟"
+    },
+    "pencil": {
+      "动作": "commonEdit",
+      "依据": "编辑 = 铅笔"
+    },
+    "sidebar.trailing": {
+      "动作": "rowDetailTitle",
+      "依据": "行详情侧栏 = 右侧栏"
+    },
+    "record.circle": {
+      "动作": "memoryGovernanceRecordingToggle",
+      "依据": "录制动作 = 录制圆点"
+    },
+    "doc.text.magnifyingglass": {
+      "动作": "agentAllowlistKind.readQuery",
+      "依据": "白名单·只读查询 = 文档 + 放大镜"
+    },
+    "square.and.pencil": {
+      "动作": "agentAllowlistKind.dataChange",
+      "依据": "白名单·数据变更 = 方框 + 笔"
+    },
+    "wrench.and.screwdriver": {
+      "动作": "agentAllowlistKind.schemaChange",
+      "依据": "白名单·结构变更 = 扳手改结构"
+    },
+    "lock.open": {
+      "动作": "agentAllowlistKind.privilegeChange",
+      "依据": "白名单·权限变更 = 开锁改权限"
+    },
+    "arrow.clockwise.circle": {
+      "动作": "agentAllowlistKind.sessionControl",
+      "依据": "白名单·会话控制 = 事务循环"
+    },
+    "key.horizontal": {
+      "动作": "privilegeWithGrantOption",
+      "依据": "可再授权（WITH GRANT OPTION）= 钥匙（授权语义；`key.badge.plus` 本机 SF Symbols 实读不存在）"
+    },
+    "minus.magnifyingglass": {
+      "动作": "erDiagramZoomOut",
+      "依据": "关系图缩小 = 减号放大镜"
+    },
+    "plus.magnifyingglass": {
+      "动作": "erDiagramZoomIn",
+      "依据": "关系图放大 = 加号放大镜"
+    },
+    "magnifyingglass": {
+      "动作": "objectSearchTitle",
+      "依据": "对象搜索 = 放大镜"
+    },
+    "arrow.clockwise": {
+      "动作": [
+        "treeRefreshHelp",
+        "terminalRestartTab",
+        "workspaceReloadFromDiskAction"
+      ],
+      "依据": "刷新 / 重启 = 顺时针箭头（都是「重来一遍」）"
+    },
+    "plus": {
+      "动作": "resultFilterAdd",
+      "依据": "加筛选条件 = 加号"
+    },
+    "chevron.left.2": {
+      "动作": "resultPageFirst",
+      "依据": "首页 = 双左箭头"
+    },
+    "chevron.left": {
+      "动作": "resultPagePrevious",
+      "依据": "上一页 = 左箭头"
+    },
+    "chevron.right": {
+      "动作": "resultPageNext",
+      "依据": "下一页 = 右箭头"
+    },
+    "chevron.right.2": {
+      "动作": "resultPageLast",
+      "依据": "末页 = 双右箭头"
+    },
+    "plus.circle": {
+      "动作": "tableDesignAddConstraint",
+      "依据": "加约束 = 圆加号"
+    },
+    "link.badge.plus": {
+      "动作": "tableDesignAddForeignKey",
+      "依据": "加外键 = 链加号"
+    },
+    "plus.square": {
+      "动作": "tableDesignAddIndex",
+      "依据": "加索引 = 方加号"
+    },
+    "minus.circle": {
+      "动作": "tableDesignRemoveColumn",
+      "依据": "删列 = 圆减号"
+    },
+    "doc.text": {
+      "动作": "workspaceOpenFileButton",
+      "依据": "打开文件 = 文档"
+    },
+    "folder": {
+      "动作": [
+        "workspaceChooseFolderButton",
+        "openFolderButton"
+      ],
+      "依据": "选工作区文件夹 = 文件夹"
+    },
+    "bubble.left.and.text.bubble.right": {
+      "动作": "agentChatTabTitle",
+      "依据": "智能体会话页签 = 对话气泡"
+    },
+    "xmark": {
+      "动作": "workspaceCloseTab",
+      "依据": "关闭页签 = 叉"
+    },
+    "square.and.arrow.down": {
+      "动作": "notesSave",
+      "依据": "保存笔记 = 存储箭头"
+    },
+    "arrow.up.doc": {
+      "动作": "historyLoadHelp",
+      "依据": "把这条历史载入页签 = 文档向上"
+    },
+    "play.fill": {
+      "动作": "toolbarExecuteHelp",
+      "依据": "执行查询 = 实心播放"
+    },
+    "arrow.up.arrow.down.circle": {
+      "动作": "resultSortClear",
+      "依据": "清除排序 = 圆内上下箭头"
+    },
+    "doc.on.doc": {
+      "动作": "rowDetailCopyValue",
+      "依据": "复制单元格值 = 叠文档"
+    },
+    "arrow.left.arrow.right": {
+      "动作": "commandReplace",
+      "依据": "替换 = 左右箭头（成对）"
+    },
+    "xmark.circle.fill": {
+      "动作": "commonClose",
+      "依据": "关闭 / 收起搜索字段 = 实心圆叉"
+    },
+    "bell": {
+      "动作": "reminderAttach",
+      "依据": "加提醒 = 铃铛"
+    },
+    "bell.slash": {
+      "动作": "reminderRemove",
+      "依据": "移除提醒 = 划掉的铃铛"
+    },
+    "clock.arrow.circlepath": {
+      "动作": "agentScheduleOpen",
+      "依据": "定时 = 时钟（面板入口）"
+    },
+    "clock.badge.exclamationmark": {
+      "动作": "agentScheduleMissed",
+      "依据": "错过窗口 = 带感叹号的时钟"
+    },
+    "photo.on.rectangle.angled": {
+      "动作": "appearanceWallpaperSkinToggle",
+      "依据": "壁纸皮肤 = 一张铺在表面之下的照片（相框图标）"
+    },
+    "paperclip": {
+      "动作": "notesAttachTip",
+      "依据": "回形针 = 附件 / 附带文件（笔记工具条「插入附件」）"
+    },
+    "macwindow.on.rectangle": {
+      "动作": "workspaceHTMLPreviewOpenInBrowser",
+      "依据": "窗口 + 向右上箭头 = 在浏览器里另开（HTML 预览）"
+    },
+    "arrow.up.forward.square": {
+      "动作": "todoLinkOpen",
+      "依据": "打开对应的那一头 = 指向右上方的方框箭头（待办 ↔ 笔记互链的「打开」出口）"
+    },
+    "arrow.uturn.backward": {
+      "动作": [
+        "todoLinkUndo",
+        "restoreDefaultButton"
+      ],
+      "依据": "撤销 = 回转箭头（撤销这次待办↔笔记转换）"
+    },
+    "note.text": {
+      "动作": "todoLinkCreateNote",
+      "依据": "新建笔记 = 带文字的纸页（从待办建一条笔记）"
+    }
   }
- }
 }
