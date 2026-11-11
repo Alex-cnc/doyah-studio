@@ -31,6 +31,9 @@ BASE = "Docs/Doyah产品详细设计说明书-macOS.md"
 SECT = re.compile(r"^### (\d+\.\d+) ", re.M)
 TID = re.compile(r"T-\d+\.\d+-\d+")
 PT = re.compile(r"\b\d+(?:\.\d+)?pt\b")
+SUB = re.compile(r"(?m)^#### (\d+\.\d+\.\d+) ")
+NUM = re.compile(r"(?m)^\d+\. \*\*")
+SIG_HEAD = re.compile(r"(?m)^### \d+\.\d+ `[A-Z]\w*[.(]")
 MS = re.compile(r"\b\d+(?:\.\d+)?\s?ms\b")
 
 
@@ -81,8 +84,12 @@ def report(base_path: Path, target_path: Path) -> dict:
         bt, tt = set(TID.findall(b[num])), set(TID.findall(t.get(num, "")))
         bp, tp = contract_pt(b[num]), all_pt(t.get(num, ""))
         bm, tm = contract_ms(b[num]), all_ms(t.get(num, ""))
+        bs, ts = set(SUB.findall(b[num])), set(SUB.findall(t.get(num, "")))
         rows.append({
             "section": num,
+            "subs_missing": sorted(bs - ts),
+            "contracts_base": len(NUM.findall(b[num])),
+            "contracts_target": len(NUM.findall(t.get(num, ""))),
             "present": num in t,
             "tids_missing": sorted(bt - tt),
             "pt_missing": sorted(bp - tp, key=lambda x: float(x[:-2])),
@@ -94,6 +101,7 @@ def report(base_path: Path, target_path: Path) -> dict:
         "base": base_path.relative_to(ROOT).as_posix() if base_path.is_relative_to(ROOT) else base_path.as_posix(),
         "target": target_path.relative_to(ROOT).as_posix() if target_path.is_relative_to(ROOT) else target_path.as_posix(),
         "sections_missing": [n for n in b if n not in t],
+        "signature_headings": SIG_HEAD.findall(t_text) and [m.group(0) for m in SIG_HEAD.finditer(t_text)],
         "extra_sections": [n for n in t if n not in b],
         "rows": rows,
         "totals": {
@@ -127,14 +135,21 @@ def self_test() -> int:
 **契约**：阈值 **20pt**。
 | `T-3.1-01` | 20pt |
 """
-    cases = [("完全一致 ⇒ 绿", base, good, 0), ("缺一节 + 缺判据 + 缺阈值 ⇒ 红", base, bad, 1)]
+    base_sub = base.replace("### 3.2 乙", "#### 3.1.1 子节甲\n\n### 3.2 乙")
+    bad_sub = base.replace("### 3.2 乙", "### 3.2 乙")
+    sig = base.replace("### 3.2 乙", "### 3.2 `AgentFoo.run(x:)`")
+    cases = [("完全一致 ⇒ 绿", base_sub, base_sub, 0),
+             ("缺一节 + 缺判据 + 缺阈值 ⇒ 红", base_sub, bad, 1),
+             ("缺子节 ⇒ 红", base_sub, bad_sub, 1),
+             ("标题抄基准签名 ⇒ 红", base_sub, sig, 1)]
     ok = 0
     with tempfile.TemporaryDirectory() as d:
         for name, b, t, want in cases:
             bp, tp = Path(d, "b.md"), Path(d, "t.md")
             bp.write_text(b, encoding="utf-8"); tp.write_text(t, encoding="utf-8")
             r = report(bp, tp)
-            red = bool(r["sections_missing"]) or any(x["tids_missing"] or x["pt_missing"] for x in r["rows"])
+            red = (bool(r["sections_missing"]) or bool(r["signature_headings"])
+                   or any(x["tids_missing"] or x["pt_missing"] or x["subs_missing"] for x in r["rows"]))
             got = 1 if red else 0
             passed = got == want
             ok += passed
@@ -170,13 +185,18 @@ def main(argv: list[str]) -> int:
         print(f"❌ 缺节 {len(r['sections_missing'])}：{', '.join(r['sections_missing'])}")
     if r["extra_sections"]:
         print(f"⚠ 目标多出的节：{', '.join(r['extra_sections'])}")
-    print(f"判据缺号 {tot['tids_missing']} 个 · 阈值缺项 {tot['pt_missing']} 处\n")
+    print(f"判据缺号 {tot['tids_missing']} 个 · 阈值缺项 {tot['pt_missing']} 处 · "
+          f"缺子节 {sum(len(r['subs_missing']) for r in r['rows'])} 个 · "
+          f"标题抄签名的节 {len(r['signature_headings'])} 个\n")
+    if r["signature_headings"]:
+        for h in r["signature_headings"][:5]:
+            print(f"  ❌ 标题是基准实现签名：{h}")
 
     print(f"{'节':>6} {'基准行':>6} {'目标行':>6} {'缺判据':>6} {'缺阈值':>6}  缺的判据 / 阈值")
     bad = 0
     for row in r["rows"]:
         miss_t, miss_p = row["tids_missing"], row["pt_missing"]
-        if not (miss_t or miss_p or not row["present"]):
+        if not (miss_t or miss_p or row["subs_missing"] or not row["present"]):
             continue
         bad += 1
         detail = " ".join(miss_t[:6]) + (" …" if len(miss_t) > 6 else "")
@@ -186,10 +206,15 @@ def main(argv: list[str]) -> int:
               f"{len(miss_t):>6} {len(miss_p):>6}  {detail}")
     if not bad:
         print("✅ 每一节的判据编号与阈值常量都已覆盖")
+    fewer = [r for r in r["rows"] if r["contracts_target"] < r["contracts_base"]]
+    if fewer:
+        print("\nℹ️ 契约条目比基准少的节（**不判红**：平台确有的差异可以合理删条，只作人工复核清单）：")
+        for row in fewer:
+            print(f"   §{row['section']}: 基准 {row['contracts_base']} 条 → 目标 {row['contracts_target']} 条")
     print(f"\n结论：判据 {'缺 ' + str(tot['tids_missing']) + ' 个' if tot['tids_missing'] else '编号齐全'} · "
           f"阈值 {'缺 ' + str(tot['pt_missing']) + ' 处' if tot['pt_missing'] else '齐全'} · "
           f"节 {'缺 ' + str(len(r['sections_missing'])) + ' 节' if r['sections_missing'] else '齐全'}")
-    return 0 if (not bad and not r["sections_missing"]) else 1
+    return 0 if (not bad and not r["sections_missing"] and not r["signature_headings"]) else 1
 
 
 if __name__ == "__main__":
