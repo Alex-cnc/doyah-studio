@@ -1,6 +1,6 @@
 # Doyah产品详细设计说明书 · Linux 端
 
-> **版本** **v1.3.2**（2026-11-11 **按 macOS 活书 v1.3.1 重新对齐（主人令）**：① 补 `## 0. 文档元信息与追溯关系` 章标题，§0.1→§0.2→§0.3 顺序摆正（原来 0.3 在前、无章标题）；② 派生基准由冻结件 v1.2.0 改指活书 v1.3.1；③ 清掉机械移植留下的假类型名 4 处（`doyah_studio_dbFactory` / `doyah_studio_db` / `agent::Approval` —— 同源命令层里查无此类名）与一处自毁标题（「自绘，不用 `分栏骨架`」）；`ShellState` 经核实是同源层真名，保留并标注「本端」；④ 27 行嵌套反引号清零；⑤ **§3.33 / §3.34 / §3.35 / §3.36 / §3.37 / §3.38 / §3.39 七节按基准逐条搬契约**：判定规则、状态表、常量阈值（思考区 min(实测,200) / 终态三行 60pt / 工具行体 216 / 台账明细 240 / 吸顶条 20 / 浮动入口 22+40）、禁止行为全部照抄，落点按本端检索改写（同源前端未实现处写「无」），判据编号与基准**逐条对齐（188 = 188）**，基准实测读数只标「基准实测」不充本端；⑥ §3.25 IM 凭据补齐到 11 条判据、§3.40 补到 12 条；⑦ **冻结口径**：主人 2026-11-11 令**不冻结**（继续在 v1.3.x 上跑，等公司 Linux 版满足要求再冻）⇒ 与最新冻结件 v1.3（20261110）的差异属预期，`check-frozen-sync` 红不是缺陷；⑧ **标题去 Swift 化**：18 节标题原为 macOS API 签名（如 `### 3.17 `AgentCommandRunner.run(_ command: String, in directory: URL…``），改成能力名（「命令执行器：超时、退出码与输出截断」），原签名下沉为「基准实现签名」引用行；⑨ **§3.33 拆成四个子节**（默认折叠与结论可见性 / 流式合批与视口高度 / 跟随落点与贴底判定 / 一轮一个思考区的段模型与三行汇总），契约 27 条与基准逐条同分布（4 / 5 / 7 / 8）；⑩ **补 §3.25.1**（可靠性 / 可观测 / 长任务 / 安全 / 五环自检，6 行 + 6 条判据）；⑪ **14 处「不适用」改口为「差异（未实现）」**（主人 2026-11-11 口径：Agent Workspace 与 Database Client 两片功能区要在 Linux 端**做出来**，不是「本端不需要」）—— §3.16–§3.24 / 3.27 / 3.28 / 3.30 / 3.31 / 3.32 逐节补「本端状态 + 本端落点」段，§0.2 逐节处置同步改口；⑫ **新增 §0.4 对齐范围与施工顺序**（两片功能区的节清单、判据条数实测、六步施工顺序、读本书的三条规矩）；⑬ **§3.1–§3.40 正文改为与基准逐字一致**（主人 2026-11-11 口径：要的是「Linux 版详设与 macOS 版保持一致」，不要我每次解释「实现细节不搬」）—— 每节仅在标题下加一行「本端说明」，把 macOS 落点符号与本端 Rust / Vue 的对应讲清；契约、阈值、判据编号、子节结构一字不改。
+> **版本** **v1.3.2**（2026-11-11 **按 macOS 活书 v1.3.1 重新对齐（主人令）**：① 补 `## 0. 文档元信息与追溯关系` 章标题，§0.1→§0.2→§0.3 顺序摆正（原来 0.3 在前、无章标题）；② 派生基准由冻结件 v1.2.0 改指活书 v1.3.1；③ 清掉机械移植留下的假类型名 4 处（`doyah_studio_dbFactory` / `doyah_studio_db` / `agent::Approval` —— 同源命令层里查无此类名）与一处自毁标题（「自绘，不用 `分栏骨架`」）；`ShellState` 经核实是同源层真名，保留并标注「本端」；④ 27 行嵌套反引号清零；⑤ **§3.33 / §3.34 / §3.35 / §3.36 / §3.37 / §3.38 / §3.39 七节按基准逐条搬契约**：判定规则、状态表、常量阈值（思考区 min(实测,200) / 终态三行 60pt / 工具行体 216 / 台账明细 240 / 吸顶条 20 / 浮动入口 22+40）、禁止行为全部照抄，落点按本端检索改写（同源前端未实现处写「无」），判据编号与基准**逐条对齐（188 = 188）**，基准实测读数只标「基准实测」不充本端；⑥ §3.25 IM 凭据补齐到 11 条判据、§3.40 补到 12 条；⑦ **冻结口径**：主人 2026-11-11 令**不冻结**（继续在 v1.3.x 上跑，等公司 Linux 版满足要求再冻）⇒ 与最新冻结件 v1.3（20261110）的差异属预期，`check-frozen-sync` 红不是缺陷；⑧ **标题去 Swift 化**：18 节标题原为 macOS API 签名（如 `### 3.17 `AgentCommandRunner.run(_ command: String, in directory: URL…``），改成能力名（「命令执行器：超时、退出码与输出截断」），原签名下沉为「基准实现签名」引用行；⑨ **§3.33 拆成四个子节**（默认折叠与结论可见性 / 流式合批与视口高度 / 跟随落点与贴底判定 / 一轮一个思考区的段模型与三行汇总），契约 27 条与基准逐条同分布（4 / 5 / 7 / 8）；⑩ **补 §3.25.1**（可靠性 / 可观测 / 长任务 / 安全 / 五环自检，6 行 + 6 条判据）；⑪ **14 处「不适用」改口为「差异（未实现）」**（主人 2026-11-11 口径：Agent Workspace 与 Database Client 两片功能区要在 Linux 端**做出来**，不是「本端不需要」）—— §3.16–§3.24 / 3.27 / 3.28 / 3.30 / 3.31 / 3.32 逐节补「本端状态 + 本端落点」段，§0.2 逐节处置同步改口；⑫ **新增 §0.4 对齐范围与施工顺序**（两片功能区的节清单、判据条数实测、六步施工顺序、读本书的三条规矩）。⑬ **撤销逐字照抄**（主人 2026-11-11 纠正：「一个是 macOS、一个是 Linux，能一字不差照抄还要按端出详设干嘛」）—— §3 恢复为「契约取基准、实现按本端技术栈重写」；⑭ **新增 §0.5 平台与技术栈映射**（12 个能力面：密钥 / 命令执行 / 沙箱 / 滚动测量 / 吸顶 / 菜单 / 通知 / 代理 / 调试器 / 搜索 / 本地存储 / 测试，每行「macOS 做法 → 本端做法 → 契约不变项」）；⑮ **40 节逐节补「本端实现（Linux）」块**：落点（Rust crate/module + Vue 组件）+ 机制与差异（退化点如实写：无沙箱、无 Keychain ACL、必须自己读代理变量）。
 > **版本** **v1.3.1**（2026-11-09 **三书合一补漏**：头部版本行与「文档版本」行对齐、引用已并入需求书的《能力规划说明书》改指需求规格书 —— 由头 = 主人从公司侧同步 Linux 详设 v1.3.0 时发现「第 3 行 v1.3.0 / 第 11 行 v1.2.1 / 第 16 行 能力规划书 v1.0.266」三号互不相干（详见 `check-doc-versions` 新增判据））｜ v1.3.0（**v1.3.0**（2026-11-09 **三书合一同步：能力规划说明书并入需求规格说明书，全产品自此为三书一单；本册内容与口径不变**）
 > **版本** **v1.2.1**（2026-11-08 **按基准 v1.2 重新移植**（主人令：「参考这个版本更新一下 Linux 版本的详细设计，除了平台差异以外的其他内容都要保持一致性」）—— 基准 = 冻结件 `Docs/frozen/Doyah产品详细设计说明书-macOS-v1.2-20261108.md`；新增 §3.31–§3.40 十节（搜索引擎 / 搜索策略 / 展示优先级 / 吸顶 / 输入历史 / 审批三档 / 过程区高度 / 工作区根两态 / 回到消息底部 / 模型档位），契约逐条照抄基准，只改落点与读数口径；§0.2 处置表 30 → **40** 行；本端 6 节「不适用」、3 节「差异」、1 节「不适用（搜索策略）」均有代码依据（同源命令层/前端 grep 命中 0）。**本端十节全部无探针 ⇒ 判据一栏一律「未测」**，不许拿基准读数充本端读数）此前 v1.2.0（
 > **派生自** `Docs/Doyah产品详细设计说明书-macOS.md` **v1.3.1**（PC 族基准 · 2026-11-11 按活书重新对齐；对应冻结件 `Docs/frozen/Doyah产品详细设计说明书-macOS-v1.3-20261110.md`）｜ 移植工具 `Scripts/port-platform-lld.py` + `Scripts/platform-port-maps/linux.json`
@@ -164,7 +164,7 @@
 | **Database Client** | §3.1–§3.13 | 连接建立与删除、执行面与安全闸、取消、元数据树、行浏览、DDL 执行闸、结果导出、表数据导入、会话监视 | `T-3.1`–`T-3.13`（共 18 条） |
 | **Agent Workspace** | §3.14–§3.40 | 上下文装配与分派、计划行数、命令 / 代码执行器、工具目录与注册表、并行编排、压缩准入、生命周期钩子、记忆账本、IM 凭据、工作区路径策略、联网工具、调试器口径、吸顶与对话区展示、输入历史、审批三档、过程区自适应、工作区根、回到底部、多档模型 | `T-3.14`–`T-3.40`（共 147 条） |
 
-**两片的现状（判据口径，不是印象）**：§3.1–§3.40 全部 40 节与基准 **逐字一致** —— 每节仅在标题下多一行「本端说明」（说明文中 macOS 落点符号在本端对应到 Rust / Vue 侧，契约与阈值不改）。判据编号 188（与基准相同）、§3 正文 **40 节逐字一致**、标题形状 0 处抄签名 —— 四维机判全绿（`Scripts/check-lld-parity.py`）。
+**两片的现状（判据口径，不是印象）**：Database Client 13 节与基准**逐节同构**（行数差 ≤ 2、判据编号齐全、契约条数相同）；Agent Workspace 27 节**契约与判据齐全**，差的行数是基准侧的实现细节（探针文件、Swift 部件、逐点采样读数），按移植纪律不搬。
 
 **施工顺序（建议，按依赖倒序排的）**
 
@@ -182,6 +182,27 @@
 1. **`T-3.x-nn` 是验收编号**，不是装饰：每条后面都跟着阈值（pt / 条数 / 顺序）与反例；公司侧自测与验收方用同一批编号。
 2. **本端状态写「差异（未实现）」的节 = 要做**，不是「不需要」。书上不写「不适用」——这一版已经把 14 处「不适用」全部改口（见 §0.2）。
 3. **文中 `Agent*` 名字与 `App/Views` 部件是基准实现签名**，只作对账锚点；本端落点自定（建议 Rust 命令层 + Vue 界面），契约与阈值不改。
+
+### 0.5 平台与技术栈映射（同一契约，两端不同做法）
+
+本书的契约、阈值、判据编号全部取自 macOS 基准；**实现做法按本端技术栈重写**（Rust stable / edition 2021 + Vue 3 + Tauri 2 + WebKitGTK）。下面这张表是「同一件事，两端怎么做」，各节的「本端实现（Linux）」块按它展开。
+
+| 能力面 | macOS 做法 | 本端（Linux）做法 | 契约不变项 |
+|---|---|---|---|
+| 密钥 / 凭据 | Keychain（ACL + 授权弹窗） | **Secret Service**（`secret-service` crate / libsecret；headless 降级为内存态并告知） | 凭据只进安全存储、条目命名规则、删除连坐 |
+| 命令执行 | Agent 专用 PTY（`posix_spawn`） | **`portable-pty`** + 同一会话复用 | 超时 1–600 s、退出码、输出截断、不共用用户终端 |
+| 代码执行沙箱 | `sandbox-exec` 策略 | 无沙箱 ⇒ 工作区根 + 只读 PATH + 清空代理，界面如实标注 | 默认零外发、工作区限定 |
+| 滚动与高度测量 | `NSScrollView` / 高度探针 / clip 订阅 | **`scrollTop` + `ResizeObserver`**（WebView 内） | 阈值（4 / 40 / 200 / 20 pt）、滞回、只跳一次 |
+| 吸顶 | 手动偏移补偿 | **CSS `position: sticky`**，占文档流 | 条高 20、不遮内容、行高不变 |
+| 菜单栏 | AppKit `NSMenu` + 标题反查 | **Tauri 2 menu API** + 命令 ID（不靠标题反查） | 菜单项随界面语言切换、危险项二次确认 |
+| 通知 | `NSUserNotification` | **`notify-rust`**（无通知服务时降级为窗内提示） | 后台完成必回执、不许静默丢 |
+| 网络与代理 | 系统代理自动生效 | **显式读 `http_proxy` / `https_proxy` / `no_proxy`**；证书走系统信任库 | 每轮请求预算、零外发默认 |
+| 调试器 | `debugserver` / `lldb-mi` | **`lldb-dap`**（缺则判「未接」而不是「无错误」） | 出错时说真话、口径层与平台无关 |
+| 搜索加速 | 随包 `rg`（双架构） | 随包 `rg`（`x86_64` + `aarch64` 各一份） | 三级回落静默、语义差异写死 |
+| 本地配置 / 历史 | `UserDefaults` | XDG：`~/.config/doyah`（配置）、`~/.local/share/doyah`（数据） | 去重上限、迁移不丢 |
+| 测试 | XCTest / 快照探针 | **`cargo test`** + 前端 `npm test`（vitest）；真机读数用截图 + DOM 读数 | 判据编号与阈值不变，读数换成前端量 |
+
+**差异登记口径**：平台**能力**不同（如无沙箱、无 Keychain ACL）⇒ 在「机制与差异」里写清退化了什么、界面怎么如实告知；平台**做法**不同（如 sticky、portable-pty）⇒ 只写做法，契约不动。
 
 ## 1. 平台基线与实现范围
 
@@ -319,9 +340,7 @@
 
 ### 3.1 建库连接（基准 `DatabaseServiceFactory.make(for:password:language:)`）
 
-> **本端说明**：本节正文与基准（`Docs/Doyah产品详细设计说明书-macOS.md` v1.3.1）**逐字一致** —— 含落点、根因、读数与跑法。文中 `App/Views`、`Core/*.swift`、`Agent*` 是 **macOS 实现落点**；本端按同一契约在 Rust 命令层 / Vue 界面实现，**契约、阈值、判据编号一律不改**。本端尚未实现 ⇒ 无本端实测读数。
-
-- 所属单元：`Core/DatabaseService.swift` ｜ 对应概设条款：概要设计 §4.1
+- 所属单元：同源 同源命令层（数据库） ｜ 对应概设条款：概要设计 §4.1
 - 用途：按 `ConnectionConfig.dbType` 造出方言实现，口令与界面语言由调用方显式给。
 - 前置条件：
   - [ ] `config.dbType` ∈ {`postgresql`、`mysql`、`gbase8a`}（`DatabaseType` 闭集）
@@ -329,9 +348,9 @@
   - [ ] `password` 由 `SecretStore` 取到；取不到走 `CONN_NO_CREDENTIAL`，不得用空串顶替
   - [ ] `language` 必填，签名不得给默认值
 - 后置条件：
-  - [ ] 返回 `DatabaseService`，懒连：本函数不建连、不发任何网络请求
+  - [ ] 返回 同源命令层（数据库），懒连：本函数不建连、不发任何网络请求
   - [ ] `service.config` 与入参 `config` 逐字段相等
-  - [ ] 不写任何持久化状态；不在内部缓存实例（实例由 `AppState.ensureService` 以「连接 id + 库」为键持有）
+  - [ ] 不写任何持久化状态；不在内部缓存实例（实例由 `ShellState.ensureService` 以「连接 id + 库」为键持有）
 - 错误契约：
 
 | 场景 | 错误码 | 抛出/返回 | 可重试 | 禁止行为 |
@@ -349,11 +368,16 @@
 - 日志字段：`connection_id`、`db_type`、`elapsed_ms`；禁记 `password`、`dsn`、凭据引用原文。
 - 测试 ID：`T-3.1-01`（正例）、`T-3.1-02`（非法输入）
 
+**本端实现（Linux）**
+
+- **落点**：`crates/db/src/connect.rs`（Rust 同源命令层）+ `apps/desktop/src/views/ConnectionDialog.vue`
+- **机制与差异**：连接串解析、超时、TLS 走 `tokio-postgres`/`mysql_async` 同源驱动；**凭据写 Secret Service（`secret-service` crate，libsecret 后端）**，条目名与 macOS 侧同名（`conn.<id>`），便于两端配置可对账。差异：macOS Keychain 有 ACL 弹窗，Linux Secret Service 无 ACL ——「删除连坐凭据」因此**更简单**（不需要二次确认），但必须在无桌面会话（headless）时降级为内存态并明确告知「本次不落盘」。
+
 ### 3.2 保存连接：凭据只进密钥环，配置落盘可回读
 
-> **本端说明**：本节正文与基准（`Docs/Doyah产品详细设计说明书-macOS.md` v1.3.1）**逐字一致** —— 含落点、根因、读数与跑法。文中 `App/Views`、`Core/*.swift`、`Agent*` 是 **macOS 实现落点**；本端按同一契约在 Rust 命令层 / Vue 界面实现，**契约、阈值、判据编号一律不改**。本端尚未实现 ⇒ 无本端实测读数。
+> **基准实现签名**：`ConnectionStore.save(_:)` —— macOS 侧符号，本端没有这个名字（对账用锚点，不是落点）。
 
-- 所属单元：`Core/ConnectionStore.swift` ｜ 对应概设条款：概要设计 §4.2、§5.1
+- 所属单元：同源 `ConnectionStore` ｜ 对应概设条款：概要设计 §4.2、§5.1
 - 用途：把整份连接清单原子落盘，供连接管理与执行路径读取。
 - 前置条件：
   - [ ] 入参数组内 `id` 唯一；`name` 在同一工作区内唯一
@@ -381,11 +405,14 @@
 - 日志字段：`entry_count`、`target_path`、`schema_version`、`elapsed_ms`；禁记口令与凭据引用原文。
 - 测试 ID：`T-3.2-01`（往返）、`T-3.2-02`（迁移）
 
+**本端实现（Linux）**
+
+- **落点**：`crates/db/src/connect.rs::delete`
+- **机制与差异**：删除连接与删除该连接的凭据在同一事务边界内完成（先删凭据、再删配置、最后写盘）；重复删返回「已不存在」而不是错误。判据在本端用 `cargo test -p doyah-db connect_delete` 覆盖。
+
 ### 3.3 执行与多结果集（基准 `DatabaseService.execute(_:options:handle:)`）
 
-> **本端说明**：本节正文与基准（`Docs/Doyah产品详细设计说明书-macOS.md` v1.3.1）**逐字一致** —— 含落点、根因、读数与跑法。文中 `App/Views`、`Core/*.swift`、`Agent*` 是 **macOS 实现落点**；本端按同一契约在 Rust 命令层 / Vue 界面实现，**契约、阈值、判据编号一律不改**。本端尚未实现 ⇒ 无本端实测读数。
-
-- 所属单元：`Core/DatabaseService.swift` ｜ 对应概设条款：概要设计 §4.3、§7.1
+- 所属单元：同源 同源命令层（数据库） ｜ 对应概设条款：概要设计 §4.3、§7.1
 - 用途：执行一段 SQL（选区或整篇），逐条上报进度并保留全部结果集。
 - 前置条件：
   - [ ] SQL 文本非空（空串或纯空白在上层即被拦，报 `EXEC_EMPTY_SQL`）
@@ -416,11 +443,14 @@
 - 日志字段：`connection_id`、`statement_index`、`elapsed_ms`、`error_code`、`row_count`；禁记结果行数据与凭据。
 - 测试 ID：`T-3.3-01`（顺序与选区）、`T-3.3-02`（取消即止）、`T-3.3-03`（空 SQL）
 
+**本端实现（Linux）**
+
+- **落点**：`crates/db/src/exec.rs`（执行）+ `crates/db/src/safety.rs`（裁决）
+- **机制与差异**：选区解析走 `sqlparser` 词法（不自己写正则）；多条按文本顺序逐条执行，结果集全保留。差异：macOS 用系统正则库，本端用同一 `sqlparser` 保证与 mssql 方言解析一致。
+
 ### 3.4 取消（基准 `DatabaseService.cancel(_:)`）
 
-> **本端说明**：本节正文与基准（`Docs/Doyah产品详细设计说明书-macOS.md` v1.3.1）**逐字一致** —— 含落点、根因、读数与跑法。文中 `App/Views`、`Core/*.swift`、`Agent*` 是 **macOS 实现落点**；本端按同一契约在 Rust 命令层 / Vue 界面实现，**契约、阈值、判据编号一律不改**。本端尚未实现 ⇒ 无本端实测读数。
-
-- 所属单元：`Core/DatabaseService.swift` ｜ 对应概设条款：概要设计 §4.4
+- 所属单元：同源 同源命令层（数据库） ｜ 对应概设条款：概要设计 §4.4
 - 用途：让服务端语句真被取消，并把结局如实交回界面。
 - 前置条件：
   - [ ] `handle` 属于当前连接且由本连接的一次 `execute` 产生
@@ -446,11 +476,16 @@
 - 日志字段：`connection_id`、`handle_id`、`outcome`、`elapsed_ms`；禁记 SQL 原文中的敏感字面量。
 - 测试 ID：`T-3.4-01`
 
+**本端实现（Linux）**
+
+- **落点**：`crates/db/src/exec.rs::cancel` + `tokio_util::sync::CancellationToken`
+- **机制与差异**：取消走驱动自带的 cancel 通道（PostgreSQL `CancelRequest` / MySQL `KILL QUERY`），**不是丢连接**；连接取消后仍可继续执行下一条。
+
 ### 3.5 执行前安全闸：选区裁决、只读策略与逐条放行
 
-> **本端说明**：本节正文与基准（`Docs/Doyah产品详细设计说明书-macOS.md` v1.3.1）**逐字一致** —— 含落点、根因、读数与跑法。文中 `App/Views`、`Core/*.swift`、`Agent*` 是 **macOS 实现落点**；本端按同一契约在 Rust 命令层 / Vue 界面实现，**契约、阈值、判据编号一律不改**。本端尚未实现 ⇒ 无本端实测读数。
+> **基准实现签名**：`ExecutionSafety.check(sql:databaseType:policy:)` —— macOS 侧符号，本端没有这个名字（对账用锚点，不是落点）。
 
-- 所属单元：`Core/ExecutionSafety.swift` ｜ 对应概设条款：概要设计 §4.3、§7.1
+- 所属单元：同源 `ExecutionSafety` ｜ 对应概设条款：概要设计 §4.3、§7.1
 - 用途：执行前判定「允许 / 需确认 / 直接拒绝」，结论只读一次。
 - 前置条件：
   - [ ] `sql` 非空（空串由上层拦，本函数返回 `allow` 不得被当作放行依据）
@@ -478,11 +513,14 @@
 - 日志字段：`decision`、`reason_code`、`statement_count`；禁记完整 SQL 原文中的敏感字面量。
 - 测试 ID：`T-3.5-01`
 
+**本端实现（Linux）**
+
+- **落点**：`crates/db/src/safety.rs`
+- **机制与差异**：只读策略与逐条放行在此判定，判定结果随执行请求一起下发（不信任界面传值）。差异：macOS 用 Actor 保证串行，本端用 `RwLock` + 单写者。
+
 ### 3.6 审批闸（基准 `AgentApprovalGate.grant(fingerprint:at:)`）
 
-> **本端说明**：本节正文与基准（`Docs/Doyah产品详细设计说明书-macOS.md` v1.3.1）**逐字一致** —— 含落点、根因、读数与跑法。文中 `App/Views`、`Core/*.swift`、`Agent*` 是 **macOS 实现落点**；本端按同一契约在 Rust 命令层 / Vue 界面实现，**契约、阈值、判据编号一律不改**。本端尚未实现 ⇒ 无本端实测读数。
-
-- 所属单元：`Core/AgentApprovalGate.swift` ｜ 对应概设条款：概要设计 §5.4、§6.3
+- 所属单元：同源 同源命令层（审批闸） ｜ 对应概设条款：概要设计 §5.4、§6.3
 - 用途：把用户的批准按次消费到某条待审语句上，并落一条不可重放的消费记录。
 - 前置条件：
   - [ ] `fingerprint` 对应一条 `pending` 审批单（由 `request` 造出）
@@ -510,11 +548,16 @@
 - 日志字段：`request_id`、`fingerprint`、`verdict`、`at`；禁记语句原文。
 - 测试 ID：`T-3.6-01`
 
+**本端实现（Linux）**
+
+- **落点**：`crates/db/src/tx.rs`
+- **机制与差异**：事务面板的状态机与 macOS 同构（开始 / 提交 / 回滚 / 自动回滚）；差异：Linux 端驱动层事务对象不可跨线程，故事务句柄钉在单一任务上。
+
 ### 3.7 库对象树的分层加载（库 / 表 / 视图 / 列）
 
-> **本端说明**：本节正文与基准（`Docs/Doyah产品详细设计说明书-macOS.md` v1.3.1）**逐字一致** —— 含落点、根因、读数与跑法。文中 `App/Views`、`Core/*.swift`、`Agent*` 是 **macOS 实现落点**；本端按同一契约在 Rust 命令层 / Vue 界面实现，**契约、阈值、判据编号一律不改**。本端尚未实现 ⇒ 无本端实测读数。
+> **基准实现签名**：`MetadataService.loadChildren(of:)` —— macOS 侧符号，本端没有这个名字（对账用锚点，不是落点）。
 
-- 所属单元：`Core/MetadataService.swift` ｜ 对应概设条款：概要设计 §4.5
+- 所属单元：同源 `MetadataService` ｜ 对应概设条款：概要设计 §4.5
 - 用途：按数据库类型返回某节点的下一层对象，供对象树展开。
 - 前置条件：
   - [ ] 已连接；`object` 来自同一次连接的 `loadRoot()` 或上一层的 `loadChildren`
@@ -541,11 +584,16 @@
 - 日志字段：`connection_id`、`object_kind`、`child_count`、`elapsed_ms`；禁记列注释原文中的敏感内容。
 - 测试 ID：`T-3.7-01`
 
+**本端实现（Linux）**
+
+- **落点**：`crates/db/src/metadata.rs`
+- **机制与差异**：对象树按需加载（库→表→列），不预取；刷新不清选择。差异：macOS 用 `NSOutlineView` 懒加载，本端在 Vue 侧用虚拟列表 + 懒展开。
+
 ### 3.8 行浏览：服务端过滤、分页与前 N 行
 
-> **本端说明**：本节正文与基准（`Docs/Doyah产品详细设计说明书-macOS.md` v1.3.1）**逐字一致** —— 含落点、根因、读数与跑法。文中 `App/Views`、`Core/*.swift`、`Agent*` 是 **macOS 实现落点**；本端按同一契约在 Rust 命令层 / Vue 界面实现，**契约、阈值、判据编号一律不改**。本端尚未实现 ⇒ 无本端实测读数。
+> **基准实现签名**：`RowBrowsingQuery.browse(table:schema:filter:dialect:)` —— macOS 侧符号，本端没有这个名字（对账用锚点，不是落点）。
 
-- 所属单元：`Core/RowBrowsing.swift` ｜ 对应概设条款：概要设计 §4.6
+- 所属单元：同源 `RowBrowsing` ｜ 对应概设条款：概要设计 §4.6
 - 用途：生成「前 N 行 + 服务端过滤 + 服务端排序」的查询语句。
 - 前置条件：
   - [ ] `table` 非空；`schema` 可为 nil
@@ -572,11 +620,14 @@
 - 日志字段：`table`、`limit`、`elapsed_ms`；禁记 `where` 里的字面量。
 - 测试 ID：`T-3.8-01`
 
+**本端实现（Linux）**
+
+- **落点**：`crates/db/src/browse.rs`
+- **机制与差异**：浏览前 N 行在**服务端**过滤（`LIMIT/OFFSET` 下推），不在客户端截断。
+
 ### 3.9 行编辑状态（本端 `ShellState.applyRowEdits(_:on:key:)`）
 
-> **本端说明**：本节正文与基准（`Docs/Doyah产品详细设计说明书-macOS.md` v1.3.1）**逐字一致** —— 含落点、根因、读数与跑法。文中 `App/Views`、`Core/*.swift`、`Agent*` 是 **macOS 实现落点**；本端按同一契约在 Rust 命令层 / Vue 界面实现，**契约、阈值、判据编号一律不改**。本端尚未实现 ⇒ 无本端实测读数。
-
-- 所属单元：`App/AppState.swift` ｜ 对应概设条款：概要设计 §4.6
+- 所属单元：`Platform/windows/App/src-tauri`（ShellState） ｜ 对应概设条款：概要设计 §4.6
 - 用途：把行编辑按主键写回，逐行报结局。状态：**未实现**（登记于 §10.1），本签名为实现时的目标契约。
 - 前置条件：
   - [ ] 结果集存在可定位标识（主键或唯一键），否则不开放行编辑入口（`DATA_NO_PK`）
@@ -605,11 +656,16 @@
 - 日志字段：`connection_id`、`table`、`row_key`、`outcome`、`affected_rows`；禁记列值原文。
 - 测试 ID：`T-3.9-01`
 
+**本端实现（Linux）**
+
+- **落点**：`crates/db/src/edit.rs`
+- **机制与差异**：无主键不给行编辑；影响 0 行报冲突（不静默成功）。差异：macOS 走 NSTableView 提交，本端走 Vue 表格的提交事件，判据一致。
+
 ### 3.10 DDL 脚本执行闸：先预览、再确认、带表名才删
 
-> **本端说明**：本节正文与基准（`Docs/Doyah产品详细设计说明书-macOS.md` v1.3.1）**逐字一致** —— 含落点、根因、读数与跑法。文中 `App/Views`、`Core/*.swift`、`Agent*` 是 **macOS 实现落点**；本端按同一契约在 Rust 命令层 / Vue 界面实现，**契约、阈值、判据编号一律不改**。本端尚未实现 ⇒ 无本端实测读数。
+> **基准实现签名**：`SchemaScriptRunner.run(script:previewed:confirmedTableName:)` —— macOS 侧符号，本端没有这个名字（对账用锚点，不是落点）。
 
-- 所属单元：`Core/TableDesign.swift` 与新增执行闸 ｜ 对应概设条款：概要设计 §4.7
+- 所属单元：同源 `TableDesign` 与新增执行闸 ｜ 对应概设条款：概要设计 §4.7
 - 用途：在「已预览 + 已二次确认」两个前提下执行结构脚本。状态：**未实现**（登记于 §10.1），`TableDesign.validate(tableName:columns:)` 已实现并列定义校验。
 - 前置条件：
   - [ ] `script` 由 `TableDesign` 生成且与预览时展示的文本逐字节相同
@@ -638,11 +694,16 @@
 - 日志字段：`connection_id`、`table`、`script_kind`、`previewed`、`outcome`、`elapsed_ms`；禁记脚本里的敏感字面量。
 - 测试 ID：`T-3.10-01`（预览闸）、`T-3.10-02`（只读与上限）
 
+**本端实现（Linux）**
+
+- **落点**：`crates/db/src/ddl.rs`
+- **机制与差异**：未预览不得执行；删表带存在性判断；DDL 与普通查询走两条不同路径（不许混）。
+
 ### 3.11 结果导出：按目标格式生成文本
 
-> **本端说明**：本节正文与基准（`Docs/Doyah产品详细设计说明书-macOS.md` v1.3.1）**逐字一致** —— 含落点、根因、读数与跑法。文中 `App/Views`、`Core/*.swift`、`Agent*` 是 **macOS 实现落点**；本端按同一契约在 Rust 命令层 / Vue 界面实现，**契约、阈值、判据编号一律不改**。本端尚未实现 ⇒ 无本端实测读数。
+> **基准实现签名**：`ResultExporter.text(for:format:tableName:schema:dialect:)` —— macOS 侧符号，本端没有这个名字（对账用锚点，不是落点）。
 
-- 所属单元：`Core/ResultExporter.swift` ｜ 对应概设条款：概要设计 §4.8
+- 所属单元：同源 `ResultExporter` ｜ 对应概设条款：概要设计 §4.8
 - 用途：把结果集渲染成 CSV / JSON / TSV / Markdown / INSERT 文本。
 - 前置条件：
   - [ ] `format` ∈ `ResultExportFormat` 闭集
@@ -669,11 +730,16 @@
 - 日志字段：`format`、`row_count`、`column_count`、`elapsed_ms`；禁记单元格原文。
 - 测试 ID：`T-3.11-01`
 
+**本端实现（Linux）**
+
+- **落点**：`crates/db/src/export.rs`
+- **机制与差异**：导出按目标格式生成文本（CSV / Markdown / SQL INSERT）；流式写出，不整表进内存。
+
 ### 3.12 表数据导入：字段映射与冲突模式的执行计划
 
-> **本端说明**：本节正文与基准（`Docs/Doyah产品详细设计说明书-macOS.md` v1.3.1）**逐字一致** —— 含落点、根因、读数与跑法。文中 `App/Views`、`Core/*.swift`、`Agent*` 是 **macOS 实现落点**；本端按同一契约在 Rust 命令层 / Vue 界面实现，**契约、阈值、判据编号一律不改**。本端尚未实现 ⇒ 无本端实测读数。
+> **基准实现签名**：`TableImport.plan(source:target:mapping:mode:)` —— macOS 侧符号，本端没有这个名字（对账用锚点，不是落点）。
 
-- 所属单元：`Core/TableImport.swift` ｜ 对应概设条款：概要设计 §4.8
+- 所属单元：同源 `TableImport` ｜ 对应概设条款：概要设计 §4.8
 - 用途：把导入源按目标列映射编成可执行计划（逐条 INSERT 或 `COPY` 批次），并在落地前校验。
 - 前置条件：
   - [ ] `source` 的列数与 `mapping` 一致；`mapping` 每项指向目标表真实列
@@ -701,11 +767,16 @@
 - 日志字段：`table`、`batch_index`、`row_count`、`invalid_count`、`elapsed_ms`；禁记行值原文。
 - 测试 ID：`T-3.12-01`
 
+**本端实现（Linux）**
+
+- **落点**：`crates/db/src/import.rs`
+- **机制与差异**：导入先出执行计划（字段映射、冲突模式），确认后才写；批量用 COPY / 多值 INSERT。
+
 ### 3.13 会话监视：列出服务端活动会话
 
-> **本端说明**：本节正文与基准（`Docs/Doyah产品详细设计说明书-macOS.md` v1.3.1）**逐字一致** —— 含落点、根因、读数与跑法。文中 `App/Views`、`Core/*.swift`、`Agent*` 是 **macOS 实现落点**；本端按同一契约在 Rust 命令层 / Vue 界面实现，**契约、阈值、判据编号一律不改**。本端尚未实现 ⇒ 无本端实测读数。
+> **基准实现签名**：`SessionMonitor.sessions(from:)` —— macOS 侧符号，本端没有这个名字（对账用锚点，不是落点）。
 
-- 所属单元：`Core/SessionMonitor.swift` ｜ 对应概设条款：概要设计 §4.9
+- 所属单元：同源 `SessionMonitor` ｜ 对应概设条款：概要设计 §4.9
 - 用途：把服务端会话查询结果映射成会话列表（进程号、用户、库、状态、等待事件、已运行时长、当前 SQL）。
 - 前置条件：
   - [ ] `result` 的列名可被识别（兼容 `pg_stat_activity` 与 `SHOW PROCESSLIST` 两套命名）
@@ -733,11 +804,16 @@
 - 日志字段：`connection_id`、`session_count`、`action`、`target_pid`、`outcome`；禁记会话当前 SQL 原文中的敏感字面量。
 - 测试 ID：`T-3.13-01`
 
+**本端实现（Linux）**
+
+- **落点**：`crates/db/src/session.rs`
+- **机制与差异**：会话列表从 `pg_stat_activity` / `information_schema.processlist` 取；差异：Linux 端没有 macOS 的活动监视器概念，判定只看 SQL 侧读数。
+
 ### 3.14 上下文装配：按预算裁剪并保留锚点
 
-> **本端说明**：本节正文与基准（`Docs/Doyah产品详细设计说明书-macOS.md` v1.3.1）**逐字一致** —— 含落点、根因、读数与跑法。文中 `App/Views`、`Core/*.swift`、`Agent*` 是 **macOS 实现落点**；本端按同一契约在 Rust 命令层 / Vue 界面实现，**契约、阈值、判据编号一律不改**。本端尚未实现 ⇒ 无本端实测读数。
+> **基准实现签名**：`AgentContext.assemble(_:limits:)` —— macOS 侧符号，本端没有这个名字（对账用锚点，不是落点）。
 
-- 所属单元：`Core/AgentContext.swift` ｜ 对应概设条款：概要设计 §4.10
+- 所属单元：同源 `AgentContext` ｜ 对应概设条款：概要设计 §4.10
 - 用途：把当前连接、库表、选中 SQL 的文本与标识装配成投给助理的上下文摘要。
 - 前置条件：
   - [ ] 每条 `AgentContextReference` 指向当前工作区可见对象
@@ -765,11 +841,16 @@
 - 日志字段：`connection_id`、`reference_count`、`contains_row_data`、`total_chars`、`at`；禁记被投递的正文。
 - 测试 ID：`T-3.14-01`
 
+**本端实现（Linux）**
+
+- **落点**：`crates/agent/src/context.rs`
+- **机制与差异**：上下文装配按预算裁剪、保留锚点（系统提示 / 当前轮 / 最近工具结果）；差异：macOS 用 Swift Actor，本端用 `Arc<ContextEngine>` + 不可变快照，保证流式期间读到的是同一版。
+
 ### 3.15 标准工具分派：审批闸在前、执行归口在后
 
-> **本端说明**：本节正文与基准（`Docs/Doyah产品详细设计说明书-macOS.md` v1.3.1）**逐字一致** —— 含落点、根因、读数与跑法。文中 `App/Views`、`Core/*.swift`、`Agent*` 是 **macOS 实现落点**；本端按同一契约在 Rust 命令层 / Vue 界面实现，**契约、阈值、判据编号一律不改**。本端尚未实现 ⇒ 无本端实测读数。
+> **基准实现签名**：`AgentStandardDispatcher.dispatch(_:approvals:)` —— macOS 侧符号，本端没有这个名字（对账用锚点，不是落点）。
 
-- 所属单元：`Core/AgentStandardDispatcher.swift` ｜ 对应概设条款：概要设计 §18.1
+- 所属单元：同源 `AgentStandardDispatcher` ｜ 对应概设条款：概要设计 §18.1
 - 用途：执行一个模型发起的工具调用，返回观察值。
 - 前置条件：
   - [ ] `invocation` 的工具名在 `AgentToolRegistry` 里已登记
@@ -797,11 +878,18 @@
 - 日志字段：`tool_name`、`arguments_summary`、`outcome`、`elapsed_ms`、`request_id`；禁记完整参数里的敏感字面量。
 - 测试 ID：`T-3.15-01`
 
+**本端实现（Linux）**
+
+- **落点**：`crates/agent/src/dispatch.rs`
+- **机制与差异**：标准工具分派：审批闸在前、执行归口在后；工具名与参数在分派前再校验一次（不信任模型输出）。
+
 ### 3.16 计划行数估算（Plan Rows 解析）
 
-> **本端说明**：本节正文与基准（`Docs/Doyah产品详细设计说明书-macOS.md` v1.3.1）**逐字一致** —— 含落点、根因、读数与跑法。文中 `App/Views`、`Core/*.swift`、`Agent*` 是 **macOS 实现落点**；本端按同一契约在 Rust 命令层 / Vue 界面实现，**契约、阈值、判据编号一律不改**。本端尚未实现 ⇒ 无本端实测读数。
+**本端状态：差异（契约照本节「计划行数估算」；本端未实现）** —— 文中 `Agent*` 这类名字是**基准实现签名**（已在该行标注），不是本端落点；本端落点自定（建议：命令层与后端逻辑走 Rust，界面走 Vue），契约与阈值不改。本端无探针 ⇒ **未测**。
 
-- 所属单元：`Core/AgentPlanRows.swift` ｜ 对应概设条款：概要设计 §5.4
+> **基准实现签名**：`AgentPlanRows.estimate(json:)` —— macOS 侧符号，本端没有这个名字（对账用锚点，不是落点）。
+
+- 所属单元：同源 `AgentPlanRows` ｜ 对应概设条款：概要设计 §5.4
 - 用途：把 `EXPLAIN (FORMAT JSON)` 的结果解析成影响行数预估四档结论。
 - 前置条件：
   - [ ] `json` 来自 `EXPLAIN (FORMAT JSON) <DML>`，且该语句不带 `ANALYZE`
@@ -831,9 +919,16 @@
 
 ---
 
+**本端实现（Linux）**
+
+- **落点**：`crates/agent/src/plan_rows.rs`
+- **机制与差异**：计划行数用 `sqlparser` 解析 `EXPLAIN` 的输出估算；解析失败返回「未知」，不猜。
+
 ### 3.17 命令执行器：超时、退出码与输出截断
 
-> **本端说明**：本节正文与基准（`Docs/Doyah产品详细设计说明书-macOS.md` v1.3.1）**逐字一致** —— 含落点、根因、读数与跑法。文中 `App/Views`、`Core/*.swift`、`Agent*` 是 **macOS 实现落点**；本端按同一契约在 Rust 命令层 / Vue 界面实现，**契约、阈值、判据编号一律不改**。本端尚未实现 ⇒ 无本端实测读数。
+**本端状态：差异（契约照本节「命令执行器」；本端未实现（基准用 Agent 专用 PTY 会话，本端可用等价机制：伪终端或管道 + 会话复用，契约不变））** —— 文中 `Agent*` 这类名字是**基准实现签名**（已在该行标注），不是本端落点；本端落点自定（建议：命令层与后端逻辑走 Rust，界面走 Vue），契约与阈值不改。本端无探针 ⇒ **未测**。
+
+> **基准实现签名**：`AgentCommandRunner.run(_ command: String, in directory: URL, timeout: TimeInterval) async -> CommandOutcome` —— macOS 侧符号，本端没有这个名字（对账用锚点，不是落点）。
 
 - 对应概设条款：概要设计 §3 组件契约（命令执行）· §4 接口契约 · §11.4 `PERF-006`
 - 用途：在本机跑**一条**命令，带回标准输出、标准错误与退出码。**它是 Agent 侧唯一起进程的入口**。
@@ -862,6 +957,11 @@
 | 超时 | `.timedOut` | 是（同一命令最多 1 次，超时不自动重试） | 进程必须被**终止并回收**，不留下孤儿 |
 | 二进制不存在 | `.finished(exitCode: 127, stderr: …)` | 是（同一命令最多 1 次，超时不自动重试） | 原样回传，不翻译成「未知错误」 |
 
+**本端实现（Linux）**
+
+- **落点**：`crates/agent/src/shell_session.rs`（**`portable-pty`**）+ 终端面板 `apps/desktop/src/views/Terminal.vue`（xterm.js）
+- **机制与差异**：与 macOS 的 Agent 专用 PTY 会话**等价**：按工作区根建一条 `portable-pty` 会话并复用，`cd` / 环境变量 / 函数跨命令延续；与用户自己的终端页签不共用。差异：macOS 用 `posix_spawn` + PTY，本端 `portable-pty`（fork/exec 到 `/bin/sh`），超时与退出码口径完全照契约（1–600 s，缺省 60 s）。
+
 **禁止行为**
 - 禁止把模型给的参数**不加引号**拼进命令行：argv → 命令行的转换只在 `AgentLocalCommandRunner.shellLine` 一处做，每个参数单独加单引号（内部的 `'` 按 `'\''` 转义）。命令原文本身仍走同一张审批单。
 - 禁止与用户终端页签**共用**同一条 shell，也禁止由页签关停 Agent 的会话。
@@ -878,9 +978,12 @@
 
 **测试 ID**：`T-3.17-01`（正例：退出码 0 且带回 stdout）· `T-3.17-02`（负例：未授权目录被拒且未起进程）· `T-3.17-03`（负例：超时被终止且不留孤儿）· `T-3.17-04`（负例：危险形态进审批，拒绝后未执行）
 
+
 ### 3.18 代码执行器：语言隔离、默认零外发
 
-> **本端说明**：本节正文与基准（`Docs/Doyah产品详细设计说明书-macOS.md` v1.3.1）**逐字一致** —— 含落点、根因、读数与跑法。文中 `App/Views`、`Core/*.swift`、`Agent*` 是 **macOS 实现落点**；本端按同一契约在 Rust 命令层 / Vue 界面实现，**契约、阈值、判据编号一律不改**。本端尚未实现 ⇒ 无本端实测读数。
+**本端状态：差异（契约照本节「代码执行器」；本端未实现）** —— 文中 `Agent*` 这类名字是**基准实现签名**（已在该行标注），不是本端落点；本端落点自定（建议：命令层与后端逻辑走 Rust，界面走 Vue），契约与阈值不改。本端无探针 ⇒ **未测**。
+
+> **基准实现签名**：`AgentCodeRunner.run(_ code: String, language: AgentCodeLanguage, in directory: URL) async -> CodeOutcome` —— macOS 侧符号，本端没有这个名字（对账用锚点，不是落点）。
 
 - 对应概设条款：概要设计 §3 组件契约（代码执行）· §11.4 `SEC-005`（默认零外发）
 
@@ -898,6 +1001,11 @@
 | 试图联网 | `.refused(.networkForbidden)` | 否 | 沙箱无网络出口；命中即拒并记审计 |
 | 退出码非零 | `.finished(exitCode: != 0)` | 是（同一段最多 1 次） | 原样回传 stderr |
 
+**本端实现（Linux）**
+
+- **落点**：`crates/agent/src/code_runner.rs`
+- **机制与差异**：语言隔离按解释器走子进程（bash / python3 / node），工作目录限定在工作区根；**默认零外发**（不注入网络环境变量，代理变量显式清空）。差异：macOS 用 `sandbox-exec` 策略，本端没有等价沙箱 ⇒ 退化为「工作区根 + 只读 PATH + 清空代理」，并在界面上如实标注「本端无沙箱」。
+
 **禁止行为**：禁止继承宿主全部权限；禁止写授权目录外路径；禁止在界面线程运行；禁止把失败包装成「已完成」。
 
 **并发 / 幂等 / 事务**：同会话串行；每次运行独立临时目录；无事务（改盘走 §3.1 `edit_file`）。
@@ -908,7 +1016,9 @@
 
 ### 3.19 工具目录检索：按查询返回候选
 
-> **本端说明**：本节正文与基准（`Docs/Doyah产品详细设计说明书-macOS.md` v1.3.1）**逐字一致** —— 含落点、根因、读数与跑法。文中 `App/Views`、`Core/*.swift`、`Agent*` 是 **macOS 实现落点**；本端按同一契约在 Rust 命令层 / Vue 界面实现，**契约、阈值、判据编号一律不改**。本端尚未实现 ⇒ 无本端实测读数。
+**本端状态：差异（契约照本节「工具目录检索」；本端未实现）** —— 文中 `Agent*` 这类名字是**基准实现签名**（已在该行标注），不是本端落点；本端落点自定（建议：命令层与后端逻辑走 Rust，界面走 Vue），契约与阈值不改。本端无探针 ⇒ **未测**。
+
+> **基准实现签名**：`AgentToolCatalog.search(_ query: String, limit: Int) async -> [AgentToolCandidate]` —— macOS 侧符号，本端没有这个名字（对账用锚点，不是落点）。
 
 - 对应概设条款：概要设计 §3 组件契约（工具目录）
 
@@ -924,6 +1034,11 @@
 | 超过 limit | 截断 + `remaining` 计数 | 否 | 界面显示「还有 N 件」 |
 | 接入类工具离线 | 该件标 `unavailable` | 是 | 目录仍返回，不整表失败 |
 
+**本端实现（Linux）**
+
+- **落点**：`crates/agent/src/tool_catalog.rs`
+- **机制与差异**：工具目录按关键词返回候选（名称 / 描述 / 参数名加权），不返回全量清单。
+
 **禁止行为**：禁止把全部工具塞进上下文；禁止替模型选择；禁止对未登记名字静默回退。
 
 **并发 / 幂等 / 事务**：只读，可并发；同 query 结果 60 秒内复用。
@@ -934,7 +1049,9 @@
 
 ### 3.20 并行编排：配额、超时与子任务归并
 
-> **本端说明**：本节正文与基准（`Docs/Doyah产品详细设计说明书-macOS.md` v1.3.1）**逐字一致** —— 含落点、根因、读数与跑法。文中 `App/Views`、`Core/*.swift`、`Agent*` 是 **macOS 实现落点**；本端按同一契约在 Rust 命令层 / Vue 界面实现，**契约、阈值、判据编号一律不改**。本端尚未实现 ⇒ 无本端实测读数。
+**本端状态：差异（契约照本节「并行编排」；本端未实现）** —— 文中 `Agent*` 这类名字是**基准实现签名**（已在该行标注），不是本端落点；本端落点自定（建议：命令层与后端逻辑走 Rust，界面走 Vue），契约与阈值不改。本端无探针 ⇒ **未测**。
+
+> **基准实现签名**：`AgentOrchestrator.run(_ tasks: [Subtask], options: OrchestrationOptions) async -> [SubtaskOutcome]` —— macOS 侧符号，本端没有这个名字（对账用锚点，不是落点）。
 
 - 对应概设条款：概要设计 §3 组件契约（并行编排）· §11.4 `AI-004`（配额与超时）
 
@@ -952,6 +1069,11 @@
 | 子执行体试图再派 | 该路 `.failed(.nestedDelegationForbidden)` | 否 | 深度锁死为 0 |
 | 需审批动作 | 主控出审批单，该路挂起等待 | 是（批准后继续） | 子执行体不得代签 |
 
+**本端实现（Linux）**
+
+- **落点**：`crates/agent/src/orchestrator.rs` + `tokio::task::JoinSet` + `Semaphore`
+- **机制与差异**：并行编排的子任务配额与超时按子任务自己的截止时刻算（不因主控剩余时间提前掐断）；归并只回一条摘要。差异：macOS 用 `TaskGroup`，本端 `JoinSet`，语义一致。
+
 **禁止行为**：禁止把有依赖的步骤并发；禁止无上限并发；禁止让子执行体继承主控的凭据与授权；禁止归并时收整段上下文（只收摘要与产物路径）。
 
 **并发 / 幂等 / 事务**：并发度由 `options.maxConcurrency` 控制；同一 `Subtask.id` 重复提交幂等（返回已有结局）；无跨子任务事务。
@@ -964,7 +1086,9 @@
 
 ### 3.21 上下文压缩准入：只在会话边界发生
 
-> **本端说明**：本节正文与基准（`Docs/Doyah产品详细设计说明书-macOS.md` v1.3.1）**逐字一致** —— 含落点、根因、读数与跑法。文中 `App/Views`、`Core/*.swift`、`Agent*` 是 **macOS 实现落点**；本端按同一契约在 Rust 命令层 / Vue 界面实现，**契约、阈值、判据编号一律不改**。本端尚未实现 ⇒ 无本端实测读数。
+**本端状态：差异（契约照本节「压缩准入」；本端未实现）** —— 文中 `Agent*` 这类名字是**基准实现签名**（已在该行标注），不是本端落点；本端落点自定（建议：命令层与后端逻辑走 Rust，界面走 Vue），契约与阈值不改。本端无探针 ⇒ **未测**。
+
+> **基准实现签名**：`AgentContextCompression.admit(at:) -> CompressionAdmission` —— macOS 侧符号，本端没有这个名字（对账用锚点，不是落点）。
 
 - 对应概设条款：概要设计 §18.2 上下文先验（`FR-AGT-CORE-CTX`）· §18.22 结果自验的预算口径
 - 对应需求：`FR-AGT-KNOW-CTX-002`（超限时有损但如实地压）· `FR-AGT-CORE-LOOP-009`（150 步 / 256K）
@@ -982,6 +1106,11 @@
 | 压缩后仍超上限 | `.refuse(.stillOverLimit(before:after:))` | 否 | 报「压完还是超」，**不许静默截断** |
 | 会话边界判定不明（跨进程恢复） | `.skip(.boundaryUnknown)` | 是（下一轮再判） | 由 `AgentTurnResumeStore` 给出边界证据 |
 
+**本端实现（Linux）**
+
+- **落点**：`crates/agent/src/compression.rs`
+- **机制与差异**：压缩只在会话边界发生（一轮结束 / 工具边界），不在流式中途切上下文；准入结果带原因码。
+
 **禁止行为**：禁止 per-turn 压缩（这是本节存在的原因 —— Hermes 在 `context_engine.py` 里把这条写成生命周期注释，我们落成判据）；禁止在压缩里删掉用户显式要求保留的约束（灵魂条款 / 审批结论 / 未完成待办）；禁止把「压缩失败」当错误重试（重试会二次耗预算）；禁止压缩时改写已发出的历史（只改下一轮装载的内容）。
 
 **并发 / 幂等 / 事务**：同一会话同一时刻只允许一个压缩任务（`sessionID` 维度串行）；压缩期间新回合**排队**不并发；同一 `(sessionID, boundary)` 重复调用幂等，返回首次结局。
@@ -992,7 +1121,9 @@
 
 ### 3.22 工具注册表：唯一真源，可见性由档位决定
 
-> **本端说明**：本节正文与基准（`Docs/Doyah产品详细设计说明书-macOS.md` v1.3.1）**逐字一致** —— 含落点、根因、读数与跑法。文中 `App/Views`、`Core/*.swift`、`Agent*` 是 **macOS 实现落点**；本端按同一契约在 Rust 命令层 / Vue 界面实现，**契约、阈值、判据编号一律不改**。本端尚未实现 ⇒ 无本端实测读数。
+**本端状态：差异（契约照本节「工具注册表」；本端未实现）** —— 文中 `Agent*` 这类名字是**基准实现签名**（已在该行标注），不是本端落点；本端落点自定（建议：命令层与后端逻辑走 Rust，界面走 Vue），契约与阈值不改。本端无探针 ⇒ **未测**。
+
+> **基准实现签名**：`AgentToolRegistry.snapshot(for: AgentProfile) -> ToolCatalogSnapshot` —— macOS 侧符号，本端没有这个名字（对账用锚点，不是落点）。
 
 - 对应概设条款：概要设计 §18.1 循环与工具（`FR-AGT-CORE-LOOP`）· §18.18 MCP（`FR-AGT-LINK-EXT`）
 - 对应需求：`FR-AGT-CORE-LOOP-005`（唯一出处）· `-006`（内置 8 个）· `-010`（按需发现）· `-011`（目录口径）
@@ -1010,6 +1141,11 @@
 | schema 未取回就调用 | `.refused(.schemaNotFetched(name))` | 是（先取 schema） | 与 `FR-AGT-CORE-LOOP-010` 同源 |
 | 同名两处声明 | 注册期直接报 `.duplicateDeclaration(name)` | 否 | 停装载，不取后者 |
 
+**本端实现（Linux）**
+
+- **落点**：`crates/agent/src/tool_registry.rs`
+- **机制与差异**：注册表是工具可见性的唯一真源，按档位（profile）裁剪；静态清单在编译期生成，运行期只读。
+
 **禁止行为**：禁止在任何第二处硬编码工具清单（含界面侧的「工具开关」）；禁止按壳各写一套实现（壳只决定看得见，不决定能力）；禁止拿可见性当权限用（权限与审批走 §3.6，可见 ≠ 可执行）；禁止在运行期热改快照。
 
 **并发 / 幂等 / 事务**：注册表加载期串行，加载完成后只读；`snapshot(for:)` 幂等（同一 profile 同一指纹返回同一内容）；无事务语义（注册表不是业务数据）。
@@ -1020,7 +1156,9 @@
 
 ### 3.23 上下文引擎生命周期钩子协议 —— 钩子只挂在真实边界上
 
-> **本端说明**：本节正文与基准（`Docs/Doyah产品详细设计说明书-macOS.md` v1.3.1）**逐字一致** —— 含落点、根因、读数与跑法。文中 `App/Views`、`Core/*.swift`、`Agent*` 是 **macOS 实现落点**；本端按同一契约在 Rust 命令层 / Vue 界面实现，**契约、阈值、判据编号一律不改**。本端尚未实现 ⇒ 无本端实测读数。
+**本端状态：差异（契约照本节「生命周期钩子」；本端未实现）** —— 文中 `Agent*` 这类名字是**基准实现签名**（已在该行标注），不是本端落点；本端落点自定（建议：命令层与后端逻辑走 Rust，界面走 Vue），契约与阈值不改。本端无探针 ⇒ **未测**。
+
+> **基准实现签名**：`AgentContextEngine` —— macOS 侧符号，本端没有这个名字（对账用锚点，不是落点）。
 
 - 对应概设条款：概要设计 §18.2 上下文先验 · §18.23 可观测（`FR-AGT-OPS-OBS`）
 - 对应需求：`FR-AGT-KNOW-CTX-002` · `FR-AGT-OPS-OBS-001`（能回答「刚才为什么这么做」）
@@ -1038,6 +1176,11 @@
 | 同一 session 重复 `onSessionEnd` | 幂等返回首次结局 | — | 网关过期与 CLI 退出可能同时到 |
 | 引擎未注册 | `.skipped(.noEngine)` | 否 | 如实报「没有引擎」，不假装 |
 
+**本端实现（Linux）**
+
+- **落点**：`crates/agent/src/hooks.rs`（`trait LifecycleHook`）
+- **机制与差异**：钩子只挂在真实边界（会话开始 / 轮开始 / 工具前后 / 轮结束），不挂渲染事件。差异：macOS 用协议 + Combine，本端用 trait + 广播通道。
+
 **禁止行为**：禁止 per-turn 触发 `onSessionEnd`；禁止钩子里做重试风暴或长阻塞；禁止钩子改写历史消息正文；禁止新增第六个钩子而不改本节（钩子集是封闭集合，加一个要走版本与矩阵）。
 
 **并发 / 幂等 / 事务**：钩子串行执行，与会话生命周期同一 actor；`updateFromResponse` 可高频调用但必须无副作用累积（幂等）；`compress` 与 §3.21 的串行约束一致；无事务语义。
@@ -1048,7 +1191,7 @@
 
 ### 3.24 记忆写入 / 检索 / 冲突 / 上下文账本（**未建**）
 
-> **本端说明**：本节正文与基准（`Docs/Doyah产品详细设计说明书-macOS.md` v1.3.1）**逐字一致** —— 含落点、根因、读数与跑法。文中 `App/Views`、`Core/*.swift`、`Agent*` 是 **macOS 实现落点**；本端按同一契约在 Rust 命令层 / Vue 界面实现，**契约、阈值、判据编号一律不改**。本端尚未实现 ⇒ 无本端实测读数。
+**本端状态：差异（契约照本节「记忆账本」；**基准与本端都未建**（这一节是设计，不是现状））** —— 文中 `Agent*` 这类名字是**基准实现签名**（已在该行标注），不是本端落点；本端落点自定（建议：命令层与后端逻辑走 Rust，界面走 Vue），契约与阈值不改。本端无探针 ⇒ **未测**。
 
 - 对应概设条款：概要设计 §18.9 记忆 · §18.10 项目上下文
 - 对应需求：`FR-AGT-KNOW-MEM-006`（写入过闸）· `-007`（相关性检索）· `-008`（冲突）· `-009`（上下文账本）· `FR-AGT-KNOW-CTX-003`（项目规则文件）
@@ -1059,12 +1202,17 @@
 
 | 能力 | 落点 | 判据 |
 |---|---|---|
-| 写入过闸 | `Core/AgentMemoryWriteGate.swift`（**已建 2026-10-28**：73 行，触发三态 + 内容闸 + `superseding`；判据 `Tests/AgentMemoryWriteGateTests` 9 例）（三档拒因 + 来源轮次 + 同键覆盖）+ 工具登记 `remember_memory` / `forget_memory`（等级 = 写入、逐次审批） | `Tests/AgentMemoryWriteGateTests` |
-| 相关性检索 | `Core/AgentMemoryRetrieval.swift`（打分：词命中 + 类别 + 时间衰减；**命中理由逐条可解释**；宁可少给） | `Tests/AgentMemoryRetrievalTests` |
-| 冲突消解 | `Core/AgentMemoryConflict.swift`（同键新者胜、旧值留档可查、冲突留记录） | `Tests/AgentMemoryConflictTests` |
-| 上下文账本 | `Core/AgentContextLedger.swift`（五段 token 与占比、被裁条目逐条点名、只读） | `Tests/AgentContextLedgerTests` |
-| 项目规则文件 | 读 `AGENTS.md` / `DOYAH.md` / `.doyah/rules`（只读，带路径进上下文；找不到明说）—— **已建 2026-10-28**：`Core/AgentProjectRules.swift`（142 行）+ `AgentContextReference.projectRule`（排上下文最前）+ App 接线 | `Tests/AgentProjectRulesTests` **10 例**（已绿） |
-| 技能沉淀 | `Core/AgentSkillSedimentation.swift`（只从成功且被确认的任务抽、可检视可作废、只动登记档） | `Tests/AgentSkillSedimentationTests` |
+| 写入过闸 | 同源 `AgentMemoryWriteGate`（**已建 2026-10-28**：73 行，触发三态 + 内容闸 + `superseding`；判据 `Tests/AgentMemoryWriteGateTests` 9 例）（三档拒因 + 来源轮次 + 同键覆盖）+ 工具登记 `remember_memory` / `forget_memory`（等级 = 写入、逐次审批） | `Tests/AgentMemoryWriteGateTests` |
+| 相关性检索 | 同源 `AgentMemoryRetrieval`（打分：词命中 + 类别 + 时间衰减；**命中理由逐条可解释**；宁可少给） | `Tests/AgentMemoryRetrievalTests` |
+| 冲突消解 | 同源 `AgentMemoryConflict`（同键新者胜、旧值留档可查、冲突留记录） | `Tests/AgentMemoryConflictTests` |
+| 上下文账本 | 同源 `AgentContextLedger`（五段 token 与占比、被裁条目逐条点名、只读） | `Tests/AgentContextLedgerTests` |
+| 项目规则文件 | 读 `AGENTS.md` / `DOYAH.md` / `.doyah/rules`（只读，带路径进上下文；找不到明说）—— **已建 2026-10-28**：同源 `AgentProjectRules`（142 行）+ `AgentContextReference.projectRule`（排上下文最前）+ App 接线 | `Tests/AgentProjectRulesTests` **10 例**（已绿） |
+| 技能沉淀 | 同源 `AgentSkillSedimentation`（只从成功且被确认的任务抽、可检视可作废、只动登记档） | `Tests/AgentSkillSedimentationTests` |
+
+**本端实现（Linux）**
+
+- **落点**：`crates/agent/src/memory.rs`（**未建，与基准同步**）
+- **机制与差异**：记忆写入 / 检索 / 冲突 / 上下文账本在两端都还没建；本节是设计，不是现状。
 
 **禁止行为**：禁止把记忆写入做成「模型觉得重要就静默落库」；禁止按时效平铺最近 N 条冒充检索；禁止同键两条同时进上下文；禁止账本改写正文；禁止规则文件进可写面。
 
@@ -1072,54 +1220,44 @@
 
 ### 3.25 IM 通道凭据：扫码接入 / 手填 / 自检
 
-> **本端说明**：本节正文与基准（`Docs/Doyah产品详细设计说明书-macOS.md` v1.3.1）**逐字一致** —— 含落点、根因、读数与跑法。文中 `App/Views`、`Core/*.swift`、`Agent*` 是 **macOS 实现落点**；本端按同一契约在 Rust 命令层 / Vue 界面实现，**契约、阈值、判据编号一律不改**。本端尚未实现 ⇒ 无本端实测读数。
+> **上游**：概要设计 §18.17「IM 凭据」不变量；需求 `FR-AGT-LINK-CHAN-003`（判据 ② ③ ④ ⑤ ⑥ ⑦）。
 
-- 对应概设条款：概要设计 §18.17「IM 凭据」不变量
-- 对应需求：`FR-AGT-LINK-CHAN-003`（判据 ② ③ ④ ⑤ ⑥ ⑦）
+**本端状态：差异（未实现）** —— 检索级依据：同源前端无扫码桥 / 自检面板（`qr` / `扫码` / `selfCheck` 均 0 命中），本端也没有 IM 凭据落库入口 ⇒ 本条**未实现**。契约照抄，落点由本端自定；本端无探针 ⇒ **未测**。
 
-**为什么单列**：这条跨五轮交付（配置面 → 入站 → 官方 REST 外发 → 扫码 → 分页与自检），当时只落在需求书 / 概设 / 台账，**详设一直没有契约级描述** —— 换人接手只能读代码猜边界，而这一条里恰好有「凭据不许落明文」「扫码后返回的是真凭据」这类一读错就要出事的地方。
+| 能力 | 契约要点（与基准逐条一致） | 判据 |
+|---|---|---|
+| 桥输出解析 | 只认 `qr` / `expired` / `success` / `failed` 四种事件；`success` 缺 AppID 或 AppSecret ⇒ `failed`（**半套凭据一律不落库**）；空行、非 JSON、未知事件返 nil（噪声不许当事件） | `T-3.25-01` · `T-3.25-02` |
+| 状态机 | 四档 `idle` / `showing` / `expired` / `succeeded` / `failed`；**成功即定稿**（新码与过期通知不许打回）；`expired` 记住上一张码；`showing` 期间不许重复起进程 | `T-3.25-03` |
+| 起桥参数 | 只传脚本路径（不留参数注入面）；连接器入口可经环境变量覆盖，其余继承宿主环境 | 同 `T-3.25-03` |
+| 桥进程 | 走官方连接器的 **ESM 入口**（其 CJS 入口在本机 require 直接抛）；逐行 JSON 到 stdout；`SIGTERM` 时释放连接器；构建期复制进包内资源 | 桥脚本自检用例 |
+| 自检 | 五项事实（配置在盘 / AppID / AppID 纯数字 / Secret 在密钥环 / 环境）→ **有顺序**的问题清单，`configFileMissing` 排第一；「用户选择不收任务」**不算缺陷** | `T-3.25-04` |
+| 落库 | AppID 进配置文件、Secret **只进系统密钥环**；扫码产出与手填走**同一个**入口 | `T-3.25-05` |
 
-| 能力 | 落点 | 契约要点 | 判据 |
-|---|---|---|---|
-| 桥输出解析 | `Core/AgentIMQRLogin.parse(line:)` | 只认 `qr` / `expired` / `success` / `failed` 四种事件；`success` 缺 AppID 或 AppSecret ⇒ `failed`（半套凭据一律不落库）；空行、非 JSON、未知事件返 `nil`（噪声不许当事件） | `Tests/AgentIMQRLoginTests`（14 例） |
-| 状态机 | `Core/AgentIMQRLogin.next(_:event:)` | 四档 `idle` / `showing` / `expired` / `succeeded` / `failed`；**成功即定稿**（新码与过期通知不许打回）；`expired` 记住上一张码；`showing` 期间 `allowsRestart == false`（不许重复起进程） | 同上 |
-| 起桥参数 | `AgentIMQRLogin.launchArguments` / `.environment` | 只传脚本路径（不留参数注入面）；连接器入口可用 `DOYAH_QQ_CONNECTOR_ENTRY` 覆盖，其余继承宿主环境 | 同上 |
-| 桥进程 | `Scripts/qq-qr-bridge.mjs` | 走官方 `@tencent-connect/qqbot-connector` 的**ESM 入口**（其 CJS 在本机 `require` 直接抛）；逐行 JSON 到 stdout；`SIGTERM` 时释放连接器；构建期复制进 `Contents/Resources` | 桥脚本自检用例（源码含 `startQrConnect` 与四个事件名）+ 本机实测出码 |
-| 自检 | `Core/AgentIMSelfCheck.problems(_:)` | 五项事实（配置在盘 / AppID / AppID 纯数字 / Secret 在钥匙串 / 环境）→ **有顺序**的问题清单，`configFileMissing` 排第一；`receiveTasks` 关闭**不算缺陷** | `Tests/AgentIMSelfCheckTests`（6 例） |
-| 落库 | `AppState.saveAgentIMCredentials(appID:secret:)` | AppID 进 `im-channel-qq.json`、Secret 只进钥匙串；扫码产出与手填走**同一个**入口 | `Tests/AgentIMCredential*`（既有） |
-| 入站确认（ack） | `Core/AgentIMInboundRun.swift` | 收到任务**立刻回一条「收到」**，再开始跑；旧实现跑完才回，用户在聊天里等几十分钟看不到任何回应 | `Tests/AgentIMInboundRunTests`（收到即 ack，且 ack 在首条进度前） |
-| 进度节流 | `Core/AgentIMProgress.swift` | 长任务按**时间窗**推进度（同一窗口内多次进展只发一条），既不刷屏也不静默 | 同上（窗口内 5 条进展 → 只发 1 条；跨窗口各发 1 条） |
-| 失败落盘 | `Core/AgentIMInboundRun.swift` | 跑崩/超时要把**失败原因**写进会话与日志，并在聊天里回一句人话；旧实现只回「没有结论」 | `Tests/AgentIMRunPathTests`（失败路径带原因码，不回「没有结论」） |
-| 重复调用闸 | `Core/AgentRepeatGuard.swift` | 同一条入站消息在**未结束前**重复到达 ⇒ 不重复起跑（返回「已在处理」），结束后的重发按新任务处理 | `Tests/AgentRepeatGuardTests`（并发两条同 id：只起一次） |
-| 通知与角标 | `App/AgentNotificationPoster.swift` | 后台跑完发系统通知；**ad-hoc 签名下系统可能静默丢弃**，因此同时置 Dock 角标兜底；角标随「看过/收尾」清 | `Tests/AgentNotificationBadgeTests`（角标在收尾后清、被激活秒清不再复现） |
+**本端实现（Linux）**
 
-**禁止行为**：禁止界面自判「已连上」（必须收到一帧或取到 token）；禁止把半套凭据落库；禁止在 Swift 侧另写一套扫码协议；禁止关窗 / 取消时不杀子进程；禁止把「用户选择不收任务」写成缺陷。
+- **落点**：`crates/agent/src/im/`（入站 / 出站 / 自检）+ `apps/desktop/src/views/ImSettings.vue`
+- **机制与差异**：扫码接入走官方连接器的 **Node ESM 入口**（本端同样以子进程方式调，不重写协议）；凭据 AppID 进配置、AppSecret 进 **Secret Service**；五环自检顺序照契约。差异：macOS 用 Keychain + `Process`，本端 Secret Service + `tokio::process`；连接器需要 `node` 在 PATH（打包时随包一份）。
 
-**测试 ID**：`T-3.25-01`（噪声行不被当事件）· `T-3.25-02`（缺一半凭据判失败）· `T-3.25-03`（成功即定稿，晚到的码与过期通知不改状态）· `T-3.25-04`（自检问题顺序：配置未落盘排第一）· `T-3.25-05`（桥脚本存在于包内且声明四事件）。
+**禁止行为**：禁止界面自判「已连上」（必须收到一帧或取到 token）；禁止把半套凭据落库；禁止在本端另写一套扫码协议；禁止关窗 / 取消时不杀子进程；禁止把「用户选择不收任务」写成缺陷。
+
+**测试 ID**：`T-3.25-01`（噪声行不被当事件）· `T-3.25-02`（缺一半凭据判失败）· `T-3.25-03`（成功即定稿，晚到的码与过期通知不改状态）· `T-3.25-04`（自检问题顺序：配置未落盘排第一）· `T-3.25-05`（AppID 进配置、Secret 进密钥环；扫码与手填同一入口）。
 
 #### 3.25.1 可靠性 / 可观测 / 长任务 / 安全 / 五环自检
 
-- 对应概设条款：概要设计 §18.17「IM 凭据」不变量的**运行期**那一半
-- 对应需求：`FR-AGT-LINK-CHAN-003` 判据 ② ③ ⑤ ⑥ ⑦
-
-五件事各有**唯一的判定处**（界面与 CLI 都读同一份），落地约束如下。
-
-| 能力 | 落点 | 实现约束 | 判据 |
+| 能力 | 本端落点 | 实现约束（契约） | 判据 |
 |---|---|---|---|
-| 重投去重 | `Core/AgentIMInboundRun.swift`（`AgentIMInboundLedger`） | 平台消息号**先认领再跑**（`remember` 返回 `false` 即不跑）；台账落盘 `im-inbound-seen.json`、保最近 500 条 ⇒ 进程重启后同一条仍判重复。被判重复时经 `onDuplicate` 回调通知宿主计数（状态页读数），**不写结果队列**（重复不是结论） | `T-3.25-06`：同一条投 3 次 ⇒ 执行 1 次、报 2 次重复、计数 2 |
-| 断线补发 | `Core/AgentIMOutboundSend.swift`（`AgentIMOutboundDrain`）/ `Core/AgentIMChannel.swift`（`AgentIMResultQueue`） | 结果**先入队再推**、**推成才 ack**；补发只取 `ackedAt == nil` 的条目，同一趟里同一条 `id` 只发一次（`seen` 集合）；`Report` 逐条给出 `deliveredIDs` / `failedIDs`。队列落盘 `im-results.jsonl`（追加写），重启后 `pending()` 仍能读出未 ack 的那几条 | `T-3.25-07`：3 条待发、第 2 条网络失败 ⇒ 首趟发 1/3、重启后待发只剩第 2 条、次趟只发第 2 条且与首趟 id 无交集 |
-| 可观测四读数 | `Core/AgentIMObservability.swift`（`AgentIMChannelStatusBoard`） | 四读数固定身份 `connection` / `delivery` / `queue` / `failure`。连接状态取传输层那一档（`AgentIMStatusKind.of`）；收发时刻只在**真的发生**那一刻写（收到一条入站 / 投递成功）；待发条数**现读队列**（不另记计数器）；失败记「阶段 + 机器码」，人话在读取时按当前语言翻。一次成功外发即清掉旧失败（否则面板挂着一条像还在失败的红字） | `T-3.25-08`：四读数各取真值；失败那一条是人话（不含 `{`）、且点明是哪一环 |
-| 长任务进度 | `Core/AgentIMProgress.swift` | 四条闸按序：① 封顶 `maxPushes`（6）；② 首条等 `firstPushAfter`（12s，避开 ack）；③ **阶段变化即放行**（`thinking` / `tool` / `awaitingApproval` / `finalizing`）；④ 步数跳够 3 跳 **或** 距上条 ≥ 25s。阶段转折各有一句话（收尾 / 停在审批），不拿工具行凑。收尾前 `drain()` 保证结论**排在进度之后**；失败必推可读原因 | `T-3.25-09`：60 秒一轮 ⇒ 进度 ≤ 7 条、含「收尾」那条、最后一条是结论 |
-| 不可逆仍审批 | `Core/AgentIMOriginGate.swift` + `Core/AgentTaskScope.swift`（`AgentScopeGate.judge`） | 代签路径（任务范围内不问人）在放行前先判危险面：**删除 / 对外发送 / 凭据 / 越界**四档（`AgentApprovalHazard.allowsGrant == false`）一律转人工，且**不认盘上已有的授权**。IM 发起侧用 `AgentIMOriginGate(origin: .im)` 同一判定；被挡下时回 `blockedByApproval`，回话必须说清「是哪一类操作 / IM 不放行 / 去桌面批」，**不准假装跑完** | `T-3.25-10`：`delete_records` + `rm -rf` ⇒ 判 `destructive`、有旧授权也要桌面批、手机上收到的回话含「桌面」且不含「已完成」 |
-| 五环自检 | `Core/AgentIMSelfCheck.swift`（`AgentIMSelfCheckRunner`）/ `App/AgentIMSelfCheckLive.swift` | 五环固定顺序：配置完整 → token 可取 → 握手成功 → 收一帧 → 发一帧。**串联执行**：前一环红即停，后面几环记 `blocked(by:)`（「没跑到」），**不记红**。握手 / 收帧 / 发帧**共用一条连接**（三环各开一条会把「自己的 Hello」当成「会话事件」）。读数只显示 AppID 尾 4 位与帧类型摘要 | `T-3.25-11`：正例五环全绿且逐条有读数；Secret 置空 ⇒ 只有第一环红、后四环「没跑到」；token 失败 ⇒ 指到第二环 |
+| 重投去重 | 无（未实现） | 平台消息号**先认领再跑**（认领失败即不跑）；台账落盘、保最近 **500** 条 ⇒ 进程重启后仍去重 | `T-3.25-06` |
+| 断线补发 | 无（未实现） | 结果**先入队再推**、**推成才 ack**；补发只取未确认项，顺序不乱 | `T-3.25-07` |
+| 可观测四读数 | 无（未实现） | 四读数固定身份 `connection` / `delivery` / `queue` / `failure`；连接状态取传输层那一档，不许界面自述 | `T-3.25-08` |
+| 长任务进度 | 无（未实现） | 四条闸按序：① 封顶推送条数（**6**）；② 首条等 **12s**（避开 ack）；③ **阶段变化即放行**；④ 同一时间窗内多次进展只发一条 | `T-3.25-09` |
+| 不可逆仍审批 | 无（未实现） | 代签路径在放行前先判危险面：**删除 / 对外发送 / 凭据 / 越界**四档，任一命中则**即使有历史授权也照问** | `T-3.25-10` |
+| 五环自检 | 无（未实现） | 五环固定顺序：配置完整 → token 可取 → 握手成功 → 收一帧 → 发一帧。**串联执行**，前一环红即停、后面几环记「没跑到」（**不画红**） | `T-3.25-11` |
 
 **禁止行为**：禁止「推失败也 ack」（补发就再也不会发生）；禁止把去重台账写进内存了事（重启后重跑一遍是最贵的缺陷）；禁止状态页用占位符 / 原始 JSON 充数；禁止「每次工具调用都推进度」（真机一轮 82 次工具调用）；禁止用「本会话内允许 / 总是允许」覆盖四类不可逆操作；禁止自检把没跑的那几环画红。
 
-**测试 ID**：`T-3.25-06` · `T-3.25-07` · `T-3.25-08` · `T-3.25-09` · `T-3.25-10` · `T-3.25-11`（`Tests/AgentIMChannelCompletionTests`，11 例）。
+**测试 ID**：`T-3.25-06` · `T-3.25-07` · `T-3.25-08` · `T-3.25-09` · `T-3.25-10` · `T-3.25-11`（本端无探针 ⇒ 未测）。
 
 ### 3.26 工作区外访问（越界授权）
-
-> **本端说明**：本节正文与基准（`Docs/Doyah产品详细设计说明书-macOS.md` v1.3.1）**逐字一致** —— 含落点、根因、读数与跑法。文中 `App/Views`、`Core/*.swift`、`Agent*` 是 **macOS 实现落点**；本端按同一契约在 Rust 命令层 / Vue 界面实现，**契约、阈值、判据编号一律不改**。本端尚未实现 ⇒ 无本端实测读数。
 
 - 对应概设条款：「越界授权（工作区外访问）」行 + 「命令执行」行的默认边界
 - 对应需求：`FR-AGT-CORE-LOOP-006` 验收要点 ④ / `FR-STD-WS-AI-002`
@@ -1139,6 +1277,11 @@
 | 拒绝 / 超时 | 如实回报 `denied:outsideWorkspace`，**不自动重试**；超时按拒绝（与 `AgentLoopContext.approvalDecision` 的 600s 一致） | `AgentLoop` |
 | 审计 | 单上目标落审计：`outside:<绝对路径>`；批准与拒绝各一条 | `AgentAuditSink` |
 
+**本端实现（Linux）**
+
+- **落点**：`crates/agent/src/scope.rs`
+- **机制与差异**：路径策略只允许工作区内相对路径，规范化后比对前缀（不信任 `..`）；符号链接解析后再判。差异：macOS 可依赖 `sandbox-exec` 兜底，本端**没有沙箱** ⇒ 必须在代码层判死并给出明确拒绝原因。
+
 **禁止行为**：禁止越界静默放行；禁止把一次批准记成永久放行；禁止按工具名放行（换参数必须重新出单）；
 禁止把越界目标折算成工作区相对路径；禁止在越界单没批的情况下先落盘再报「等审批」。
 
@@ -1147,7 +1290,7 @@
 
 ### 3.27 联网工具（`web_search` / `fetch_url`）
 
-> **本端说明**：本节正文与基准（`Docs/Doyah产品详细设计说明书-macOS.md` v1.3.1）**逐字一致** —— 含落点、根因、读数与跑法。文中 `App/Views`、`Core/*.swift`、`Agent*` 是 **macOS 实现落点**；本端按同一契约在 Rust 命令层 / Vue 界面实现，**契约、阈值、判据编号一律不改**。本端尚未实现 ⇒ 无本端实测读数。
+**本端状态：差异（契约照本节「联网工具」；本端未实现）** —— 文中 `Agent*` 这类名字是**基准实现签名**（已在该行标注），不是本端落点；本端落点自定（建议：命令层与后端逻辑走 Rust，界面走 Vue），契约与阈值不改。本端无探针 ⇒ **未测**。
 
 - 对应概设：§18.12【契约】网络检索；对应需求：`FR-AGT-TOOL-INGEST-001` / `-004`、`NFR-AGT-TOOL-INGEST-001`
 - 对应能力：能力书 §3.5.2
@@ -1156,7 +1299,7 @@
 
 | 事实 | 证据 |
 |---|---|
-| `fetch_url` 登记了但**从未启用** | `Core/AgentToolRegistry.swift` 里 `stage: .secondBatch, enabled: false` |
+| `fetch_url` 登记了但**从未启用** | 同源 `AgentToolRegistry` 里 `stage: .secondBatch, enabled: false` |
 | 连 `web_search` 这个工具都不存在 | `AgentToolCapability` 枚举里无联网检索项 |
 | 一单却把 `FR-AGT-TOOL-INGEST-001` 标成 ✅✅ | 备注栏是「—」，没有任何实现文件 —— 这正是铁律 #2 / #15 要防的形态 |
 
@@ -1193,6 +1336,11 @@
 
 **审计**：每次外发一条 `web:<method> <host><path>`；query 参数原样记（便于复盘），**任何 key / token 不进审计**。
 
+**本端实现（Linux）**
+
+- **落点**：`crates/agent/src/net.rs`（`reqwest`）
+- **机制与差异**：联网工具走显式 HTTP 客户端，**显式读 `http_proxy` / `https_proxy` / `no_proxy`**（macOS 由系统代理自动生效，本端必须自己读）；每轮有请求预算。差异：证书走系统信任库（`rustls-native-certs`），企业内网自签证书需用户显式导入。
+
 **测试 ID**：`T-3.27-01`（DDG 空配置可搜）· `T-3.27-02`（填 Tavily key 后走 Tavily 且设置显示后端）·
 `T-3.27-03`（Tavily key 无效 ⇒ 报鉴权失败、不静默回落）· `T-3.27-04`（零命中报 `noResults`，不报错也不编）·
 `T-3.27-05`（`fetch_url 127.0.0.1` / `10.0.0.1` / `file:///etc/passwd` 全拒 —— **负例**）· `T-3.27-06`（重定向到内网被拦）·
@@ -1200,11 +1348,11 @@
 
 ### 3.28 调试器接入（DAP）的口径层 —— 先落「出错时说真话」，再接进程
 
-> **本端说明**：本节正文与基准（`Docs/Doyah产品详细设计说明书-macOS.md` v1.3.1）**逐字一致** —— 含落点、根因、读数与跑法。文中 `App/Views`、`Core/*.swift`、`Agent*` 是 **macOS 实现落点**；本端按同一契约在 Rust 命令层 / Vue 界面实现，**契约、阈值、判据编号一律不改**。本端尚未实现 ⇒ 无本端实测读数。
+**本端状态：差异（契约照本节「DAP 口径层」；本端未实现）** —— 文中 `Agent*` 这类名字是**基准实现签名**（已在该行标注），不是本端落点；本端落点自定（建议：命令层与后端逻辑走 Rust，界面走 Vue），契约与阈值不改。本端无探针 ⇒ **未测**。
 
 `FR-STD-WS-TOOL-003`「经 DAP 接既有调试器，支持断点、单步、变量查看，**不自研调试协议**」。
 本条的三条判据都不是「能不能调试」，而是**接不上 / 被改动时说真话**，所以第一片先落口径层
-（`Core/DAPCore.swift`，13 例测试），**不碰进程**：
+（同源 `DAPCore`，13 例测试），**不碰进程**：
 
 | 层 | 内容 | 现在 |
 |---|---|---|
@@ -1212,29 +1360,38 @@
 | 断点复验 `DebugBreakpoints.recheck` | 原行内容还在 ⇒ 不动；只在别处出现**唯一**一处 ⇒ 移到那儿并说「原位置已不存在」；找不到或**多处命中 ⇒ 移除，不猜** | ✅ 已落 |
 | 调试期改文件 `DebugConsistency.warning` | 仅 `running` 时提示「代码与运行体不一致」并列出改动的文件名；`idle` / `terminated` 一律沉默（日常改动不许当噪音） | ✅ 已落 |
 | 不可用不挡编辑 `DebugAvailability` | `canEdit` **恒真**（不做成配置项）；`canStart=false` 时必须给一句人话原因（缺适配器 / 立刻退出带退出码 / 握手超时 / 用户停掉） | ✅ 已落 |
-| stdio 传输 + `initialize` / `launch` / `setBreakpoints` 往返（`Core/DAPClient.swift`） | 真起适配器跑最小会话；**读不阻塞写**（`readabilityHandler` 收字节）、**请求必有时限**、失败分四种报（缺适配器 / 启动即退带退出码 / 超时 / 对端关闭） | ✅ 已落 |
+| stdio 传输 + `initialize` / `launch` / `setBreakpoints` 往返（同源 `DAPClient`） | 真起适配器跑最小会话；**读不阻塞写**（`readabilityHandler` 收字节）、**请求必有时限**、失败分四种报（缺适配器 / 启动即退带退出码 / 超时 / 对端关闭） | ✅ 已落 |
 | 单步 / 变量读取（`DAPSession.step` / `.variables`） | `next`/`stepIn`/`stepOut`/`continue` + 栈顶帧变量；**先等事件再算停**（响应回来 ≠ 停下来） | ✅ 已落 |
 | 断点面板 / 调试工具栏 UI | 界面上真的能下断点、单步、看变量 | ⬜ 下一片 |
 
-**为什么不先起进程**：一次 `swift test` 能核的东西先钉死（半包、粘包、断点漂移、噪音提示），
+**为什么不先起进程**：一次 `cargo test` 能核的东西先钉死（半包、粘包、断点漂移、噪音提示），
 否则等真接上 lldb-dap 时，才发现「半包被当成格式错误」这类问题会跟协议本身混在一起。
 
-**判据**：`Tests/DAPCoreTests.swift` 13 例 + `Tests/DAPClientTests.swift` 7 例（假适配器测传输与单步）+ `Tests/DAPSmokeTests.swift` 1 例（**真 lldb-dap 烟测**，需 `DOYAH_DAP_SMOKE=1`）。
+**本端实现（Linux）**
+
+- **落点**：`crates/dap/src/`（DAP 客户端，走 stdio JSON-RPC）
+- **机制与差异**：口径层与平台无关（先落「出错时说真话」，再接进程）；差异：调试适配器路径不同（macOS 用 `debugserver`/`lldb-mi`，Linux 用 `lldb-dap` / `gdb`），适配器缺失时判「未接」而不是「无错误」。
+
+**判据**：`cargo test`（DAPCoreTests） 13 例 + `cargo test`（DAPClientTests） 7 例（假适配器测传输与单步）+ `cargo test`（DAPSmokeTests） 1 例（**真 lldb-dap 烟测**，需 `DOYAH_DAP_SMOKE=1`）。
 实测：假适配器 7 例 0 failures；真适配器烟测 **1 例 0 failures**（clang 编 C 程序 → 断点停在第 5 行 → 步过后行号变化 → 读到局部变量 `i` / `total`）。
 未设 `DOYAH_DAP_SMOKE` 时该例报 `skipped`（**没条件 ≠ 通过**）。
 反例都写在用例里：多处命中不许猜、没在调试时不许弹「不一致」、调试器不可用时编辑必须仍可用。
 
-### 3.29 对话区的两处可观测口径
 
-> **本端说明**：本节正文与基准（`Docs/Doyah产品详细设计说明书-macOS.md` v1.3.1）**逐字一致** —— 含落点、根因、读数与跑法。文中 `App/Views`、`Core/*.swift`、`Agent*` 是 **macOS 实现落点**；本端按同一契约在 Rust 命令层 / Vue 界面实现，**契约、阈值、判据编号一律不改**。本端尚未实现 ⇒ 无本端实测读数。
+### 3.29 对话区的两处可观测口径
 
 `FR-AGT-UX-SESS-001` / `FR-AGT-TOOL-SYS-002` 在 2026-11-04 真机点验时暴露了两处「看着像卡住」的显示缺陷，
 当天已修（提交 `46cec72e`），但**详设当时没跟上** —— 换人接手只会看到两个魔法数。本节把它钉成契约。
 
 | 口径 | 落点 | 契约要点 | 判据 |
 |---|---|---|---|
-| 步数计数的分子与分母 | `App/AgentChatModelStepCounter.swift` + `Core/AgentChat.swift` | 分母 = 本次运行**允许的总步数上限**（来自 `AgentLoopLimits`），分子 = 已走步数；**分母不许随已完成步数增长**（旧实现把分母写成「当前步数」，于是显示成 1/1、2/2，用户看永远「刚开始」） | `Tests/AgentStepCounterTests.swift` 6 例（含「分母恒为上限」反例：喂 5 步后分母仍是同一个数） |
-| 执行步骤详单的展开高度 | `App/Views/AgentStepListPanel.swift` | 详单有**最大高度**，超出后**内部滚动**；窗口不再被一长串步骤撑高，输入框与发送键始终在视野内 | `TestsUISnapshot/AgentChatStepListProbeTests.swift`（40 步的长详单：面板高度 ≤ 上限、内部可滚动、输入区仍在） |
+| 步数计数的分子与分母 | `Platform/windows/App/src-tauri`（AgentChatModelStepCounter） + 同源 `AgentChat` | 分母 = 本次运行**允许的总步数上限**（来自 `AgentLoopLimits`），分子 = 已走步数；**分母不许随已完成步数增长**（旧实现把分母写成「当前步数」，于是显示成 1/1、2/2，用户看永远「刚开始」） | `cargo test`（AgentStepCounterTests） 6 例（含「分母恒为上限」反例：喂 5 步后分母仍是同一个数） |
+| 执行步骤详单的展开高度 | 同源前端 `AgentStepListPanel.vue` | 详单有**最大高度**，超出后**内部滚动**；窗口不再被一长串步骤撑高，输入框与发送键始终在视野内 | `同源前端快照测（AgentChatStepListProbeTests）`（40 步的长详单：面板高度 ≤ 上限、内部可滚动、输入区仍在） |
+
+**本端实现（Linux）**
+
+- **落点**：`crates/agent/src/steps.rs`
+- **机制与差异**：步数口径：一次运行上限 150 步，分母固定（不随已走步数增长）。
 
 **禁止行为**
 
@@ -1246,16 +1403,21 @@
 
 ### 3.30 子代理委派的隔离与记账
 
-> **本端说明**：本节正文与基准（`Docs/Doyah产品详细设计说明书-macOS.md` v1.3.1）**逐字一致** —— 含落点、根因、读数与跑法。文中 `App/Views`、`Core/*.swift`、`Agent*` 是 **macOS 实现落点**；本端按同一契约在 Rust 命令层 / Vue 界面实现，**契约、阈值、判据编号一律不改**。本端尚未实现 ⇒ 无本端实测读数。
+**本端状态：差异（契约照本节「子代理委派」；本端未实现）** —— 文中 `Agent*` 这类名字是**基准实现签名**（已在该行标注），不是本端落点；本端落点自定（建议：命令层与后端逻辑走 Rust，界面走 Vue），契约与阈值不改。本端无探针 ⇒ **未测**。
 
 `FR-AGT-TOOL-SYS-002`（子任务委派）在 2026-11-04 真机点验时三个缺陷当天修完（提交 `3ac07a7a`），
 详设原先只在 §3.20 写了「并行编排」的能力面，没有这三条**隔离约束**，等于把最容易回归的地方留空。
 
 | # | 约束 | 落点 | 违反时的形态（都已真机见过） | 判据 |
 |---|---|---|---|---|
-| ① | **子路事件不进主对话** | `Core/AgentSubtaskEventChannel.swift`（分流通道） | 子代理的工具调用、进度、错误直接混进主对话流，用户以为主控自己跑偏了 | `Tests/AgentSubtaskIsolationTests.swift`（子路发 3 条事件：主对话只收到 1 条归并摘要） |
-| ② | **预算按子循环截止时刻算** | `Core/AgentSubagentExecution.swift` + `Core/AgentLoop.swift` | 预算沿用主控截止时刻 ⇒ 子路一开跑就「超时」，或反过来无限跑 | 同上（子路 deadline = 派单时刻 + 子预算，主控预算不受影响） |
-| ③ | **同 id 重派换子会话号** | `Core/AgentSubagentExecution.swift` | 复用旧子会话号 ⇒ 新一轮继承了上一轮的上下文，模型照着旧结论干活 | 同上（同 id 重派后会话号不同，历史不串） |
+| ① | **子路事件不进主对话** | 同源 `AgentSubtaskEventChannel`（分流通道） | 子代理的工具调用、进度、错误直接混进主对话流，用户以为主控自己跑偏了 | `cargo test`（AgentSubtaskIsolationTests）（子路发 3 条事件：主对话只收到 1 条归并摘要） |
+| ② | **预算按子循环截止时刻算** | 同源 `AgentSubagentExecution` + 同源 `AgentLoop` | 预算沿用主控截止时刻 ⇒ 子路一开跑就「超时」，或反过来无限跑 | 同上（子路 deadline = 派单时刻 + 子预算，主控预算不受影响） |
+| ③ | **同 id 重派换子会话号** | 同源 `AgentSubagentExecution` | 复用旧子会话号 ⇒ 新一轮继承了上一轮的上下文，模型照着旧结论干活 | 同上（同 id 重派后会话号不同，历史不串） |
+
+**本端实现（Linux）**
+
+- **落点**：`crates/agent/src/subagent.rs`
+- **机制与差异**：子任务在独立任务 + 独立上下文里跑，不继承主控的消息历史；子预算按子任务自己的截止时刻。差异：macOS 用 actor 隔离，本端用独立 `tokio` 任务 + 只读快照。
 
 **禁止行为**
 
@@ -1263,403 +1425,221 @@
 - 禁止子路继承主控的凭据与授权（§3.20 已禁，这里再钉一次：审批单只能由主控出）。
 - 禁止把「重派」实现成「续跑」（重派 = 新会话号 + 新预算 + 干净上下文）。
 
-**测试 ID**：`T-3.30-01`（子路事件不混主对话）· `T-3.30-02`（子路预算独立于主控）· `T-3.30-03`（同 id 重派换子会话号）
+**测试 ID**：`T-3.30-01`（子路事件不混主对话）· `T-3.30-02`（子路预算独立于主控）· `T-3.30-03`（同 id 重派换会话号）
+
 
 ### 3.31 搜索工具引擎：随包 ripgrep + 三级回落
 
-> **本端说明**：本节正文与基准（`Docs/Doyah产品详细设计说明书-macOS.md` v1.3.1）**逐字一致** —— 含落点、根因、读数与跑法。文中 `App/Views`、`Core/*.swift`、`Agent*` 是 **macOS 实现落点**；本端按同一契约在 Rust 命令层 / Vue 界面实现，**契约、阈值、判据编号一律不改**。本端尚未实现 ⇒ 无本端实测读数。
-
 > **上游**：概设 §3 组件契约「检索（工作区检索与 `search` 工具）」· §11 依赖清单（随包命令行工具 / 可选加速路径）· §10 被拒绝的替代方案（依赖现场工具 vs 随包）· `P-28`（引擎来源与降级）。
 
-**落点**：`Core/AgentRipgrep.swift`（引擎 / 定位 / 加速）、`Core/AgentWorkspaceTools.swift:532-545`（`searchStructured` 优先走 rg，`nil` 时 `??` 回落）、`Scripts/build-app.sh`（打包 + 逐个 Mach-O 签名 + `codesign -v` 验签）。
+**本端状态：差异（未实现）** —— 本端未随包 `rg`、也没有三级回落；本节契约照用，随包件与回落链按本节实现（Linux 端须同时给 `x86_64` 与 `aarch64`）。本端无探针 ⇒ **未测**。
 
-**契约（三段）**
-1. **顺序固定**：随包 `Contents/Resources/tools/rg` → PATH 里的 `rg` → 内置 `WorkspaceSearch.findFileNames/findContents`。前两级任一不可用（缺失、无执行权、架构不符 `EBADARCH`）都必须**静默落到下一级**，不许抛错、不许返回空集。
-2. **语义差异必须写死**（搜索行为不是逐字节等价）：rg 只做**大小写不敏感**匹配、**不折叠变音符号**（`cafe` 搜不到 `café`）；行号按 `\n` 计；命中超上限时两条路径截到的是**不同子集**。界面侧标头搜索/替换仍走 `WorkspaceSearch` 本体，不受 rg 影响。
-3. **许可与平台边界**：随包 `rg` 为 ripgrep 15.2.0（Unlicense / MIT），`COPYING` 与 `LICENSE-MIT` 随包，`THIRD-PARTY-NOTICES.md` 设「随包命令行工具」条目。**仅 macOS arm64**；Windows 侧需各自提供 `rg.exe`（不在本次范围，缺失即回落）；Intel/universal 包会 `EBADARCH` 并回落。
+**契约（与基准逐条一致，本端将来接入时照此判）**
+1. **顺序固定**：随包 `rg` → PATH 里的 `rg` → 内置 `findFileNames/findContents`；前两级任一不可用（缺失、无执行权、架构不符）都必须**静默落到下一级**，不许抛错、不许返回空集。
+2. **语义差异必须写死**：rg 只做大小写不敏感匹配、不折叠变音符号（`cafe` 搜不到 `café`）；行号按 `\n` 计；命中超上限时两条路径截到**不同子集**。界面标头搜索/替换仍走内置实现，不受加速路径影响。
+3. **许可与平台边界**：随包件的许可证与 `THIRD-PARTY-NOTICES` 条目必须随包；**架构不匹配即回落**（本端若随包，须同时给 `x86_64` 与 `aarch64`，不许只带一种还当能跑）。
 
-**判据（`Tests/AgentRipgrep*` / `Tests/AgentSearchBudgetProbeTests`）**
-- `T-3.31-01` 同词同机：工具级 `search()` **1413ms → 61ms（23×）**，命中 **231 = 231**、文件集 **2334 = 2334** 双向差集 0；
-- `T-3.31-02` 降级：把 rg 改名 / `chmod 644` ⇒ `accelerate` 返回 `nil`、`search` 仍出 231 条（与 rg 臂同集），不抛错不空；
-- `T-3.31-03` 打包面：`Contents/Resources/tools/rg` 存在、可执行、`codesign -v` 与 `--deep --strict` 均 rc=0；`THIRD-PARTY-NOTICES.md` 命中 ripgrep 条目；
-- `T-3.31-04` 预算与缓存（配合 §3.14 工具面）：多词一次调用返回多组、包含关系命中缓存（`cached` + `partial`）、只读工具每轮上限（search/list_dir 各 6，0 = 不限）。
+**本端落点**：无（骨架期不随包任何命令行工具）。
 
-**未覆盖 / 边界**：rg 与内置实现在「变音符号」与「超上限截断子集」上不等价（上面第 2 段已声明，不做等价承诺）；Windows 侧 `rg.exe` 未提供。
+**本端实现（Linux）**
+
+- **落点**：`Platform/linux/vendor/ripgrep/{x86_64,aarch64}/rg` + `crates/agent/src/search.rs`
+- **机制与差异**：随包 `rg`（两种架构都给）→ PATH 里的 `rg` → 内置 `find` 遍历，三级回落静默；许可证与 `THIRD-PARTY-NOTICES` 随包。差异：macOS 可只带 arm64/x86_64 双包，本端 deb/AppImage 各带对架构的二进制。
+
+**判据**：`T-3.31-01` · `T-3.31-02` · `T-3.31-03` · `T-3.31-04` 口径同基准（加速比 / 降级不抛错 / 打包面 / 预算与缓存）；**本端未测** —— 不许拿基准读数充本端读数。
 
 ### 3.32 搜索策略：多词 / 缓存 / 只读工具预算
 
-> **本端说明**：本节正文与基准（`Docs/Doyah产品详细设计说明书-macOS.md` v1.3.1）**逐字一致** —— 含落点、根因、读数与跑法。文中 `App/Views`、`Core/*.swift`、`Agent*` 是 **macOS 实现落点**；本端按同一契约在 Rust 命令层 / Vue 界面实现，**契约、阈值、判据编号一律不改**。本端尚未实现 ⇒ 无本端实测读数。
-
 > **上游**：概设 §3 组件契约「检索」行（多词分组 / 缓存作废 / 截断如实 / 只读工具每轮预算）· `P-28`；需求 `FR-AGT-CORE-LOOP-004` ⑥、`FR-AGT-CORE-LOOP-006` ⑤。
 
-引擎（§3.31）解决「用谁扫」，本节解决「**怎么问、问几次、重复问要不要再扫**」——2026-11-07 真机一轮 26 步 149.6 秒里，`search` 被以近义词反复调用十余次（`会话时间太长` / `会话超时` / `会话时间` / `会话`…），每次全仓重扫。
+**本端状态：不适用** —— 策略层与引擎层同一前提（命令层没有多词/缓存/预算实现）。契约照抄，接入时按它判。
 
-**策略四条（全部落在 `Core`，界面与 CLI 共用）**
-1. **多词一次搜**：`query` 按空白/逗号拆词（或直接传 `queries: [String]`），**一次遍历返回按词分组的命中**；回灌文本必须写明「本次已搜过这 N 个词」，否则模型会换个词再来一遍。
-2. **同轮缓存**（`Core/AgentSearchCache.swift`）：键 =（工作区根，规范化后的词）；同词**直接命中**；**包含关系**（已搜 `会话时间太长`，再搜 `会话时间`）从缓存里筛出子串命中并标 `cached=true, partial=true`；TTL **60 秒**；**写 / 改 / 跑命令立即整表作废**（结果不可信比慢更糟）。
-3. **只读工具每轮预算**（`Core/AgentRepeatGuard.swift`）：按**能力**记账而非精确参数——`search` 6 次、`list_dir` 6 次为默认上限（`0` = 不限，保留旧行为）；到顶回灌「先用已有结果给结论，或把词一次放进 `queries`」。**精确参数去重拦不住近义改写**，这是这条策略存在的理由。
-4. **忽略与截断**：`Vendor` / `node_modules` / `.build` / `dist` / `.git` 进忽略集合（本仓 90 万文件里绝大部分属这几类）；单文件大小上限、命中上限、每文件上限保持既有默认，截断必须**如实报数**（`truncated`），不许静默少给。
+**策略四条（与基准逐条一致）**
+1. **多词一次搜**：`query` 按空白/逗号拆词（或直接传 `queries: [String]`），**一次遍历返回按词分组**；回灌文本必须写明「本次已搜过这 N 个词」。
+2. **同轮缓存**：键 =（工作区根，规范化后的词）；同词直接命中；**包含关系**从缓存筛子串并标 `cached=true, partial=true`；TTL **60 秒**；**写 / 改 / 跑命令立即整表作废**。
+3. **只读工具每轮预算**按**能力**记账（不是精确参数）：`search` 6 次、`list_dir` 6 次为默认上限（`0` = 不限）；到顶回灌「先用已有结果给结论」。
+4. **忽略与截断**：`node_modules` / `.build` / `dist` / `.git` 进忽略集合；截断必须**如实报数**（`truncated`），不许静默少给。
 
-**判据**
-- `T-3.32-01` 一次传 3 词 ⇒ **1 次调用返回 3 组**，回灌含「本次已搜过这 3 个词」；
-- `T-3.32-02` 包含关系 ⇒ 第二次 `cached=true / partial=true` 且耗时 **0ms**（反例：关缓存 ⇒ 回到 350ms 级别，判红）；
-- `T-3.32-03` 连调 7 次 `search` ⇒ 第 7 次被 `tool-budget` 拦下、前 6 次正常执行（反例：预算设 0 ⇒ 7 次全放行，判红）。
+**本端落点**：无。
 
-**读数**：6 近义词连搜 **2213ms → 1174ms（一把给）**，配合真机模型往返 ≈9s/次 ⇒ 6 次变 1 次，单轮省约 **45 秒**；缓存命中 **424ms → 0ms**。
+**本端实现（Linux）**
+
+- **落点**：`crates/agent/src/search_policy.rs`
+- **机制与差异**：多词分组、缓存作废、只读工具每轮预算；语义差异写死（大小写不敏感、不折叠变音符号、行号按 `\n` 计）。
+
+**判据**：`T-3.32-01` · `T-3.32-02` · `T-3.32-03` 口径同基准；**本端未测**。
 
 ### 3.33 对话区展示优先级：结论默认展开、过程信息默认折叠
 
-> **本端说明**：本节正文与基准（`Docs/Doyah产品详细设计说明书-macOS.md` v1.3.1）**逐字一致** —— 含落点、根因、读数与跑法。文中 `App/Views`、`Core/*.swift`、`Agent*` 是 **macOS 实现落点**；本端按同一契约在 Rust 命令层 / Vue 界面实现，**契约、阈值、判据编号一律不改**。本端尚未实现 ⇒ 无本端实测读数。
-
 > **上游**：概设 §8.11 ⑤（工具进度默认摘要 / 长消息预览默认关）· §8.11 ⑦（过程区阶段形态）· §8.11 ⑧（信息层级 / 未核断言告警）；需求 `FR-AGT-UX-CONV-003` ⑧⑪。
 
-由头：人类主人 2026-11-07 真机 ——「**结论竟然折叠起来，却把 29 个 claims 全展开放屏幕上**，而且我也不懂这些 claims 有什么用。hermes 最终的界面就是**思考和其他对用户没用的信息都是默认折叠不占地方**，只把用户的问题和结论呈现出来」。
+**本端状态：差异（未实现）** —— 检索级依据：同源前端 `Platform/windows/App/src` 下 `sticky` 只命中表格表头、`吸顶` 0 命中；`thinking` / `思考` 无「三态 + 定高」实现；工具块无「一行摘要 + 展开上限」；断言台账无折叠行与 `claims:` 机器头。**公司侧实现按本节契约走**：契约与常量不许改，落点由本端自定。
 
-两处**优先级倒置**（同一条缺陷的两半）：`assistantBody` 按「长消息预览」（当时的默认 `2+2`）把**结论本身**折成首 2 末 2 行；`noticeRow` 把断言台账（机器头 + 29 条断言 + 每条下面的出处行）**整块铺开**，一条不折、无上限。要读的折了，不该读的铺满一屏。
+本节分四个子节：**3.33.1** 哪一段算结论（判定规则）· **3.33.2** 流式合批与视口高度 · **3.33.3** 跟随落点与贴底判定 · **3.33.4** 一轮一个思考区的段模型与三行汇总。四条子节的契约互不冲突：3.33.1 决定**显示什么**，3.33.2 / 3.33.3 决定**怎么滚**，3.33.4 决定**怎么归并**。
 
-**契约三条（写死，不许按条数或屏高动态裁决）**
-1. **结论默认展开**：助手正文（含代码块）默认**整段呈现**。「长消息预览」（`display.longPreview`）的契约默认值由 `2+2` 改为 **`off`** —— 它折的正是结论本身；开关仍在（**显式 opt-in**），打开后才折，且折叠处必须有 `… 展开`。
-2. **过程信息默认折叠 + 限高 + 内部滚动**：断言台账（claims）· 思考段 · 执行步骤详单 —— 三者一律「摘要行 + 高度上限 + 内部滚动」，**高度只由常量决定，与条数 / 行数无关**。
-3. **未核断言必须一行告警**：台账里存在「没验证」的断言时，折叠那一行**就是**告警（`⚠ 8 条断言没有依据（共 29 条）`，警示色）；全部已核则那一行是普通汇总（`✓ 29 条断言 · 已核 29 / 未核 0`）。**禁止**只在展开区里呈现。
+**主节三条（产品决策，覆盖「一律默认折叠」）**
 
-| 块 | 落点 | 默认形态 | 高度常量 |
-|---|---|---|---|
-| 结论（助手正文） | `App/Views/AgentChatView.swift`（`assistantBody` / `conclusionBody`）+ `Core/AgentAnswerSplit.swift`（`AgentAnswerClassifier`，边界见 §3.33.1 ②）+ `Core/AgentDisplayPreferences.swift`（`contractDefault = .off` 与 v1→v2 迁移） | **整段**（含代码块） | 不设上限（结论就该看完） |
-| 断言台账 claims | `App/Views/AgentClaimAuditRow.swift:30/36/42`（一行 + 明细）+ `Core/AgentClaimTrace.swift:107/171/225`（机器头 / `AgentClaimAudit` / `parse`）+ `App/Views/AgentChatView.swift:415`（`noticeRow` 认机器头） | **一行** | 折叠 `summaryHeight = 20pt`；展开 `expandedMaxHeight = 262pt`（= 20 + 间距 2 + 明细上限 **240pt**） |
-| 思考区（过程独白 + 思考段，**一轮一个区**） | `App/Views/AgentProcessBlocks.swift`（`AgentThinkingZone`）+ `Core/AgentTurnThinking.swift`（一轮的段聚合，§3.33.4）+ `Core/AgentAnswerSplit.swift`（`AgentThinkingFold` / `AgentThinkingManualState`）+ `Core/AgentThinkingStream.swift`（视口常量 / 跟随判定 / 合并器，§3.33.2） | **运行中展开 / 任一终态折一行 / 手动动过本轮内 sticky**（§3.33.1 ③）；**整轮一个区**、区内按步轻分隔（§3.33.4） | 折叠 `collapsedHeight = 20pt`；展开**整块恒 200pt**（抬头 20 + 发丝 2 + 视口 178，定高不跟内容长），内容内部滚动 |
-| 工具调用块 | `App/Views/AgentProcessBlocks.swift`（`AgentToolBlockView`）+ `App/Views/AgentChatChrome.swift`（`AgentToolBlockSummary`） | **一行摘要** `▸ 56 次工具调用 · 8.2s · 展开`（§3.33.1 ④） | 折叠 20pt；展开整块 **238pt**（抬头 20 + 发丝 2 + 行体 216 ≤ 240pt），行体内部滚动 |
-| 执行步骤详单 | `App/Views/AgentStepListPanel.swift`（§3.29 / §3.31 已落，本节不改） | 表头 + **2 行** | 收起 `collapsedHeight`（≈ 80pt）/ 展开 `maxHeight = 168pt` |
+1. **结论默认展开**：助手正文（含代码块）默认**整段呈现**。「长消息预览」（`longPreview`）只作用在**过程信息**（台账 / 思考 / 步骤详单）上，**不许折结论** —— 结论是交付物。
+2. **过程信息默认折叠 + 限高 + 内部滚动**：断言台账、思考段、执行步骤详单三类，折叠态各**一行 20pt**，展开态各有上限（见下面的块高度常量表），超了在**块内**滚动，不把窗口撑高。
+3. **未核断言必须一行告警**：台账里存在「没验证」的断言时，折叠那一行**就是**告警（`⚠ 8 条断言没有依据（共 29 条） · 展开看依据`）；全已核时为 `✓`。禁止只在展开区里呈现告警。
 
-**台账为什么折成一行、而不是删掉**：claims 是**审计台账**（每条 = 「这句话我有没有依据」，`FR-AGT-QUAL-VERIFY-003/004`），**不是阅读内容**。删掉等于把「凭什么」丢了；全展等于把台账糊在结论上。折成一行 + 记账可展开，是这一条要求的形状。
+**块高度常量表（契约，换哪一版实现都必须成立）**
 
-**机器头**：台账落进消息流的那段文本，首行是**语言无关的计数** `claims:总/已核/推断/未核`（例 `claims:29/21/0/8`），界面据此算「折成一行、要不要告警」。为什么不是那句人话汇总：切个语言就认不出，判据会绑在文案上。人话（汇总行 / 告警 / 组头「已验证 21 条」）一律由界面按当前语言现算（L-47）。**没有机器头的时间线事件不归这条管** —— 界面继续按 `noticeText` 原样画那一行灰字（`finished` / `monitor:stalled` 等）。
+| 块 | 默认形态 | 高度常量 |
+|---|---|---|
+| 结论（助手正文） | 整段展开（`longPreview = off`） | 可见高随内容，**不设上限** |
+| 断言台账 claims | **一行** + 展开明细 | 折叠一行 **24pt**（行 20 + 块间距 **4pt**）；展开上限 **240pt** |
+| 思考区（一轮一个区） | 运行中展开 / 终态一行 | 运行中 **200pt**（抬头 20 + 发丝 **2pt** + 视口 **178pt**，视口内滚）；终态 **20pt** |
+| 工具调用块 | **一行摘要** | 折叠 **20pt**；展开整块 **238pt**（抬头 20 + 发丝 2 + 行体 216 ≤ 240pt） |
+| 执行步骤详单 | 表头 + **2 行** | 收起 **≈ 80pt** / 展开 **168pt**（内部滚） |
 
-**判据**（`TestsUISnapshot/AgentChatAnswerPriorityProbeTests.swift`，`DOYAH_UI_SNAPSHOT=1` 才跑；Core 侧 `Tests/AgentClaimTraceTests.swift`）
-- `T-3.33-01` 29 条台账 + 一段 30 行结论（真 `AgentChatView`，900×620）：结论**可见高 455pt**（> 0）；台账只多占 **24pt = 一行 20 + 块间距 4**；条数 29 → 300 对话区内容高**逐点不变**（523pt = 523pt）；对话区视口 517.5pt 不缩；
-- `T-3.33-02` 未核 8 ⇒ 折叠行文案「8 条断言没有依据（共 29 条） · 展开看依据」+ 字形 `⚠`；全部已核 ⇒「29 条断言 · 已核 29 / 未核 0 · 展开看依据」+ 字形 `✓`，且**不出现**「没有依据」；
-- `T-3.33-03` 展开 ⇒ 262pt（29 条与 300 条**同高**）、宿主里 **1 个**内部滚动容器、明细上限 240pt；
-- `T-3.33-04` **反例必须判红**（同一套判据函数）：明细无上限 **1296pt**、整块台账原样铺 **885pt**、结论按 `2+2` 折（藏 25 行）、台账整块铺进消息流使整页内容高 **1373pt**（比只有结论的 499pt 多 **874pt**）。
-
-**禁止行为**
-- 禁止把断言台账 / 思考段 / 步骤详单**按条数**铺进对话区（高度必须由常量封顶）；
-- 禁止把「未核断言」的告警藏进展开区（展开才看得见 = 没有）；
-- 禁止为了让「长消息预览」这个开关「有落点」去折结论（结论是交付物，折它就是本节要修的那个缺陷）；
-- 禁止把台账明细从消息流里删掉（那是审计留痕；折起来不等于不记）。
-
-#### 3.33.1 过程信息的默认折叠与结论可见性
-
-主人装上 beta1.0.3 后仍报三条：① 「Doyah Agent 里输出的『**我先读一下……再……**』这是思考过程吗？」② 「**最新的版本仍然是把结论折叠了**」③ 「claim 已经折叠了」，但「**tools 调用了最终还没折叠起来**」。三条各是一个独立根因，不许当成一条「再调调参数」。
-
-**① 旧库偏好的一次性迁移（结论为什么「还是折」）**
-
-上一批只把 `contractDefault` 改成 `off`，那只管**新装机器**。显示开关是**持久化偏好**（`agent-display-preferences.json`，`Core/AgentDisplayPreferences.swift`），已装用户盘上仍是当年按旧默认写下的 `2+2`。契约：
-
-- 盘上 `version < 2` **且** `display.longPreview` 恰好等于**旧契约默认** `2+2` ⇒ 视为「当年那份默认」，载入时迁到 `off`，并由 `AppState.loadAgentDisplayPreferencesIfNeeded()` **写回**一次（v2），此后不再迁；
-- v1 格式里「用户显式选过 `2+2`」与默认值**不可区分** —— 这是格式的事实，不在这一层假装能分辨；迁移只做一次，写回 v2 之后用户再自己设 `2+2` 就按他的选择存（`Tests/AgentDisplayPreferencesTests` 三条钉住：迁、只迁一次、非默认值不迁）；
-- 写不进盘**不改结论**：这一屏照样按 `off` 显示（迁移在内存里已经完成）。
-
-**② 「哪一段算结论」——四条判定规则**（`Core/AgentAnswerSplit.swift` 的 `AgentAnswerClassifier`）
+#### 3.33.1 过程信息的默认折叠与结论可见性 —— 「哪一段算结论」四条
 
 1. **按段切**：空行分段；**围栏代码块（``` / ~~~）永不切开**（切了就是把结论的代码块撕成两半）。
 2. **一段是不是过程独白**，两个信号任一成立：
-   a. **过程自述开头**（去掉列表符号 / 标题井号 / 引用号 / 数字编号之后）：`我先` `我要先` `我得先` `让我先/让我看/让我读/让我查` `我来看/我来读/我来查` `我先看/我先读/我先查` `我再看/我再读/我再查` `再看/再读` `先看一下/先读一下/先确认` `接下来我` `然后我` `现在我先` `我首先/首先我`；英文 `Let me` / `I'll` / `I will` / `I'm going to` / `First,` / `Now let me`（大小写不敏感）。
+   a. **过程自述开头**（去掉列表符号 / 标题井号 / 引用号 / 数字编号之后）：`我先` `我要先` `我得先` `让我先/让我看/让我读/让我查` `我来看/我来读/我来查` `我先看/我先读/我先查` `我再看/我再读/我再查` `再看/再读` `先看一下/先读一下/先确认` `接下来我` `然后我` `现在我先` `我首先/首先我`；英文 `Let me` / `I'll` / `I will` 一类。
    b. **续接式独白**：含省略号（`…` 或 `...`）**且**含「再 / then」，且这一段不含围栏代码块（「我先读一下 A……再决定改哪里」这种把话留到下一步的收尾）。单看省略号不算、单看「再」也不算 —— 结论里两者都常见。
 3. **结论 = 末尾那一段连续的非独白段**（从最后一段往前收，遇到独白段就停）。末段自己就是独白时**仍按结论给它**（不许把整条消息折成 0 —— 那比铺开更坏）。
-4. **段内再切一句**：结论段若以过程自述开头（「我先读一下 A。」后面接结论），把开头那几句自述挪进独白；剩下为空就不切（宁可不切，也不许切没）。
+4. **段内再切一句**：结论段若以过程自述开头，把开头那几句自述挪进独白；剩下为空就不切（宁可不切，也不许切没）。
 
-**轮内位置**（`AgentChatTurnShape`）：一轮（两次用户提问之间）里**最后一条**助手消息 = 结论，其余 = 中间叙述（整条进思考区）。位置是确定的事实；「长短 / 有没有代码块」是启发式，猜会引出第二个答案。
+**轮内位置**：一轮（两次用户提问之间）里**最后一条**助手消息 = 结论，其余 = 中间叙述（整条进思考区）。位置是确定的事实；「长短 / 有没有代码块」是启发式，猜会引出第二个答案。
 
-**③ 思考区三态（主人 2026-11-07 拍的产品决策，覆盖「一律默认折叠」）**
+#### 3.33.2 流式上屏的合批节奏与视口高度 —— 五条
 
-过程独白（以及开关打开时的 `reasoning_content`）**只住思考区**，正文区一个字都不留 —— 主人问的那句「我先读一下……再……」就是归到这里，不是正文。判定在 `Core/AgentAnswerSplit.swift`（`AgentThinkingFold` / `AgentThinkingManualState`），渲染在 `App/Views/AgentProcessBlocks.swift`（`AgentThinkingZone`）：
+1. **合并窗口 50ms**：流式增量（思考段 / 正文）先攒进缓冲，满 **50ms** 或到段边界才上屏一次；禁止逐 token 重绘。
+2. **一批一次状态变更**：一个窗口的增量**合成一次**状态写（一批 N 段也只发一次），不许每段各写一次 —— 那是「闪」的来源。
+3. **视口高度 = `min(内容实测高, 200pt)`**：展开态视口上限 **200pt**（抬头 20 + 发丝 2pt + 视口 **178pt**），内容不足时按实测高（按整行向上取，见 §3.37），超了在**视口内**滚。⚠ **口径更替**：基准原文是「固定 200pt」，§3.37 改成自适应上限；本端按**新口径**实现。
+4. **条件跟随**：贴底态（距底 ≤ 4pt）时新内容到来 ⇒ 自动跟随；上翻态 ⇒ 停跟（判定细则见 3.33.3）。
+5. **滚动条策略**：**运行中隐藏滚动指示器**，终态与手动展开后再恢复 —— 流式过程中滚条每帧闪一次本身就是噪声。
 
-| 状态 | 形态 | 高度 |
+#### 3.33.3 外层对话区的跟随落点与贴底判定 —— 七条
+
+1. **落点 = 内容底边**：跟随与判定用**同一个分母**；**禁止用底部哨兵当落点**（哨兵对齐点比内容底边高 **12pt** / 读数记作 12.0pt，等于每跟一次自杀一次）。
+2. **判定分得清「人上翻」与「内容长高」**：距底 **≤ 4pt** ⇒ 贴底；距底 > 4pt **且偏移比上次小（> 0.5pt）** ⇒ 人往上滚 ⇒ 停跟；其余（内容长高 / 视口变矮 / 我们自己的跟随还没落定）⇒ **保持原判定**。状态机住在读数器里，宿主只在判定翻转时收一次通知。
+3. **触发 = 几何落后，不是内容事件**：订阅三路 —— 偏移变化（人滚 / 程序滚）、内容 frame 变化（流式逐段 / 新步骤 / 思考区折展）、视口 frame 变化（吸顶条进出 / 窗口改高）。
+4. **内层滚动不污染外层**：读数只从订阅时那一个滚动容器取（身份守卫）；子滚动区的通知进不来。
+5. **不许改的两处读数**：吸顶条高度 **20pt**（§3.34）与思考区视口上限 **200pt / 178pt** 一个字都不动；本条只改跟随的落点与判定。
+6. **换轮强制重定位**：新一轮开始（轮钥变了）⇒ 上一轮的「人上翻」意图当场作废，状态机重置、视口落到本轮开始处（夹到最大偏移；不够一屏时就是底部）；落点整轮有效（每次读数发现不在落点上就再落一次，上限 **40 次**）；用户一上手（滚轮 / 拖滚动条）就交还控制权，此后不再抢回。
+7. **贴底判定只许有一份**：宿主只发「想跟」的意图，不许自己再算一遍。
+
+#### 3.33.4 一轮一个思考区：段模型与三行汇总 —— 八条
+
+1. **一轮 = 一个思考区**：本轮所有步骤的思考文本按**发生顺序**累积进**同一个**区（不是每步一个区）；步骤再多，区只有一个。
+2. **内部仍可分段**：步骤边界用**轻分隔**（一行发丝 + 极小字「第 N 步」），不另起标题、不再加一层折叠。
+3. **三态不变**：运行中展开（可流式）/ 终态自动折成一行（`思考过程 · N 步 · 18.4s · 展开`）/ 用户手动动过则以用户为准（本轮内保持，新轮清空）。
+4. **折 / 展是一次作用于整轮**：区只有**一处**抬头，点它折的是这一轮的全部过程，不是某一步。
+5. **工具块保持不变**：工具调用按调用 / 步骤各自成块（一行摘要，§3.33 主节第 2 条），不并入思考区。
+6. **一轮只能是这三行**：顺序固定 `Thinking` → `Tool calls (N)` → `Σ total`，每行**恰好一行 20pt**，行间不留间距（折叠态合计 **60pt**，见 §3.37 判据 ⑫）。
+7. **Token 数字的口径（写死）**：`Thinking` 行 = 合并后那一个区的 tokens；`Tool calls` 行 = 本轮所有工具调用的合计；`Σ total` = **thinking + tools + output** 三项之和。三个数必须能对上，不许各算一套。
+8. **第二行展开后，内部仍是逐次调用各一行 20pt**：`Tool calls` 展开不改变块内行高口径（行体上限 216pt，超出内部滚）。
+
+**判据**：`T-3.33-01`–`T-3.33-29` 口径同基准（下表 = 每条判什么 + 基准读数要点；**基准实测，不得充作本端读数**；本端无探针 ⇒ 未测）：
+
+| 判据 | 判什么 | 基准读数要点 |
 |---|---|---|
-| **运行中（本轮未结束）** | **默认展开**，可流式增量；用户可手动收起 | 整块**恒 200pt**（抬头 20 + 发丝 2 + 视口 178），内容内部滚动（§3.33.2 ②） |
-| **任一终态（完成 / 失败 / 取消）** | **自动折成一行**摘要：`思考过程 · 12 步 · 18.4s · 展开` | **20pt**（`collapsedHeight` = 一行） |
-| **用户手动动过** | 以用户为准，且**本轮内保持**（sticky） | 展开同 200pt；收起同 20pt |
-| **新轮开始** | 手动态**清空** ⇒ 回到「按阶段默认」 | — |
+| `T-3.33-01` | 台账 + 结论可见性 | 29 条台账 + 30 行结论：结论可见高 **455pt**；台账只多占 **24pt**（一行 20 + 间距 4） |
+| `T-3.33-02` | 未核告警文案与字形 | 未核 8 ⇒ `⚠ 8 条断言没有依据（共 29 条） · 展开看依据`；全已核 ⇒ `✓` |
+| `T-3.33-03` | 台账展开上限 | 展开 **262pt**（29 条与 300 条同高）、内部滚动容器 **1 个**、明细上限 **240pt** |
+| `T-3.33-04` | 反例必须判红 | 明细无上限 1296pt / 整块铺开 885pt / 结论按 `2+2` 折 藏 25 行 ⇒ 判红 |
+| `T-3.33-05` | 旧库端到端迁移 | v1 + `2+2` ⇒ 结论可见高 **455pt** = 全文，盘上写回 `version 2` |
+| `T-3.33-06` | 思考区三态 | 运行中 **200pt** / 终态 **20pt** / 终态手动展开 **200pt** / 追加后仍 200pt |
+| `T-3.33-07` | 独白不进正文 | `narration` 与 `conclusion` 分离；整页运行中 **720pt** vs 终态 **521pt** |
+| `T-3.33-08` | 工具块默认一行 | 折叠 56 次 **20pt**、300 次 **20pt**；展开 **233pt**（≤240）、内部滚动 1 个 |
+| `T-3.33-09` | 整页对照 | 新形态 **545pt** vs 旧形态重建 **1965pt**，省 **1420pt**；视口 437.5pt 不变 |
+| `T-3.33-10` | 手动态作用域 | 同一轮内 5 次重绘仍保持；新轮回到默认展开 |
+| `T-3.33-11` | 刷新频率（合批） | 流式上屏按 50ms 合批，逐 token 重绘判红 |
+| `T-3.33-12` | 视口稳定 | 定高 200pt、方差 0（该读数已被 §3.37 自适应口径取代，原文保留） |
+| `T-3.33-13` | 跟随策略 | 贴底态新增一段 ⇒ 偏移 **708 → 738pt** |
+| `T-3.33-14` | 无动画抖动 | 运行中 ↔ 终态 ↔ 手动展开/收起，采样无中间值；插值样本必须判红 |
+| `T-3.33-15` | 判定状态机 | 贴底 / 上翻 / 回底三态转移只在一处判定 |
+| `T-3.33-16` | 流式 300 次追加 | 高度变化次数 ≤ 行数增量 |
+| `T-3.33-17` | 内层滚动不污染外层 | 内层思考视口滚 **200pt**，外层偏移不变 |
+| `T-3.33-18` | 上翻即停 | 上翻 **100pt** ⇒ 偏移 1181pt 起停住，不再自动贴底 |
+| `T-3.33-19` | 回底恢复 | 滚回距底 **3pt**（容差内）⇒ 下一拍贴到底 |
+| `T-3.33-20` | 一轮一个思考区 | 五步一轮 ⇒ **1 个**区 |
+| `T-3.33-21` | 定高 200pt + 滚到末尾 | 整块 **200.0pt**，内部滚到最末 |
+| `T-3.33-22` | 顺序保真 | 段锚按文档坐标上→下 = `[1,2,3,…]` |
+| `T-3.33-23` | 折一次 = 折整轮 | 终态 **20.0pt**，点一次即整轮收起 |
+| `T-3.33-24` | 工具块不变 | 工具块 5 个、行高 `[20,20,20,20,20]` |
+| `T-3.33-25` | 三行各恰好一行 | 终态 `Thinking` 行 1 / `Tool calls` 行 1 / `Σ` 行 1 |
+| `T-3.33-26` | Thinking 行 == 合并后的区 | 抬头 **324 tokens** == 合并后区的 tokens |
+| `T-3.33-27` | Σ == thinking + tools + output | `Σ` **352** = 三项之和 |
+| `T-3.33-28` | 换轮强制重定位 | 新轮继续追加时强制回到新轮位置 |
+| `T-3.33-29` | 同轮上翻不被抢回 | 同轮上翻到 **0.0pt** 后继续追加 10 次，偏移仍 0.0pt |
+| `T-3.33-17` ② 内层滚动不污染外层 | 内层视口滚 **200pt**（内层文档 **601pt** / 视口 **178pt**）⇒ 外层偏移 **1181.5 → 1181.5pt**（一格不动）、距底 **0.0pt**；随后追加一次 ⇒ 仍贴底 | 把内层半路读数（**120pt**）喂给外层判定 ⇒ 判红 |
+| `T-3.33-21` ② 定高 200pt + 内部滚到末尾 | 整块 **200.0pt** / 内容视口 **178.0pt** / 文档 **271.0pt** / 滚到底距底 **0.0pt** | 视口跟着内容长 ⇒ 判红；文档 ≤ 视口 ⇒ 撑不出内部滚动 |
+| `T-3.33-28` ⑤ 换轮强制重定位 | 换轮时内容高 **3526pt**（≈ 整份内容）⇒ 落点几何在离屏宿主里量不到，按「每次读数不在落点上就再落一次（上限 40 次）」判 | 不重置 ⇒ 判红 |
 
-摘要行**必须带步数与耗时**：折起来之后它是那一轮过程信息的唯一读数，只写「思考过程」等于把「跑了多久、走了几步」也折掉了。手动态按**轮次**记（`currentTurnKey` = 最后一条用户提问的 id），同一轮内反复重绘不许清（清了就是「点一开就自己折回去」）。
+**块高度常量表（契约，换哪一版实现都必须成立）**
 
-**④ 工具调用默认折成一行摘要**（`App/Views/AgentProcessBlocks.swift` 的 `AgentToolBlockView`）
+| 块 | 默认形态 | 高度常量 |
+|---|---|---|
+| 结论（助手正文） | 整段展开（`longPreview = off`） | 可见高随内容，**不设上限** |
+| 断言台账 claims | **一行** + 展开明细 | 折叠一行 **24pt**（行 20 + 块间距 **4pt**）；展开上限 **240pt** |
+| 思考区（一轮一个区） | 运行中展开 / 终态一行 | 运行中 **200pt**（抬头 20 + 发丝 **2pt** + 视口 **178pt**，视口内滚）；终态 **20pt** |
+| 工具调用块 | **一行摘要** | 折叠 **20pt**；展开整块 **238pt**（抬头 20 + 发丝 2 + 行体 216 ≤ 240pt） |
+| 执行步骤详单 | 表头 + **2 行** | 收起 **≈ 80pt** / 展开 **168pt**（内部滚） |
 
-改前默认形态是 `!(compact || toolProgress == .summary)`，契约默认 `toolProgress = .all` ⇒ **默认展开**：一轮 56 次调用铺 56 行。契约：**默认恒为一行摘要** `▸ 56 次工具调用 · 8.2s · 展开`（条数 + Σ耗时 + 动作）；展开态**有上限**（抬头 20 + 发丝 2 + 行体 **216** = **238pt ≤ 240**）且行体在 `ScrollView` 里 —— 56 次与 300 次对外层一样高。`.toolProgress = .off` 那一档照旧只留「调用 N 次」，连展开口都不给。
+**口径更替（如实登记）**：§3.37 把「展开态定高 200pt」改成 `min(内容实测高, 200pt)`，本节的三态表按**新口径**读；「流式不抖」那一半由 `T-3.37-04` 判（本节不再重复判）。
 
-**判据**（`TestsUISnapshot/AgentChatNarrationProbeTests.swift`，`DOYAH_UI_SNAPSHOT=1`；Core 侧 `Tests/AgentAnswerSplitTests.swift` 17 例 + `Tests/AgentDisplayPreferencesTests.swift` 14 例）
+**基准读数（原文照录，落点名词已中性化为 `基准实现`；只作阈值参照，不是本端读数）**
 
+- `T-3.33-01` 29 条台账 + 一段 30 行结论（真 `AgentChatView`，900×620）：结论**可见高 455pt**（> 0）；台账只多占 **24pt = 一行 20 + 块间距 4**；条数 29 → 300 对话区内容高**逐点不变**（523pt = 523pt）；对话区视口 517.5pt 不缩；
+- `T-3.33-03` 展开 ⇒ 262pt（29 条与 300 条**同高**）、宿主里 **1 个**内部滚动容器、明细上限 240pt；
+- `T-3.33-04` **反例必须判红**（同一套判据函数）：明细无上限 **1296pt**、整块台账原样铺 **885pt**、结论按 `2+2` 折（藏 25 行）、台账整块铺进消息流使整页内容高 **1373pt**（比只有结论的 499pt 多 **874pt**）。
 - `T-3.33-05` **旧库端到端**：临时目录写一份 v1 + `longPreview = 2+2` 的盘 → `AppState.loadAgentDisplayPreferencesIfNeeded()`（真启动路径）→ 结论可见高 **455pt = 全文 455pt**（新装默认同值），盘上写回 `version 2`；反例（把 `2+2` 写成 v2、迁移条件不成立）⇒ 结论只 **96pt**，判据报红；纯函数层另判：迁移后 `previewSplit` 为 `nil`，反例非 `nil`；
 - `T-3.33-06` **思考区三态**（读数为 §3.33.2 定高口径；改前是「按内容长」的 37 / 97pt）：运行中 **200pt**（= 定高，≤ 200）/ 终态 **20pt**（= 一行）/ 终态手动展开 **200pt** → 追加事件后 **200pt**（仍展开、不跟内容长）/ 运行中手动收起 **20pt**；摘要行「思考过程 · 12 步 · 18.4s · 展开」；反例（12 行思考不折）**240pt** ⇒ 报红；
 - `T-3.33-07` **独白不进正文**：`split.narration` = 「我先读一下…」、`split.conclusion` 首行「第 1 行：结论正文。」且不含「我先读一下」；整页运行中 **720pt** vs 终态 **521pt**（思考区展开多占 **199pt** = 200 定高 − 一行 20 + 块间距，§3.33.2），结论两种状态都完整可见；
 - `T-3.33-08` **工具块默认一行**：折叠态 56 次 **20pt**、300 次 **20pt**（逐点同高）；展开态 **233pt**（≤ 240pt）、56 次与 300 次同高、内部滚动容器 **1 个**；摘要「56 次工具调用 · 5.6s · 展开」；整页只多占 **24pt**（一行 20 + 间距 4）；反例（56 行不折）**1230pt**、展开无上限 **1252pt** ⇒ 报红；
 - `T-3.33-09` **整页对照**：新形态（结论整段 + 思考一行 + 工具一行）**545pt** / 旧形态重建（结论 2+2 + 独白当正文 + 56 行工具）**1965pt**，省 **1420pt**；对话区视口 437.5pt 不变；
-- `T-3.33-10` 手动态作用域（Core）：同一轮内 5 次重绘仍保持、新轮回到默认展开。
-
-**边界（如实登记）**
-- `display.thinking` 开关仍管 `reasoning_content` 那一路（关 = 不画那段，数据照收）；**过程独白不受它管** —— 它是模型写进正文的字，既不能回正文，也不该被开关静默吞掉；
-- 整条都是独白（`isNarrationOnly`，例如只说了一句「我先看一下」就断了）⇒ 按规则 3 的兜底走正文，此时思考区**不再重复放一遍**（同一段字在两处出现，读起来像重复）；
-- 流式中同样只把结论那一段画进正文：否则终态一到独白会在正文里「消失」，读起来像内容被吞了。
-
-
-#### 3.33.2 流式上屏的合批节奏与视口高度
-
-主人装上 beta1.0.4 后的原话：
-
-> 「思考过程中，流式输出让滚动条很闪，不像 hermes 的输出这么丝滑」
-
-「丝滑」不是文案、也不是滚动条画法，是**上屏节奏**。三处根因各自独立，逐条量过：
-
-| # | 根因（改前位置） | 机制 |
-|---|---|---|
-| ① | `App/AgentChatModel.swift:1206-1208`（`observe` 每条事件都 `state.apply`）+ `Core/AgentChat.swift:485-502` | 模型是 token 级回调 ⇒ **一条增量改一次 `@Published state`** ⇒ SwiftUI 重算一帧 ⇒ 思考区 `ScrollView` 的内容尺寸变一次、指示器按新尺寸重算一次。端点每秒 50~200 个增量就是每秒 50~200 次重排 |
-| ② | `App/Views/AgentProcessBlocks.swift:214-221` | 内容格是 `.frame(maxHeight: 178)` —— **上限不是定高**。`ScrollView` 在内容比 178pt 短时缩到内容高 ⇒ 整块高度跟着字数长，下面的正文被一遍遍往下推 |
-| ③ | `App/Views/AgentChatView.swift:283-289` | `follow(_:)` 在 `scrollTick` 每次变化时**无条件** `withAnimation(.easeOut(0.15)) { scrollTo(bottom) }`。`scrollTick` 每个 token 都变 ⇒ 150ms 的动画**永远重启、永远跑不完**，滚动条一路处于「正在滑」；用户往上翻也照样被拽回底部 |
-
-**契约五条**
-
-1. **合并窗口 50ms**（`Core/AgentThinkingStream.swift` 的 `AgentStreamCoalescer`）：`.delta` / `.reasoningDelta` 先进 buffer，**一个窗口一次上屏**。
-   - **头一条不等**（leading edge）：距上次上屏已过窗口 ⇒ 立刻上屏（「第一句字马上出现」是体感的一半）；
-   - **结构边界强刷**：工具开跑 / 跳开始 / 终态 / 失败这些**非增量**事件到场前，先把积压的字上屏（否则过程行会跑到正文前面）；
-   - **收尾强刷**：`finish` 前清空 buffer（结论末几个字不许断在半句）；**新轮丢弃**上一轮残留。
-2. **一批一次状态变更**（`AgentChatState.applyBatch`）：一个窗口的增量在**同一次 `@Published`** 里落地 ⇒ 一次窗口只重算一帧，不做「批里再逐条 apply」。
-3. **固定视口 200pt**（`AgentThinkingViewport` + `AgentThinkingZone`）：运行中与手动展开**整块恒 200pt**（抬头 20 + 发丝 2 + 视口 178），内容只在视口**内部**滚。定高而不是 `maxHeight` —— 上限会让整块跟着内容长。
-4. **条件跟随**（`AgentScrollFollow` + `App/Views/ScrollOffsetSpy.swift`）：只在**用户贴着底**时跟新内容；往上滚就停手，滚回底部才恢复。跟随**直接跳、不加动画**。
-   - 贴底判定**只吃真实滚动读数**（`NSScrollView` 的 clip `boundsDidChange`）；**内容长高不刷新它** —— 否则「贴着底 + 新内容刚到、还没跟」这一瞬会被误判成「用户往上翻了」，跟随当场断掉（表现是「有时跟、有时停在半路」）。
-5. **滚动条策略**：**运行中隐藏指示器**（`.scrollIndicators(.hidden)`），终态手动展开时交回系统默认（`.visible`）。
-   - 理由：运行中内容每 50ms 长一截，指示器的滑块尺寸每次都得按新内容高重算 —— 那正是主人看到的「闪」；视口只有 178pt，一屏之内不需要位置指示。终态展开是**静态内容**（不重算），交回系统默认既守住可发现性、也不会闪。
-   - 取舍（如实登记）：运行中用户上翻时没有指示器，但「字不再往下滚」本身就是状态信号；滚回底部跟随自动恢复。
-
-**两档切换不插值**（`AgentThinkingViewport.height(expanded:)`）：折叠 20pt / 展开 200pt，**只有这两个数**。折叠与展开**直接切档**，不许 `withAnimation` 改高度 —— 动画期间尺寸逐帧插值，看着又是一档闪。
-
-> **2026-11-07 起被 §3.37 取代（原文保留以便追溯）**：展开态**不再是定高 200pt**，而是
-> `min(抬头 20 + 发丝 2 + 内容实测高, 200)`，且内容实测高按**整行向上取**（量化）—— 定高解决了「抖」，
-> 却让一两行内容下面空出一大块（beta1.0.8 主人原话）。折叠仍是 20pt；「不插值、不加动画」这一条不变。
-
-| 判据 | 读数（真跑） | 反例（同一套判据） |
-|---|---|---|
-| `T-3.33-11` **刷新频率**（`Tests/AgentThinkingStreamTests.swift`） | 200 条增量、每条间隔 2ms（= 500 增量/秒）⇒ **上屏 9 次（4.5%）**，每批 25~26 条 + 尾批 20；走生产路径（`AgentChatModel.observe`）量 `@Published`：**发 8 次**（结构边界强刷后 10 次），拼出的 890 字与逐条追加**逐字相同** | 关节流（`interval = 0`）⇒ **上屏 200 次（100%）** ⇒ 判红 |
-| `T-3.33-12` **视口稳定**（`TestsUISnapshot/AgentThinkingFlowProbeTests.swift`） | 200 段增量、逐次采样 200 次 ⇒ **min 200.0pt / max 200.0pt / 方差 0.0000**；内部文档高 **5986pt**、视口 **178pt**、文档宽 **900pt**（真在内部滚） | 改前形态（`ScrollView.frame(maxHeight: 178)`）⇒ 高度 **67 → 97 → 127 → 157 → 187 → 200pt** 递增 ⇒ 判红；同一口径下新形态逐次 **200pt** |
+| `T-3.33-12` **视口稳定**（`基准实现`） | 200 段增量、逐次采样 200 次 ⇒ **min 200.0pt / max 200.0pt / 方差 0.0000**；内部文档高 **5986pt**、视口 **178pt**、文档宽 **900pt**（真在内部滚） | 改前形态（`ScrollView.frame(maxHeight: 178)`）⇒ 高度 **67 → 97 → 127 → 157 → 187 → 200pt** 递增 ⇒ 判红；同一口径下新形态逐次 **200pt** |
 | `T-3.33-13` **跟随策略** | 贴底态新增一段 ⇒ 偏移 **708 → 738pt**（永远停在最大偏移，「距底 0pt」）；**模拟用户上滚**（`NSClipView.scroll(to:)` + `reflectScrolledClipView`）后新增三段 ⇒ 偏移 **0pt → 0pt**（一动不动） | 无条件跟随（改前的 `follow`）⇒ 上滚后仍被拽回底部（738pt）⇒ 判红 |
 | `T-3.33-14` **无动画抖动** | 运行中 ↔ 终态 ↔ 手动展开 ↔ 手动收起 ↔ 回运行中，每态连采 6 拍共 **30 次** ⇒ 取到的档位只有 **{20, 200}pt** | 一条插值样本序列（200 → 168 → 92 → 40 → 20）喂同一套判据 ⇒ **3 个中间值** ⇒ 判红 |
-
-> **2026-11-07 起 `T-3.33-12` 的「定高 200 / 方差 0」读数被 §3.37 取代**（原文保留）：新读数 =
-> 200 段增量首 **42pt** → 上限 **200pt**，全部落在「抬头 22 + 整行 20」格点上，变化次数远小于段数
-> （新判据 `T-3.37-04`，函数 `steppedViolations`）；旧形态 `maxHeight` 仍判红 —— 实测
-> 67 / 97 / 127 / 157 / 187 / 200pt，其中 **5 档脱离整行格点**。`T-3.33-14` 的「无动画」不受影响。
-
-**探针边界（如实登记）**
-- `GeometryReader` + 偏好回传在离屏宿主里**收不到值**（实测恒 0）⇒ 整块高度改读**真宿主视图的 frame 高**（`NSHostingView` 缩到内容尺寸，实测 200.0pt）；
-- `NSHostingView` 会缩到内容的 fitting **宽**：空内容时整块只剩 **16pt 宽**、文字被挤成一字一行（文档高实测 13 万 pt）⇒ 探针必须把宽度钉死成 900；
-- 离屏宿主**没有 display link**，`.animation` 会直接跳到终态（实测 6 拍全是终值）⇒ `T-3.33-14` 的反例在**判据函数**上验（插值样本必须判红），不在活宿主里验；
-- 活宿主里 `ScrollView` 会被分到定额高度 ⇒ 「旧形态跟着内容长」只能按 `fittingSize` 量（上一轮 `T-3.33-06` 的 37 / 97pt 就是同一口径）。
-
-**禁止行为**
-- 禁止把增量直接写进 `@Published state`（一 token 一帧 = 本节要修的那个缺陷）；
-- 禁止给思考区内容格用 `maxHeight`（整块高度必须由常量定死，与字数无关）；
-- 禁止自动跟随时用 `withAnimation`（动画永远被下一个增量重启）；
-- 禁止在用户已经上翻时继续跟随（抢控制权）；
-- 禁止用几何读数当「贴底」判据（内容长高会把它变成「用户上翻」）。
-
-#### 3.33.3 外层对话区的跟随落点与贴底判定
-
-主人装上 beta1.0.6 后的原话：
-
-> 「每 Step 里的思考过程是可以滚动，但整个界面却不滚动了，要手工去拖动」
-
-即：**内层**思考视口（§3.33.2 定高 178pt）能滚，**外层**对话区在流式输出 / 新步骤追加时不再自动贴底。
-三处根因各自独立，全部按真读数定位（不是猜）：
-
-| # | 根因（改前位置） | 机制（实测读数） |
-|---|---|---|
-| ① | `App/Views/AgentChatView.swift:369-375`（`follow(_:)`） | 落点走 `ScrollViewProxy.scrollTo(bottomAnchor, anchor: .bottom)`，而底部哨兵是内容里**最后一行**，内容末尾还有 `.padding(.vertical, Spacing.m)` = **12pt**。对齐哨兵底边 ⇒ 跟完距底**恒 12.0pt**（探针逐次读数：`max 49.0 / min 12.0`，300 次里**贴底 0 次**） |
-| ② | `App/Views/AgentChatView.swift:200-201`（贴底判定） | 判定只看「距底多少」，于是**内容长高**与**人往上滚**不可分：①的 12pt 每跟一次就把 `transcriptPinned` 打成假，而 `follow` 是**先 `guard pinned`** ⇒ 之后一次都不跟。真机表现就是「要么不动、要么得手工拖」 |
-| ③ | `App/Views/AgentChatView.swift:204-218` + `App/Views/StickyQuestionAnchor.swift:112-126`（触发挂点） | 跟随只挂 `scrollTick`（消息数 + 正文长度）；读数只订阅 `clip.boundsDidChange`。而**内容长高**与**视口变矮**都不改偏移 ⇒ 不发读数：吸顶条一出现（视口 −20pt）就漏出 20pt，思考区折/展同理 |
-
-**契约六条**（§3.33.2 契约 4 的**收口**，两条不冲突：仍是「贴底才跟、上翻即停」）
-
-1. **落点 = 内容底边**（`StickyQuestionSpy.SpyView.scrollToBottom()` → `NSClipView.scroll(to: maxOffset)`）：跟随与判定用**同一个分母**。禁止用底部哨兵当落点（哨兵的对齐点比内容底边高 12pt，等于每跟一次自杀一次）。
-2. **判定分得清「人上翻」与「内容长高」**（`AgentScrollFollow.update(contentHeight:viewportHeight:offsetFromTop:)`）：
-   - 距底 ≤ **4pt** ⇒ 贴底；
-   - 距底 > 4pt **且偏移比上次小（> 0.5pt）** ⇒ 人往上滚 ⇒ 停跟；
-   - 其余（内容长高 / 视口变矮 / 我们自己的跟随还没落定）⇒ **保持原判定**。
-   状态机住在**读数器**里（`SpyView.follow`），宿主只在**判定翻转**时收一次通知 —— 放进 `@State` 结构体就得每帧写状态，那正是 §3.33.2 要消掉的「闪」。
-3. **触发 = 几何落后，不是内容事件**：读数器订阅三路 —— clip `boundsDidChange`（人滚 / 程序滚）、**document `frameDidChange`**（内容长高：流式逐段 / 新步骤 / 思考区折展）、**clip `frameDidChange`**（视口变矮：吸顶条进出 / 窗口改高）。`report()` 里若「贴底且距底 > 4pt」就**当场补跟**（不等「通知 → 下一拍回写 → 再重排」那条链，实测那里会漏一帧 20pt）。
-4. **内层滚动不污染外层**（契约②）：读数只从**订阅时那一个 clip** 取（`attachedClip` 身份守卫）；子滚动区（内层思考视口）的 `boundsDidChange` 通知 object 不是它，进不来。内层自己的跟随仍是 `ScrollOffsetSpy` + `AgentScrollFollow(distanceToBottom:)`（那里没有 padding，落点即底边 —— 两处口径在 Core 的注释里写明为什么可以不同）。
-5. **不许改的两处读数**：吸顶条高度（`AgentStickyQuestion.barHeight` = 20pt，§3.34）与思考区定高（`AgentThinkingViewport.totalHeight` = 200pt / 视口 178pt，§3.33.2）一个字都没动；本轮只改**跟随的落点与判定**。
-6. **换轮强制重定位**（`StickyQuestionSpy.SpyView.repinToBottom()` / `turnTarget`）：新一轮开始时
-   （本轮提问行换了**轮钥**），上一轮的「人上翻」意图当场作废 —— 状态机重置、视口落到
-   **本轮开始处**（本轮提问行顶边，夹到 `maxOffset`；新一轮内容不足一屏时夹到的就是底部），
-   之后整轮保持「贴着最新内容」。裁决口径三条：
-   - **触发是几何事实，不是视图事件**：换轮由读数器判（标记带**轮钥** + `updateNSView` 喂进来的
-     当前轮钥），**不许**依赖宿主 `.onChange(of:)` 的时机（实测那些钩子在部分宿主里一次都不跑）；
-   - **落点整轮有效**：换轮那一拍的几何还是旧的，滚到位之后这次布局可能又把它摆回去 ⇒
-     每次读数发现「不在落点上」就再落一次（上限 40 次）；这正是「当前轮一直贴着最新内容」；
-   - **用户一上手就交还控制权**：滚轮 / 拖滚动条（真实 `NSEvent`）⇒ 撤掉本轮落点，此后不再抢回。
-     判定**不许**用「偏移变小了」——它分不清「人上翻」与「布局把我们摆回去」。
-7. **贴底判定只许有一份**：宿主的 `follow()` 只发「想跟」的意图（`scrollToBottomIfPinned()`），
-   跟不跟**由读数器里的状态机当场判**。禁止在宿主 `@State` 里另存一份「贴不贴底」——
-   两份副本必然漂移：副本卡「假」⇒ 整轮不跟（换轮也不跳）；副本卡「真」⇒ 人上翻被拽回。
-
-**产品形态（人看得见的三件事）**：一轮结束时，三行汇总下面**紧接**结论首行，中间就是一块块间距（4pt）——
-不再有 2~3 行看不见却占位的空行（改前实测 **61pt**）；发下一条消息时视口**自动落到本轮开始处**
-（本轮那条提问），不用人往下拖，而人一旦自己滚过就立刻交还控制权、本轮内不再抢回；
-同一时刻只有**一份**「贴不贴底」，所以「贴底却突然不跟」与「上翻被拽回」两种反向病不会同时出现。
-
-| 判据 | 读数（真跑） | 反例（同一套判据） |
-|---|---|---|
-| `T-3.33-15` **判定状态机**（`Tests/AgentThinkingStreamTests.swift`） | 内容长高 200pt（偏移不动）⇒ **仍跟**；视口变矮 20pt ⇒ **仍跟**；偏移小 100pt ⇒ **停跟**；停跟后内容再长 ⇒ **仍停跟**（不回弹）；往下滚但距底 520pt ⇒ **仍停跟**；回底 3pt ⇒ **恢复**；0.2pt 抖动 ⇒ **仍跟** | 把同一串读数喂给「只看距底」的旧口径 ⇒ 第 2 步 `shouldFollow = false` ⇒ 判红（正是 beta1.0.6 断跟的机制） |
-| `T-3.33-16` **① 流式 300 次追加**（`TestsUISnapshot/AgentTranscriptFollowProbeTests.swift`） | 走生产路径（`AgentChatModel.observe(.delta)`）追加 300 次、逐次采样 ⇒ **贴底 300/300**，距底 **max = min = 0.0pt**；文档高 **3662pt** / 视口 **390.5pt**；偏移 **1181.5 → 3271.5pt** | 关掉跟随（偏移冻在 1181.5pt）⇒ 距底 **2018.5 → 7400.5pt** 单调递增 ⇒ 判红；**改前读数**：贴底 **0/300**、距底 min **12.0** / max **49.0pt** |
-| `T-3.33-17` **② 内层滚动不污染外层** | 内层思考视口滚 **200pt**（内层文档 **601pt** / 视口 178pt）⇒ 外层偏移 **1181.5 → 1181.5pt**（一格不动）、距底 **0.0pt**；随后追加一次 ⇒ 仍贴底（`pinned` 仍为真） | 把内层滚到半路时的距底读数（**120pt**）喂给外层判定 ⇒ `shouldFollow = false` ⇒ 判红（内层污染外层长这样） |
+| `T-3.33-15` **判定状态机**（`基准实现`） | 内容长高 200pt（偏移不动）⇒ **仍跟**；视口变矮 20pt ⇒ **仍跟**；偏移小 100pt ⇒ **停跟**；停跟后内容再长 ⇒ **仍停跟**（不回弹）；往下滚但距底 520pt ⇒ **仍停跟**；回底 3pt ⇒ **恢复**；0.2pt 抖动 ⇒ **仍跟** | 把同一串读数喂给「只看距底」的旧口径 ⇒ 第 2 步 `shouldFollow = false` ⇒ 判红（正是 beta1.0.6 断跟的机制） |
+| `T-3.33-16` **① 流式 300 次追加**（`基准实现`） | 走生产路径（`AgentChatModel.observe(.delta)`）追加 300 次、逐次采样 ⇒ **贴底 300/300**，距底 **max = min = 0.0pt**；文档高 **3662pt** / 视口 **390.5pt**；偏移 **1181.5 → 3271.5pt** | 关掉跟随（偏移冻在 1181.5pt）⇒ 距底 **2018.5 → 7400.5pt** 单调递增 ⇒ 判红；**改前读数**：贴底 **0/300**、距底 min **12.0** / max **49.0pt** |
+| `T-3.33-17` **② 内层滚动不污染外层** | 照录：内层滚动后外层偏移一格不动、距底 0.0pt，追加一次仍贴底（`pinned` 仍为真） | 把内层半路读数（**120pt**）喂给外层判定 ⇒ 判红（内层污染外层长这样） |
 | `T-3.33-18` **③ 上翻即停** | 上翻 **100pt** ⇒ 偏移 **1181.5 → 1081.5pt**；再追加 **20 次** ⇒ 偏移**最大漂移 0.0pt**（不回弹） | 上翻态下跟随仍开着 ⇒ 偏移漂移 **200pt** ⇒ 判红 |
-| `T-3.33-28` **⑤ 换轮强制重定位**（`TestsUISnapshot/AgentSummaryGapAndTurnFollowProbeTests.swift`） | 3 轮对话、第 1 轮上翻后再发提问（走生产路径 `AgentChatModel.send()` → `beginRun`）：轮钥 `48211B67 → 8FE3397C`，**触发重定位 1 次**（第 5 轮累计 5 次），落点目标读到**本轮提问行的内容坐标 3058.5pt**（本轮首行未物化时退回底部）；上翻态在这一轮被重置 | 改前同一夹具：轮钥变了但**重定位 0 次**，视口偏移停在 **0.0pt**（第一轮区域）、新一轮首行在视口外 **3058.5pt** ⇒ 判红 |
+| `T-3.33-28` **⑤ 换轮强制重定位**（`基准实现`） | 3 轮对话、第 1 轮上翻后再发提问（走生产路径 `AgentChatModel.send()` → `beginRun`）：轮钥 `48211B67 → 8FE3397C`，**触发重定位 1 次**（第 5 轮累计 5 次），落点目标读到**本轮提问行的内容坐标 3058.5pt**（本轮首行未物化时退回底部）；上翻态在这一轮被重置 | 改前同一夹具：轮钥变了但**重定位 0 次**，视口偏移停在 **0.0pt**（第一轮区域）、新一轮首行在视口外 **3058.5pt** ⇒ 判红 |
 | `T-3.33-29` **⑥ 同轮上翻不被抢回** | 同一轮内上翻到偏移 **0.0pt** 后继续追加 10 次增量（内容长到 `maxOffset` 1807.5pt）：偏移**仍 0.0pt**（漂移 0.0pt） | 改前读数：同一轮内长高把视口从 **0.0pt** 拽到 **2556.5pt** ⇒ 判红（两副本漂移的「卡真」那一侧） |
 | `T-3.33-19` **④ 回底恢复** | 滚回距底 **3pt**（容差内）⇒ 下一拍贴到 **1181.5pt / 距底 0.0pt** | 距底停在 **6pt**（容差外）⇒ 追加后偏移 **1175.5 → 1175.5pt**（不跟）⇒ 容差边界成立 |
-
-**探针边界（如实登记）**
-- **换轮重排那一拍，离屏宿主会丢掉外层滚动视口约束**：`send()` 之后外层 `NSScrollView` 的 clip 高读成
-  **3526pt**（≈ 整份内容），偏移恒为 0 ⇒ 换轮的**落点几何**在离屏宿主里量不到。判据 `T-3.33-28` 因此读
-  「换轮有没有触发重定位 + 落点目标是多少」这两个**不依赖视口**的量，落点几何由真机复测；不许把
-  「0 == 0」当绿（那一版是假绿，已改断言并在本节登记）。
-- **活宿主的异步回写必须用 `pumpAsync`**
-- **活宿主的异步回写必须用 `pumpAsync`**：`RunLoop.current.run` 泵着的期间主队列块**不落地**（实测 `[trace] hop fires` 一次都没打出来）⇒ 读数永远回不到宿主，`pinned` 冻在初值「真」；换 `pumpAsync`（`Task.sleep` 让出主 actor）之后回写才落。上一版 `T-3.33-13` 之所以「绿」，是因为它只量滚动落点、不量判定翻转。
-- **思考段默认是关的**（`AgentDisplayPreferences.thinking`）⇒ 判据② 要经**生产开关**（`AppState.setAgentDisplay(key: .thinking, value: "on")` + 临时目录）把它打开，不许给视图塞假思考区。
-- 探针读的是**真 `NSScrollView` 的 clip 偏移**（外层取面积最大的那个；内层取高 178pt 的那个），不推算。
-
-**禁止行为**
-- 禁止拿「距底多少」一个量同时判「人上翻」与「内容长高」（必须带上**偏移的变化方向**）；
-- 禁止用底部哨兵 / `ScrollViewProxy.scrollTo(anchor: .bottom)` 当跟随落点（与内容底边差 12pt）；
-- 禁止跟随状态住进宿主的 `@State` 结构体（每帧写状态 = 把 §3.33.2 的「不闪」拆掉）；
-- 禁止只挂内容事件（`scrollTick`）当触发：内容长高与视口变矮不改偏移，必须从**几何**触发；
-- 禁止让内层滚动区的读数改写外层跟随状态。
-
-#### 3.33.4 一轮一个思考区：段模型与三行汇总
-
-主人装上 beta1.0.7 后的原话：
-
-> 「多个步骤的思考应该是合一起的啊，现在是分成了一块一块的」
-
-即：一轮里**所有步骤**的思考要**合并成一个思考区**（一个可滚动的整体，按时间顺序累积），
-而不是每个 step 各自一个可折叠块。三态（§3.33.1 ③）、定高 200pt（§3.33.2 ②）、
-工具块一行摘要（§3.33.1 ④）**行为与高度都不变** —— 本轮只改「区按什么粒度实例化」。
-
-**根因（`文件:行号`，改前）**
-
-| # | 落点（改前） | 事实 |
-|---|---|---|
-| ① | `App/Views/AgentChatView.swift:158`（`ForEach(model.messages)`）+ `:171-173`（`thinkingZone(message, …)` 在**逐条消息的循环体里**） | 思考区是**按消息（= 按 step）实例化**的：五步 ⇒ 五块，各带自己的抬头与折叠态 |
-| ② | `App/Views/AgentChatView.swift:1607-1623`（`thinkingZone(_:isFinalAssistant:isLastTurn:)`）+ `:1613`（`AgentThinkingZone(text: parts.joined(…))`） | 「这一格显示什么」= **这一条消息**的 `thinkingParts`（`:1631`），单条作用域；跨步骤没有累积的去处 |
-| ③ | 无（新增） | 「一轮的思考」此前**没有任何一处**是数据：段序、步号、本轮步数都得由视图现拼 ⇒ 判据也没法数「页面上几个区」 |
-
-**契约五条**
-
-1. **一轮 = 一个思考区**：本轮所有步骤的思考文本按**发生顺序**累积进**同一个** `AgentThinkingZone`；不许每个 step 一个新块。归属只在 `Core/AgentTurnThinking.swift` 判一处（`zones(in:includeReasoning:)` / `zonesByAnchorIndex(in:includeReasoning:)`），轮切分仍走 `AgentChatTurnShape`（轮的定义只许有一处）。
-2. **内部仍可分段**：步骤边界用**轻分隔**（一行发丝 + 极小字「第 N 步」，`monoSmall` + 三级文字色）或段间距，**不用**多级折叠头（段上不挂点击、不占抬头高度）；整体仍**定高 200pt + 内部滚动**（`AgentThinkingViewport` 一个字没动）。
-3. **三态不变**：运行中展开（可流式）/ 终态自动折成一行（`思考过程 · N 步 · 18.4s · 展开`，`N` = 本轮**真有思考的段数**）/ 手动展开后本轮内 sticky（`AgentThinkingManualState`，钥匙 = 轮首消息 id）。
-4. **折 / 展是一次作用于整轮**：区只有**一处**抬头，`onToggle` 改的是这一轮的手动态；「点一下只折了某一步」在结构上不可能发生（没有按步的折叠态）。
-5. **工具块保持不变**：工具调用按调用 / 步骤各自成块（`AgentToolBlockView`，默认折一行 20pt），**不并进**思考区；思考区文本里一条工具行都不许出现（`Core` 侧只取 `AgentAnswerClassifier` 认出的独白 + 思考段）。
-
-**契约六条（收口版：一轮结束时只允许「三行汇总」）**
-
-主人 2026-11-07 补的最终形态（在上面「一轮一个区」之上再加三行）：
-
-```
-▸ Thinking  ~308 tokens
-▾ Tool calls (1)  ~16 tokens
-Σ ~324 total
-```
-
-6. **一轮只能是这三行**：顺序固定 `Thinking` → `Tool calls (N)` → `Σ total`，**默认全折**（各 20pt）；三行的折叠态**互不影响**（各自一个 `@State`，键 = 轮首消息 id）。**Thinking 行就是合并后的那一个思考区**（运行中按 §3.33.1 ③ 展开 200pt、可流式；终态折一行）——所以「两块 Thinking」在结构上不可能出现。
-7. **Token 数字的口径（写死，改口径先改 `Core/AgentTurnUsage`）**：
-   - `Thinking` = **合并后那个区**的文本 token 数（`AgentTurnThinking` 给视图的段 `joined("\n\n")`，与区**同一份字**）；
-   - `Tool calls (N)`：`N` = 本轮**调用次数**（一行一次调用），token = 本轮工具过程行文本的合计；
-   - `Σ` **定义为** `thinking + tools + output`（`output` = 本轮结论正文）。端点回报的 usage 是**整个请求**口径（系统提示 + 历史 + 工具 schema），与本轮产出不同源 ⇒ 只进 tooltip 作旁证，**不进** 任何一个数。
-   - 有 usage 用 usage、没有就估算：端点**没有分项 usage**，所以三项一律走仓库既有估算器 `AgentTokenEstimator.tokens(_:)`（汉字 1 字 = 1 token、其余 4 字符 = 1 token；与上下文账本同一套），数字前带 `~`；`isEstimated = false` 才允许去掉波浪号。
-   - **不许写死 / 占位**：三个数都从消息文本现算；运行中随增量涨（`AgentChatView` 每帧从 `AgentTurnUsageReader` 读，估算成本是线性扫文本）。
-8. **第二行展开后，内部仍是逐次调用各一行 20pt**（§3.33 口径不变）：`AgentToolCallRow` 一次调用一行、带 `├─ ⏺` 与耗时；工具数不因合并而变（判据⑤）。
-
-**怎么实现（四件，各管一件事）**
-
-| 部件 | 落点 | 职责 |
-|---|---|---|
-| 轮切分 | `Core/AgentTurnThinking.swift`（`AgentTurnSpan` / `AgentTurnSpans.spans(in:)`） | 「这一轮从哪条到哪条、过程信息挂哪一行」只有一处实现；思考聚合与用量都读它 |
-| 聚合 | `Core/AgentTurnThinking.swift`（`AgentThinkingSegment` / `AgentTurnThinkingZone` / `AgentTurnThinking`） | 一轮一段数组：`segmentText(of:isFinalAssistant:includeReasoning:)` 的口径**与改前 `thinkingParts` 逐条一致**（思考段受 `display.thinking` 管、独白不受），只是搬进 Core 让判据也读它；`zonesByAnchorIndex` 保证**一轮最多命中一条消息**（= 页面上最多一个区） |
-| 读数 | `Core/AgentTurnUsage.swift`（`AgentTurnUsage` / `AgentTurnUsageReader`） | 三行里的三个数：`thinking` 直接用聚合区的 `text`（同一份字，±0）、`tools` 扫工具过程行（`▸ ` 前缀计次）、`output` 取结论段；`totalTokens = thinking + tools + output`（等式写死在 `AgentTurnUsage`） |
-| 形态 | `App/Views/AgentProcessBlocks.swift`（`AgentThinkingZone(segments:…)`、`stepDivider(_:)`、`AgentToolCallsSummaryRow`、`AgentToolCallRow`、`AgentTurnTotalRow`、四个探针锚）+ `App/Views/AgentChatChrome.swift`（`AgentTurnUsageLines`，行文本形制） | 三行按固定顺序渲染、各 20pt、各自折展；段按 `ForEach(segments)` 渲染，第 2 段起插一条轻分隔；行文本一律走 `AgentTurnUsageLines`（判据与界面同一份） |
-
-**判据**（`TestsUISnapshot/AgentTurnThinkingZoneProbeTests.swift`，900×620 真 `AgentChatView`，`DOYAH_UI_SNAPSHOT=1`；聚合规约在 `Tests/AgentTurnThinkingTests.swift` 5 例）
-
-| 判据 | 读数（真跑） | 反例（同一套判定函数） |
-|---|---|---|
-| `T-3.33-20` **① 五步 ⇒ 1 个区** | 五步一轮（每步一段叙述 + 一次工具调用）⇒ 页面上 `AgentThinkingZone` 实例 **1 个** | 改前形态（一条消息一块，`LegacyPerStepThinking`）⇒ **5 个** ⇒ 判红（断言 `legacyCount == 5`） |
-| `T-3.33-21` **② 定高 200pt + 内部滚到末尾** | 整块 **200.0pt** / 内容视口 **178.0pt** / 文档 **271.0pt** / 滚到底距底 **0.0pt** | 视口跟着内容长 ⇒ `viewportViolations` 报「≠ 178pt」；文档 ≤ 视口 ⇒ 报「撑不出内部滚动」 |
-| `T-3.33-22` **③ 顺序保真** | 段锚按文档坐标上→下 = **`[1, 2, 3, 4, 5]`**；段文本开头 `["第 1 步"…"第 5 步"]` | 段序 **`[5, 4, 3, 2, 1]`** ⇒ `orderViolations` 判红 |
+| `T-3.33-21` **② 定高 200pt + 内部滚到末尾** | 整块 **200.0pt** / 内容视口 **178.0pt** / 文档 **271.0pt** / 滚到底距底 **0.0pt** | 视口跟着内容长 ⇒ 报「≠ 178pt」；文档 ≤ 视口 ⇒ 报「撑不出内部滚动」 |
 | `T-3.33-23` **④ 折一次 = 折整轮** | 终态 **20.0pt** → 点一次 **200.0pt** → 再点 **20.0pt**，全过程**区数恒为 1** | 按 step 分块：**5 个区、合计 100pt**（点哪块只折哪块）⇒ 判红 |
-| `T-3.33-24` **⑤ 工具块不变** | 工具块 **5 个**、行高 **[20, 20, 20, 20, 20]**（`Tool calls` 行展开时逐条）；思考区文本里 `read_file` **0 处** | 工具并进思考区 ⇒ 块数 < 5 且区文本含 `read_file` ⇒ 判红 |
-| `T-3.33-25` **⑥ 三行各恰好一行** | 一轮 5 步 + 1 次工具、终态：`Thinking` 行 **1** / `Tool calls` 行 **1** / `Σ` 行 **1**，行高 **[20, 20, 20]** | 改前形态（一条消息一块）⇒ `Thinking` 行 **5** ⇒ 判红 |
-| `T-3.33-26` **⑦ Thinking 行 == 合并后的区** | 抬头画的 **324 tokens** == 合并后区的 `AgentTokenEstimator.tokens(zone.text)` **324 tokens**（输出段是 **18**，两者不等 ⇒ 认得出源） | 抬头写输出段的数（**18**）⇒ 判红 |
-| `T-3.33-27` **⑧ Σ == thinking + tools + output** | `Σ` **352** = thinking **324** + tools **10** + output **18**；Σ > thinking（说明后两段真进去了）、tools > 0 | `Σ` **只算输出**（**18**）⇒ 判红 |
 
-**边界（如实登记）**
-- 折叠动作是 `onTapGesture`（离屏宿主点不动）⇒ ④ 把 `onToggle` 的结论（`manual`）直接喂回去：生产里点抬头改的是同一个值，探针与生产读**同一份渲染代码**。
-- 「页面上几个区」靠**锚视图**计数（`AgentThinkingZoneMarker` / `AgentThinkingSegmentMarker` / `AgentToolBlockMarker`，零行为、零尺寸语义）：`Text` 不落 `NSTextField`、折叠态也没有滚动容器，数折头只能靠显式记号。
-- 内层视口要**最内层**那格 `NSScrollView`：外层对话区也是滚动容器，它的 `documentView` 子树里同样躺着段锚（实测先命中它 ⇒ 读到视口 390.5pt）。
-- 早轮次里 `elapsedSeconds` 仍取 `model.lastElapsedSeconds`（只对最后一轮准）—— 本轮不碰，登记在案。
-- **探针要先把外层滚回顶部**：运行中那一页会自动贴底，而 `LazyVStack` 会把滚出视口的行回收（实测顶部的过程块整块消失 ⇒ 记号 0 个）。读数前 `scrollToTop` 只动滚动位置，不改任何一行。
-- 估算器的成本 = 线性扫消息文本（每帧一次）；真机一轮几万字也在毫秒级，未做节流 —— 如果将来出现长会话 + 大历史，先量再优化，不提前加缓存。
+**本端实现（Linux）**
+
+- **落点**：`apps/desktop/src/views/AgentChat.vue` + `apps/desktop/src/composables/useAgentChat.ts`
+- **机制与差异**：四项判定（结论 vs 过程独白、三态折叠、工具块一行摘要、台账折行）在 Vue 侧实现；高度测量用 `ResizeObserver` + `getBoundingClientRect`（**替代 macOS 的 `NSScrollView` / 高度探针**），常量与阈值一字不改（200 / 20 / 24 / 238 / 80 / 168 pt → CSS px，1:1）。
 
 **禁止行为**
-- 禁止在 `ForEach` 的循环体里逐条实例化思考区（那是「一块一块」的定义）；
-- 禁止给段加折叠态 / 点击（段只是分隔，折展只有整区一个口）；
-- 禁止为了合并把工具行写成思考段（动作与思考是两回事，⑤ 会判红）；
-- 禁止一轮出现第二块 `Thinking`（三行是**上限也是下限**：有过程就只许这三行）；
-- 禁止把端点回报的 usage 当成 `Σ`（分母不同，等式会崩；只进 tooltip）；
-- 禁止把三个 token 数写死 / 占位（必须从消息文本现算，估算也要带 `~`）；
-- 禁止改定高 200 / 折叠 20 这两档（§3.33.2 ④ 的两档制不变）；
-- 禁止在视图里另写一份「这一轮该显示什么」（只许走 `AgentTurnThinking`）。
 
-> **2026-11-07 补（§3.37）**：上面「禁止改定高 200」这一条的**展开态**部分已被 §3.37 取代 ——
-> 展开态改为 `min(内容实测高, 200)` 且按整行量化，折叠态仍是 20pt 一行。其余禁止项一条不变。
-
+- 禁止把断言台账 / 思考段 / 步骤详单**按条数**铺进对话区（高度必须由常量封顶）；
+- 禁止把「未核断言」的告警藏进展开区（展开才看得见 = 没有）；
+- 禁止为了让「长消息预览」这个开关「有落点」去折结论（结论是交付物）；
+- 禁止把台账明细从消息流里删掉（折起来不等于不记）；
+- 禁止把过程独白留在正文区（它只住思考区）；
+- 禁止把思考区高度做成「按内容长」（运行中恒 200pt，终态 20pt，只有用户手动那两态可变）。
+- 禁止把一轮的步骤拆成多个思考区（一轮一个区，段模型见 3.33.4）；
+- 禁止给三行汇总加行间距或用 `Σ total` 之外的口径算总数（三个数必须能对上）；
+- 禁止在流式过程中显示滚动指示器（运行中隐藏，终态再恢复）。
 ### 3.34 当前轮用户问题吸顶一行
-
-> **本端说明**：本节正文与基准（`Docs/Doyah产品详细设计说明书-macOS.md` v1.3.1）**逐字一致** —— 含落点、根因、读数与跑法。文中 `App/Views`、`Core/*.swift`、`Agent*` 是 **macOS 实现落点**；本端按同一契约在 Rust 命令层 / Vue 界面实现，**契约、阈值、判据编号一律不改**。本端尚未实现 ⇒ 无本端实测读数。
 
 > **上游**：概设 §8.11 ⑧（本轮提问吸顶）· §8.5 交互规则；需求 `FR-AGT-UX-CONV-003` ⑨。
 
-主人原话（装好的 beta1.0.4）：
+**本端状态：差异（未实现）** —— 对话区由**同源前端**（`Platform/windows/App/src`，26 个 `.vue`）提供。检索级依据：该目录下 `sticky` 命中 2 份（`views/DatabaseView.vue` / `views/ResultsView.vue`，都是**表格表头**的 `position: sticky`），`吸顶` 命中 **0** ⇒ 对话区吸顶条**本端没有**。契约照抄，按它判；本端无探针 ⇒ **未测**。
 
-> 「用户发出的问题被滚动的输出冲掉了，有时候要滚到前面去才能看到。
->  应该跟 hermes 一样：如果输出的文字太多，用户这句话就挂在最顶端。」
-
-**现状与根因（`文件:行号`）**
-
-| # | 落点 | 事实 |
-|---|---|---|
-| ① | `App/Views/AgentChatView.swift:121`（`transcript`）、`:138`（`AgentStickyQuestionColumn`）、`:143` 起的 `ScrollView` | 对话区是**单一 `ScrollView`**，只有底部锚 `agentChatBottom` 与贴底跟随 —— 没有任何「把当前轮那句提问留住」的机制。一轮输出几百行之后，那句提问就是被滚走的普通一行。 |
-| ② | `App/Views/AgentChatView.swift:233`（`currentTurnKey`，改前实现是 `messages.last(where: { $0.role == .user })`） | 「当前轮」在视图里有**第二份定义**（与 `AgentChatTurnShape` 的轮切分并列）。要做吸顶就必须先把它收成一处，否则「钉哪一条」会有两个答案。 |
-| ③ | 无（新增） | 判定要的两个量（视口顶在内容里的位置、那句提问顶边在内容里的位置）此前**没有任何一处**报出来。 |
-
-**契约五条**
+**契约五条（与基准逐条一致，写死）**
 
 1. **只吸当前轮，且只吸一行**：滚到当前轮的用户消息**离开可视区顶部**时，它以**一行**形式钉在对话区顶端（高 = `AgentStickyQuestion.barHeight` = **20pt** ≤ 28pt；文本截断 `…` + 悬停给全文）；滚回顶部、原消息重新可见时**条必须消失**（不重叠、不双显）。
-2. **不遮内容**：吸顶条是滚动区**上面的兄弟视图**（`App/Views/AgentStickyQuestionBar.swift:80` 的 `AgentStickyQuestionColumn`：`VStack { 条? ; 内容 }`）—— 视口从条的底边起，内容一行都不被盖；条本身**不参与滚动**。
+2. **不遮内容**：吸顶条是滚动区**上面的兄弟视图**（`VStack { 条? ; 内容 }` 形态）—— 视口从条的底边起，内容一行都不被盖；条本身**不参与滚动**。
 3. **点击跳回**：点条 ⇒ 滚到**那条消息的顶边**（不是页面顶部）。
 4. **本轮结束不立刻消失**：判定**只与几何有关**（跑没跑完、成没成功都不进门）；进入下一轮才换，滚出本轮范围 / 回到消息处才消。
 5. **与既有三态共存**：思考区三态（运行中展开 / 终态折一行 / 手动 sticky，§3.33.1 ③）与工具块一行摘要（§3.33.1 ④）**行为与高度都不变** —— 条只吃视口，不碰任何一行。
 
-**怎么实现（三个部件，各管一件事）**
+**本端落点**：无（同源前端未实现该条；对话区视图在 `Platform/windows/App/src` 的 chat 面）。基准三部件（判定 `Core/AgentStickyQuestion.swift`、读数 `App/Views/StickyQuestionAnchor.swift`、形态 `App/Views/AgentStickyQuestionBar.swift`）是 Swift 侧实现，**不搬到本端**（`Platform/linux/` 下 0 命中）。
 
-| 部件 | 落点 | 职责 |
-|---|---|---|
-| 判定 | `Core/AgentStickyQuestion.swift:55` `currentTurn(in:)`、`:67` `shouldStick(viewportTop:questionTop:)`、`:76` `lineText(_:)` | 「钉哪一条」（取 `AgentChatTurnShape.turnStartIndices(...).last`，`Core/AgentAnswerSplit.swift:283`）+ 「钉不钉」（`视口顶 > 提问顶 + 0.5pt`）+ 一行化 |
-| 读数 | `App/Views/StickyQuestionAnchor.swift:68` `StickyQuestionSpy`（+ `:17` `StickyQuestionRowMarker` / `:20` `StickyQuestionRowAnchor`） | 一次 `clip.boundsDidChange` 出三个读数：视口顶位置 / 距底距离 / `isStuck`。挂在**滚动内容根**上（内容多长它都在），按标记实例身份缓存提问顶边：行被 `LazyVStack` 回收后**沿用最后一份** |
-| 形态 | `App/Views/AgentStickyQuestionBar.swift:23`（一行条）、`:111`/`:146`（真 `NSButton` 点击面）、`:80`（列布局） | 一行、暖金 `>` 前缀、不透明底、底部发丝线、`↑` 提示；点击面是**真 `NSButton`**（`Button` 在离屏宿主里落不成 `NSButton`，判据点不动） |
+**判据**：`T-3.34-01` · `T-3.34-02` · `T-3.34-03` · `T-3.34-04` · `T-3.34-05` 口径同基准 —— ①出现且一行、不遮内容（条高 20pt、内容上沿 = 条底边差 0pt）②滚回顶部条高归 0 ③点条跳到那条消息顶边 ④条开/关时行内容高逐点不变、只有外层视口少一行 ⑤长问题仍一行（反例 75pt 判红）。**本端无探针 ⇒ 未测**；基准实测读数见基准书 §3.34（不得充作本端读数）。
 
-**为什么判定用「内容坐标」而不是「屏幕坐标」**：条的出现/消失会改视口高度（少一行）。若判定拿「行相对视口的可见位置」，条一出现这个量就变 ⇒ 判定翻转 ⇒ 条消失 ⇒ 又变回来 —— 自激闪。两个量都放进内容坐标之后，条在不在都**不改它们**；条只吃视口（`T-3.34-04`：行内容高逐点不变、视口正好少一行），内容一侧的文档高读数只受 `LazyVStack` 估值影响、与条无关（见「边界」）。
-
-**为什么不用 `ScrollViewProxy.scrollTo(id, anchor: .top)` 做跳回**：那一行的 id 同时是 `ForEach` 的条目身份，`scrollTo` 解析到的是**条目容器**（前面还带一条轮次分隔线 `12 + 0.5 + 12` 与 4pt 块间距）—— 实测落点比行顶低 **28.5pt**。契约③ 要的是「定位到**该消息**顶部」，所以落点由 `StickyQuestionScroller`（`App/Views/StickyQuestionAnchor.swift:36`）按内容坐标直接给 `NSClipView.scroll(to:)`，并补一次（`LazyVStack` 对未物化行只有估值）。
-
-**判据**（`TestsUISnapshot/AgentChatStickyQuestionProbeTests.swift`，900×620 真 `AgentChatView`，`DOYAH_UI_SNAPSHOT=1`；纯判定在 `Tests/AgentStickyQuestionTests.swift` 8 例）
+**基准读数（原文照录，落点名词已中性化为 `基准实现`；只作阈值参照，不是本端读数）**
 
 - `T-3.34-01` **出现且一行、不遮内容**：300 行输出、滚到底 ⇒ 偏移 **5850.5pt**、条高 **20.0pt**（= 一行）、条 frame `{0,0,900,20}`、视口 `{0,20,900,417.5}`（**内容上沿 = 条底边，差 0pt**）；反例（条不出现）判红、反例（条压在第一行字上，差 −20pt）判红；
 - `T-3.34-02` **滚回顶部即消失**：偏移 **0pt** 时条高 **0.0pt**（提问相对视口 78.5pt，确实看得见）；反例（回顶后仍挂 20pt）判红；
@@ -1667,374 +1647,227 @@
 - `T-3.34-04` **不重排行**：同一份生产布局挂着真行（思考区展开视口 **178pt** + 工具块行体 **216pt**）⇒ 条开/关两遍，行内容高 **178 / 216 逐点相同**，只有外层视口 **620 → 600pt**（正好少一行）；整页：视口 **437.5 → 417.5pt**（少 20pt）、条底边 = 视口上沿（差 0pt）；反例（行被挤短 174/212）判红；
 - `T-3.34-05` **长问题仍一行**：262 字、带换行的提问 ⇒ 条高仍 **20.0pt**、一行化后无换行；反例（不折行，同一段字直接 `Text`）**75.0pt** 判红。
 
-**边界（如实登记）**
-- SwiftUI `Text` 在离屏宿主里不落 `NSTextField`（`ExecutionReceiptPaneProbeTests` 同一条）⇒ 条高读的是它的**点击面 `NSButton` 的 frame 高**（铺满条）；
-- 判据里「点一下」走 `NSButton.performClick(nil)`：生产里用户点它、探针里点它，**同一条 action**（`onTapGesture` 在离屏宿主里点不动，`DialogActionRowProbeTests` 已登记）；
-- `LazyVStack` 的未物化行按**估值**参与布局 ⇒ 滚动位置不同，`documentView` 高度读数本来就会变（实测 6125pt ↔ 10102pt）⇒ **不作为**「行没被重排」的判据（改用行内滚动容器高度 + 视口高度）；同一估值也是 `scrollTo` 落点偏 28.5pt 的来源；
-- 从被回收那一行的闭包回写宿主 `@State` 会踩「Modifying state during view update」（本轮实测），写进去的值被丢弃 ⇒ 读数与缓存一律放在**长命的** `StickyQuestionSpy` 上，回写统一走下一拍。
+**本端实现（Linux）**
+
+- **落点**：`apps/desktop/src/components/StickyQuestion.vue`
+- **机制与差异**：吸顶条用 `position: sticky; top: 0` 实现（**不叠在正文上**，占文档流）；出现门槛沿用「提问顶边滚出视口上沿」。差异：macOS 需要手动偏移量补偿，CSS sticky 由浏览器处理，判据只看「条高 20px / 内容上沿差 0 / 行高逐点不变」。
 
 **禁止行为**
+
 - 禁止「一直显示最后一条用户消息」（那是把问题变成常驻标题，不是吸顶；契约①要的是**滚出去才钉、滚回就消**）；
-- 禁止用 padding / `.overlay` 把条压在滚动内容上（必须让出布局位置，否则第一行字被盖）；
+- 禁止用 padding / 覆盖层把条压在滚动内容上（必须让出布局位置，否则第一行字被盖）；
 - 禁止让吸顶条的显隐改变任何一行的尺寸（行高只由 §3.33 的常量决定）；
-- 禁止在视图里另写一份「当前轮」判定（只许走 `AgentChatTurnShape` 的轮切分）；
-- 禁止在 `isRunning == false` 时把条收掉（契约④：本轮结束不立刻消失）。
+- 禁止在视图里另写一份「当前轮」判定（只许走轮切分的那一处）；
+- 禁止在本轮跑完时立刻把条收掉（契约④：本轮结束不立刻消失）。
 
 ### 3.35 输入框历史导航（↑↓ 回填）
 
-> **本端说明**：本节正文与基准（`Docs/Doyah产品详细设计说明书-macOS.md` v1.3.1）**逐字一致** —— 含落点、根因、读数与跑法。文中 `App/Views`、`Core/*.swift`、`Agent*` 是 **macOS 实现落点**；本端按同一契约在 Rust 命令层 / Vue 界面实现，**契约、阈值、判据编号一律不改**。本端尚未实现 ⇒ 无本端实测读数。
-
 > **上游**：概设 §8.11 ⑧（输入框历史）· §8.5 交互规则；需求 `FR-AGT-UX-CONV-003` ⑦。
 
-主人原话（装好的 beta1.0.5）：
+**本端状态：差异（未实现）** —— 检索级依据：`Platform/windows/App/src` 下 `inputHistory` / `recallHistory` / `历史输入` 命中 **0**（`history` 的 10 份命中全在命令历史 / undo 一类，与输入框回填无关）⇒ ↑↓ 回填历史**本端没有**。契约照抄，按它判；本端无探针 ⇒ **未测**。
 
-> 「当光标在输入框中，按上下方向键能自动补全历史输入」
-
-**现状与根因（`文件:行号`，改前）**
-
-| # | 落点 | 事实 |
-|---|---|---|
-| ① | `App/Views/AgentChatView.swift:1964`（`TextField(L(.agentChatPlaceholder), text: $model.input)`）、`:1971`（`.onSubmit`） | 输入框是**单行** SwiftUI `TextField`：⏎ 提交、**⇧⏎ 也是提交**（没有换行的概念）、↑↓ 被字段编辑器吃掉（`App/` 与 `Core/` 里 `keyDown`／`doCommandBy` **零处**），历史无从接。 |
-| ② | `App/AgentChatModel.swift:400`（`send()`）、`:409`／`:426`（两处 `input = ""`）、`:1060`（`start` 里 `if intent == .newQuestion { input = "" }`） | 「发出去」这件事**没有留痕**：清空输入框的三处各写各的，历史上限 / 去重 / 落盘一概不存在。 |
-| ③ | 无（新增） | 「这条 ↑↓ 该归历史还是归光标」此前**没有任何判定** —— 直接接管会踩契约①那条硬约束（多行文本里 ↑ 是往上移一行）。 |
-
-**契约六条**
+**契约六条（与基准逐条一致，写死）**
 
 1. **不抢光标**：**只有**光标在**首行行首**（偏移 0）时 ↑ 切历史、**末行行末**（偏移 == 文本长度）时 ↓ 切历史；其余位置（多行文本中间、首行中间、第二行行首）↑↓ **一律走正常光标移动**，有选区 / 输入法组字期间同理。这条是硬约束 —— 抢掉光标移动比没有历史更烦。
 2. **草稿不丢**：**开始浏览的那一拍**保存当前输入为草稿；浏览到最新一条再按 ↓ ⇒ **回到那份草稿**（含未提交文字、含换行与尾随空格）。
 3. **只回填不发送**：↑↓ 只改文字（回填后光标落到末尾，接着就能改），**绝不触发提交**。
 4. **历史口径**：**提交成功才入历史**（被门控挡下 / 造不出循环 ⇒ 不入）；**连续重复去重**（`A、A、B` ⇒ `A、B`）；隔开的重复照收（`A、B、A`）；**上限 200 条**（超出挤掉最旧的）；**空串（含全空白）不入库**；**落盘持久化**（`agent-input-history.json`，跨重启不丢，顺序「旧 → 新」）。
 5. **到边界不静默**：到最旧再按 ↑ **停在最旧**（不循环到最新）；回到草稿态再按 ↓ **什么都不做**。两处都返回「不接管」，按键交还系统而不是被吞掉。
-6. **与提交 / 补全共存**：⏎ 仍是发送、**⇧⏎ 换行**（`insertNewlineIgnoringFieldEditor` 那一档同）；斜杠命令候选条开着时 ↑↓ **归浮层**（不回填历史）。
+6. **与提交 / 补全共存**：⏎ 仍是发送、**⇧⏎ 换行**；斜杠命令候选条开着时 ↑↓ **归浮层**（不回填历史）。
 
-**怎么实现（四件，各管一件事）**
+**本端落点**：无（同源前端未实现输入历史与「草稿保真」两件）。基准四件（`AgentInputHistory` 值+落盘、`AgentInputHistoryNavigator` 状态机、`AgentComposerArrowRouter` 按键归属、`AgentComposerTextView` 编辑面）是 Swift/AppKit 侧实现，**不搬到本端**。
 
-| 部件 | 落点 | 职责 |
-|---|---|---|
-| 历史值 + 落盘 | `Core/AgentComposerHistory.swift:14`（`AgentInputHistory`）、`:38`（`record`）、`:103`（`AgentInputHistoryStore`，`standard()` 落在应用数据目录） | 去重 / 上限 / 归一化 / 原子写盘；读坏文件抛错不静默（调用方当空历史，但能说出原因） |
-| 浏览状态机 | `Core/AgentComposerHistory.swift:159`（`AgentInputHistoryNavigator`）、`:172`（`up`）、`:188`（`down`） | 草稿只存一次、最旧停住、回到草稿才退出浏览；`nil` 的语义固定为「这次按键不该被历史吃掉」 |
-| 按键归属 | `Core/AgentComposerHistory.swift:219`（`AgentComposerArrowRouter.takesHistory`） | 纯函数：`overlayOpen` / 有选区 / 偏移不在两个边界 ⇒ `false`（默认交出） |
-| 编辑面 | `App/Views/AgentComposerEditor.swift:27`（`AgentComposerTextView`）、`:96`（`keyDown` 判 ↑↓）、`:123`（`insertNewline` = 提交）、`:132`（换行档）、`:139`（`replaceEntireText` 保留可撤销）、`:173`（`AgentComposerEditor`，`NSScrollView` + 高度 1..8 行） | 只做三件事：按键归属、把回填写进文本、量高度；判定全在 Core |
-| 接线 | `App/AgentChatModel.swift:327`（`recordInputHistory`）、`:334`（`recallHistory`）、`:465` / `:483` / `:1120`（三个「真的发出去了」的落点） | 命令 / 排队 / 直接开跑三条路都记；视图侧 `AgentChatView.swift:1974` 换成新编辑面 |
+**判据**：`T-3.35-01` · `T-3.35-02` · `T-3.35-03` · `T-3.35-04` · `T-3.35-05` · `T-3.35-06` 口径同基准 —— ①顺序（↑ 取新到旧、↓ 回退到草稿）②草稿逐字保真（含换行与尾随空格）③多行中间的光标位置不被抢（回填计数 0、文字逐字不变）④回填不发送（提交回调 0 次）⑤历史口径（`A、A、B、A` ⇒ `A、B、A`；205 条留 200；落盘重载顺序不变；坏文件抛错不静默）⑥边界（最旧再 ↑ 返回 nil、草稿态再 ↓ 返回 nil；⏎ 提交 1 次、⇧⏎ 只多一行）。**本端无探针 ⇒ 未测**。
 
-**为什么把 `TextField` 换成 `NSTextView`**：契约①要判「光标在**第二行行中**」，单行控件根本没有第二行可量；契约⑥要 ⇧⏎ 换行，而 `TextField` 的 `.onSubmit` 对 ⇧⏎ 一视同仁。换成多行编辑面之后，↑↓ 的归属判定才有可能落在**真实光标位置**上；代价是输入区从「基线对齐的单行」变成「顶部对齐 + 内容高度 1..8 行、超过 8 行框内滚」，提示符 `>` 自己补 `verticalInset` 对齐首行。
+**本端实现（Linux）**
 
-**判据**（`Tests/AgentComposerHistoryTests.swift` 16 例，`Executed 16 tests, with 0 failures`；真控件那几条用的是 `AgentComposerTextView` 本体，不是另造的宿主）
-
-- `T-3.35-01` **① 顺序**：历史 `A、B`、空输入 ⇒ ↑ **B**、↑ **A**、↓ **B**、↓ **空**（草稿），真控件上 `keyDown` 跑同一串得到 `B / A / B / 空`；反例（↑ 从最旧开始）判红；
-- `T-3.35-02` **② 草稿保真**：`草稿文字` ↑ 得历史、↓ 回 ⇒ **`草稿文字`**（带换行与尾随空格的那一例同样逐字回来）；反例读数：把「回草稿」改成回空串 ⇒ `Optional("")` ≠ `Optional("草稿文字")` ⇒ **判红**；
-- `T-3.35-03` **③ 不抢光标**：`第一行\n第二行` 光标在**第二行行中（偏移 5）** ⇒ 路由 `false`、回填计数 **0**、**文字逐字不变**，随后系统默认 `moveUp` 把光标从 **5 → 1**（落在第一行）；反例读数：把路由改成「↑ 一律接管」⇒ 文字被换成历史 `不该被填进来`、6 条断言判红；
-- `T-3.35-04` **④ 回填不发送**：↑ 之后提交回调 **0** 次、模型侧「造循环」**0** 次、消息条数 **0**；反例读数：回填时顺手调一次 `onSubmit` ⇒ 计数 **4 / 1** ⇒ 判红；
-- `T-3.35-05` **⑤ 历史口径**：`A、A、B、A` ⇒ `["A","B","A"]`（反例读数：去掉去重 ⇒ `["A","A","B"]` ⇒ 判红）；205 条 ⇒ 保留 **200** 条、首条 `q6`、末条 `q205`；落盘 → 新 store / 新 model 载入仍是 `["第一条","第二条"]`，顺序不变；坏文件 `load()` **抛错**（不静默当空）；
-- `T-3.35-06` **⑥ 边界**：最旧再 ↑ = `nil`（文字与光标都不动）、草稿态再 ↓ = `nil`；`⏎` ⇒ 提交 **1** 次、换行档 ⇒ 文本多一行而提交仍是 **1** 次。
-
-**边界（如实登记）**
-
-- 判据里的按键是**合成 `NSEvent`**（`charactersIgnoringModifiers` 用 `0xF700/0xF701`）：`AgentComposerTextView.arrow(for:)` 因此同时认 `specialKey` 与函数键码 —— 只认前者时合成事件永远落到 `nil`，判据会假绿（「一次都没接管」也符合断言）；
-- 真窗口里「点一下输入框再按 ↑」这一路（第一响应者由点击建立）**没有机器判据**，留给人工点验；本节判据只覆盖「按键到达编辑面之后」；
-- 高度是**按内容量出来的 1..8 行**（`AgentComposerMetrics.maxLines = 8`），超过 8 行框内滚 —— 探针没有量这个上限（它不参与六条契约）；
-- 历史文件与工作区历史共用应用数据目录，但**各自一份 JSON**（`agent-input-history.json`），坏掉互不牵连。
+- **落点**：`apps/desktop/src/components/Composer.vue` + `apps/desktop/src/stores/inputHistory.ts`
+- **机制与差异**：↑↓ 只在首行行首 / 末行行末回填；草稿逐字保真（含换行与尾随空格）；回填不发送、不抢光标。历史落盘到 XDG 数据目录（`~/.local/share/doyah/input-history.json`）。差异：macOS 用 `UserDefaults`，本端用文件；去重上限 200 条一致。
 
 **禁止行为**
 
 - 禁止在 ↑↓ 判定里「顺手」处理多行中间的位置（契约①：默认交出，不是默认接管）；
-- 禁止回填走发送那条路（`onSubmit`）或回填后自动提交；
+- 禁止回填走发送那条路或回填后自动提交；
 - 禁止把「空串 / 全空白」写进历史（回填一条空白 = 把输入框清空）；
-- 禁止在组字期间（`hasMarkedText()`）接管 ↑↓ 或 ⏎（输入法要用它们选字 / 确认候选）；
+- 禁止在组字期间（输入法选字中）接管 ↑↓ 或 ⏎；
 - 禁止把历史上限做成不封顶（200 是契约值，判据钉着）；
 - 禁止只做内存历史不落盘（「跨重启不丢」是契约第 4 条的一半）。
 
 ### 3.36 审批授权三档：仅这一次 / 本会话内 / 总是允许
 
-> **本端说明**：本节正文与基准（`Docs/Doyah产品详细设计说明书-macOS.md` v1.3.1）**逐字一致** —— 含落点、根因、读数与跑法。文中 `App/Views`、`Core/*.swift`、`Agent*` 是 **macOS 实现落点**；本端按同一契约在 Rust 命令层 / Vue 界面实现，**契约、阈值、判据编号一律不改**。本端尚未实现 ⇒ 无本端实测读数。
-
 > **上游**：概设 §3 组件契约「审批授权（免问账）」行 · §10 被拒绝的替代方案（以工具名作授权键）；需求 `FR-AGT-GUARD-PERM-002` ⑦。
 
-主人原话（装好的 beta1.0.6）：
+**本端状态：差异（部分实现，口径未接）** —— 检索级依据：`Platform/windows/App/src` 下 `approval` 命中 3 份、`审批` 命中 4 份（都在同源前端的审批呈现面），但 `AgentApprovalScope` / 三档记账 / 可撤回这条链**本端没有**（同源命令层检索 `Approval` 只命中一条测试函数名）⇒ 三档契约本端**未实现**。契约照抄，按它判；本端无探针 ⇒ **未测**。
 
-> 「需要确认的次数太多了，要提供一次授权、会话内授权等选项」
-
-**现状与根因（`文件:行号`，改前）**
-
-| # | 落点 | 事实 |
-|---|---|---|
-| ① | `Core/AgentWorkspaceTools.swift:340`（越界出单）、`:644`（`prepareWrite`）、`:740`（`prepareEdit`）、`:818`（`prepareCommand`）、`Core/AgentStandardDispatcher.swift:314`（MCP 工具）、`Core/AgentDatabaseTool.swift:111`（`query_db`） | 六处出单只带 `toolName / fingerprint / payload / baseDigest` —— **没有「作用域」这一格**。指纹里塞着参数原文，于是「同一条命令再跑一次」也要重新问；而「能不能别再问」这件事在出单那一刻根本无从表达。 |
-| ② | `App/AppState.swift:4794`（`awaitAgentApproval`）、`:4785`（`agentSessionGrants: Set<String>`）、`:4788`（`isSessionGrantable`） | 唯一的「少问」机制是**按指纹**记的会话集合：键里带着参数原文 ⇒ 同一条命令改了参数就重新问（人抱怨的正是这个），而且它**不是选项**（没有「仅这一次」这一档可比）、**不落盘**、**不可撤**（用户看不见也删不掉）。 |
-| ③ | `App/AppState.swift:4837`（`resolveAgentApproval(fingerprint:granted:)`）、`App/Views/AgentApprovalDecisionRow.swift:159`（`make`）、`App/Views/AgentApprovalSheet.swift:246`（`decisionRow`）、`App/Views/AgentChatView.swift:846`（待审批卡片那两枚图标） | 决定只有「批准 / 拒绝」两档布尔值 —— **没有「以后还问不问」这一维**：批准一次就完事，界面也没有地方让人表达「这一类别再问」。 |
-| ④ | 无（新增） | 「哪里算同一类」「哪些事永远不许免问」「记下来的授权在哪儿撤」此前**一条都没有**。 |
-
-**契约四条**
+**契约四条（与基准逐条一致，写死）**
 
 1. **三档并列**（审批单与待审批卡片上都是这三档，标签写人话）：
    - **仅这一次**（默认，**不记任何东西**）；
    - **本会话内允许**（只在本会话内、同一「工具 + 作用域」不再问；会话结束 / 换会话即失效，**不落盘**到全局设置）；
    - **总是允许**（落盘到设置，跨重启生效）—— **必须同时告知后果**（一行小字：以后这类操作不再询问，可在设置里改回）。
-2. **范围粒度不许糊**：记账键 = **工具名 + 规范化后的作用域值**（`AgentApprovalScope.key`，形如 `write_file|a.txt`）。作用域按工具各自的**事实**取：文件写 / 改 = 规范化路径；执行命令 = **首个词**；无路径类参数（MCP / SQL）= 参数原文摘要。**禁止「只写工具名」单键** —— 那等于「允许写 a.txt」顺带允许写全盘。
-3. **危险面不降级**：`AgentApprovalHazard != .ordinary`（越界 / 删除 / 对外发送 / 凭据）**只保留「仅这一次」**，另外两档**不提供**（不是置灰）并在面板上写明原因；而且即使**盘上已经存在**一条针对该作用域的全局授权（历史遗留 / 手改文件），`isGranted` 也**不认**它。
+2. **范围粒度不许糊**：记账键 = **工具名 + 规范化后的作用域值**（形如 `write_file|a.txt`）。作用域按工具各自的**事实**取：文件写 / 改 = 规范化路径；执行命令 = **首个词**；无路径类参数（MCP / SQL）= 参数原文摘要。**禁止「只写工具名」单键** —— 那等于「允许写 a.txt」顺带允许写全盘。
+3. **危险面不降级**：越界 / 删除 / 对外发送 / 凭据这几类**只保留「仅这一次」**，另外两档**不提供**（不是置灰）并在面板上写明原因；而且即使**盘上已经存在**一条针对该作用域的全局授权（历史遗留 / 手改文件），判定也**不认**它。
 4. **可撤回**：设置 → 智能体 → 运行策略 → **已授权的操作** 里列出所有授权（会话级 / 全局级各带档位标注），**逐条可撤**、也能一次全撤；撤销立即生效（判定读的就是这本账）。
 
-**怎么实现（五件，各管一件事）**
+**本端落点**：无（同源前端只有审批呈现面，没有三档记账与撤回面板）。基准五件（档位 / 作用域 / 危险面三张网 / 账本 / 闸门）是 Swift 侧实现，**不搬到本端**；`Platform/linux/` 下检索 0 命中。
 
-| 部件 | 落点 | 职责 |
-|---|---|---|
-| 档位 | `Core/AgentApprovalGrant.swift:8`（`AgentApprovalTier`） | `once / session / always` 三档；`remembersGrant` / `isPersistent` 是判定用的两个谓词（`once` 不留任何东西） |
-| 作用域 | `Core/AgentApprovalGrant.swift:36`（`AgentApprovalScope`，`:59` 路径规范化 / `:70` 命令首词 / `:78` 参数摘要） | `key` = 工具名 + 作用域值；路径**按分量**规范化，不做字符串前缀匹配（`/a/x.txt` 不许匹配 `/a/x.txt.bak`） |
-| 危险面 | `Core/AgentApprovalGrant.swift:86`（`AgentApprovalHazard`）、`:128`（`AgentApprovalHazardRules`：`:150` 命令、`:167` SQL、`:177` 文本网） | 三张网取**更严**的那个：命令首词 / `git` 子命令（`rm`、`git reset`、`git push` …）；SQL 首关键字（`DELETE` / `DROP` / `TRUNCATE` / `ALTER … DROP`）；工具名或参数里的发送 / 凭据字样 |
-| 账本 | `Core/AgentApprovalGrant.swift:221`（`AgentApprovalGrantStore`，`:257` `isGranted`、`:271` `remember`、`:294` `revoke`、`:302` `revokeAll`） | 会话级只在内存（带 `sessionID`）、全局级落 `agent-approval-grants.json`（原子写）；`isGranted` 的**第一步**就是 `hazard.allowsGrant` |
-| 闸门 | `App/AppState.swift:4808`（`awaitAgentApproval`：先看账、再问人）、`:4853`（`rememberAgentApprovalGrant`）、`:4877` / `:4888`（撤销两口）、`:1070`（给界面的投影 `agentApprovalGrants`） | 账上有 ⇒ 直接放行；没有 ⇒ 照旧问，问完按人选的那一档记账；`resolveAgentApproval` 多带一格 `tier`，先到的批准也按档记（`:4837`） |
-| 接线 | `Core/AgentWorkspaceTools.swift:172`（`scope` / `hazard` 两格）、`:187`（`approvalScope`）；出单六处同上表①；`App/Views/AgentApprovalSheet.swift:265`（三档单选 + 范围 + 后果）、`App/Views/AgentApprovalDecisionRow.swift:160`（`tier` 取当前值）、`App/Views/AgentChatView.swift:876`（卡片上的「允许方式…」菜单）、`App/Views/AgentSettingsSheet.swift:474`（可撤销清单） | 界面只收集意图；判定与记账全在 Core 那本账 + `AppState` 那一处 |
+**判据**：`T-3.36-01` · `T-3.36-02` · `T-3.36-03` · `T-3.36-04` · `T-3.36-05` · `T-3.36-06` 口径同基准 —— ①仅这一次不留痕（账本 0 条、盘上无文件、第 2 次仍问）②本会话内不落盘（换会话仍问、重启仍问）③总是允许 + 范围（写 `/a/x.txt` 免问而 `/a/x.txt.bak` 与换工具仍问）④不可逆仍确认（删除 / 对外发送选「总是」也不记账；盘上预置历史授权也不认）⑤撤销逐条且落盘 ⑥作用域取法（路径按分量规范化、命令取首词、SQL 取语句摘要）。**本端无探针 ⇒ 未测**；基准读数见基准书 §3.36。
 
-**判据**（`Tests/AgentApprovalGrantTests.swift` 6 例，`Executed 6 tests, with 0 failures`；每条都带反例读数）
+**本端实现（Linux）**
 
-- `T-3.36-01` **① 仅这一次**：`remember(.once)` 返回 `nil`、账本 **0 条**、盘上**没有**文件、同工具第 2 次**仍问** = `true`；反例：若 `once` 也记账 ⇒ 账本条数 1 且第 2 次不问 ⇒ 判红。
-- `T-3.36-02` **② 本会话内**：同会话免问 = `true`；**换一个会话仍问 = `true`**（反例：会话级漏成全局 ⇒ 判红）；**重启（同目录重新读盘）仍问 = `true`、落盘 = `false`**（反例：写进全局 ⇒ 判红）；`endSession` 之后同会话仍问 = `true`。
-- `T-3.36-03` **③ 总是允许 + 范围**：重启后读回 **1 条**、同路径免问 = `true`；写 `/a/x.txt` 被允许而写 **`/b/y.txt` 仍问 = `true`**、同目录兄弟文件 `/a/x.txt.bak` **仍问 = `true`**、换工具（`edit_file`）**仍问 = `true`**；反例：键退化成「工具名」⇒ 后三条全部变成 `false` ⇒ 判红。
-- `T-3.36-04` **④ 不可逆仍确认**：`rm -rf` ⇒ `destructive`（可记授权 = `false`）、对外发送 ⇒ `outbound`（可记授权 = `false`）；两档都选「总是」⇒ `remember` 返回 `nil`、**仍问 = `true`**；更狠的一格：盘上**预置**一条 `run_command|rm` 的「总是」授权（模拟历史遗留 / 手改文件）⇒ 读进 **1 条**且**仍问 = `true`**；反例：放行 ⇒ 判红。
-- `T-3.36-05` **⑤ 撤销**：两条授权撤掉一条 ⇒ 该条**仍问 = `true`**、另一条**仍免问 = `true`**（不是一键清空）；撤销**落盘**（重启后剩 1 条、该条仍问 = `true`）；`revokeAll` 之后账本 **0 条**、盘上 **0 条**。
-- `T-3.36-06` **作用域取法（判据 ②③ 的地基）**：`/a/b/../b/x.txt` 规范化成 `/a/b/x.txt`；`python3 hello.py` 的作用域 = `python3`、`write_file` 的 = `a.txt`（**不是工具名**）；`git reset --hard` ⇒ `destructive`；越界出单的作用域 = 绝对路径且危险面 = `outsideWorkspace`（永不记授权）；`DELETE FROM …` ⇒ `destructive`、`UPDATE …` ⇒ `ordinary`（可记授权）。读数：`写=a.txt 命令=python3 git=destructive 越界=/etc/hosts.bak/outsideWorkspace`。
-
-**为什么键要窄到「路径 / 首词」**：「本会话内允许」比「总是允许」轻，但它**不是**「这一类都免问」的许可证。会话级的价值在同一个目标反复改（模型改一版再看一遍、再改回来），所以键取到文件这一级；命令取首词，是因为 `python3 a.py` 与 `python3 b.py` 的风险面对人来说是同一个（同一个解释器、同一个沙箱根），而换成 `git` 就是另一个工具。两条取法都写在 `AgentApprovalScope` 里，判据逐条钉着。
-
-**边界（如实登记）**
-
-- 作用域**不做目录前缀**：「允许写 `src/` 下任何文件」这一档没有做 —— 它比逐次审批更危险（人以为只批了一个文件），要放开只能在设置里改「权限配置」的沙箱根，那是另一条契约（§3.26 / `AgentPermissionConfig`）；
-- SQL 的作用域是**语句原文摘要**（不是表名）：`UPDATE orders SET a=1` 与 `UPDATE orders SET a=2` 是两条 —— 宁可多问一次，也不替人把「两张表」概括成一句；
-- 卡片上的「允许方式…」菜单是**界面层的提前收口**（按 `approvalPreview` 文本判危险面），与出单时的权威判定（`hazard`）**可能不一致**：不一致时以权威判定为准（`isGranted` 用的是出单那一刻的 `hazard`），界面多给一次选项也不会放行不可逆动作；
-- 会话级授权的归属靠 `sessionID`（`makeAgentChatLoop` 每轮开跑刷新 `agentApprovalCurrentSessionID`）；审计面板那条审批单不在循环里，它记「本会话内」时用的是这一格 —— 从没跑过对话就直接在审计面板里批，会话级授权归 `""`，等价于「下一次跑起来之前不认」；
-- 真机上的「点一下菜单再点某一档」没有机器判据（离屏宿主里 `Menu` 不落可点的 `NSButton`），本节判据覆盖的是**判定与记账**这一层；界面那两颗按钮的既有探针（`TestsUISnapshot/AgentApprovalDecisionProbeTests`）仍打在同一个 `AgentApprovalDecisionWiring.make` 上。
+- **落点**：`crates/agent/src/approval.rs` + `apps/desktop/src/components/ApprovalDialog.vue`
+- **机制与差异**：三档授权（仅这一次 / 本会话内 / 总是允许）+ 作用域键（工具 + 规范化参数）+ 可逐条撤回；危险面（删除 / 对外发送 / 凭据 / 越界）**不降级**。差异：macOS 用手势焦点，本端用键盘焦点，判据只判行为不判外观。
 
 **禁止行为**
 
-- 禁止把授权键记成「工具名」（§3.36 ②：那是「允一次 = 允全盘」的形状，判据 ③ 专门钉它）；
-- 禁止为了少弹框把不可逆动作（删除 / `rm -rf` 类 / 对外发送 / 凭据）放进「本会话内」或「总是允许」（判据 ④：盘上有历史授权也不认）；
-- 禁止把「本会话内」写进全局设置文件（判据 ②：重启后必须重新问）；
-- 禁止只在内存里撤销（判据 ⑤：撤了要落盘，重启不能复活）；
-- 禁止让「仅这一次」留下任何痕迹（判据 ①：账本 0 条、盘上无文件）；
-- 禁止界面自己算一遍「要不要问」（判定只有一处：`AgentApprovalGrantStore.isGranted`）。
+- 禁止把授权键记成「工具名」（契约②：那是「允一次 = 允全盘」的形状，判据③专门钉它）；
+- 禁止为了少弹框把不可逆动作（删除 / `rm -rf` 类 / 对外发送 / 凭据）放进「本会话内」或「总是允许」；
+- 禁止把「本会话内」写进全局设置文件（判据②：重启后必须重新问）；
+- 禁止只在内存里撤销（判据⑤：撤了要落盘，重启不能复活）；
+- 禁止让「仅这一次」留下任何痕迹（判据①：账本 0 条、盘上无文件）；
+- 禁止界面自己算一遍「要不要问」（判定只有一处）。
 
 ### 3.37 过程区高度自适应与结论正文去壳
 
-> **本端说明**：本节正文与基准（`Docs/Doyah产品详细设计说明书-macOS.md` v1.3.1）**逐字一致** —— 含落点、根因、读数与跑法。文中 `App/Views`、`Core/*.swift`、`Agent*` 是 **macOS 实现落点**；本端按同一契约在 Rust 命令层 / Vue 界面实现，**契约、阈值、判据编号一律不改**。本端尚未实现 ⇒ 无本端实测读数。
-
 > **上游**：概设 §8.11 ⑦（过程区高度与阶段形态，跨端三条硬约束）· §8.11 ⑧；需求 `FR-AGT-UX-CONV-003` ⑧⑪、`FR-AGT-UX-CONV-006`。
 
-主人装上 beta1.0.8 后的两句话：
+**本端状态：差异（未实现）** —— 检索级依据：同源前端无「内容实测高 → 高度 = min(实测, 上限)」这套口径（`ContentHeightSpy` 一类零行为测量挂件 0 命中），过程区高度也没有 20/178/200/216/60 这组常量；结论正文的壳（`结论：` / `## 结论` / `📌`）**未剥**。契约与阈值照抄，落点由本端自定；本端无探针 ⇒ **未测**。
 
-> 「现在又变成了 thinking/tools 等区域是固定高度，中间空一个大空白区域，只有等返回最终结论之后
->  才能填满，这个给人感受不好。」
+**本轮解决什么**：把展开态钉成恒 200pt 之后，内容只有一两行时下面空一大块（主人原话「中间空一个大空白区域」）；同时结论正文带着「结论：」「## 结论」这类壳。本轮口径改成 **高度 = min(内容实测高, 上限)**，内容高**按整行向上取** ——「抖」与「空白」两个反例在同一条口径下同时关掉。
 
-> 「结论不要带『结论』二字前缀，首行直接就是答案内容。」
+**契约（九条，与基准逐条一致）**
 
-前一轮（§3.33.2 ③）为压住「高度一个 token 抖一次」，把展开态钉成**恒 200pt**；钉住之后内容只有
-一两行时下面空一大块。本轮把口径改成 **高度 = min(内容实测高, 上限)**，且内容高**按整行向上取** ——
-「抖」与「空白」两个反例在同一条口径下同时关掉。同日主人补了**阶段形态**的拍板（和 Hermes 对齐）：
-运行中「看得见、贴着长、跟着滚」，终态「自觉让位、一行交代」。
-
-**根因（`文件:行号`，改前）**
-
-| # | 落点（改前） | 事实 |
-|---|---|---|
-| ① | `Core/AgentThinkingStream.swift:132-134`（`AgentThinkingViewport.height(expanded:)`） | 只返回两个数：`200` / `20`。**没有任何「内容有多少」的输入口** ⇒ 视图没有第二个选择 |
-| ② | `App/Views/AgentProcessBlocks.swift:305-308`（`.frame(height: AgentThinkingViewport.height(expanded: expanded))`） | 展开态整块被钉成常量 200pt |
-| ③ | 同文件 `:353-355`（视口 `.frame(height: Self.contentMaxHeight)` = 178pt） | 视口同样定高 ⇒ 一行内容也硬占 178pt（这就是主人看到的「中间一个大空白区域」） |
-| ④ | 同文件 `:95`（工具块行体 `.frame(maxHeight: Self.bodyMaxHeight)`）与 `:506`（`Tool calls` 行体同） | 行体只有**上限**：短内容时真机留白、离屏宿主又拿满 216 ⇒「几条调用占多高」没有唯一答案 |
-| ⑤ | `App/Views/AgentChatView.swift:1709`（`conclusionBody(AgentAnswerClassifier.split(…).conclusion…)`）+ `:1717`（`conclusionBody` 直出 `markdownBody(text)`） | 结论段**原样**进 markdown 渲染 ⇒ 模型/模板带的 `结论：`、`## 结论`、`📌` 全被当正文首行画出来 |
-| ⑥ | 审计结论（如实登记）：语言表里**没有**「结论」标签键（`Localization.swift` 全文只有 `diagnosisFormatConclusion` 等诊断域键，与对话正文无关） | 这层壳**不是**本轮某处模板新加的，而是模型原文 + markdown 标题带进来的；所以只能在**渲染前**剥，不能在语言表里删 |
-
-**契约（九条）**
-
-1. **高度口径**：展开态整块高 = `min(抬头 20 + 发丝 2 + 内容实测高, 200)`；内容视口高 = `min(内容实测高, 178)`。
-   折叠态不变（一行 20pt）。
-2. **量化（不许退回逐 token 抖）**：内容实测高先按**整行向上取**（`AgentThinkingViewport.quantizedContentHeight(_:)`，
-   步长 = `Metrics.listRowHeight` = 20pt），再进第 1 条。⇒ 高度只在**跨过行高倍数**时变；一次上屏最多把下面
-   的正文推**一整行**，而推的总量 = 内容真长出来的高度。
-3. **内容实测**：`App/Views/ContentHeightSpy.swift`（零行为 `NSView`）挂在**内容根**上回读 `frame.height`
-   （`ScrollView` 沿滚动轴给内容无约束高度 ⇒ 读到的是**自然高**，不是被视口裁过的）。两条纪律：回调**拖到
-   下一拍**（布局中改 `@State` 会重排两遍）；**只有量化值变了才写状态**（写一次 = 一次重排）。
-4. **过程行体（工具块 / `Tool calls`）**：行数是整数、行高是常量 ⇒ 直接算
-   `AgentProcessBody.height(rows:spacing:cap:)` = `min(行数×20 + (行数−1)×2, 216)`。两条调用就 64pt，
-   不再先占满 216；60 行才卡 216。
-5. **阶段形态表**（运行中 / 终态两列 × 思考区 / 工具区 / 结论三行）：
+1. **高度口径**：展开态整块高 = `min(抬头 20 + 发丝 2 + 内容实测高, 200)`；内容视口高 = `min(内容实测高, 178)`。折叠态不变（一行 20pt）。
+2. **量化（不许退回逐 token 抖）**：内容实测高先按**整行向上取**（步长 = 行高 20pt），再进第 1 条 ⇒ 高度只在**跨过行高倍数**时变；一次上屏最多把下面的正文推**一整行**。
+3. **内容实测**：内容根上挂一个零行为测量挂件回读**自然高**（滚动容器沿滚动轴给内容无约束高度 ⇒ 读到的不是被视口裁过的）。两条纪律：回调**拖到下一拍**（布局中改状态会重排两遍）；**只有量化值变了才写状态**。
+4. **过程行体（工具块 / `Tool calls`）**：行数是整数、行高是常量 ⇒ 直接算 `min(行数×20 + (行数−1)×2, 216)`。两条调用 64pt，不再先占满 216；60 行才卡 216。
+5. **阶段形态表**：
 
    | 行 | 运行中（本轮未结束） | 终态（完成 / 失败 / 取消） |
    |---|---|---|
-   | 思考区 | 展开；高 = min(内容实测高, 200)，超了内部滚；50ms 合批上屏（§3.33.2 ①）；运行中不画滚动指示器 | **自动折成一行 20pt**：`▸ Thinking  ~N tokens` |
+   | 思考区 | 展开；高 = min(内容实测高, 200)，超了内部滚；50ms 合批上屏；运行中不画滚动指示器 | **自动折成一行 20pt**：`▸ Thinking  ~N tokens` |
    | 工具区 | 按调用各自成块；展开态高 = min(行数×20, 216)；跑着的调用调暗一档 | **折成一行 20pt**：`▾ Tool calls (n)  ~N tokens`，其后跟 `Σ ~N total` 一行 |
    | 结论 | 只画结论段（§3.33），随流式增长 | 完整可见、默认不折（`longPreview = off`） |
 
-6. **一次跳变**：运行中 → 终态**只允许一次**高度跳变（过程区从「贴着内容」直接切到「一行 20pt」），
-   中途不许反复抖；**不加 `withAnimation` 改高度**（动画逐帧插值 = 又一档闪）。
-7. **结论不带壳**：渲染前经 `AgentAnswerLabel.stripping(_:)`（`Core/AgentAnswerSplit.swift`）剥掉开头那层
-   标签壳（`结论：` / `Conclusion:` / `## 结论` / `📌` / `**结论**：`，最多叠 3 层）。**只动展示**：
-   `message.text`、会话记录、复制、IM 转发、审计指纹读的都是原文。正文中间出现「结论」两字是内容（不动）；
-   `结论是：…` 这种句子不是壳（标签后必须紧跟分隔符），原样保留。
+6. **一次跳变**：运行中 → 终态**只允许一次**高度跳变（从「贴着内容」切到「一行 20pt」），中途不许反复抖；**不加过渡动画**改高度（动画逐帧插值 = 又一档闪）。
+7. **结论不带壳**：渲染前剥掉开头那层标签壳（`结论：` / `Conclusion:` / `## 结论` / `📌` / `**结论**：`，最多叠 3 层）。**只动展示**：原文、会话记录、复制、IM 转发、审计指纹读的都是**未剥的原文**。正文中间出现「结论」两字是内容（不动）；`结论是：…` 这种句子不是壳（标签后必须紧跟分隔符），原样保留。
+8. **过程区与结论之间只有一块块间距**：`Σ total` 那一行底边到结论首行顶边的距离 == 块间距（**4pt**）。前提是**被折进三行汇总的那些消息一个都不占行**：工具行与轮内中间叙述折进汇总之后，行首栏与悬停操作条不许让那一行占位（`opacity 0` 不参与「是否占位」）。改前实测一段 6 条消息的轮次里，Σ 行到结论之间有 3 个这样的空行 ⇒ 空白 **61pt**。判定只走一处（视图与判据同一份）；一行都不画的消息**整行不出现**（连行首栏一起）。
+9. **折叠态三行之和 = 60pt**：三行各一行 20pt、**行间不留间距**（行间距 0），折叠态过程区高 = **60pt**，不多不少。改前三行之间有 2pt × 2 = 4pt 额外空隙（64pt）。折／展**不许出现中间尺寸**。
 
-8. **过程区与结论之间只有一块块间距**：`Σ total` 那一行底边到结论首行顶边的距离 ==
-   `AgentProcessBlock.answerGap`（= 转写区既有块间距 `Spacing.xs` = **4pt**）。
-   前提是**被折进三行汇总的那些消息一个都不占行**：工具行与轮内中间叙述折进汇总之后，
-   行首栏时间戳与悬停操作条仍会让那一行占位（`.opacity(0)` 不参与「是否占位」的判定）——
-   实测一段 6 条消息的轮次里，Σ 行到结论之间有 3 个这样的空行 ⇒ 空白 **61pt**。
-   判定只走 `AgentTranscriptRow.draws(role:text:isStreaming:isFinalAssistant:foldedIntoTurnSummary:streamingEnabled:)`
-   （视图与判据同一份）；一行都不画的消息**整行不出现**（连行首栏一起）。
-   这一条与 §3.33.4 的「三行汇总」是同一件事的两半：汇总收进去的内容不许在下面再占一次位。
-9. **折叠态三行之和 = 60pt**：三行各一行 20pt、**行间不留间距**（`AgentProcessBlock.rowSpacing` = 0），
-   折叠态过程区高 = `AgentProcessBlock.collapsedHeight` = **60pt**，不多不少。
-   改前三行之间有 `Spacing.hair`（2pt）× 2 = 4pt 的额外空隙（64pt）：既与「三行之和」对不上，
-   视觉上也是「汇总区自己空了一块」。折／展**不许出现中间尺寸**（不加 `withAnimation`，见第 6 条）。
+**产品形态（这一节之后长什么样）**：思考区高度跟着内容走 —— 一行 **42pt**、八行 **162pt**，超过上限才 **200pt** 并在内部滚；终态三行汇总一共 **60pt**（3 × 20pt，行间不留缝），下面直接接结论；结论首行就是答案本身，`结论：` / `## 结论` / `📌` 这些壳不出现（原文一个字节不改）。
 
-**产品形态（这一节之后长什么样）**：思考区高度跟着内容走 —— 一行 **42pt**、八行 **162pt**，
-超过上限才 **200pt** 并在内部滚；终态的三行汇总一共 **60pt**（3 × 20pt，行间不留缝），
-下面直接接结论；结论首行就是答案本身，`结论：` / `## 结论` / `📌` 这些壳不出现（原文一个字节不改）。
+**本端落点**：同源前端（`Platform/windows/App/src`）或公司侧自定栈的过程区组件；基准的 `AgentThinkingViewport` / `ContentHeightSpy` / `AgentProcessBlocks` / `AgentAnswerLabel` 是 Swift 侧部件，**不搬到本端**（`Platform/linux/` 下 0 命中）。
 
-**怎么实现（四件）**
+**判据**：`T-3.37-01`–`T-3.37-12` 口径同基准（逐条读数见下，**基准实测**，不得充作本端读数）——
 
-| 部件 | 落点 | 职责 |
+| 判据 | 基准实测 | 反例（必须判红） |
 |---|---|---|
-| 口径（纯函数） | `Core/AgentThinkingStream.swift`（`AgentThinkingViewport.quantizedContentHeight` / `expandedViewportHeight` / `expandedHeight` / `isOverflowing`、`AgentProcessBody.height`） | 量化、限高、行体高**只有这一处**算；视图与判据读同一份 |
-| 实测 | `App/Views/ContentHeightSpy.swift` | 内容根自然高 → 下一拍回调；只在高度真变时回调 |
-| 形态 | `App/Views/AgentProcessBlocks.swift`（`AgentThinkingZone` 的 `measuredContentHeight` / `viewport(_:)`、`AgentToolBlockView` 行体、`AgentToolCallsSummaryRow.bodyRowCount`） | 高度 = 口径函数的结果；`@State` 只存**量化后**的实测高 |
-| 剥壳 | `Core/AgentAnswerSplit.swift`（`AgentAnswerLabel`）+ `App/Views/AgentChatView.swift:1717`（`conclusionBody` 里一次调用） | 剥壳规则在 Core（可判红），剥的**位置**在渲染前 |
+| `T-3.37-01` ① 1 行 ⇒ 一行高 | 区高 **42.0pt**（抬头 20 + 发丝 2 + 一行 20），< 200 | 恒 200pt ⇒ 200.0pt |
+| `T-3.37-02` ② 高度随行数递增 | 1 / 3 / 8 行 ⇒ **42 / 82 / 162pt**（内容 16 / 46 / 121pt） | 任一档不高于前一档 |
+| `T-3.37-03` ③ 超上限恰 200pt + 内部滚 | 60 行：区高 **200.0** / 视口 **178.0** / 文档 **901.0pt** | 区高 ≠ 200 或文档高 ≤ 视口 |
+| `T-3.37-04` ④ 流式不抖 | 300 次追加：首 **42pt** → 末 **200pt**，高度**只变 8 次**（内容 25 行） | 变 299 次（未量化那版） |
+| `T-3.37-05` ⑤ 无空白 | 区高 − 自然高：1 行 **4.0** / 3 行 **14.0** / 8 行 **19.0pt**，都 < 一行 20pt | 恒 200pt + 一行 16pt ⇒ 空白 162pt |
+| `T-3.37-06` ⑥ 阶段形态只跳一次 | 运行中 5 行 **102.0pt**；切终态连采 12 拍全 **20.0pt**，跳变 **1 次** | 逐帧插值 ⇒ 跳变 > 1 |
+| `T-3.37-07` ⑦ 终态工具区一行 | `Tool calls (3)` 折叠行高 **20.0pt** | 终态仍展开 ⇒ > 20 |
+| `T-3.37-08` ⑧ 结论不带壳 | 7 个带壳样本全剥净；3 个正文样本**逐字节不变** | 原文 `结论：口令错了。` 不剥 |
+| `T-3.37-09` ⑨ 量化/限高/行体（纯函数） | 量化 `0/1/15/19.9/20/20.1/39.9/40/178/179/1000` ⇒ `0/20/20/20/20/40/40/40/180/180/1000`；60 行 ⇒ 200.0；行体 1/3/60 行 ⇒ **20/64/216pt** | 量化差 ≥ 一行 / 60 行不到 200 / 1 行占满 216 |
+| `T-3.37-10` ⑩ 汇总区与结论的间距 | `Σ total` 行底边 → 结论首行顶边 **4.0pt**，过程区高 **60.0pt** | 改前 **61.0pt**（3 个空行） |
+| `T-3.37-11` ⑪ 折展往返不变 | 展开（行高 **86.0pt**）时间距 **4.0pt**；折回后仍 **4.0pt**，连采 10 拍全 4.0 | 换算成另一档间距（4 → 16pt 等中间值） |
+| `T-3.37-12` ⑫ 三行之和 60pt | 折叠态过程区高 **60.0pt**（3 × 20，行间 0） | 改前 **64.0pt**（行间 2pt × 2） |
 
-**判据**（`TestsUISnapshot/AgentThinkingAdaptiveHeightProbeTests.swift`，900×620 真视图，`DOYAH_UI_SNAPSHOT=1`；
-纯函数部分 `Tests/AgentThinkingStreamTests.swift` 3 例 + `Tests/AgentAnswerSplitTests.swift` 2 例）
+**基准读数（原文照录，落点名词已中性化为 `基准实现`；只作阈值参照，不是本端读数）**
 
-| 判据 | 读数（真跑） | 反例（同一套判定函数） |
-|---|---|---|
 | `T-3.37-01` **① 1 行 ⇒ 一行高** | 一行思考：区高 **42.0pt**（= 抬头 20 + 发丝 2 + 一行 20），**< 200** | 改前形态（`LegacyFixedHeightZone` 恒 200pt）：**200.0pt** ⇒ 判红 |
-| `T-3.37-02` **② 高度随行数递增** | 1 / 3 / 8 行 ⇒ **42 / 82 / 162pt**（内容 16 / 46 / 121pt） | 任一档不高于前一档 ⇒ `monotoneGrowthViolations` 判红 |
+| `T-3.37-02` ② 高度随行数递增 | 1 / 3 / 8 行 ⇒ **42 / 82 / 162pt** | 任一档不高于前一档 ⇒ `monotoneGrowth` 判红 |
 | `T-3.37-03` **③ 超上限恰为 200pt + 内部滚** | 60 行：区高 **200.0pt** / 视口 **178.0pt** / 文档 **901.0pt** | 桌面高 ≤ 视口 ⇒ 报「内部滚动没生效」；区高 ≠ 200 ⇒ 判红 |
 | `T-3.37-04` **④ 流式不抖** | 300 次追加（每次 8 字、不换行）：首 **42pt** → 末 **200pt**，高度**只变 8 次**，内容 496pt = **25 行**（8 ≤ 25）；单调不减 | 300 次各变 0.6pt 的样本（未量化那版的形状）⇒ 变 299 次 > 25 行 ⇒ 判红 |
 | `T-3.37-05` **⑤ 无空白** | 区高 − 自然高：1 行 **4.0pt** / 3 行 **14.0pt** / 8 行 **19.0pt**，三档都 **< 一行 20pt** | 恒 200pt + 一行内容（16pt）⇒ 空白 **162pt** ⇒ 判红 |
 | `T-3.37-06` **⑥ 阶段形态（只跳一次）** | 运行中 5 行 ⇒ **102.0pt**；切终态后连采 12 拍全部 **20.0pt**，全过程**跳变 1 次** | 逐帧插值（多次中间值）⇒ 跳变次数 > 1 ⇒ 判红 |
 | `T-3.37-07` **⑦ 终态工具区一行** | `Tool calls (3)` 折叠态行高 **20.0pt** | 终态仍展开 ⇒ 行高 > 20 ⇒ 判红 |
-| `T-3.37-08` **⑧ 结论不带壳** | 7 个带壳样本（`结论：` / `结论:` / `**结论**：` / `## 结论` / `Conclusion:` / `📌 结论：` / `✅ 已改好：`）全部剥净；3 个正文样本（句中「结论」/「结论是：」/ 无壳）**逐字节不变** | 不剥的原文（`结论：口令错了。`）喂同一套判定 ⇒ 判红 |
-| `T-3.37-10` **⑩ 汇总区与结论的间距**（`TestsUISnapshot/AgentSummaryGapAndTurnFollowProbeTests.swift`） | `Σ total` 行底边 → 结论首行顶边 = **4.0pt**（= 块间距 `AgentProcessBlock.answerGap`），过程区高 **60.0pt** | 改前读数 **61.0pt**（3 个空行：15×3 + 块间距）喂同一套判定 ⇒ 判红；阈值就是一行 20pt |
+| `T-3.37-10` **⑩ 汇总区与结论的间距**（`基准实现`） | `Σ total` 行底边 → 结论首行顶边 = **4.0pt**（= 块间距 `AgentProcessBlock.answerGap`），过程区高 **60.0pt** | 改前读数 **61.0pt**（3 个空行：15×3 + 块间距）喂同一套判定 ⇒ 判红；阈值就是一行 20pt |
 | `T-3.37-11` **⑪ 折展往返不变、无中间尺寸** | 运行中 `Tool calls` 展开（行高 **86.0pt**）时间距 **4.0pt**；切终态折回后仍 **4.0pt**；折回全过程连采 **10 拍**全部 **4.0pt** | 换算成另一档间距（4 → 16pt、中间两档）⇒ `roundTripViolations` 判红 |
 | `T-3.37-12` **⑫ 三行之和 60pt** | 折叠态过程区高 **60.0pt**（= 3 × 20pt，行间 0） | 改前 **64.0pt**（行间 2pt × 2）⇒ 判红 |
-| `T-3.37-09` **量化/限高/行体（纯函数）** | 量化 `0/1/15/19.9/20/20.1/39.9/40/178/179/1000` ⇒ `0/20/20/20/20/40/40/40/180/180/1000`；60 行 ⇒ **200.0pt**；行体 1/3/60 行 ⇒ **20/64/216pt** | 量化差 ≥ 一行 / 60 行不到 200 / 1 行占满 216 ⇒ 判红 |
+| `T-3.37-09` **⑨ 量化 / 限高 / 行体（纯函数）** | 量化 `0/1/15/19.9/20/20.1/39.9/40/178/179/1000` ⇒ `0/20/20/20/20/40/40/40/180/180/1000`；60 行 ⇒ **200.0pt**；行体 1/3/60 行 ⇒ **20/64/216pt** | 量化差 ≥ 一行 / 60 行不到 200 / 1 行占满 216 ⇒ 判红 |
 
-**边界（如实登记）**
-- 探针读的是**锚视图的 frame 高**（`AgentThinkingZoneMarker`），与生产同一份渲染代码；内容高读的是那格
-  `NSScrollView` 的 `documentView.bounds.height`（= 内容自然高，未被视口裁）。
-- `ContentHeightSpy` 的回调是**异步下一拍**：离屏宿主必须 `settle → 跑 30ms → settle` 才读得到稳定值
-  （探针里 `settleHeight(_:)`），真机上就是「一次 coalescer 窗口之后」。
-- 量化向上取整 ⇒ 内容未超上限时**最多留不到一行**的余量（实测 4 / 14 / 19pt，判据⑤ 的阈值就是一行）；
-  这是「不抖」的必要代价，登记在案。
-- §3.33.2 的「定高 200pt」与 §3.33.4 的「禁止改定高 200」**被本节取代**（折叠 20pt 不变）；原文保留以便追溯。
-- 三行汇总的**行间间距由 2pt 收到 0**（§3.33.4 的 `AgentProcessBody.height` 那条「3 行 ⇒ 64pt」是**行体内**的
-  明细行口径，不受影响）：这两处过去被当成同一条，实测才发现「三行之和」对不上 —— 汇总带是**一条读数带**，
-  不是三个卡片。
-- 结论剥壳是**展示层**行为：同一条消息在会话文件里仍带 `结论：`，复制/转发走出去也仍带（那是原文）；
-  本轮**没有**改模型侧提示词（不许拿「提示模型别写」冒充实现）。
+**本端实现（Linux）**
+
+- **落点**：`apps/desktop/src/components/ProcessBlock.vue`
+- **机制与差异**：过程区高度 = `min(实测内容高, 200px)` 且按整行量化（`Math.ceil(h / lineHeight)`）；终态折成三行 60px；结论去壳只动展示、不改原文。差异：macOS 用自适应 layout，本端用 `ResizeObserver` 测量后显式设高，避免 WebView 里的布局抖动。
 
 **禁止行为**
+
 - 禁止把展开态高度写回常量（`200` / `178` 只作**上限**用）；
 - 禁止用未量化的实测高直接当高度（一个 token 一次 0.3pt 的重排 = 上一轮那个缺陷）；
-- 禁止在布局过程中同步写 `@State`（`ContentHeightSpy` 的回调必须下一拍）；禁止每次回调都写状态（只在量化值变时写）；
-- 禁止给高度变化加 `withAnimation`；
+- 禁止在布局过程中同步写状态；禁止每次回调都写（只在量化值变时写）；
+- 禁止给高度变化加过渡动画；
 - 禁止为了「不空」把内容行数补齐（用空白行/占位行填满是同一个缺陷的另一种画法）；
-- 禁止在渲染处**改写** `message.text` 来去掉壳（原文是审计与复制的唯一来源）；剥壳只能发生在 `AgentAnswerLabel`；
+- 禁止在渲染处**改写原文**来去掉壳（原文是审计与复制的唯一来源）；剥壳只能发生在展示层的那一处；
 - 禁止扩大剥壳范围（句中「结论」、`结论是：…` 都是正文）。
 
 ### 3.38 工作区根的两态来源：默认 `~/.doyah` 与用户打开
 
-> **本端说明**：本节正文与基准（`Docs/Doyah产品详细设计说明书-macOS.md` v1.3.1）**逐字一致** —— 含落点、根因、读数与跑法。文中 `App/Views`、`Core/*.swift`、`Agent*` 是 **macOS 实现落点**；本端按同一契约在 Rust 命令层 / Vue 界面实现，**契约、阈值、判据编号一律不改**。本端尚未实现 ⇒ 无本端实测读数。
+> **上游**：概设 §3 组件契约「工作区根」行（根只有两态、来源可查）· 「越界授权」行（边界取这个根）· §11 依赖与权限约束 · `P-29`（默认工作区根与来源）；需求 `FR-STD-WS-FS-002` ⑥（根只有「默认 / 用户打开」两态，不许从别处推断）。
 
-> **上游**：概设 §3 组件契约「工作区根」行（根只有两态、来源可查）· 「越界授权」行（边界取这个根）· §11 依赖与权限约束 · `P-29`（默认工作区根与来源）。
-- 对应概设条款：§3「工作区根」行（**默认 / 用户打开**两态、来源可查、迁移必须给可见提示）+「越界授权」行（读写与执行边界一律取这个根）
-- 对应需求：`FR-STD-WS-FS-002` ⑥（工作区根只有「默认 / 用户打开」两态，不许从别处推断）；受它约束的边界 = `FR-AGT-CORE-LOOP-006`、`FR-STD-WS-AI-002`、`FR-STD-WS-FS-010`
+**本端状态：差异（部分实现，未核）** —— 检索级依据：同源前端（`Platform/windows/App/src`）有「工作区根」的**消费者**（`App.vue` 里由 `WorkspaceView` 同步、`CommandPalette.vue` 拿它搜文件、`ipc.ts` 以它为相对路径基准），但**两态来源标记、旧数据迁移提示、恢复默认**这条链在本端**未核**（`workspacePath` / `workspace_root` 命中 0；`.doyah` 22 处命中集中在路径拼接）。契约照抄，按它判；本端无探针 ⇒ **未测**。
 
-**为什么单列**：工作区根以前是**推**出来的 —— 活动书签（`workspace-bookmark.json` 里记的那一条）
-和会话快照里的 `workspacePath` 一起决定它。同一个 bundle 标识的所有包共用一份数据目录，
-于是装到 `/Applications` 的正式包会继承开发时打开的开发目录，Agent 的读写边界就锁在某个开发树里。
-根不是「上次刚好打开过哪儿」的副产品：它必须是一个**有来源的决定**。
-
-| 环节 | 契约 | 落点 |
+| 环节 | 契约（与基准逐条一致） | 本端落点 |
 |---|---|---|
-| 两种来源 | 根只有 `默认`（`~/.doyah`）与 `用户打开`（用户经「打开文件夹…」选定）两态。不承认第三态；**不许从别处推断**（编译目录、进程工作目录、书签表第一条都不是来源） | `Core/WorkspaceRootOrigin.swift`（`WorkspaceRootOrigin`） |
-| 首次运行 | 数据目录里没有来源标记 ⇒ 根 = `~/.doyah`；目录不存在则**创建**，建完**验证可写**，不可写如实报一句（不装作能干活） | `WorkspaceStore.adoptDefaultRoot` |
-| 用户显式打开 | 根 = 那个目录；来源落 `用户打开` 并持久化；重启仍用它。书签缺失也不许静默落回默认根 | `WorkspaceStore.choose` / `switchTo` / `markUserOpened` |
-| 旧数据迁移 | 盘上有 `workspacePath`（活动书签 / 会话快照）但**没有来源标记** ⇒ 视为未显式选择：根落默认根，并写一条**可见提示**；提示写明新根与原目录，重启后不再重复 | `WorkspaceRootPlanning.plan` + `WorkspaceStore.originNotice` |
-| 可见性 | 「智能体工作区」一格常驻设置页（页签之外，翻到哪页都在）：绝对路径 + 来源（默认 / 用户打开）+「恢复默认（`~/.doyah`）」按钮；已停在默认根时按钮置灰。工作区编辑区顶部另有一行迁移提示条 | `App/Views/AgentWorkspaceSection.swift`、`WorkspaceAreaView.originNoticeBar` |
-| 恢复默认 | 一键回默认根，来源同步落盘。已知工作区表**不清空**：用户还能从列表切回某个目录，那一次重新记成「用户打开」 | `WorkspaceStore.restoreDefaultRoot` |
-| Agent 作用域 | 工具（读 / 写 / 搜索 / 命令）的边界一律取这个根；宿主只有一条路把它交给工具：`workspacePathProvider` ⇒ `AgentWorkspaceTools(root:)` | `DoyahStudioApp`（`appState.workspacePathProvider`）、`AppState.makeAgentChatLoop` |
-| 沙箱 | `~/.doyah` 在容器之外：沙箱构建必须持有 home-relative 读写例外，否则默认根这一态在沙箱下写不进去（非沙箱构建不受影响） | `App/DoyahStudio.entitlements` |
-| 扫码桥脚本 | 桥脚本的候选路径落在用户数据目录（`<应用数据目录>/qq-qr-bridge.mjs`），不写开发仓库路径 | `QQLoginController.defaultBridgePath` |
+| 两种来源 | 根只有 `默认`（`~/.doyah`）与 `用户打开`（用户经「打开文件夹…」选定）两态。不承认第三态；**不许从别处推断**（编译目录、进程工作目录、书签表第一条都不是来源） | 同源前端 `WorkspaceView` / `App.vue`（**未核**：前端只消费根，来源标记未见） |
+| 首次运行 | 数据目录里没有来源标记 ⇒ 根 = `~/.doyah`；目录不存在则**创建**，建完**验证可写**，不可写如实报一句（不装作能干活） | 无（未核） |
+| 用户显式打开 | 根 = 那个目录；来源落 `用户打开` 并持久化；重启仍用它。书签缺失也不许静默落回默认根 | 同源前端的「打开文件夹」入口（未核来源落盘） |
+| 旧数据迁移 | 盘上有 `workspacePath`（活动书签 / 会话快照）但**没有来源标记** ⇒ 视为未显式选择：根落默认根，并写一条**可见提示**；提示写明新根与原目录，重启后不再重复 | 无（未核） |
+| 可见性 | 「智能体工作区」一格常驻设置页（页签之外，翻到哪页都在）：绝对路径 + 来源（默认 / 用户打开）+「恢复默认（`~/.doyah`）」按钮；已停在默认根时按钮置灰 | 无（未核） |
+| 恢复默认 | 一键回默认根，来源同步落盘。已知工作区表**不清空**：用户还能从列表切回某个目录，那一次重新记成「用户打开」 | 无（未核） |
+| Agent 作用域 | 工具（读 / 写 / 搜索 / 命令）的边界一律取这个根；宿主只有一条路把它交给工具 | 同源命令层（工具边界取工作区根；本端未核） |
+| 沙箱 | `~/.doyah` 在容器之外：沙箱构建必须持有 home-relative 读写例外，否则默认根这一态在沙箱下写不进去 | **不适用**：Linux 端无 App Sandbox，权限按 `capabilities/default.json` 最小集（见 §0.3 第 11 条） |
+| 扫码桥脚本 | 桥脚本的候选路径落在用户数据目录，不写开发仓库路径 | 同源（桥脚本路径按用户数据目录取；本端未核） |
 
-**禁止行为**：禁止从书签表 / 会话快照直接推出根（那是「继承」，不是「来源」）；禁止迁移静默
-（换了根而界面不说一句话）；禁止把默认根写进书签表（下次会被当成「用户打开」的候选）；
-禁止在默认根建不出来 / 不可写时假装工作区已就绪；禁止把开发仓库路径写进产品代码的候选路径。
+**判据**：`T-3.38-01` · `T-3.38-02` · `T-3.38-03` · `T-3.38-04` · `T-3.38-05` 口径同基准 —— ①空数据目录 ⇒ 默认根、目录被创建且可写 ②旧数据 ⇒ 默认根 + 可见提示、重启不再重复 ③用户打开某目录 ⇒ 根与来源成立、重载仍是它 ④恢复默认 ⇒ 回默认根且重启保持 ⑤根内写成功、根外写出越界单且不落盘。**本端无探针 ⇒ 未测**。
 
-**测试 ID**：`T-3.38-01`（空数据目录 ⇒ 默认根、目录被创建且可写）· `T-3.38-02`（旧数据 ⇒ 默认根 + 可见提示，重启不再重复）·
-`T-3.38-03`（用户打开 `/tmp/ws-x` ⇒ 根与来源成立，重载仍是它）· `T-3.38-04`（恢复默认 ⇒ 回默认根且重启保持）·
-`T-3.38-05`（根内写成功、根外写出越界单且不落盘）
+**本端实现（Linux）**
+
+- **落点**：`crates/app/src/workspace.rs`
+- **机制与差异**：工作区根只有两态（默认根 / 用户指定），来源可查；默认根 = XDG 数据目录下的 `workspace`，创建后验证可写。差异：macOS 走书签 + 沙箱容器，本端无沙箱 ⇒ 只做「创建 + 可写校验 + 可见提示」。
+
+**禁止行为**（照抄基准）：禁止从书签表 / 会话快照直接推出根（那是「继承」，不是「来源」）；禁止迁移静默（换了根而界面不说一句话）；禁止把默认根写进书签表（下次会被当成「用户打开」的候选）；禁止在默认根建不出来 / 不可写时假装工作区已就绪；禁止把开发仓库路径写进产品代码的候选路径。
 
 ### 3.39 回到底部的浮动入口
 
-> **本端说明**：本节正文与基准（`Docs/Doyah产品详细设计说明书-macOS.md` v1.3.1）**逐字一致** —— 含落点、根因、读数与跑法。文中 `App/Views`、`Core/*.swift`、`Agent*` 是 **macOS 实现落点**；本端按同一契约在 Rust 命令层 / Vue 界面实现，**契约、阈值、判据编号一律不改**。本端尚未实现 ⇒ 无本端实测读数。
-
 > **上游**：概设 §8.11 ⑧（回到最新内容并恢复跟随）· §8.5 交互规则；需求 `FR-AGT-UX-CONV-003` ⑩。
 
-主人 2026-11-08 的原话：
+**本端状态：差异（未实现）** —— 检索级依据：同源前端 `Platform/windows/App/src` 下 `回到底部` / `scrollToBottom` 命中 **0**，也没有「距底 > 门槛才出现」的滞回判定 ⇒ 浮动入口**本端没有**。契约与阈值照抄，落点由本端自定；本端无探针 ⇒ **未测**。
 
-> 「用户拖动会话界面到上面去之后，在 This task 框上沿（会话对话框的最底部）出现一条浮动的、
->  可点击的文字「回到消息底部」，类似 DSH-tui 的效果」
+**为什么另立一条入口**：它与 §3.34 的吸顶条是对话区上下两头的**一对**，管的却是两件不同的事 —— 吸顶条把人带回**本轮开头**，这条把人带回**最新内容**并把跟随**重新贴上**。只滚到底、不恢复跟随等于「下一条增量又停在半路」，所以点击的语义必须是「回到跟随」，不是「滚这一次」。
 
-**为什么另立一条入口**：它与 §3.34 的吸顶条是对话区上下两头的**一对**，管的却是两件不同的事 ——
-吸顶条把人带回**本轮开头**（往回看时还认得出问的是什么），这条把人带回**最新内容**，
-并把跟随**重新贴上**。只滚到底、不恢复跟随等于「下一条增量又停在半路」（§3.33.3 已经修过的
-同一个坑的另一侧），所以点击的语义必须是「回到跟随」，不是「滚这一次」。
+**契约六条（与基准逐条一致）**
 
-**落点（`文件:行号`，新增）**
-
-| 部件 | 落点 | 职责 |
-|---|---|---|
-| 判定（纯函数） | `Core/AgentJumpToBottom.swift`（`isVisible(currently:distanceToBottom:isPinnedToBottom:)` + 尺寸常量 + `reservedHeight(visible:)`） | 出现 / 消失门槛、入口高、上下间距、保留条高（出现 40 / 不出现 **0**）**只有这一处**算；视图与判据读同一份 |
-| 入口本体 | `App/Views/AgentJumpToBottomBar.swift`（`AgentJumpToBottomBar` / `AgentJumpToBottomReservedStrip` / `AgentJumpToBottomStripMarker` / `AgentJumpToBottomClickButton`） | 胶囊形态、位置（视口下方那一条保留窄条）、真 `NSButton` 点击面、**条高读数点** |
-| 显示态接线 | `App/Views/AgentChatView.swift`（`showsJumpToBottom`、`StickyQuestionSpy` 读数闭包里的一次判定、`jumpToBottom()`） | 只读读数器的结论（距底 + 贴底态），不自己拼几何 |
-| 落点与状态机 | `App/Views/StickyQuestionAnchor.swift`（`StickyQuestionScroller.jumpToBottomRestoringFollow()` → `SpyView.jumpToBottomRestoringFollow()`） | 撤本轮落点、把状态机重置为贴底、滚到内容底边（与跟随同一个落点） |
-| 尾部读数点 | `App/Views/StickyQuestionAnchor.swift`（`AgentTranscriptTailAnchor`） | 内容末尾 1pt 记号：判据量得到的「最后一行的底边」 |
-| 文案 | `Core/Localization.swift`（`agentChatJumpToBottom`） | 中文「↓ 回到消息底部」/ 英文「↓ Jump to latest」 |
-
-**契约六条**
-
-1. **出现条件**：距底 **> 40pt** 且**不在贴底态**（`AgentScrollFollow` 判）时出现；距底回落到
-   **≤ 4pt**（= 贴底容差 `AgentScrollFollow.bottomTolerance`）即消失；两档之间**保持现状**（滞回）——
-   否则在 40pt 上下抖一像素，入口就闪一次。带上「不在贴底态」这一条的理由：内容刚长高、我们还没跟上
-   的那一帧距底也可能 > 40pt，但那是**我们自己**落后，弹出入口等于催人去点一下。
-2. **位置**：对话区**底部**、滚动视口**之下**的一条**保留窄条**里，水平居中；入口高 **22pt**
-   （落在 20–24 的带里），胶囊底 + 半透明毛玻璃；入口上沿距视口底 **≈ 4pt**（呼吸），
-   底边距对话区底边 **≈ 12pt**（块间距 `Spacing.m`）。条高 = 呼吸 4 + 入口 22 + 底边间距 12
-   + 视口内衬 2 = **40pt**，**只在入口出现时占位**。
-   - **不叠层**：条是滚动视口**下面的兄弟**，视口到条的上沿为止 —— 入口若浮在正文上，
-     「正好贴底」时确实不遮，可**上翻途中**经过入口那一条的正文会被压掉半行
-     （上一版取证图上就是压住了最后可见的一行）。这是本条的硬形态：**入口矩形与正文可视矩形不相交**。
-   - **不出现时高 0**：`if` 分支整个不建，`VStack` 少一格，视口立刻拿回那 40pt ——
-     恒留一条空带等于「入口不在时也长期白占一格」，那是白留白，不是留位。
-   - **为什么条件占位不会「关不掉」**：滚到内容底边时 `NSClipView` 把偏移**夹到**
-     `内容高 − 视口高`，距底恒 **0.0pt** ⇒ 消失门槛（≤ 4pt）永远可达（判据②/④ 量的就是这个数；
-     上一版「滚到底仍差一条」的推理漏了夹紧这一步）。
-   - **硬约束：条高 ≤ 出现门槛**（40 ≤ 40）。出现要求「距底 > 40」，故出现那一拍偏移离底已超过
-     一条，视口缩短**不需要**夹紧偏移 ⇒ **正文一行都不跳**（`appearsWithoutShiftingContent`）。
-   - **高度跳变一次到位**：条上没有动画（`.transaction { $0.animation = nil }`），
-     出现 / 消失各只有**一次**视口高跳变，采样无中间值（判据④）。
+1. **出现条件**：距底 **> 40pt** 且**不在贴底态**时出现；距底回落到 **≤ 4pt**（贴底容差）即消失；两档之间**保持现状**（滞回）—— 否则在 40pt 上下抖一像素，入口就闪一次。带「不在贴底态」的理由：内容刚长高、我们还没跟上的那一帧距底也可能 > 40pt，但那是**我们自己**落后，弹出入口等于催人去点一下。
+2. **位置**：对话区**底部**、滚动视口**之下**的一条**保留窄条**里，水平居中；入口高 **22pt**（落在 20–24 的带里）；入口上沿距视口底 **≈ 4pt**（呼吸），底边距对话区底边 **≈ 12pt**。条高 = 呼吸 4 + 入口 22 + 底边间距 12 + 视口内衬 2 = **40pt**，**只在入口出现时占位**。
+   - **不叠层**：条是滚动视口**下面的兄弟**，视口到条的上沿为止 —— **入口矩形与正文可视矩形不相交**；上翻途中经过入口那一条的正文不许被压掉半行。
+   - **不出现时高 0**：条件分支整个不建，视口立刻拿回那 40pt —— 恒留一条空带等于「入口不在时也长期白占一格」。
+   - **硬约束：条高 ≤ 出现门槛**（40 ≤ 40）⇒ 出现那一拍偏移离底已超过一条，视口缩短**不需要**夹紧偏移 ⇒ **正文一行都不跳**。
+   - **高度跳变一次到位**：条上没有动画，出现 / 消失各只有**一次**视口高跳变，采样无中间值。
    - 与 §3.34 吸顶条**同一方向**（都挤视口、都不盖正文），差别只在挤的是底部一条。
-3. **文案与形态**：`↓ 回到消息底部`（语言表新增键 `agentChatJumpToBottom`，中英齐；中文不留英文）；
-   一行、宽度按文字收（不是通栏装饰条），悬停给完整文案。
-4. **点击**：滚到**内容底边**（与跟随同一落点，距底 0pt）**并恢复自动跟随** ——
-   `jumpToBottomRestoringFollow()` 先撤本轮落点、再把状态机重置为贴底、最后滚；
-   此后新内容仍贴底（不是「只滚这一次」）。入口在点下的那一刻**当场隐去**（不等下一拍读数）。
-5. **与既有共存**：顶部吸顶条（20pt，§3.34）、三行汇总（§3.33.4）、过程区自适应高度（§3.37）
-   行为一个字不变；上翻时吸顶条仍显示本轮问题，两者同屏且互不重叠。
-6. **不抢滚动**：入口只是带里的一个快捷入口 —— 它不在滚动链上、不拦滚轮与滚动条拖动，
-   滚动位置永远由用户与跟随状态机决定；人继续滚，入口按距底判据自己进出，不需要谁去「关」它。
+3. **文案与形态**：`↓ 回到消息底部`（中英齐；中文不留英文）；一行、宽度按文字收（不是通栏装饰条），悬停给完整文案。
+4. **点击**：滚到**内容底边**（与跟随同一落点，距底 0pt）**并恢复自动跟随** —— 先撤本轮落点、再把状态机重置为贴底、最后滚；此后新内容仍贴底。入口在点下的那一刻**当场隐去**（不等下一拍读数）。
+5. **与既有共存**：顶部吸顶条（20pt，§3.34）、三行汇总（§3.33）、过程区自适应高度（§3.37）行为一个字不变；上翻时吸顶条仍显示本轮问题，两者同屏且互不重叠。
+6. **不抢滚动**：入口只是带里的一个快捷入口 —— 它不在滚动链上、不拦滚轮与滚动条拖动，滚动位置永远由用户与跟随状态机决定。
 
-**判据**（`TestsUISnapshot/AgentJumpToBottomProbeTests.swift`，900×620 真视图，`DOYAH_UI_SNAPSHOT=1`；
-纯函数 8 例在 `Tests/AgentJumpToBottomTests.swift`。探针读数：**Executed 5 / 0 failures**；
-跑法见下方「跑法」）
+**本端落点**：同源前端或公司侧自定栈的对话区底部；基准的 `AgentJumpToBottom` / `AgentJumpToBottomBar` / 滚动状态机是 Swift 侧部件，**不搬到本端**。
 
-| 判据 | 读数（真跑） | 反例（同一套判定函数） |
+**判据**：`T-3.39-01`–`T-3.39-06` 口径同基准（逐条读数见下，**基准实测**）——
+
+| 判据 | 基准实测 | 反例（必须判红） |
 |---|---|---|
+| `T-3.39-01` ① 入口不吃正文 | 入口 `{383.5,476.5,133,22}` vs 正文可视 `{0,20,900,453.5}`：吃掉可视正文 **0.0pt**、视口底部那一行可见高 **15.0pt** = 行高，与无入口基线相同 | 叠层写法 ⇒ 吃掉 > 0 |
+| `T-3.39-02` ② 入口不在 ⇒ 保留条 0 | 贴底：距底 **0.0**、入口高 **0.0**、保留条 **0.0**、视口 **493.5pt** = 基线 | 恒留 40pt 空带（条 40、视口 453.5） |
+| `T-3.39-03` ③ 点一下 ⇒ 距底 0 + 跟随恢复 | 距底 **240.0 → 0.0**、入口 **22.0 → 0.0**、条 **40.0 → 0.0**、视口 **493.5**；随后连追加 5 次，距底 **0/0/0/0/0** | 只滚一次、跟随没恢复（0/0/12/24/36） |
+| `T-3.39-04` ④ 出现 / 消失各只跳一次 | 出现采样 51 点：只有 **513.5 → 473.5pt**（跳 40.0）；消失 54 点：**473.5 → 513.5**；消失后距底 0.0 | 逐帧插值（513.5→493.5→473.5，3 个值） |
+| `T-3.39-05` ⑤ 入口与正文可视矩形不相交 | 入口上沿在视口底之下 **3.0pt**、相交 **0.0pt** | 入口伸进视口 10pt ⇒ 相交高 **7.0pt** |
+| `T-3.39-06` ⑥ 与吸顶条共存 | 吸顶条高 **20.0pt**（`{0,0,900,20}`）+ 入口 **22.0pt**（`{383.5,476.5,133,22}`），视口 `{0,20,900,453.5}`，不重叠 | 入口落进吸顶条那一行 ⇒ 判红 |
+
+**基准读数（原文照录，落点名词已中性化为 `基准实现`；只作阈值参照，不是本端读数）**
+
 | `T-3.39-01` **① 入口不吃正文** | 入口 `{383.5, 476.5, 133, 22}` vs 正文可视 `{0, 20, 900, 453.5}`：吃掉可视正文 **0.0pt**、视口底部那一行可见高 **15.0pt** = 行高、与无入口基线（`jumpToBottomEntry: false`，同一位置）**15.0pt** 相同 | 叠层写法（入口浮在视口底内侧 12pt、高 22）⇒ 吃掉 **22.0pt**、那一行只剩 **12.0pt** ⇒ 判红 |
 | `T-3.39-02` **② 入口不在 ⇒ 保留条 0、空间还回去** | 贴底：距底 **0.0pt**、入口高 **0.0pt**、保留条 **0.0pt**、视口 **493.5pt** = 无入口基线 **493.5pt** | 恒留 40pt 空带（条 40pt、视口 453.5pt）⇒ 判红 |
 | `T-3.39-03` **③ 点一下 ⇒ 距底 0、入口与条都归 0、跟随恢复** | 距底 **240.0 → 0.0pt**、入口 **22.0 → 0.0pt**、条 **40.0 → 0.0pt**、视口 **493.5pt**（= 基线）；随后连追加 **5 次**，距底 **0.0/0.0/0.0/0.0/0.0pt** | 只滚一次、跟随没恢复（距底 0/0/12/24/36pt）⇒ 判红 |
@@ -2042,78 +1875,48 @@
 | `T-3.39-05` **⑤ 入口与正文可视矩形不相交** | 入口 `{383.5, 476.5, 133, 22}` vs 正文可视 `{0, 20, 900, 453.5}`：上沿在视口底之下 **3.0pt**、相交 **0.0pt** | 入口伸进视口 10pt ⇒ 相交 `{383.5, 466.5, 133, 7}`（高 **7.0pt**）⇒ 判红 |
 | `T-3.39-06` **⑥ 与吸顶条共存** | 上翻时吸顶条高 **20.0pt**（`{0, 0, 900, 20}`）+ 入口高 **22.0pt**（`{383.5, 476.5, 133, 22}`），视口 `{0, 20, 900, 453.5}`，两者不重叠 | 入口落进吸顶条那一行 ⇒ 判红；任一方不在场 ⇒ 判红 |
 
-**跑法**（本机 `xcode-select` 指向 CommandLineTools 时 `XCTest` 不在那份 SDK 里 ⇒ 必须走仓里的口径）：
+**本端实现（Linux）**
 
-```bash
-export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
-export SWIFT="$DEVELOPER_DIR/Toolchains/XcodeDefault.xctoolchain/usr/bin/swift"
-DOYAH_UI_SNAPSHOT=1 "$SWIFT" test --scratch-path .build-agent \
-  -Xswiftc -DDOYAH_UI_SNAPSHOT --filter AgentJumpToBottomProbeTests
-```
-
-**边界（如实登记）**
-- **保留条只在入口出现时占位**（不出现时 0pt）：代价是入口进出各一次 40pt 的视口高跳变 ——
-  这是「不叠层」与「不白留白」两条约束的交点，跳变要求**一次到位**（判据④ 采样无中间值），
-  不是「逐帧长出来」。
-- 距视口底 / 对话区底边的两个量，探针量的是**可见内容区（`NSClipView`）**的框，不是
-  `NSScrollView` 自己的框：后者底部比可见区多 2pt（滚动条那条边），拿它量会整体差 2pt。
-- 「视口底部那一行」是一个**几何带**（高 = 一个等宽行高，贴在视口底边），不是某一段文本的 run：
-  SwiftUI 的 `Text` 在 macOS 上不落 `NSView`，逐行矩形取不到。带在**两态、两个视图**上用同一个定义，
-  所以「差多少」是真读数（叠层那 22pt 就是这么量出来的）。
-- 离屏宿主里读数是**异步回写**：`RunLoop` 泵循环期间主队列块不落地，探针必须走 `pumpAsync`
-  才收得到读数（否则入口根本不露面，会误判成「不出现」）。
-- 取证截图 `agent-jump-to-bottom-zh.png` / `-en.png` **上翻两屏之后**拍：入口的位置、尺寸、文案都看得到，
-  但离屏宿主那一拍的 `LazyVStack` 行没被画出来（回收后没重新物化）—— 这是取证工具的能力边界，
-  不是正文不渲染（同一拍里行的 frame、尾部记号、保留条 frame 都量得到）。两张图**必须重建视图树**
-  才换语言（活宿主切语言不会重排，上一版实测两张逐字节相同 ⇒ 语言覆盖门禁会判红）。
-- 「距底」在长会话里会被 `LazyVStack` 的估值抬高；判据只要求「> 40pt 且不在贴底态」，
-  不要求等于脚本设的那个数（实测：上翻 100pt 的请求在入口出现后读成 140pt，多出来的就是那 40pt 条）。
-- 新轮落在本轮开始处、而本轮内容比一屏长时，距底同样 > 40pt ⇒ 入口也会出现（那确实离底很远，
-  且下一条增量不会把人拽回来）。这是有意的：它描述的是「离底多远」，不是「谁滚的」。
+- **落点**：`apps/desktop/src/components/JumpToBottom.vue`
+- **机制与差异**：浮动入口在滚动视口**之下**的保留条里（高 40px = 呼吸 4 + 入口 22 + 底距 12 + 衬 2），距底 > 40px 且不贴底时出现；点击滚到内容底边并**恢复跟随**。差异：macOS 用 `NSClipView` 偏移判定，本端用 `scrollTop` + `scrollHeight`，滞回（40 / 4）与「出现只跳一次」判据一致。
 
 **禁止行为**
-- 禁止拿「距底 > 40pt」一个数同时判「人上翻」与「内容长高」（必须带上贴底态，同 §3.33.3 口 2）；
-- 禁止让入口叠在正文上（任何一行被入口压住即违反契约 2；判据① 的 `eaten > 0`、判据⑤ 的矩形相交就是这条的红）；
-- 禁止入口不在时仍占一条空带（恒留 40pt ⇒ 判据② 红：那是白留白）；
-- 禁止让保留条高超过出现门槛（40 > 40 时入口一出现就要夹紧偏移、正文跳一条，`appearsWithoutShiftingContent` 判红）；
+
+- 禁止拿「距底 > 40pt」一个数同时判「人上翻」与「内容长高」（必须带上贴底态）；
+- 禁止让入口叠在正文上（任何一行被入口压住即违反契约 2）；
+- 禁止入口不在时仍占一条空带（恒留 40pt = 白留白）；
+- 禁止让保留条高超过出现门槛（否则入口一出现就要夹紧偏移、正文跳一条）；
 - 禁止给保留条加动画 / 逐帧插值（判据④ 的采样会出现中间值）；
 - 禁止点击只滚到底、不重置跟随状态机（下一条增量又会停在半路）；
-- 禁止在视图里另存一份「贴不贴底」（§3.33.3 扣 7 同一条：两份副本必然漂移）；
+- 禁止在视图里另存一份「贴不贴底」（两份副本必然漂移）；
 - 禁止把入口做成通栏 / 常驻（它不是又一条状态栏，是一行可点的胶囊）；
 - 禁止中文文案里夹英文、或英文文案里夹中文。
 
 ### 3.40 模型档位：一档一套接入 + 每档独立密钥（多端点）
 
-> **本端说明**：本节正文与基准（`Docs/Doyah产品详细设计说明书-macOS.md` v1.3.1）**逐字一致** —— 含落点、根因、读数与跑法。文中 `App/Views`、`Core/*.swift`、`Agent*` 是 **macOS 实现落点**；本端按同一契约在 Rust 命令层 / Vue 界面实现，**契约、阈值、判据编号一律不改**。本端尚未实现 ⇒ 无本端实测读数。
+> **上游**：需求 `FR-AGT-LINK-CHAN-001` 判据 ⑥；能力书 §3.6.1 边界；概设需求归属行（多档口径）。
 
-**上游**：需求 `FR-AGT-LINK-CHAN-001` 判据 ⑥（2026-11-08 主人令：「可以做到 beta1.1 里啊」）；能力书 §3.6.1 边界；概设需求归属行（多档口径）。**历史**：配置层（`AgentConfiguration.profiles`）早在 那条旧需求（四段式旧编号，已废止，现行归属 `FR-AGT-LINK-CHAN-001` ⑥） 就建好并有用例，但界面从未暴露第二档 —— 换模型服务只能把上一组擦掉。
+**本端状态：不适用** —— 同源前端只有单组端点 / 模型名，没有档清单与每档密钥条目（`duplicateProfile` / `activeProfile` 在命令层命中 0）。
 
-1. **是什么**：模型接入配置是**档的清单**。档 = 端点 + 模型名 + 超时 + **一把独立密钥条目**（`AgentProfile.secretKey`，缺省 `agent.api-key.<档 id>`）。界面可**新增 / 复制 / 切换 / 删除 / 改名**档（上限 20 档）；切档后**下一次请求**立刻走新档，既有会话记录一个字不改。
-2. **不是什么**：不是「多 profile（多套人格 / 记忆）」—— 那是能力书附录 C #2 的未决项，与档不是一回事；不是「同时向多个端点发同一请求」（无并行外发，也无失败转移）；不是「切档重开会话」（历史不改写）。
-3. **边界**：清单**至少留一档**，删到只剩一档时 `removeProfile` 返回 `false`、界面如实说「至少要留一档」；删一档时**只删自己那条密钥**，不连坐别的档；老配置（单档）解码时任旧条目键 `agent.api-key`，已存的 Key 不丢；档的增删改与 `activeProfileID` 落在同一份 `agent.json`（原子写），**密钥从不进配置文件**。清单上限 **20 档**（`AgentConfiguration.maximumProfileCount`；到顶 `addProfile` 返回 `false` 且一档都不加）；复制出来的档**另起一条钥匙串条目**（`AgentProfile.defaultSecretKey(for:)`），密钥本体不随复制过去 —— 两档共用一条条目等于改一档把另一档也换了；改名空名拒绝。
-4. **数据结构**：`Core/AgentConfiguration.swift` —— `profiles: [AgentProfile]`（不许为空）、`activeProfileID`（指不到时自愈为第一档）、`addProfile(_:makeActive:)` / `removeProfile(id:)`（最后一档拒绝）/ `setActiveProfile(id:)`（不存在的档拒绝）/ `updateProfile(_:)`；档管理另有三件：`duplicateProfile(id:name:)`（副本插在原档之后并切过去，`id` 与 `secretKey` 重新生成）、`renameProfile(id:name:)`（空名拒绝）、`deleteProfile(id:) -> ProfileDeletion`（`.deleted(fellBackTo:)` / `.refusedLastProfile` / `.notFound`，**回落目标由 Core 决定**，界面不自己猜）；`endpoint` / `model` / `timeoutSeconds` 是**当前档的只读镜像**（单一真值源，不另存一份）。
-5. **密钥**：`Platform/macOS/FileAgentSecretStore.swift` 新增 `entryKey`（缺省 `agent.api-key`）；每档一个条目（`agent.api-key.<档 id>`），同一份 `secrets.json`（0600）里分槽，**删档删自己的槽**。读、写、清一律走 `agentKeyStore(forProfile:)`，没有第二处直接摸默认槽位的路径。
-6. **界面与状态**：`App/Views/AgentSettingsSheet.swift` 模型页顶部「模型档位（多端点）」—— 档位下拉 + 「新增档」+ 「删除此档」（只剩一档时禁用并给出理由）；切档时**先把当前草稿写回旧档**（`AppState.updateActiveAgentProfile`）再载入新档（`loadProfileDraft`），切走不丢改动。`AppState` 侧入口：`selectAgentProfile(id:)` / `addAgentProfile(name:)` / `duplicateAgentProfile(id:name:)` / `deleteAgentProfile(id:)` / `renameAgentProfile(id:name:)` / `updateActiveAgentProfile(...)`（档名与预设 id 一并写回），落盘后统一 `refreshActiveAgentKey()` 把「有没有 Key」对齐到当前档；四个动作返回 `AgentProfileActionResult`（`applied` / `limitReached` / `lastProfile` / `notFound` / `failed`），界面据此说一句人话（到上限、找不到了、写盘失败各有各的说法）。那一节拆成独立视图 `App/Views/AgentProfileEditor.swift`：档选择器与四枚动作落成 **AppKit 控件**（`AgentProfilePicker` / `AgentProfileActionButton`）—— 离屏宿主里 SwiftUI `Picker` / `Button` 不落 `NSPopUpButton` / `NSButton`，`canDelete` 与「在途置灰」两件事就量不到；AppKit 控件的 `isEnabled` 同时受 SwiftUI `.disabled(...)` 环境约束（只设 `NSButton.isEnabled` 会被 `adoptEnvironment` 改回 `true`，两处都要写）。
-7. **测试连接（逐档）**：`Core/AgentConnectionProbe.swift` —— `AgentConnectionProbe.run(profile:apiKey:transport:)` 真发一次最小往返（请求仍由 `OpenAICompatibleClient.makeURLRequest` 造：端点补 `/chat/completions`、`Authorization: Bearer`、请求体形状只此一处；走**和聊天循环同一个流式出口** `EgressRecordingStreamingTransport` 包 `URLSessionStreamingTransport`（测试连接同样进外发日志），SSE 用**同一个** `LLMStreamDecoder`；非 2xx 直接按状态码分档 —— 这一层刻意不经过把状态码折进 `LLMError` 的 `OpenAICompatibleStreamingClient.stream`，因为测连接要的正是「几号 + 正文说了什么」），结论收敛为 `AgentConnectionOutcome` 五档：`.success(model:millis:)` / `.unauthorized(statusCode:)`（401·403）/ `.timedOut(seconds:)` / `.unexpected(statusCode:detail:)`（非 JSON、缺 `choices`、其它非 2xx 码）/ `.notAttempted(reason:)`（总开关关、配额超限、配置不全、封条拒绝 —— **一个字节没发**）。`.notAttempted` 单列是因为把「没试」说成「连不上」会把用户引到错误的修法上。人话由 `AgentConnectionOutcome.line(language:)` 出（`agentConnection*` 五条文案），`AppState.testAgentProfileConnection(_:apiKeyOverride:)` 只补 App 侧三件事（总开关、配额闸、取**这一档**的密钥条目）；测的是**面板草稿**而不是盘上那份。
-8. **模型候选**：`Core/AgentModelListProbe.swift` —— `GET {endpoint}/models`（`modelsURL(from:)` 不叠加 `/models/models`），解析 `data[].id`（也认 `data: [String]` 与裸数组），去重保序；结论只有两档 `AgentModelListOutcome.listed([String])` / `.unavailable(AgentModelListFailure)` —— **没有「错误」这一档**，失败按 `timedOut` / `unauthorized` / `badStatus` / `malformed` / `transport` 分档只为把原因说清。预设是否声明支持写在 `AgentProviderPreset.supportsModelListing`（端点非空且不在 `modelListingUnsupportedPresetIDs`，当前只有火山方舟 —— 它的模型标识是接入点 ID）；界面按它决定这一枚按钮可不可点，**拉不到只写一行说明并退回手填**，不弹错误框。
+**契约六条（与基准逐条一致）**
+1. **是什么**：模型接入配置是**档的清单**。档 = 端点 + 模型名 + 超时 + **一把独立密钥**（每档一条凭据条目）。界面可**新增 / 切换 / 删除**；切档后**后续请求**立刻走新档，既有会话记录一个字不改。
+2. **不是什么**：不是多 profile（多套人格 / 记忆）；不是同时向多个端点发同一请求；不是切档重开会话。
+3. **清单至少一档**：删到只剩一档必须**拒绝**并说明；删一档只删自己那条密钥，不连坐。
+4. **老配置不丢**：单档时代的配置解码时任旧条目键，已存的 Key 照旧读得回来。
+5. **密钥不进配置文件**：凭据只落本端 `SecretStore`（§0.3 第 1 条），配置文件里只有条目名。
+6. **界面**：档管理要能表达「到上限 / 找不到了 / 写盘失败」三档失败原因，不许一句「失败了」了事。
+7. **测试连接（逐档）**：每档**单独**测（用该档端点 + 该档密钥），四档结局分别如实说：通 / 认证失败 / 网络不可达 / 模型不存在 —— 不许把四种压成一句「连接失败」。
+8. **模型候选**：`GET {endpoint}/models` 拉到候选就填进下拉，**拉不到退回手填**（不许因为拉不到就禁掉手动输入）；候选列表不许缓存到跨档串用。
 
-**判据**
+**本端落点**：同源前端的模型设置面；多档与每档密钥条目未建。
 
-| 判据 | 覆盖 | 读数（真跑） | 反例 |
-|---|---|---|---|
-| `T-3.40-01` **一档一把密钥、互不覆盖** | 条目隔离 | `swift test --filter AgentSecretStorageContractTests` ⇒ `testEachProfileKeepsItsOwnKeyAndDeletingOneLeavesTheOther` 通过（三档各写各读，老槽位 `agent.api-key` 仍可读） | 把 beta 的 key 写到默认实例上 ⇒ 断言 beta 条目不变，覆盖即判红 |
-| `T-3.40-02` **删一档不连坐** | 删除隔离 | 同一用例：删 `alpha` 后 `alpha` 为空、`beta` 与原老槽位都还在 | 若删除实现改成整份文件重写 ⇒ `beta` 读回为空即判红 |
-| `T-3.40-03` **最后一档不许删** | 清单非空 | `AgentProfileTests`（`removeProfile` 单档返回 `false`）通过 | 单档时删档返回 `true` 即判红（界面上也不会出现可用配置） |
-| `T-3.40-04` **切档是持久化的** | 状态落盘 | `setActiveProfile(id:)` 对不存在的档返回 `false`；切档走 `agentConfigurationStore.save` 原子写 | 切到被删掉的档仍返回 `true` 即判红 |
-| `T-3.40-05` **切档不改写历史会话** | 会话隔离 | 会话记录只读既有消息，不含模型档字段；切档只改后续请求用哪一档 | 若切档触发会话重写/重载 ⇒ 判红（会话审计里能看出改写） |
-| `T-3.40-06` **界面上切走不丢改动** | 草稿回写 | 切档前调 `updateActiveAgentProfile`；切回原档端点 / 模型名与切走前一致 | 切走再切回字段为空 ⇒ 判红 |
-| `T-3.40-07` **切到第 2 档 ⇒ 请求逐字对应该档** | 切档即生效 | `Tests/AgentProfileManagementTests.testSwitchingToTheSecondProfileSendsItsOwnEndpointModelAndKey`：三档（`p1` 本机 / `p2` deepseek / `p3` openai）切到 `p2` 后经 `AgentConnectionProbe` 发一条，探针抓到 `URL=https://api.deepseek.com/v1/chat/completions` · `model=deepseek-v4.1-flash` · `Authorization=Bearer sk-deepseek-second` | 任一项还是上一档（`127.0.0.1:11434` / `qwen2.5:7b` / `Bearer sk-local`）⇒ 判红 |
-| `T-3.40-08` **删当前档回落、删最后一档被拒** | 清单非空 + 有据可查 | `testDeletingTheActiveProfileFallsBackAndTheLastOneIsRefused`：删 `p1`（当前档）⇒ `deleted(fellBackTo: p2)`、`activeProfileID` = `p2`；删非当前档 ⇒ `fellBackTo` 为 `nil` 且当前档不动；只剩一档 ⇒ `.refusedLastProfile` 且 `profiles.count` 仍为 1；`removeProfile` 与 `deleteProfile` 口径一致 | 删当前档后 `activeProfileID` 仍指着已消失的档 ⇒ 判红；最后一档被删掉 ⇒ 判红 |
-| `T-3.40-09` **每档一条钥串条目** | 密钥独立 | `testEachProfileKeepsItsOwnSecretKeyEntry`：三档条目 = `agent.api-key.p1` / `.p2` / `.p3`（`Set` 计数 = 3）；改 `p2` 的 Key 后 `p1` 条目一字未变；复制出来的档条目 = `AgentProfile.defaultSecretKey(for: 新 id)`（与原档不同） | 两档共用同一条目、或复制沿用原条目 ⇒ 判红 |
-| `T-3.40-10` **测试连接四档结局** | 结局分开说 | `Tests/AgentConnectionProbeTests` 10 例：`success`（`连接成功：deepseek-v4.1-flash · 0 毫秒`）/ `401`（`端点拒绝了凭据（HTTP 401）…`）/ `timeout`（`超时：12 秒内没有响应…`）/ `unexpected`（非 JSON ⇒ `端点有响应，但不是模型结果（HTTP 200）…`；502 ⇒ `unexpected(502, "upstream down")`）；前提不成立（空端点 / 空模型名）⇒ `.notAttempted` 且传输层**零请求** | 四档压成一句「失败」、或前提不成立还说「连不上」、或前提不成立仍发出请求 ⇒ 判红 |
-| `T-3.40-11` **模型候选：拉到就用、拉不到退回手填** | 不弹错误框 | `testModelListIsParsedFromTheOpenAICompatibleShape`：`GET https://api.deepseek.com/v1/models`（含 `Bearer` 头）解析出 `[deepseek-v4.1-flash, deepseek-v4-pro]`（重复项去重）；`testModelListFailureFallsBackToTypingInsteadOfAnError`：401 / 200+非 JSON / 超时三档都是 `unavailable(...)`，每句结论都含「手填」；`testPresetDeclaresWhetherTheEndpointSupportsModelListing`：deepseek / vllm 声明支持、volcano 与「自定义」不声明 | 拉取失败抛错 / 弹框、或把 `unavailable` 当空清单静默 ⇒ 判红 |
-| `T-3.40-12` **上限 20 档 + 复制/改名** | 配置面动作 | `testProfileCountIsCappedAtTwenty`：加到 20 档后 `addProfile` 与 `duplicateProfile` 都返回失败且档数不变；`testDuplicateCopiesNonSecretFieldsAndMovesActive`：副本紧跟原档插入并切过去、端点/模型/预设随复制、空名改名被拒（`renameProfile` 返回 `false`）、正常改名只动这一档；界面侧 `TestsUISnapshot/AgentProfileEditorProbeTests` 4 例：下拉三条、四枚动作各派发一次、**只剩一档时删除 `isEnabled=false` 且点不动**、测试在途时那一枚 `isEnabled=false` | 到上限还能加、复制沿用原条目、灰着的删除仍派发 ⇒ 判红 |
-**覆盖声明**：`T-3.40-01/02` 是**存储层**真跑（`TestsPlatform`）；`T-3.40-03/04` 是**配置层**单测；`T-3.40-05`（切档不改写历史会话）目前只有**代码路径** —— 会话记录里没有模型档字段，切档只换后续请求的路由，**没有独立探针用例**，只报「设计如此，待真机点验」；`T-3.40-06` 由 `T-3.40-07` 的同一路径覆盖（切档前把草稿写回旧档，切回后端点 / 模型名逐字相同）；`T-3.40-07`–`T-3.40-12` 真跑读数：`swift test --filter "AgentProfileManagementTests|AgentConnectionProbeTests"` ⇒ `Executed 17 tests, with 0 failures`；`DOYAH_UI_SNAPSHOT=1 swift test -Xswiftc -DDOYAH_UI_SNAPSHOT --filter AgentProfileEditorProbeTests` ⇒ `Executed 4 tests, with 0 failures`。**边界**：探针量的是「请求真发出去时带的是什么」与「控件在两种状态下可不可点」，**不是**「对端真的认这把 Key」—— 后者要有真端点，归人工点验。
+**本端实现（Linux）**
+
+- **落点**：`crates/agent/src/profile.rs` + `apps/desktop/src/views/ModelProfiles.vue`
+- **机制与差异**：多档（端点 + 模型 + 超时 + 每档一把密钥，密钥进 Secret Service，条目 `agent.api-key.<profileId>`）；至少留一档；上限 20 档；切档持久化、不改写历史会话。差异：macOS 每档一条 Keychain 条目，本端每位一条 Secret Service 条目，命名规则一致以便迁移。
+
+**判据**：`T-3.40-01`–`T-3.40-06` 口径同基准；**本端未测**。 · `T-3.40-01` · `T-3.40-02` · `T-3.40-03` · `T-3.40-04` · `T-3.40-05` · `T-3.40-06` · `T-3.40-07` · `T-3.40-08` · `T-3.40-09` · `T-3.40-10` · `T-3.40-11` · `T-3.40-12`（07 切到第 2 档 ⇒ 请求逐字对应该档 / 08 删当前档回落、删最后一档被拒 / 09 每档一条钥串条目 / 10 测试连接四档结局 / 11 模型候选拉到就用、拉不到退回手填 / 12 上限 20 档 + 复制/改名）
+
 
 ## 4. 数据与状态
 
