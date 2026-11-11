@@ -1,275 +1,317 @@
 {
- "_说明": "`Scripts/check-network-egress.py`（**全仓**网络出口门禁，闭环第 10 项）的台账。清单只许取自 Notes SRS **v3.94** §6.4「按面分层的文件级显式清单」（前门落笔 `987ace7` · 回执 T-20261009-149 ③）；**扫描面 = 全仓**（前门裁 `T-20261014-204` 第 9 条，原单 `T-20261010-016/017/018`）。台账写的是**声明**，门禁拿它跟事实对账 —— 判据与台账分家会让『改台账就能过』变成一条暗道，所以面 / 文件 / 理由三样缺一不可。",
- "srs": {
-  "doc": "Notes SRS v3.94",
-  "commit": "987ace7",
-  "section": "§6.4 网络出口与门禁（按面分层的文件级显式清单）",
-  "frontDoorReceipt": "T-20261009-149 ③「禁网门禁片可建（判据能写死）」",
-  "pending": "「判定对象 = 代码出现（`//` / `///` 注释与字符串字面量里的提及不算出现）」这条口径尚未写进 SRS v3.94 —— SRS 表末行按**字面**会判红 `Core/DataTaskSpecGenerator.swift:7` 的 `///` 文档注释（那**不是**出网调用）。已作契约措辞缺口上报前门（组长第 371 轮预审 · 单号 T-20261009-159）；本门禁按该口径实现。"
- },
- "tokens": [
-  {
-   "token": "URLSession",
-   "reason": "系统自带的出网 API；出现在白名单之外的文件里就说明那条链路能发数据出去"
+  "_说明": "`Scripts/check-network-egress.py`（**全仓**网络出口门禁，闭环第 10 项）的台账。清单只许取自 Notes SRS **v3.94** §6.4「按面分层的文件级显式清单」（前门落笔 `987ace7` · 回执 T-20261009-149 ③）；**扫描面 = 全仓**（前门裁 `T-20261014-204` 第 9 条，原单 `T-20261010-016/017/018`）。台账写的是**声明**，门禁拿它跟事实对账 —— 判据与台账分家会让『改台账就能过』变成一条暗道，所以面 / 文件 / 理由三样缺一不可。",
+  "srs": {
+    "doc": "Notes SRS v3.94",
+    "commit": "987ace7",
+    "section": "§6.4 网络出口与门禁（按面分层的文件级显式清单）",
+    "frontDoorReceipt": "T-20261009-149 ③「禁网门禁片可建（判据能写死）」",
+    "pending": "「判定对象 = 代码出现（`//` / `///` 注释与字符串字面量里的提及不算出现）」这条口径尚未写进 SRS v3.94 —— SRS 表末行按**字面**会判红 `Core/DataTaskSpecGenerator.swift:7` 的 `///` 文档注释（那**不是**出网调用）。已作契约措辞缺口上报前门（组长第 371 轮预审 · 单号 T-20261009-159）；本门禁按该口径实现。"
   },
-  {
-   "token": "URLRequest",
-   "reason": "请求对象；只可能是要发出去的东西"
-  }
- ],
- "requiredTokens": [
-  "URLSession",
-  "URLRequest"
- ],
- "surfaces": [
-  {
-   "key": "sync",
-   "name": "笔记同步面",
-   "rule": "该面唯一出口",
-   "files": [
-    "Plugins/Notes/Sources/NoteSync/CloudSyncService.swift"
-   ],
-   "reason": "SRS §6.4 表第 1 行：同步面的出网接线集中在这一个文件（上行 upsert + 增量下拉 + 断网重试），便于审计与将来替换；`Core/NoteSync/` 其余文件（`SyncCore.swift` / `SyncQueue.swift` 等纯逻辑）必须保持可离线单测。"
-  },
-  {
-   "key": "auth",
-   "name": "认证面",
-   "rule": "单列（认证与同步解耦）",
-   "files": [
-    "Plugins/Notes/Sources/NoteSync/CloudAuth.swift"
-   ],
-   "reason": "SRS §6.4 表第 2 行：认证（口令换令牌 / 刷新 / 登出 / 注册）与同步解耦，单独一个文件承载它自己的 HTTP 面；端点口径见 §6.4.2 IR-18。"
-  },
-  {
-   "key": "ai",
-   "name": "AI 面（既有豁免 + FR-AGT-LINK-CHAN-002 流式面）",
-   "rule": "既有豁免；新增件须前门登记后放行（纪律②）",
-   "files": [
-    "Core/LLMClient.swift",
-    "Core/EgressLog.swift",
-    "Core/LLMStreaming.swift"
-   ],
-   "reason": "SRS §6.4 表第 3 行：AI 面的出网（模型调用）与统一外发日志的传输装饰器都在既有实现里，本次口径修正**不动它们**，只登记。**2026-10-14 补登第 3 件** `Core/LLMStreaming.swift`（FR-AGT-LINK-CHAN-002 流式传输面 · 实测 7 处令牌）：依据前门 `T-20261014-207` ① 裁定「**必须登记进联网文件面**，登记后求 `rc=0`；**不许**为了 `rc=0` 把它排除在面外」+ §1.4 不变量①「任何发起网络调用的文件必须登记」（原缺口 = 本台账 `knownGaps` ⑤）；**SRS §6.4 表第 3 行的文件枚举待前门落笔跟版**（本侧不擅改契约层）。"
-  },
-  {
-   "key": "seam",
-   "name": "装配缝（不算出口）",
-   "rule": "只注入 transport，不得直接出网",
-   "files": [
-    "App/AppState.swift",
-    "App/Auth/AccountFlowModel.swift"
-   ],
-   "allowPatterns": [
-    "URLSessionTransport\\(",
-    "URLSessionCloudAuthTransport\\(",
-    "URLSessionStreamingTransport\\("
-   ],
-   "reason": "SRS §6.4 表第 4 行：这两处是**装配缝** —— 把出网传输（`URLSessionTransport` / `URLSessionCloudAuthTransport`）注入到 Core 的客户端上，**自己不直接出网**；除注入之外出现 `URLSession` / `URLRequest` ⇒ 判红（纪律③）。 **2026-11-02 补第 3 个模式** `URLSessionStreamingTransport(`：`NFR-ALL-GATE-SEC-008` 把流式出网也包上留痕装饰器后，装配缝里出现的就是「造流式 transport 再交给装饰器」——与本面第 1 个模式同一种形状（注入 transport，不直接出网），不是放宽判据。"
-  }
- ],
- "scan": {
-  "glob": "*.swift",
-  "commentPolicy": "判定对象 = **代码出现**：`URLSession` / `URLRequest` 出现在 `//` / `///` 行注释、`/* */` 块注释或**字符串字面量**里**不算出现、不判红**（与 `check-core-portability.py` / `check-editor-surface-tokens.py` / `check-design-tokens.py` 同一口径：「注释里提到某个标识不算它还在用」）。例：`Core/DataTaskSpecGenerator.swift:7` 的 `///` 文档注释写着「本类型里没有任何 URLSession / 请求组装」—— 那是**声明不出网**，不判红、也**不进白名单**（白名单只许取自 SRS）。",
-  "excludeDirs": [
-   ".git",
-   ".build",
-   ".worktrees",
-   "DerivedData",
-   "build"
+  "tokens": [
+    {
+      "token": "URLSession",
+      "reason": "系统自带的出网 API；出现在白名单之外的文件里就说明那条链路能发数据出去"
+    },
+    {
+      "token": "URLRequest",
+      "reason": "请求对象；只可能是要发出去的东西"
+    }
   ],
-  "scopeNote": "扫描面 = **全仓**（前门裁 `T-20261014-204` 第 9 条：「以**声明**为准，把扫描面扩到全仓 —— **不许收窄声明去迁就脚本**」· 原单 `T-20261010-016/017/018`：其中 17 的缺口正是「SRS §6.4 表末行『其余一切文件』全仓口径 ↔ 实现侧只扫 `App/`+`Core/`」）。`scope` 必须是 `repo`（判据⑦面钉）；`excludeDirs` 只许放生成物 / 稀疏检出副本；实测扫描面漏掉不在排除名单里的 `.swift` ⇒ 判红。白名单面（SRS §6.4 表 1~4 行）以外的出网文件逐条登记在 `outOfFace`（**登记 ≠ 放行**，定性由前门裁）。",
-  "scope": "repo",
-  "excludeDirsAllowed": [
-   ".git",
-   ".build",
-   ".worktrees",
-   "DerivedData",
-   "build"
-  ],
-  "excludeDirsAllowedNote": "排除名单的**钉**（2026-10-14 · 合册 `T-20261013-027` 清册第 11 行 · 原单 `T-20261010-018`）：`excludeDirs` 的每一项都必须在这里登记 —— 把真源码目录塞进排除名单就能静默缩面，故「未登记的排除项」判红。这五项全是生成物 / 稀疏检出副本。"
- },
- "floors": {
-  "minFilesScanned": 911,
-  "minSurfaces": 4,
-  "minRequiredTokens": 2,
-  "minFilesScannedNote": "2026-10-14（合册 `T-20261013-027` · 清册第 9~11 行 · 前门 `T-20261014-204` 第 9 条「面扩到全仓」）：由 **357**（旧「产品源面」= `App/` + `Core/` + `Plugins/Notes/Sources/` + `Plugins/Notes/Views/` 实数）提到**本跳实测 911**（= 全仓 `.swift` 数，排除名单 `.git` / `.build` / `.worktrees` / `DerivedData` / `build` 之后）。下限按**只增不减**取 911：同日更晚落地的 Linux 端片 `a08656e` 再 +1 ⇒ 读数 **912**，仍在可接受的只增一侧（收窄到 911 以下才判红）。",
-  "minRegisteredEgress": 10,
-  "minRegisteredEgressNote": "2026-10-14（合册 `T-20261013-027` · 清册第 9~11 行 · 前门 `T-20261014-204` 第 9 条）：非白名单面**已登记**的出网文件条数下限 = **10**（实测）。前门令「**登记不许抹**」⇒ 删掉一条登记，就没人再看见面外实测的真出网 ⇒ 本条判红。"
- },
- "wiring": {
-  "verifyAll": "Scripts/verify-all.sh",
-  "gateCall": "check-network-egress.py",
-  "negativeTest": "Scripts/test-network-egress-gate.py"
- },
- "evidence": [
-  {
-   "file": "Scripts/verify-all.sh",
-   "contains": "check-network-egress.py",
-   "why": "门禁必须在闭环里真的被调用（存在但没接线＝红不起来，第 10 项那类假绿）"
-  },
-  {
-   "file": "Scripts/test-network-egress-gate.py",
-   "contains": "URLSession.shared",
-   "why": "负例必须真的注入一次出网调用（真仓里白名单之外一条都扫不出来，所以『门禁看得见违规』只能靠负例证明）"
-  }
- ],
- "knownGaps": [
-  "① 只判『源码里出现出网 API』，判不了『运行时真的没有出网』（那要靠断网用例与统一外发日志；后者见 NFR-ALL-GATE-SEC-008）。",
-  "② 面 = **全仓**（前门 `T-20261014-204` 第 9 条钉死）：白名单面（SRS §6.4 表 1~4 行）以外的 `.swift` 不判出网合法性，但必须逐条登记在 `outOfFace`（漏登 / 陈旧 / 死登记 / 抹登记都判红，条数下限 `floors.minRegisteredEgress`）；面不许由被审台账单方面改窄 —— `scan.scope != \"repo\"` 或实测漏掉不在排除名单里的文件 ⇒ 判据⑦判红（原单 `T-20261010-018`）。",
-  "③ 「判定对象 = 代码出现（注释 / 字符串里的提及不算出现）」这条口径尚未写进 SRS v3.94（前门单号 T-20261009-159）。",
-  "④ 非白名单面两处已知生产出网（`CLI/main.swift` · `Platform/macOS/WebKitBrowserEngine.swift`）的**定性**未决 —— 记在 `outOfFace` 只让它们不再静默，不等于放行；定性由前门裁（原单 `T-20261010-040` ④）。",
-  "⑤ **已闭环（2026-10-14）**：`Core/LLMStreaming.swift`（FR-AGT-LINK-CHAN-002 第二片 · 2026-10-13 新增的流式传输面）7 处令牌原先未登记进任何面 ⇒ 门禁在真仓判红（改前 rc=1 · 7 处）。**前门 `T-20261014-207` ① 已裁「必须登记进联网文件面，不许为了 rc=0 排除在面外」** ⇒ 本侧按 ㈠ 登记进 **AI 面**（`Core/LLMClient.swift` / `Core/EgressLog.swift` 之后第 3 件，改后 rc=0）。**残留 = SRS §6.4 表第 3 行的文件枚举待前门落笔**（契约层不归本侧）。"
- ],
- "outOfFace": [
-  {
-   "file": "CLI/main.swift",
-   "tokens": [
-    "URLSession"
-   ],
-   "reason": "第407轮实测的面外活体：CLI 侧装配 transport（当前 HEAD 的 `:122`；原单按 `6a1de15` 记的是 `:113`，行号随提交漂移）。面外不判，但必须逐条登记并打出读数；待前门定性（原单 T-20261010-040 ④：这两处出网是「合法出口」还是「漏网」由前门裁）",
-   "bucket": "production"
-  },
-  {
-   "file": "Platform/macOS/WebKitBrowserEngine.swift",
-   "tokens": [
-    "URLRequest",
-    "URLSession"
-   ],
-   "reason": "第407轮实测的面外活体：内嵌浏览器 `view.load(URLRequest(url:))`（当前 HEAD 的 `:175`）。面外不判，但必须逐条登记并打出读数；待前门定性（原单 T-20261010-040 ④：这两处出网是「合法出口」还是「漏网」由前门裁）",
-   "bucket": "production"
-  },
-  {
-   "file": "Tests/AgentObservationTests.swift",
-   "bucket": "test-double",
-   "tokens": [
-    "URLRequest"
-   ],
-   "reason": "面外活体（第407轮实测口径重跑）：本文件在 `Tests/` 面外构造出网替身 —— 测试夹具的请求对象，不是产品出口路径。面外不判，登记只为不再静默 + 棘轮（只减不增）；定性待前门（原单 T-20261010-040 ④）。"
-  },
-  {
-   "file": "Tests/AgentQuotaSessionTests.swift",
-   "bucket": "test-double",
-   "tokens": [
-    "URLRequest"
-   ],
-   "reason": "面外活体（第407轮实测口径重跑）：本文件在 `Tests/` 面外构造出网替身 —— 测试夹具的请求对象，不是产品出口路径。面外不判，登记只为不再静默 + 棘轮（只减不增）；定性待前门（原单 T-20261010-040 ④）。"
-  },
-  {
-   "file": "Tests/AgentSQLGeneratorTests.swift",
-   "bucket": "test-double",
-   "tokens": [
-    "URLRequest"
-   ],
-   "reason": "面外活体（第407轮实测口径重跑）：本文件在 `Tests/` 面外构造出网替身 —— 测试夹具的请求对象，不是产品出口路径。面外不判，登记只为不再静默 + 棘轮（只减不增）；定性待前门（原单 T-20261010-040 ④）。"
-  },
-  {
-   "file": "Tests/EgressLogTests.swift",
-   "bucket": "test-double",
-   "tokens": [
-    "URLRequest"
-   ],
-   "reason": "面外活体（第407轮实测口径重跑）：本文件在 `Tests/` 面外构造出网替身 —— 测试夹具的请求对象，不是产品出口路径。面外不判，登记只为不再静默 + 棘轮（只减不增）；定性待前门（原单 T-20261010-040 ④）。"
-  },
-  {
-   "file": "Tests/LLMRetryTests.swift",
-   "bucket": "test-double",
-   "tokens": [
-    "URLRequest"
-   ],
-   "reason": "面外活体（第407轮实测口径重跑）：本文件在 `Tests/` 面外构造出网替身 —— 测试夹具的请求对象，不是产品出口路径。面外不判，登记只为不再静默 + 棘轮（只减不增）；定性待前门（原单 T-20261010-040 ④）。"
-  },
-  {
-   "file": "Tests/LLMStreamTests.swift",
-   "bucket": "test-double",
-   "tokens": [
-    "URLRequest"
-   ],
-   "reason": "面外活体（第407轮实测口径重跑）：本文件在 `Tests/` 面外构造出网替身 —— 测试夹具的请求对象，不是产品出口路径。面外不判，登记只为不再静默 + 棘轮（只减不增）；定性待前门（原单 T-20261010-040 ④）。"
-  },
-  {
-   "file": "Tests/LLMStreamingClientTests.swift",
-   "bucket": "test-double",
-   "tokens": [
-    "URLRequest"
-   ],
-   "reason": "面外活体（第407轮实测口径重跑）：本文件在 `Tests/` 面外构造出网替身 —— 测试夹具的请求对象，不是产品出口路径。面外不判，登记只为不再静默 + 棘轮（只减不增）；定性待前门（原单 T-20261010-040 ④）。"
-  },
-  {
-   "file": "Tests/NoteSyncE2ETests.swift",
-   "bucket": "test-double",
-   "tokens": [
-    "URLSession"
-   ],
-   "reason": "面外活体（第407轮实测口径重跑）：本文件在 `Tests/` 面外构造出网替身 —— 测试夹具的请求对象，不是产品出口路径。面外不判，登记只为不再静默 + 棘轮（只减不增）；定性待前门（原单 T-20261010-040 ④）。"
-  },
-  {
-   "file": "Tests/LLMStreamingAuthTests.swift",
-   "tokens": [
-    "URLRequest"
-   ],
-   "reason": "测试件：断言「模型流式响应的鉴权头拼装」—— 只构造 URLRequest 校验 header，不发真请求（面外不判，但逐条登记并打读数）",
-   "bucket": "test"
-  },
-  {
-   "file": "Platform/macOS/URLSessionAgentIMSocket.swift",
-   "tokens": [
+  "requiredTokens": [
     "URLSession",
     "URLRequest"
-   ],
-   "bucket": "production",
-   "reason": "2026-10-28 第四十二批补登（第四十批落地时漏登 ⇒ 本轮实测面外 7 处未登记）：`FR-AGT-LINK-CHAN-003` 传输层的**线** —— WebSocket 适配（`URLSessionWebSocketTask`）。面外不判，登记只为不再静默 + 棘轮（只增不减，腾挪要登记）；定性待前门（原单 T-20261010-040 ④ 同类）。"
+  ],
+  "surfaces": [
+    {
+      "key": "sync",
+      "name": "笔记同步面",
+      "rule": "该面唯一出口",
+      "files": [
+        "Plugins/Notes/Sources/NoteSync/CloudSyncService.swift"
+      ],
+      "reason": "SRS §6.4 表第 1 行：同步面的出网接线集中在这一个文件（上行 upsert + 增量下拉 + 断网重试），便于审计与将来替换；`Core/NoteSync/` 其余文件（`SyncCore.swift` / `SyncQueue.swift` 等纯逻辑）必须保持可离线单测。"
+    },
+    {
+      "key": "auth",
+      "name": "认证面",
+      "rule": "单列（认证与同步解耦）",
+      "files": [
+        "Plugins/Notes/Sources/NoteSync/CloudAuth.swift"
+      ],
+      "reason": "SRS §6.4 表第 2 行：认证（口令换令牌 / 刷新 / 登出 / 注册）与同步解耦，单独一个文件承载它自己的 HTTP 面；端点口径见 §6.4.2 IR-18。"
+    },
+    {
+      "key": "ai",
+      "name": "AI 面（既有豁免 + FR-AGT-LINK-CHAN-002 流式面）",
+      "rule": "既有豁免；新增件须前门登记后放行（纪律②）",
+      "files": [
+        "Core/LLMClient.swift",
+        "Core/EgressLog.swift",
+        "Core/LLMStreaming.swift"
+      ],
+      "reason": "SRS §6.4 表第 3 行：AI 面的出网（模型调用）与统一外发日志的传输装饰器都在既有实现里，本次口径修正**不动它们**，只登记。**2026-10-14 补登第 3 件** `Core/LLMStreaming.swift`（FR-AGT-LINK-CHAN-002 流式传输面 · 实测 7 处令牌）：依据前门 `T-20261014-207` ① 裁定「**必须登记进联网文件面**，登记后求 `rc=0`；**不许**为了 `rc=0` 把它排除在面外」+ §1.4 不变量①「任何发起网络调用的文件必须登记」（原缺口 = 本台账 `knownGaps` ⑤）；**SRS §6.4 表第 3 行的文件枚举待前门落笔跟版**（本侧不擅改契约层）。"
+    },
+    {
+      "key": "seam",
+      "name": "装配缝（不算出口）",
+      "rule": "只注入 transport，不得直接出网",
+      "files": [
+        "App/AppState.swift",
+        "App/Auth/AccountFlowModel.swift"
+      ],
+      "allowPatterns": [
+        "URLSessionTransport\\(",
+        "URLSessionCloudAuthTransport\\(",
+        "URLSessionStreamingTransport\\("
+      ],
+      "reason": "SRS §6.4 表第 4 行：这两处是**装配缝** —— 把出网传输（`URLSessionTransport` / `URLSessionCloudAuthTransport`）注入到 Core 的客户端上，**自己不直接出网**；除注入之外出现 `URLSession` / `URLRequest` ⇒ 判红（纪律③）。 **2026-11-02 补第 3 个模式** `URLSessionStreamingTransport(`：`NFR-ALL-GATE-SEC-008` 把流式出网也包上留痕装饰器后，装配缝里出现的就是「造流式 transport 再交给装饰器」——与本面第 1 个模式同一种形状（注入 transport，不直接出网），不是放宽判据。"
+    }
+  ],
+  "scan": {
+    "glob": "*.swift",
+    "commentPolicy": "判定对象 = **代码出现**：`URLSession` / `URLRequest` 出现在 `//` / `///` 行注释、`/* */` 块注释或**字符串字面量**里**不算出现、不判红**（与 `check-core-portability.py` / `check-editor-surface-tokens.py` / `check-design-tokens.py` 同一口径：「注释里提到某个标识不算它还在用」）。例：`Core/DataTaskSpecGenerator.swift:7` 的 `///` 文档注释写着「本类型里没有任何 URLSession / 请求组装」—— 那是**声明不出网**，不判红、也**不进白名单**（白名单只许取自 SRS）。",
+    "excludeDirs": [
+      ".git",
+      ".build",
+      ".worktrees",
+      "DerivedData",
+      "build"
+    ],
+    "scopeNote": "扫描面 = **全仓**（前门裁 `T-20261014-204` 第 9 条：「以**声明**为准，把扫描面扩到全仓 —— **不许收窄声明去迁就脚本**」· 原单 `T-20261010-016/017/018`：其中 17 的缺口正是「SRS §6.4 表末行『其余一切文件』全仓口径 ↔ 实现侧只扫 `App/`+`Core/`」）。`scope` 必须是 `repo`（判据⑦面钉）；`excludeDirs` 只许放生成物 / 稀疏检出副本；实测扫描面漏掉不在排除名单里的 `.swift` ⇒ 判红。白名单面（SRS §6.4 表 1~4 行）以外的出网文件逐条登记在 `outOfFace`（**登记 ≠ 放行**，定性由前门裁）。",
+    "scope": "repo",
+    "excludeDirsAllowed": [
+      ".git",
+      ".build",
+      ".worktrees",
+      "DerivedData",
+      "build"
+    ],
+    "excludeDirsAllowedNote": "排除名单的**钉**（2026-10-14 · 合册 `T-20261013-027` 清册第 11 行 · 原单 `T-20261010-018`）：`excludeDirs` 的每一项都必须在这里登记 —— 把真源码目录塞进排除名单就能静默缩面，故「未登记的排除项」判红。这五项全是生成物 / 稀疏检出副本。"
   },
-  {
-   "file": "Platform/macOS/URLSessionAgentIMQQClient.swift",
-   "tokens": [
-    "URLSession",
-    "URLRequest"
-   ],
-   "bucket": "production",
-   "reason": "2026-10-28 第四十二批：★0 取 token / 取网关的 REST 出口（`bots.qq.com/app/getAppAccessToken`、`api.sgroup.qq.com/gateway`）—— 地址由程序自己取之后这条面必然存在。面外不判；定性待前门。"
+  "floors": {
+    "minFilesScanned": 911,
+    "minSurfaces": 4,
+    "minRequiredTokens": 2,
+    "minFilesScannedNote": "2026-10-14（合册 `T-20261013-027` · 清册第 9~11 行 · 前门 `T-20261014-204` 第 9 条「面扩到全仓」）：由 **357**（旧「产品源面」= `App/` + `Core/` + `Plugins/Notes/Sources/` + `Plugins/Notes/Views/` 实数）提到**本跳实测 911**（= 全仓 `.swift` 数，排除名单 `.git` / `.build` / `.worktrees` / `DerivedData` / `build` 之后）。下限按**只增不减**取 911：同日更晚落地的 Linux 端片 `a08656e` 再 +1 ⇒ 读数 **912**，仍在可接受的只增一侧（收窄到 911 以下才判红）。",
+    "minRegisteredEgress": 23,
+    "minRegisteredEgressNote": "2026-10-14（合册 `T-20261013-027` · 清册第 9~11 行 · 前门 `T-20261014-204` 第 9 条）：非白名单面**已登记**的出网文件条数下限 = **10**（实测）。前门令「**登记不许抹**」⇒ 删掉一条登记，就没人再看见面外实测的真出网 ⇒ 本条判红。2026-11-10：人类主人令按三类登记 5 份（连接自检探针 2 · 传输层 1 · 单测夹具 2）后，实测条数增至 23，下限同批提到 23（只增不减：删掉任何一条就判红）。"
   },
-  {
-   "file": "Tests/AgentEgressSealTests.swift",
-   "bucket": "test-double",
-   "tokens": [
-    "URLRequest",
-    "URLSession"
-   ],
-   "reason": "面外活体（2026-11-02 `AC-ALL-GATE-AI-001` 判据）：本文件就是那台「在 URLSession 边界上数请求」的量具 —— 自建一个带计数 `URLProtocol` 的 session，证明封条关着时 0 条请求真的开始加载（并做松开 1 条的正向对照）。它不发起任何真实出网（计数器拦下所有请求并回固定假响应），不是产品出口路径；登记只为不再静默 + 棘轮（只减不增）。"
+  "wiring": {
+    "verifyAll": "Scripts/verify-all.sh",
+    "gateCall": "check-network-egress.py",
+    "negativeTest": "Scripts/test-network-egress-gate.py"
   },
-  {
-   "file": "Core/AgentWebTools.swift",
-   "tokens": [
-    "URLRequest",
-    "URLSession"
-   ],
-   "bucket": "production",
-   "reason": "联网检索面（`FR-AGT-TOOL-INGEST-001/004`）：`AgentWebTools` / `AgentWebFetcher` / 三个后端各自构造 `URLRequest` 并走注入的 `HTTPTransport`。面外不判，登记只为不再静默 + 棘轮（只减不增）。**2026-11-02 起它的每一次出网都进统一外发日志**（`App/AppState.swift` 里构造时包 `EgressRecordingTransport(origin: \"智能体 · 联网检索\")`，判据 `Tests/EgressUnifiedLogTests`）——`NFR-ALL-GATE-SEC-008` 的覆盖面靠这条接线成立，不是靠本登记。定性（是否升为 AI 面的一员）待前门裁。"
-  },
-  {
-   "file": "Tests/AgentQuotaPersistenceTests.swift",
-   "bucket": "test-double",
-   "tokens": [
-    "URLRequest"
-   ],
-   "reason": "面外活体（2026-11-02 门禁实测重跑）：本文件在 `Tests/` 面外构造出网替身 —— 测试夹具的请求对象，不是产品出口路径。面外不判，登记只为不再静默 + 棘轮（只减不增）。"
-  },
-  {
-   "file": "Tests/AgentWebToolsTests.swift",
-   "bucket": "test-double",
-   "tokens": [
-    "URLRequest"
-   ],
-   "reason": "面外活体（2026-11-02 门禁实测重跑）：本文件在 `Tests/` 面外构造出网替身 —— 测试夹具的请求对象，不是产品出口路径。面外不判，登记只为不再静默 + 棘轮（只减不增）。"
-  },
-  {
-   "file": "Tests/EgressUnifiedLogTests.swift",
-   "bucket": "test-double",
-   "tokens": [
-    "URLRequest"
-   ],
-   "reason": "面外活体（2026-11-02 新增）：`NFR-ALL-GATE-SEC-008` 判据族本身要造请求对象喂给流式装饰器 —— 测试夹具，不是产品出口路径。面外不判，登记只为不再静默 + 棘轮（只减不增）。"
-  }
- ],
- "outOfFaceNote": "登记类（只减不增）：`scan.scope = repo` ⇒ 这些文件**已经在扫描面内**，但不在 SRS §6.4 白名单面里 ⇒ 逐条登记（漏登 / 陈旧 / 死登记 / **抹登记**都判红；条数下限 `floors.minRegisteredEgress` = 10）。**登记 ≠ 放行**：`CLI/main.swift` · `Platform/macOS/WebKitBrowserEngine.swift` 两处生产活体的定性由前门裁（原单 `T-20261010-040` ④）。"
+  "evidence": [
+    {
+      "file": "Scripts/verify-all.sh",
+      "contains": "check-network-egress.py",
+      "why": "门禁必须在闭环里真的被调用（存在但没接线＝红不起来，第 10 项那类假绿）"
+    },
+    {
+      "file": "Scripts/test-network-egress-gate.py",
+      "contains": "URLSession.shared",
+      "why": "负例必须真的注入一次出网调用（真仓里白名单之外一条都扫不出来，所以『门禁看得见违规』只能靠负例证明）"
+    }
+  ],
+  "knownGaps": [
+    "① 只判『源码里出现出网 API』，判不了『运行时真的没有出网』（那要靠断网用例与统一外发日志；后者见 NFR-ALL-GATE-SEC-008）。",
+    "② 面 = **全仓**（前门 `T-20261014-204` 第 9 条钉死）：白名单面（SRS §6.4 表 1~4 行）以外的 `.swift` 不判出网合法性，但必须逐条登记在 `outOfFace`（漏登 / 陈旧 / 死登记 / 抹登记都判红，条数下限 `floors.minRegisteredEgress`）；面不许由被审台账单方面改窄 —— `scan.scope != \"repo\"` 或实测漏掉不在排除名单里的文件 ⇒ 判据⑦判红（原单 `T-20261010-018`）。",
+    "③ 「判定对象 = 代码出现（注释 / 字符串里的提及不算出现）」这条口径尚未写进 SRS v3.94（前门单号 T-20261009-159）。",
+    "④ 非白名单面两处已知生产出网（`CLI/main.swift` · `Platform/macOS/WebKitBrowserEngine.swift`）的**定性**未决 —— 记在 `outOfFace` 只让它们不再静默，不等于放行；定性由前门裁（原单 `T-20261010-040` ④）。",
+    "⑤ **已闭环（2026-10-14）**：`Core/LLMStreaming.swift`（FR-AGT-LINK-CHAN-002 第二片 · 2026-10-13 新增的流式传输面）7 处令牌原先未登记进任何面 ⇒ 门禁在真仓判红（改前 rc=1 · 7 处）。**前门 `T-20261014-207` ① 已裁「必须登记进联网文件面，不许为了 rc=0 排除在面外」** ⇒ 本侧按 ㈠ 登记进 **AI 面**（`Core/LLMClient.swift` / `Core/EgressLog.swift` 之后第 3 件，改后 rc=0）。**残留 = SRS §6.4 表第 3 行的文件枚举待前门落笔**（契约层不归本侧）。"
+  ],
+  "outOfFace": [
+    {
+      "file": "CLI/main.swift",
+      "tokens": [
+        "URLSession"
+      ],
+      "reason": "第407轮实测的面外活体：CLI 侧装配 transport（当前 HEAD 的 `:122`；原单按 `6a1de15` 记的是 `:113`，行号随提交漂移）。面外不判，但必须逐条登记并打出读数；待前门定性（原单 T-20261010-040 ④：这两处出网是「合法出口」还是「漏网」由前门裁）",
+      "bucket": "production"
+    },
+    {
+      "file": "Platform/macOS/WebKitBrowserEngine.swift",
+      "tokens": [
+        "URLRequest",
+        "URLSession"
+      ],
+      "reason": "第407轮实测的面外活体：内嵌浏览器 `view.load(URLRequest(url:))`（当前 HEAD 的 `:175`）。面外不判，但必须逐条登记并打出读数；待前门定性（原单 T-20261010-040 ④：这两处出网是「合法出口」还是「漏网」由前门裁）",
+      "bucket": "production"
+    },
+    {
+      "file": "Tests/AgentObservationTests.swift",
+      "bucket": "test-double",
+      "tokens": [
+        "URLRequest"
+      ],
+      "reason": "面外活体（第407轮实测口径重跑）：本文件在 `Tests/` 面外构造出网替身 —— 测试夹具的请求对象，不是产品出口路径。面外不判，登记只为不再静默 + 棘轮（只减不增）；定性待前门（原单 T-20261010-040 ④）。"
+    },
+    {
+      "file": "Tests/AgentQuotaSessionTests.swift",
+      "bucket": "test-double",
+      "tokens": [
+        "URLRequest"
+      ],
+      "reason": "面外活体（第407轮实测口径重跑）：本文件在 `Tests/` 面外构造出网替身 —— 测试夹具的请求对象，不是产品出口路径。面外不判，登记只为不再静默 + 棘轮（只减不增）；定性待前门（原单 T-20261010-040 ④）。"
+    },
+    {
+      "file": "Tests/AgentSQLGeneratorTests.swift",
+      "bucket": "test-double",
+      "tokens": [
+        "URLRequest"
+      ],
+      "reason": "面外活体（第407轮实测口径重跑）：本文件在 `Tests/` 面外构造出网替身 —— 测试夹具的请求对象，不是产品出口路径。面外不判，登记只为不再静默 + 棘轮（只减不增）；定性待前门（原单 T-20261010-040 ④）。"
+    },
+    {
+      "file": "Tests/EgressLogTests.swift",
+      "bucket": "test-double",
+      "tokens": [
+        "URLRequest"
+      ],
+      "reason": "面外活体（第407轮实测口径重跑）：本文件在 `Tests/` 面外构造出网替身 —— 测试夹具的请求对象，不是产品出口路径。面外不判，登记只为不再静默 + 棘轮（只减不增）；定性待前门（原单 T-20261010-040 ④）。"
+    },
+    {
+      "file": "Tests/LLMRetryTests.swift",
+      "bucket": "test-double",
+      "tokens": [
+        "URLRequest"
+      ],
+      "reason": "面外活体（第407轮实测口径重跑）：本文件在 `Tests/` 面外构造出网替身 —— 测试夹具的请求对象，不是产品出口路径。面外不判，登记只为不再静默 + 棘轮（只减不增）；定性待前门（原单 T-20261010-040 ④）。"
+    },
+    {
+      "file": "Tests/LLMStreamTests.swift",
+      "bucket": "test-double",
+      "tokens": [
+        "URLRequest"
+      ],
+      "reason": "面外活体（第407轮实测口径重跑）：本文件在 `Tests/` 面外构造出网替身 —— 测试夹具的请求对象，不是产品出口路径。面外不判，登记只为不再静默 + 棘轮（只减不增）；定性待前门（原单 T-20261010-040 ④）。"
+    },
+    {
+      "file": "Tests/LLMStreamingClientTests.swift",
+      "bucket": "test-double",
+      "tokens": [
+        "URLRequest"
+      ],
+      "reason": "面外活体（第407轮实测口径重跑）：本文件在 `Tests/` 面外构造出网替身 —— 测试夹具的请求对象，不是产品出口路径。面外不判，登记只为不再静默 + 棘轮（只减不增）；定性待前门（原单 T-20261010-040 ④）。"
+    },
+    {
+      "file": "Tests/NoteSyncE2ETests.swift",
+      "bucket": "test-double",
+      "tokens": [
+        "URLSession"
+      ],
+      "reason": "面外活体（第407轮实测口径重跑）：本文件在 `Tests/` 面外构造出网替身 —— 测试夹具的请求对象，不是产品出口路径。面外不判，登记只为不再静默 + 棘轮（只减不增）；定性待前门（原单 T-20261010-040 ④）。"
+    },
+    {
+      "file": "Tests/LLMStreamingAuthTests.swift",
+      "tokens": [
+        "URLRequest"
+      ],
+      "reason": "测试件：断言「模型流式响应的鉴权头拼装」—— 只构造 URLRequest 校验 header，不发真请求（面外不判，但逐条登记并打读数）",
+      "bucket": "test"
+    },
+    {
+      "file": "Platform/macOS/URLSessionAgentIMSocket.swift",
+      "tokens": [
+        "URLSession",
+        "URLRequest"
+      ],
+      "bucket": "production",
+      "reason": "2026-10-28 第四十二批补登（第四十批落地时漏登 ⇒ 本轮实测面外 7 处未登记）：`FR-AGT-LINK-CHAN-003` 传输层的**线** —— WebSocket 适配（`URLSessionWebSocketTask`）。面外不判，登记只为不再静默 + 棘轮（只增不减，腾挪要登记）；定性待前门（原单 T-20261010-040 ④ 同类）。"
+    },
+    {
+      "file": "Platform/macOS/URLSessionAgentIMQQClient.swift",
+      "tokens": [
+        "URLSession",
+        "URLRequest"
+      ],
+      "bucket": "production",
+      "reason": "2026-10-28 第四十二批：★0 取 token / 取网关的 REST 出口（`bots.qq.com/app/getAppAccessToken`、`api.sgroup.qq.com/gateway`）—— 地址由程序自己取之后这条面必然存在。面外不判；定性待前门。"
+    },
+    {
+      "file": "Tests/AgentEgressSealTests.swift",
+      "bucket": "test-double",
+      "tokens": [
+        "URLRequest",
+        "URLSession"
+      ],
+      "reason": "面外活体（2026-11-02 `AC-ALL-GATE-AI-001` 判据）：本文件就是那台「在 URLSession 边界上数请求」的量具 —— 自建一个带计数 `URLProtocol` 的 session，证明封条关着时 0 条请求真的开始加载（并做松开 1 条的正向对照）。它不发起任何真实出网（计数器拦下所有请求并回固定假响应），不是产品出口路径；登记只为不再静默 + 棘轮（只减不增）。"
+    },
+    {
+      "file": "Core/AgentWebTools.swift",
+      "tokens": [
+        "URLRequest",
+        "URLSession"
+      ],
+      "bucket": "production",
+      "reason": "联网检索面（`FR-AGT-TOOL-INGEST-001/004`）：`AgentWebTools` / `AgentWebFetcher` / 三个后端各自构造 `URLRequest` 并走注入的 `HTTPTransport`。面外不判，登记只为不再静默 + 棘轮（只减不增）。**2026-11-02 起它的每一次出网都进统一外发日志**（`App/AppState.swift` 里构造时包 `EgressRecordingTransport(origin: \"智能体 · 联网检索\")`，判据 `Tests/EgressUnifiedLogTests`）——`NFR-ALL-GATE-SEC-008` 的覆盖面靠这条接线成立，不是靠本登记。定性（是否升为 AI 面的一员）待前门裁。"
+    },
+    {
+      "file": "Tests/AgentQuotaPersistenceTests.swift",
+      "bucket": "test-double",
+      "tokens": [
+        "URLRequest"
+      ],
+      "reason": "面外活体（2026-11-02 门禁实测重跑）：本文件在 `Tests/` 面外构造出网替身 —— 测试夹具的请求对象，不是产品出口路径。面外不判，登记只为不再静默 + 棘轮（只减不增）。"
+    },
+    {
+      "file": "Tests/AgentWebToolsTests.swift",
+      "bucket": "test-double",
+      "tokens": [
+        "URLRequest"
+      ],
+      "reason": "面外活体（2026-11-02 门禁实测重跑）：本文件在 `Tests/` 面外构造出网替身 —— 测试夹具的请求对象，不是产品出口路径。面外不判，登记只为不再静默 + 棘轮（只减不增）。"
+    },
+    {
+      "file": "Tests/EgressUnifiedLogTests.swift",
+      "bucket": "test-double",
+      "tokens": [
+        "URLRequest"
+      ],
+      "reason": "面外活体（2026-11-02 新增）：`NFR-ALL-GATE-SEC-008` 判据族本身要造请求对象喂给流式装饰器 —— 测试夹具，不是产品出口路径。面外不判，登记只为不再静默 + 棘轮（只减不增）。"
+    },
+    {
+      "file": "Core/AgentConnectionProbe.swift",
+      "tokens": [
+        "URLSession",
+        "URLRequest"
+      ],
+      "bucket": "production",
+      "reason": "连接自检探针：`AgentConnectionProbe.run` 先生成 `URLRequest`（`:102/:104`，走 `OpenAICompatibleClient.makeURLRequest`）再经 `transport` 发一条 8 token 的试探请求，出网**就是它的功能本身**（用户点「测试连接」才跑；端点/模型为空时 `notAttempted` 一个字节都不发）。`:76` 的 `URLSession` 是默认 transport 形参 `URLSessionStreamingTransport()` 的类型名。定性：2026-11-10 人类主人令「按三类登记」（连接自检探针 / 传输层 / 单测夹具）。"
+    },
+    {
+      "file": "Core/AgentModelListProbe.swift",
+      "tokens": [
+        "URLSession",
+        "URLRequest"
+      ],
+      "bucket": "production",
+      "reason": "连接自检探针的第二件：拉取端点的 `/models` 列表（`URLRequest(url: modelsURL)` `:90`，Bearer 头 `:91`），出网**就是功能本身**（用户点「获取模型列表」才跑；端点非法时 `.unavailable` 直接返回不发请求）。`:78` 的 `URLSession` 是默认 transport 形参 `URLSessionTransport()` 的类型名。定性同上（2026-11-10 人类主人令）。"
+    },
+    {
+      "file": "Core/HTTPTransportOverStreaming.swift",
+      "tokens": [
+        "URLRequest"
+      ],
+      "bucket": "production",
+      "reason": "传输层适配器：`send(_ request: URLRequest)`（`:21`）把一次性请求转成流式请求再收齐——`URLRequest` 在这里只是**入参类型**，本文件不构造 URL、不持有 URLSession，真出网在被包住的 `HTTPStreamingTransport`（`Core/LLMStreaming.swift` 那一面）。定性同上（2026-11-10 人类主人令）。"
+    },
+    {
+      "file": "Tests/AgentConnectionProbeTests.swift",
+      "tokens": [
+        "URLRequest"
+      ],
+      "bucket": "test",
+      "reason": "单测夹具：`StubTransport: HTTPStreamingTransport`（`:18` 起）按剧本回状态码/正文/URLError，`recorded: [URLRequest]` 只为断言「发出去的那条请求长什么样」，**不发真网络**（文件头注释原文「可编排的假流式传输层（不发真网络）」）。6 处命中全在 `URLRequest` 类型用法上。定性同上（2026-11-10 人类主人令）。"
+    },
+    {
+      "file": "Tests/AgentProfileManagementTests.swift",
+      "tokens": [
+        "URLRequest"
+      ],
+      "bucket": "test",
+      "reason": "单测夹具：`RecordingTransport: HTTPStreamingTransport` 记录「真发出去的那一条请求」并回一段 SSE，用于逐字断言 URL/模型/Authorization；**自己不发网络**（请求被记录后由桩返回）。3 处命中全在 `URLRequest` 类型用法上。定性同上（2026-11-10 人类主人令）。"
+    }
+  ],
+  "outOfFaceNote": "登记类（只减不增）：`scan.scope = repo` ⇒ 这些文件**已经在扫描面内**，但不在 SRS §6.4 白名单面里 ⇒ 逐条登记（漏登 / 陈旧 / 死登记 / **抹登记**都判红；条数下限 `floors.minRegisteredEgress` = 10）。**登记 ≠ 放行**：`CLI/main.swift` · `Platform/macOS/WebKitBrowserEngine.swift` 两处生产活体的定性由前门裁（原单 `T-20261010-040` ④）。"
 }
