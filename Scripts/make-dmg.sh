@@ -8,6 +8,7 @@
 # 产物：dist/DoyahStudio-<label>-<sha8>.dmg
 #
 # 说明（重要）：
+# shared-surface：2026-11-10 红#6 收口 —— 两侧共用出包脚本；L85 裸写 `$KEEP_APP（` 在 bash 3.2 会当变量名吞掉 ⇒ 改 `${KEEP_APP}`
 #   本脚本**不签名、不公证**。自家/团队内部安装没问题；发给外部用户时 macOS
 #   Gatekeeper 会提示「来自身份不明的开发者」，需要右键 →「打开」，或执行
 #   `xattr -dr com.apple.quarantine "/Applications/Doyah Studio.app"`。
@@ -82,7 +83,7 @@ for a in "$ROOT"/dist/*.app; do
   [ -e "$a" ] || continue
   [ "$(basename "$a")" = "$KEEP_APP" ] || { rm -rf "$a"; echo "  清掉旧包: $(basename "$a")"; }
 done
-echo "  保留策略 : dist/ 只留 $(basename "$DMG") + $KEEP_APP（旧版已删）"
+echo "  保留策略 : dist/ 只留 $(basename "$DMG") + ${KEEP_APP}（旧版已删）"
 echo
 echo "未签名/未公证：外部用户首次打开需右键 →「打开」，或"
 echo "  xattr -dr com.apple.quarantine \"/Applications/$(basename "$APP" .app).app\""

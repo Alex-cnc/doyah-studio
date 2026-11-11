@@ -28,6 +28,7 @@
 - `--version 0.3.0`（历史）只认 `plan.yaml` 的 `- id:` / `status:` 两列，**不读台账** ——
   那一版队列 35 条与台账 111 条 DB 行不是同一集合，拿台账复算会误报；要复算它得先切回历史的 `plan.yaml`。
 """
+# shared-surface：2026-11-10 收尾 —— 两侧共用派生脚本；未闭口径按一单 v1.0.170「➖ 不占未闭数」修正（原先把两条挂起项算成未闭）
 
 from __future__ import annotations
 
@@ -459,7 +460,11 @@ def ledger_open(scope: tuple[str, ...] | None) -> list[dict]:
     rows = read_ledger()
     if scope is not None:
         rows = [r for r in rows if matches(r["id"], list(scope))]
-    return [r for r in rows if r["status"] != "✅"]
+    # ➖ = 挂起 / 不适用。一单自己的口径（v1.0.170）写着「实现与判据两列记 ➖，不标 ✅、**不占未闭数**」
+    # ⇒ 未闭 = 既不是 ✅ 也不是 ➖。2026-11-10 修：原写 `!= "✅"` 把两条 ➖（`NFR-NTS-ALL-DIST-001` /
+    # `NFR-NTS-ALL-PARITY-001`，主人 2026-11-04 令挂起）也算成未闭，于是 `--check` 一直报
+    # 「台账未闭但队列里没有」—— 判据与条文互相打脸（台账说挂起不占数，脚本偏要它进队列）。
+    return [r for r in rows if r["status"] not in ("✅", "➖")]
 
 
 def matches(item: str, patterns: list[str]) -> bool:

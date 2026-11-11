@@ -17,6 +17,7 @@
 
 退出码：0 = 通过；1 = 有违反；2 = 用法 / 环境问题（不许静默当通过）。
 """
+# shared-surface：2026-11-10 收尾 —— 两侧共用判据；域码表认 `ALL（NTS）` 括注形（原正则只认裸 ALL ⇒ DIST/PARITY 判成未登记）
 from __future__ import annotations
 
 import argparse
@@ -36,7 +37,14 @@ CANDIDATE = re.compile(r"(?<![A-Z])((?:FR|NFR|AC)-[A-Z]+(?:-[A-Z]+){0,3}-\d{2,3}
 LEGACY = re.compile(r"^(FR|NFR|AC)-[A-Z]+-\d{2,3}$")
 
 
+# shared-surface：2026-11-10 负例覆盖轮 · 关掉 git 的 quotepath 转义，让判据真的按文档树判
 def run(cmd, cwd=None) -> str:
+    # 2026-11-10：本仓文档全是中文名，`git diff` 默认 `core.quotepath=true` 把路径转义成
+    # `"b/Docs/\346\226\207…"` ⇒ 下面 `path.endswith(".md")` 永远不成立，判据**一份文档都没扫过**
+    # （实测：往需求书写一行 `NFR-STD-RISK-001`，判据报「扫过 0 个编号」照样绿）。关掉 quotepath
+    # 才是「按文档树判」；`-z` 不用，路径里没有换行。
+    if cmd and cmd[0] == "git" and "-c" not in cmd:
+        cmd = ["git", "-c", "core.quotepath=false", *cmd[1:]]
     p = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True)
     if p.returncode != 0:
         raise RuntimeError("命令失败：%s\n%s" % (" ".join(cmd), p.stderr.strip()))
@@ -48,7 +56,12 @@ def load_registry(l0_path: str):
     text = open(l0_path, encoding="utf-8").read()
     products = set(re.findall(r"^\| `(AGT|STD|NTS|RTR|ALL)` \| ", text, re.M))
     faces = {(p, f) for p, f in re.findall(r"^\| (AGT|STD|NTS|RTR|ALL) \| `([A-Z]{2,8})` \|", text, re.M)}
-    domains = {(f, d) for f, d in re.findall(r"^\| (CORE|PLAN|GUARD|KNOW|TOOL|LINK|UX|QUAL|OPS|WS|DB|NOTE|TODO|MKT|RSR|FLOW|REV|ALL|GATE) \| `([A-Z]{2,8})` \|", text, re.M)}
+    # 面格允许带括注：§1.5.5 里 Notes 那一族写着 `ALL（NTS）`（「Studio 的所有面」之外的另一条
+    # 「Notes 的产品面」）。原正则只认裸 `ALL` ⇒ `DIST` / `PARITY` / `LIC` 三行**读不进来**，
+    # 于是 `NFR-NTS-ALL-DIST-001` 这类合法编号被判「域码未登记」（2026-11-10 由重生成的对齐件暴露）。
+    domains = {(f, d) for f, d in re.findall(
+        r"^\| (CORE|PLAN|GUARD|KNOW|TOOL|LINK|UX|QUAL|OPS|WS|DB|NOTE|TODO|MKT|RSR|FLOW|REV|ALL|GATE)(?:（[^|）]+）)? \| `([A-Z]{2,8})` \|",
+        text, re.M)}
     return products, faces, domains
 
 

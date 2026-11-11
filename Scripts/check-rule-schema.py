@@ -15,10 +15,12 @@
 
 负例（--self-test 内固化）：一条缺「负例」字段的条文必须判红。
 """
+# shared-surface：2026-11-10 主人令 —— 两侧共用判据；新增「单向引用」判据（通用条文不得引用项目规范，只能反过来），带正反两例
 
 from __future__ import annotations
 
 import json
+import re
 import re
 import sys
 import pathlib
@@ -27,6 +29,38 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 DOCS = ROOT / "Docs"
 SCHEMA = ROOT / "Scripts" / "rule-schema.json"
 BASELINE = ROOT / "Scripts" / "rule-schema-baseline.json"
+
+# 单向引用（2026-11-10 人类主人令）：**通用规范条文不许引用项目规范**，只能反过来
+# （项目规范可以写「见《通用开发规范》§X」）。理由：通用规范要能整体搬到另一个项目，
+# 里面一旦出现「见《项目管理规范》§5」这种指回，搬过去就是悬空引用。
+GENERIC_BOOK = "通用开发规范.md"
+PROJECT_REF = re.compile(r"《项目管理规范》|项目管理规范\s*§\s*\d")
+PROJECT_REF = re.compile(r"《项目管理规范》|项目管理规范\s*§\s*\d")
+
+# 条文点名的脚本必须存在（2026-11-10）：条文里写 `Scripts/xxx.py` 是「判据在哪」的唯一线索，
+# 脚本删了而条文没改 ⇒ 判据静默悬空，到有人真去跑才发现。这里把悬空引用当场判红。
+SCRIPT_REF = re.compile(r"(?:\./)?Scripts/([A-Za-z0-9_.\-]+\.(?:py|sh))")
+SCRIPT_GONE = ("已删", "已移除", "已退场", "归档到", "搬走")   # 明确写了「已经没了」的行不算悬空
+
+
+def dangling_scripts(text: str, schema: dict) -> list[str]:
+    """条文里点名但文件不存在的脚本（空列表 = 没有悬空引用）。"""
+    names = set(schema["字段"].keys())
+    missing = []
+    for title, body in split_clauses(text, names):
+        for line in body.split("\n"):
+            if any(k in line for k in SCRIPT_GONE):
+                continue
+            for m in SCRIPT_REF.finditer(line):
+                if not (ROOT / "Scripts" / m.group(1)).exists():
+                    missing.append(f"{title}⇒Scripts/{m.group(1)}")
+    return missing
+
+
+def project_refs(text: str, schema: dict) -> list[str]:
+    """通用规范里引用了项目规范的条文标题（空列表 = 单向干净）。"""
+    names = set(schema["字段"].keys())
+    return [title for title, body in split_clauses(text, names) if PROJECT_REF.search(body)]
 BOOKS = ["Doyah产品需求规格说明书_不做.md"]  # 占位，实际用下面 NORMS
 NORMS = ["通用开发规范.md", "项目管理规范.md"]
 
@@ -113,7 +147,13 @@ def main(argv: list[str]) -> int:
     new_base: dict[str, dict] = {}
     for name in NORMS:
         path = DOCS / name
-        total, complete, problems = audit(path.read_text(encoding="utf-8"), schema)
+        text = path.read_text(encoding="utf-8")
+        total, complete, problems = audit(text, schema)
+        if name == GENERIC_BOOK:
+            for title in project_refs(text, schema):
+                bad.append(f"{name}: 条文「{title}」引用了项目规范 —— 只许项目规范引用本件（单向）")
+        for miss in dangling_scripts(text, schema):
+            bad.append(f"{name}: 条文点名的脚本不存在 —— 「{miss}」（判据悬空，删脚本必须同批改条文）")
         incomplete = total - complete
         prev = base.get(name, {})
         first_baseline = "--write-baseline" in argv and name not in base
@@ -142,6 +182,9 @@ def main(argv: list[str]) -> int:
         BASELINE.write_text(json.dumps(new_base, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         print(f"基线已写：{BASELINE.name}")
     print("✅ 条文写法通过（缺字段只许降不许升）")
+    print("   覆盖范围：只判条文里**明文写的** `Scripts/<文件名>` 是否存在 —— "
+          "`import 模块名`（不带 .py）、跨仓引用、cron / launchd 调用判不了，"
+          "那三类靠「挪而不删 + 全量门禁跑一遍」兜（见 Scripts/archive/README.md）")
     return 0
 
 
@@ -156,15 +199,21 @@ def self_test(schema: dict) -> int:
 """
     miss_negative = good.replace("- **负例**：改坏必红。\n", "")
     no_judge_kind = good.replace("【机判】", "")
+    ghost_script = good.replace("- **判据**：【机判】`true`。", "- **判据**：【机判】`Scripts/no-such-gate.py`。")
+    cites_project = good.replace("- **读数口径**：无。", "- **读数口径**：见《项目管理规范》§5。")
+    generic_ok = good  # 同一条文放进「通用」这一侧，只要不引用项目规范就该绿
     cases = [
         ("六字段齐全", good, True),
         ("缺负例字段", miss_negative, False),
         ("判据没标机判/人判", no_judge_kind, False),
+        ("通用条文引用项目规范 ⇒ 判红", cites_project, False),
+        ("通用条文不引用项目规范 ⇒ 绿", generic_ok, True),
+        ("条文点名不存在的脚本 ⇒ 判红", ghost_script, False),
     ]
     ok = 0
     for name, text, want_pass in cases:
         total, complete, problems = audit(text, schema)
-        passed = total == 1 and not problems
+        passed = total == 1 and not problems and not project_refs(text, schema) and not dangling_scripts(text, schema)
         mark = "✓" if passed == want_pass else "✗"
         if passed == want_pass:
             ok += 1

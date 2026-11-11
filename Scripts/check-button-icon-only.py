@@ -19,6 +19,12 @@ B. **逐处分类**（判定物**先剥注释与字符串**）：`Button(` 的�
    ④ 判不出的登记成**存疑**（不许静默放过）。
    `Toggle(`（带字符的切换式按钮，本令范围第 3 条）与 `Button` 同判；`Picker` 是**非按钮控件** ⇒ 只列进附录（归口待裁）。
 C. **断言**：a 类命中数 ≤ 基线 `targetTextButtons`（本令的目标 = **0**）⇒ 改前红、改完绿；
+   **a 类的两条边界（2026-11-10 补，曾把 15 处不该算的算成欠账）**：
+   ① `.alert` / `.confirmationDialog` 的**动作块**按钮 —— macOS 系统对话框只渲染文字，图标塞进去不落地
+      （源码注释早有记录）⇒ 它们是「平台不适用」，单列 `dialog_platform` 桶照数报，不进 a 类；
+      反之对话框里若出现**纯图标**按钮，图标不落地 ⇒ 判据 J 判红（真缺陷）。
+   ② 单字符图形（`Text("▾")` 这类等宽转写面符号）不是中/英文文案 ⇒ 按「转写面」逐条登记例外台账，
+      不硬改成 SF Symbol（换成 SF Symbol 会破坏 TUI 对照口径，见台账 `AgentChatView` 那几条的理由）；
    基线里同时留 `beforeTextButtons`（改前读数）做**成对留痕**。
 D. **空跑防护**：UI 文件数下限 + 面与 `Package.swift` 对账（面目录不在盘上 ⇒ 红）。
 F. **纯图标按钮须带提示 / 无障碍标签**（加令 `T-20261013-051` ②「升为硬要求」）：纯图标控件必须带
@@ -52,6 +58,8 @@ import re
 import shutil
 import sys
 import tempfile
+
+# shared-surface：2026-11-10 红#5 收口 —— 两侧共用判据；本轮给判据 C 开「对话框动作」边界（`.alert` 动作按钮平台不可图标化）并加空跑防护，口径改动必须两侧可见
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 
@@ -281,6 +289,28 @@ def classify(code: str, raw: str, start: int) -> dict:
 
 CONTROL = re.compile(r"\b(Button|Toggle)\s*(?=[({])")
 
+# 系统对话框动作块（2026-11-10 补 · 判据 C 的边界）
+# 平台事实：macOS 的 `.alert(...) { 动作 }` / `.confirmationDialog(...) { 动作 }`，动作按钮**只渲染文字**
+# —— 塞 `Image(systemName:)` 进去不显示、甚至点了不触发（`LowerPaneView` / `MainWindow` 的源码注释
+#   2026-10 就写着「`.alert` actions 只认真 `Button` + 可见文字（图标按钮在这里不落地）」）。
+# 判据原来没有这层认识 ⇒ 把 12 处**不可能图标化**的对话框动作记成 a 类欠账（19 处里 12 处），
+# 结果是这条判据永远红、且红的是自己的错。现在单列一桶「对话框动作·平台不渲染图标」，照数报，不放行。
+ALERT_CALL = re.compile(r"\.(?:alert|confirmationDialog)\s*\(")
+
+
+def dialog_action_ranges(code: str) -> list[tuple[int, int]]:
+    """`.alert(...)` / `.confirmationDialog(...)` 的**动作块**字符区间（`{` 起，含收尾 `}`）。"""
+    spans: list[tuple[int, int]] = []
+    for match in ALERT_CALL.finditer(code):
+        close = match_paren(code, match.end() - 1)
+        if close is None:
+            continue
+        brace = code.find("{", close)
+        if brace < 0:
+            continue
+        spans.append((brace, brace + len(balanced_block(code, brace)) + 2))
+    return spans
+
 # 对话框 / 弹层 / 面板面（人类主人 2026-10-18：「二级对话框里基本都还是图标，没有恢复按钮语义」）
 # 口径：**对话框是竖向表单，省不出空间 ⇒ 按钮保留文字**（图标 + 文字都行，纯图标不行）。
 # 判法只看文件名（`XxxSheet` / `XxxDialog` / `XxxWizard` / `XxxPanel` / `XxxPopover`）——
@@ -393,6 +423,7 @@ def scan_file(root: pathlib.Path, relative: str) -> dict:
     raw = (root / relative).read_text(encoding="utf-8", errors="ignore")
     code = strip_noncode(raw)   # 保长度 ⇒ 需要看原文（如空串标签）时按同偏移查 raw
     frames: list[str] = ["menu"] if relative in MENU_FILES else []
+    alert_spans = dialog_action_ranges(code)
     rows: list[dict] = []
     pickers: list[dict] = []
     index, length = 0, len(code)
@@ -416,6 +447,7 @@ def scan_file(root: pathlib.Path, relative: str) -> dict:
             info["control"] = control.group(1)
             info["line"] = code.count("\n", 0, index) + 1
             info["in_menu"] = "menu" in frames
+            info["in_alert"] = any(begin <= index < end for begin, end in alert_spans)
             info["probe"], info["probe_raw"] = modifier_window(code, raw, info["line"])
             rows.append(info)
             index = control.end()
@@ -434,7 +466,8 @@ def scan_file(root: pathlib.Path, relative: str) -> dict:
         row["path"] = relative
     for row in pickers:
         row["path"] = relative
-    return {"path": relative, "rows": rows, "pickers": pickers}
+    return {"path": relative, "rows": rows, "pickers": pickers,
+            "alert_blocks": len(alert_spans)}
 
 
 # ---------------------------------------------------------------- 面 / 统计 / 基线
@@ -725,10 +758,13 @@ def unregistered_rows(a_rows: list, ledger: dict | None) -> list:
     return out
 
 
-def exception_ratchets(a_rows: list[dict], ledger: dict | None) -> list[Issue]:
+def exception_ratchets(a_rows: list[dict], ledger: dict | None,
+                       debt_rows: list[dict] | None = None) -> list[Issue]:
     """三条棘轮（纯函数 —— 自检直接喂合成数据）。
 
     ① **未登记差异**：a 类命中既不是图标、也不在本台账里 ⇒ 红；
+       `debt_rows` 给了就只在这一批里查（判据 C 的**对话框边界**：平台不可图标化的动作不算欠账，
+       但**已登记**的那些仍按 `a_rows` 核 ②③ —— 边界不许把台账一起搅乱）；
     ② **陈旧登记**：登记的文件还在 a 类里，但盘上原形态与台账不一致（站点变过）⇒ 红；
     ③ **死登记**：登记的文件已不在 a 类命中里（已图标化 / 已删）⇒ 红。
     外加必填字段核（文件 / 形态 / 归口 / 理由 / 依据 / 关闭条件）。
@@ -748,7 +784,7 @@ def exception_ratchets(a_rows: list[dict], ledger: dict | None) -> list[Issue]:
         key = (_norm(row["path"]), _norm(row["detail"]))
         row_counts[key] = row_counts.get(key, 0) + 1
     row_paths = {_norm(row["path"]) for row in a_rows}
-    for row in unregistered_rows(a_rows, ledger):
+    for row in unregistered_rows(debt_rows if debt_rows is not None else a_rows, ledger):
         issues.append(Issue("例外台账", f"未登记差异：{row['path']}:{row['line']} 既不是图标、也不在本台账里"
                                         f" —— 归口改判不得藏在判据之外（`T-20261014-003` §②）"))
     for key, count in quota.items():
@@ -1022,12 +1058,22 @@ def main(argv: list[str]) -> int:
     files, missing = ui_files(ROOT)
     results = [scan_file(ROOT, relative) for relative in files]
     buckets = tally(results)
+    alert_blocks = sum(result.get("alert_blocks", 0) for result in results)
     baseline, issues = load_baseline(ROOT)
     ledger, ledger_issues = load_exceptions(ROOT)
     issues += ledger_issues
     raw_a = buckets["a"]
-    issues += exception_ratchets(raw_a, ledger)
-    buckets = {**buckets, "a": unregistered_rows(raw_a, ledger)}
+    # 判据 C 的边界（2026-11-10）：`.alert` / `.confirmationDialog` 的动作按钮只渲染文字，
+    # 图标塞进去不落地 ⇒ 从 a 类里摘出来单列 `dialog_platform`（照数报，不当欠账，也不静默消失）。
+    # 台账棘轮仍按**全体** a 类核 —— 登记过的不因此变成「陈旧/死登记」。
+    platform_actions = [row for row in raw_a if row.get("in_alert") and row["kind"] == "text"]
+    platform_icons = [row for row in raw_a if row.get("in_alert") and row["kind"] == "icon"]
+    debt_a = [row for row in raw_a if not row.get("in_alert")]
+    issues += exception_ratchets(raw_a, ledger, debt_rows=debt_a)
+    buckets = {**buckets, "a": unregistered_rows(debt_a, ledger),
+               "dialog_platform": platform_actions}
+    if platform_icons:
+        buckets = {**buckets, "dialog_icon": platform_icons + buckets.get("dialog_icon", [])}
     # 对话框里的纯图标按钮：「例外台账」登记过的（文件 + 行，容 ±3 行）放行；
     # 其余交给判据 J 判红 —— 登记是**显式归口**，不是静默放过。
     if ledger:
@@ -1037,6 +1083,9 @@ def main(argv: list[str]) -> int:
             row for row in buckets.get("dialog_icon", [])
             if not any(row["path"] == path and abs(row["line"] - line) <= 3
                        for path, line in registered)]}
+    if alert_blocks and not buckets["dialog_platform"]:
+        issues.append(Issue("判据 C", f"盘上有 {alert_blocks} 个对话框动作块，却一处动作按钮都没认出来"
+                                      f" —— 识别窗失效，不许静默通过"))
     issues += assert_issues(files, missing, buckets, baseline)
     extra, stats = a11y_and_semantics_issues(ROOT, buckets, baseline, ledger)
     issues += extra
@@ -1049,6 +1098,8 @@ def main(argv: list[str]) -> int:
     print(f"    a 类 水平按钮（**必改**）：{len(buckets['a'])} 处（未登记）"
           f"（改前读数 {baseline.get('beforeTextButtons') if baseline else '-'} · 目标 "
           f"{baseline.get('targetTextButtons') if baseline else '-'}）")
+    print(f"    对话框动作（`.alert`/`.confirmationDialog`，平台只渲染文字·**不可图标化**）："
+          f"{len(buckets['dialog_platform'])} 处（判据 C 边界，另计不判红）")
     print(f"    例外台账（②）：站点 {len((ledger or {}).get(EXCEPTION_SITES, []))} 条 · "
           f"动作图标 {len((ledger or {}).get(EXCEPTION_ACTIONS, []))} 条（{EXCEPTIONS}）")
     print(f"    b 类 菜单项（保留文字）：{len(buckets['b'])} 处"

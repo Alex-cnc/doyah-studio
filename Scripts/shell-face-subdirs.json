@@ -13,6 +13,12 @@
       "dir": "hooks",
       "exempt": true,
       "reason": "提交钩子目录：`pre-commit` / `install.sh` 是 git 钩子件（在 `.git/hooks` 安装、由 git 触发），不是按参数化口径跑的本机脚本 ⇒ 不属判据 ② 的面。2026-10-30 新建（需求编号形状判据 + 越界门禁），三仓同源。"
+    },
+    {
+      "dir": "archive/2026-11-10",
+      "exempt": true,
+      "reason": "退场脚本（2026-11-10 归档 4 份）：已无活引用、无条文点名、不在任何门禁清单里；保留只为可回溯，不按「参数化口径」跑，也不进账号闸门面。注意：doc_index.py 曾在此、因被 check-doc-tables 以 import 方式使用已还原。",
+      "shared-surface": "2026-11-10 清理：面递归后必须逐条表态，退场目录登记为豁免"
     }
   ]
 }

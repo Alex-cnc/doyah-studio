@@ -117,20 +117,46 @@ def actions_for(paths: list[str]) -> list[str]:
     return hit
 
 
-def staged_paths(base: str | None) -> list[str]:
-    # `-c core.quotepath=false`：否则中文文件名会被 git 转成 "Docs/Doyah\344\272..." 带引号的八进制形式，
-    # 路由正则全部落空 —— 本仓绝大多数文档都是中文名，这个坑会让总入口对它们完全不触发。
+def parse_porcelain(raw: str) -> list[str]:
+    """`git status --porcelain -z` 的输出 → 路径列表（暂存 + 未暂存 + 未跟踪，改名取新名）。
+
+    为什么不用 `git diff --cached`：2026-11-10 实测的洞 —— 只要暂存区**有任何**改动，
+    原实现就再也不看工作区，于是「暂存两个脚本 + 未暂存整本文档」这种最常见的混合改动
+    只推断出「改判据脚本」，文档那 10 条必跑判据一条都没跑（注入重复 Q37 仍 rc=0）。
+    """
+    parts = [x for x in raw.split("\0") if x]
+    out: list[str] = []
+    skip_next = False
+    for part in parts:
+        if skip_next:                      # 改名条目：下一段是旧路径，丢掉
+            skip_next = False
+            continue
+        if len(part) < 4:
+            continue
+        status, path = part[:2], part[3:]
+        out.append(_unquote(path))
+        if status[0] in ("R", "C") or status[1] in ("R", "C"):
+            skip_next = True
+    return out
+
+
+def changed_paths(base: str | None) -> list[str]:
+    """本次改动涉及的全部路径：暂存 ∪ 未暂存 ∪ 未跟踪（`base` 给了就只算与该提交的差）。
+
+    `-c core.quotepath=false` 与 `-z`：中文文件名否则会被转义成 `"Docs/Doyah\\344..."`，
+    路由正则全部落空 —— 本仓绝大多数文档都是中文名，这个坑会让总入口对它们完全不触发。
+    """
     common = ["git", "-c", "core.quotepath=false"]
-    args = common + ["diff", "--cached", "--name-only"]
     if base:
-        args = common + ["diff", "--name-only", base]
-    out = subprocess.run(args, cwd=ROOT, capture_output=True, text=True)
-    paths = [l for l in out.stdout.splitlines() if l.strip()]
-    if not paths:                                   # 没有暂存区改动就看工作区
-        out = subprocess.run(common + ["diff", "--name-only", "HEAD"], cwd=ROOT,
-                             capture_output=True, text=True)
-        paths = [l for l in out.stdout.splitlines() if l.strip()]
-    return paths
+        out = subprocess.run(common + ["diff", "--name-only", base], cwd=ROOT, capture_output=True, text=True)
+        tracked = [_unquote(l) for l in out.stdout.splitlines() if l.strip()]
+        u = subprocess.run(common + ["ls-files", "--others", "--exclude-standard", "-z"],
+                           cwd=ROOT, capture_output=True, text=True)
+        untracked = [_unquote(x) for x in u.stdout.split("\0") if x]
+        return list(dict.fromkeys(tracked + untracked))
+    out = subprocess.run(common + ["status", "--porcelain", "-z", "--untracked-files=all"],
+                         cwd=ROOT, capture_output=True, text=True)
+    return list(dict.fromkeys(parse_porcelain(out.stdout)))
 
 
 def run_check(script: str, extra: list[str], fast: bool) -> tuple[bool, str]:
@@ -167,11 +193,27 @@ def self_test() -> int:
         ok = got == expect
         print(("  ✓ " if ok else "  ✗ ") + f"{paths[0]} → {got or '（无动作）'}（应 {expect or '（无动作）'}）")
         bad += 0 if ok else 1
+    # 本次修的洞：只改暂存区时不能丢工作区改动。用固定串验解析（不依赖真仓库状态）
+    probe = ("M  Scripts/check-doc-versions.py\0"
+             " M Docs/通用开发规范.md\0"
+             "R  Scripts/doc_index.py\0Scripts/archive/doc_index.py\0"
+             "?? Docs/new-note.md\0")
+    parsed = parse_porcelain(probe)
+    expect_paths = ["Scripts/check-doc-versions.py", "Docs/通用开发规范.md",
+                    "Scripts/doc_index.py", "Docs/new-note.md"]
+    ok = parsed == expect_paths
+    print(("  ✓ " if ok else "  ✗ ") + f"porcelain 解析（暂存+未暂存+改名+未跟踪）→ {parsed}")
+    bad += 0 if ok else 1
+    mixed = actions_for(["Scripts/check-doc-versions.py", "Docs/通用开发规范.md"])
+    ok = sorted(mixed) == sorted(["改文档", "改判据脚本"])   # 顺序随 ROUTES，判定只看集合
+    print(("  ✓ " if ok else "  ✗ ") + f"脚本+文档混合改动 → {mixed}（应两个动作都命中）")
+    bad += 0 if ok else 1
     # 负例：清单里的动作都必须有判据，否则「有规则无判据」
     empty = [n for n, a in ACTIONS.items() if not a["checks"]]
     print(("  ✓ " if not empty else "  ✗ ") + f"每个动作都有判据（空判据动作：{empty or '无'}）")
     bad += 0 if not empty else 1
-    print(f"自检{'通过' if not bad else '失败'}（{len(cases)+1-bad}/{len(cases)+1}）")
+    total = len(cases) + 3
+    print(f"自检{'通过' if not bad else '失败'}（{total-bad}/{total}）")
     return 0 if not bad else 1
 
 
@@ -212,15 +254,24 @@ def main() -> int:
             print(f"  必跑：{s} {' '.join(extra)}".rstrip())
         return 0
 
-    paths = staged_paths(args.base)
+    paths = changed_paths(args.base)
     acts = actions_for(paths)
     print(f"本次改动 {len(paths)} 个文件 ⇒ 命中动作：{'、'.join(acts) if acts else '（无需动作）'}")
     if not args.check:
         return 0
+    if len(acts) > 1:
+        print(f"（改动同时落在 {len(acts)} 个动作上 ⇒ 每个动作的必跑判据**都要**跑；"
+              f"同一脚本只跑一次）")
     failed = 0
+    seen: set[tuple[str, tuple[str, ...]]] = set()
     for act in acts:
         print(f"\n[{act}]")
         for s, extra in ACTIONS[act]["checks"]:
+            key = (s, tuple(extra))
+            if key in seen:
+                print(f"  ⏭️  {s}（本批已跑过，不重复）")
+                continue
+            seen.add(key)
             ok, msg = run_check(s, extra, args.fast)
             print("  " + msg)
             if not ok:

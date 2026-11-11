@@ -1,143 +1,212 @@
 {
- "version": 1,
- "repo": "DoyahStudio",
- "purpose": "「盘上的路径归谁」的唯一清单（判据 = 同目录的 check-path-ownership.py，三仓同源；三仓副本见该脚本 docstring）。清单可以各仓不同，判据逻辑逐字节同一份。",
- "contract_owner": "hugehippo",
- "contract_docs": [
-  "Docs/",
-  "AGENT-SPEC.md",
-  "README.md",
-  "Scripts/doc-numbers.json"
- ],
- "contract_note": "**2026-10-16 人类主人定案：不再设「分组键」、两轴合一，`owner` 直接写侧名** ⇒ `hugehippo` = macOS / iOS / watchOS / Linux；`babyhippo` = Windows / Android / 鸿蒙。**归属真值 = `trees[].actor`**；退役侧名（`fatshark` / `fatfish` / `bighippo` / `tinyhippo`）只作识别用。",
- "trees": [
-  {
-   "id": "macos",
-   "owner": "hugehippo",
-   "hosts": [
-    "darwin"
-   ],
-   "contract_side": "apple",
-   "label": "macOS 端（大河马 / 本机侧；Swift + SwiftUI / AppKit）",
-   "paths": [
-    ".cloudbase/",
-    "App/",
-    "Core/",
-    "CLI/",
-    "Platform/macOS/",
-    "Tests/",
-    "TestsPlatform/",
-    "TestsUISnapshot/",
-    "Tools/",
-    "Vendor/",
-    "Package.swift",
-    "Package.resolved",
-    "project.yml",
-    "DoyahStudio.xcodeproj/",
-    "Plugins/",
-    "review/"
-   ],
-   "note": "与派活单 T-20261002-029 给的清单一致，只多一条 `Package.resolved`（SwiftPM 锁文件，属 Swift 族）与 `.cloudbase/`（云后端绑定 —— 片 `云A` 交付物 · 派单 `T-20261009-116` ①，前门裁 `T-20261009-117`：macOS 实现面 = DoyahStudio 仓）；`Scripts/` 单列进 shared（见 shared_note）。",
-   "actor": "hugehippo"
-  },
-  {
-   "id": "watchos",
-   "owner": "hugehippo",
-   "hosts": [
-    "darwin"
-   ],
-   "contract_side": "apple",
-   "label": "watchOS 端（Apple 全系第三端 · 与 macOS 同一机组／同宿主；实现未开工）",
-   "paths": [
-    "platform/watchos/"
-   ],
-   "note": "2026-10-13 人类主人令：平台词表第七项 `watchos`（Apple 全系归大河马）⇒ 建立声明式落点（只一页 README，无工程 / 无源码）；派单 `T-20261013-004`。`owner = macos` 与 Notes 的 `ios` 树同形：同机组、不同格。",
-   "actor": "hugehippo"
-  },
-  {
-   "id": "windows",
-   "owner": "babyhippo",
-   "hosts": [
-    "win32",
-    "windows"
-   ],
-   "contract_side": "nonapple",
-   "label": "Windows 端（小河马 babyhippo；Tauri 2 + Vue 3 + TypeScript / Rust）",
-   "paths": [
-    "platform/windows/"
-   ],
-   "actor": "babyhippo",
-   "note": " ｜ **2026-10-15 人类主人令**：大肥鲨交出全部开发工作、由奶牙小河马 `babyhippo` 承接 ⇒ 本树 `actor` fatshark → babyhippo（派单 `/接线/顺序` 等口径随之改道）。"
-  },
-  {
-   "id": "linux",
-   "owner": "hugehippo",
-   "hosts": [
-    "linux"
-   ],
-   "contract_side": "nonapple",
-   "label": "Linux 端（铁皮大河马 hugehippo · 2026-10-15 归 hugehippo，原 2026-10-14 人类主人令「Doyah Studio 全量 PC 端还要补一个 Linux 平台，小河马负责的」；Tauri 2 + 系统 WebView = WebKitGTK + 复用 Windows 侧同一套 Vue 3 / TypeScript 前端）",
-   "paths": [
-    "Platform/linux/",
-    "platform/linux/"
-   ],
-   "actor": "hugehippo",
-   "note": "派单 T-20261014-016 ②：本树此前**不在归属登记里** ⇒ 归属门禁盖不到 `platform/linux/**`（改它既不判红也不判绿 = 无网）。两种拼写都登记（`Platform/linux/` 与 `platform/linux/`）：本仓盘上是**大小写不敏感的合成目录**（`Platform/macOS/` 与 `platform/watchos/` 两种受控拼写并存），`git add` 会把新建的 `platform/linux/` **归一到既有 `Platform/`**（实测 `git status` 打 `?? Platform/linux/`），而判据 `fnmatch` / `has_prefix` **区分大小写** ⇒ 只登记一种会漏判。 ｜2026-10-15 人类主人拍板：Linux 与 macOS 底层血缘更近 ⇒ 归 hugehippo（原归 babyhippo）。",
-   "status": "⬜ 未开工（2026-10-14 开工：骨架 = 本目录 README + build.sh；应用工程属骨架落地片）"
-  }
- ],
- "shared": [
-  "Docs/",
-  "Scripts/",
-  "AGENT-SPEC.md",
-  "cloud-sync/"
- ],
- "shared_note": "共享面 = 两侧都写的地方：改它**不算越界**，但要走声明式台账（清单 `shared_ledger` 改前登记 / 本次新增行注 `shared-surface：理由` / 提交信息注 `shared-surface: 理由`），三处都没有理由 ⇒ 判红。`Scripts/` 在派活单 T-20261002-029 里被同时列进「macOS 仓根族」与「共享面」两处 ⇒ 本清单按**共享面**收口：里面的判据（`check-*.py` / `verify-all.sh`）被两侧共同调用，`Scripts/doc-numbers.json` 的 `checkScriptParity` 也是按「闭环引用」写的，判它是某一端专属会与现行事实相抵。要改成 macOS 专属 ⇒ 改这一行 + 记一笔变更。",
- "shared_require_declaration": true,
- "unclassified_allow": [
-  {
-   "path": "README.md",
-   "reason": "仓根门面（两侧都可能改措辞 / 加索引）"
-  },
-  {
-   "path": "README.en.md",
-   "reason": "仓根门面（英文版，同上）"
-  },
-  {
-   "path": "LICENSE",
-   "reason": "许可证（不归任何一端）"
-  },
-  {
-   "path": "THIRD-PARTY-NOTICES.md",
-   "reason": "第三方声明（随依赖变，两侧都可能追加）"
-  },
-  {
-   "path": "RELEASE-0.1.0-alpha.md",
-   "reason": "发布说明（历史件，只读性维护）"
-  },
-  {
-   "path": "RELEASE-0.2.0-alpha.md",
-   "reason": "发布说明（同上）"
-  },
-  {
-   "path": ".gitignore",
-   "reason": "仓级忽略规则（两侧都可能加条目）"
-  },
-  {
-   "path": ".clang/",
-   "reason": "本机工具目录（格式配置），非任一端产品代码"
-  },
-  {
-   "path": ".handoff/",
-   "reason": "会话交接目录（工具产物），非任一端产品代码"
-  },
-  {
-   "path": ".agent/",
-   "reason": "常驻执行者的计划队列与证据（plan/checkpoint/decisions/evidence）；不属于任何平台子树，也不属契约文档面"
-  },
-  {
-   "path": ".build/derived/任务清单-按平台.md",
-   "reason": "派生件（跨端视图）已按令停止入库；本笔是把它从索引里摘掉，文件仍在 .build/ 下由 gen-platform-board 生成"
-  }
- ]
+  "version": 1,
+  "repo": "DoyahStudio",
+  "purpose": "「盘上的路径归谁」的唯一清单（判据 = 同目录的 check-path-ownership.py，三仓同源；三仓副本见该脚本 docstring）。清单可以各仓不同，判据逻辑逐字节同一份。",
+  "contract_owner": "hugehippo",
+  "contract_docs": [
+    "Docs/",
+    "AGENT-SPEC.md",
+    "README.md",
+    "Scripts/doc-numbers.json"
+  ],
+  "contract_note": "**2026-10-16 人类主人定案：不再设「分组键」、两轴合一，`owner` 直接写侧名** ⇒ `hugehippo` = macOS / iOS / watchOS / Linux；`babyhippo` = Windows / Android / 鸿蒙。**归属真值 = `trees[].actor`**；退役侧名（`fatshark` / `fatfish` / `bighippo` / `tinyhippo`）只作识别用。",
+  "trees": [
+    {
+      "id": "macos",
+      "owner": "hugehippo",
+      "hosts": [
+        "darwin"
+      ],
+      "contract_side": "apple",
+      "label": "macOS 端（大河马 / 本机侧；Swift + SwiftUI / AppKit）",
+      "paths": [
+        ".cloudbase/",
+        "App/",
+        "Core/",
+        "CLI/",
+        "Platform/macOS/",
+        "Tests/",
+        "TestsPlatform/",
+        "TestsUISnapshot/",
+        "Tools/",
+        "Vendor/",
+        "Package.swift",
+        "Package.resolved",
+        "project.yml",
+        "DoyahStudio.xcodeproj/",
+        "Plugins/",
+        "review/"
+      ],
+      "note": "与派活单 T-20261002-029 给的清单一致，只多一条 `Package.resolved`（SwiftPM 锁文件，属 Swift 族）与 `.cloudbase/`（云后端绑定 —— 片 `云A` 交付物 · 派单 `T-20261009-116` ①，前门裁 `T-20261009-117`：macOS 实现面 = DoyahStudio 仓）；`Scripts/` 单列进 shared（见 shared_note）。",
+      "actor": "hugehippo"
+    },
+    {
+      "id": "watchos",
+      "owner": "hugehippo",
+      "hosts": [
+        "darwin"
+      ],
+      "contract_side": "apple",
+      "label": "watchOS 端（Apple 全系第三端 · 与 macOS 同一机组／同宿主；实现未开工）",
+      "paths": [
+        "platform/watchos/"
+      ],
+      "note": "2026-10-13 人类主人令：平台词表第七项 `watchos`（Apple 全系归大河马）⇒ 建立声明式落点（只一页 README，无工程 / 无源码）；派单 `T-20261013-004`。`owner = macos` 与 Notes 的 `ios` 树同形：同机组、不同格。",
+      "actor": "hugehippo"
+    },
+    {
+      "id": "windows",
+      "owner": "babyhippo",
+      "hosts": [
+        "win32",
+        "windows"
+      ],
+      "contract_side": "nonapple",
+      "label": "Windows 端（小河马 babyhippo；Tauri 2 + Vue 3 + TypeScript / Rust）",
+      "paths": [
+        "platform/windows/"
+      ],
+      "actor": "babyhippo",
+      "note": " ｜ **2026-10-15 人类主人令**：大肥鲨交出全部开发工作、由奶牙小河马 `babyhippo` 承接 ⇒ 本树 `actor` fatshark → babyhippo（派单 `/接线/顺序` 等口径随之改道）。"
+    },
+    {
+      "id": "linux",
+      "owner": "hugehippo",
+      "hosts": [
+        "linux"
+      ],
+      "contract_side": "nonapple",
+      "label": "Linux 端（铁皮大河马 hugehippo · 2026-10-15 归 hugehippo，原 2026-10-14 人类主人令「Doyah Studio 全量 PC 端还要补一个 Linux 平台，小河马负责的」；Tauri 2 + 系统 WebView = WebKitGTK + 复用 Windows 侧同一套 Vue 3 / TypeScript 前端）",
+      "paths": [
+        "Platform/linux/",
+        "platform/linux/"
+      ],
+      "actor": "hugehippo",
+      "note": "派单 T-20261014-016 ②：本树此前**不在归属登记里** ⇒ 归属门禁盖不到 `platform/linux/**`（改它既不判红也不判绿 = 无网）。两种拼写都登记（`Platform/linux/` 与 `platform/linux/`）：本仓盘上是**大小写不敏感的合成目录**（`Platform/macOS/` 与 `platform/watchos/` 两种受控拼写并存），`git add` 会把新建的 `platform/linux/` **归一到既有 `Platform/`**（实测 `git status` 打 `?? Platform/linux/`），而判据 `fnmatch` / `has_prefix` **区分大小写** ⇒ 只登记一种会漏判。 ｜2026-10-15 人类主人拍板：Linux 与 macOS 底层血缘更近 ⇒ 归 hugehippo（原归 babyhippo）。",
+      "status": "⬜ 未开工（2026-10-14 开工：骨架 = 本目录 README + build.sh；应用工程属骨架落地片）"
+    }
+  ],
+  "shared": [
+    "Docs/",
+    "Scripts/",
+    "AGENT-SPEC.md",
+    "cloud-sync/",
+    "AGENTS.md"
+  ],
+  "shared_note": "共享面 = 两侧都写的地方：改它**不算越界**，但要走声明式台账（清单 `shared_ledger` 改前登记 / 本次新增行注 `shared-surface：理由` / 提交信息注 `shared-surface: 理由`），三处都没有理由 ⇒ 判红。`Scripts/` 在派活单 T-20261002-029 里被同时列进「macOS 仓根族」与「共享面」两处 ⇒ 本清单按**共享面**收口：里面的判据（`check-*.py` / `verify-all.sh`）被两侧共同调用，`Scripts/doc-numbers.json` 的 `checkScriptParity` 也是按「闭环引用」写的，判它是某一端专属会与现行事实相抵。要改成 macOS 专属 ⇒ 改这一行 + 记一笔变更。",
+  "shared_require_declaration": true,
+  "unclassified_allow": [
+    {
+      "path": "README.md",
+      "reason": "仓根门面（两侧都可能改措辞 / 加索引）"
+    },
+    {
+      "path": "README.en.md",
+      "reason": "仓根门面（英文版，同上）"
+    },
+    {
+      "path": "LICENSE",
+      "reason": "许可证（不归任何一端）"
+    },
+    {
+      "path": "THIRD-PARTY-NOTICES.md",
+      "reason": "第三方声明（随依赖变，两侧都可能追加）"
+    },
+    {
+      "path": "RELEASE-0.1.0-alpha.md",
+      "reason": "发布说明（历史件，只读性维护）"
+    },
+    {
+      "path": "RELEASE-0.2.0-alpha.md",
+      "reason": "发布说明（同上）"
+    },
+    {
+      "path": ".gitignore",
+      "reason": "仓级忽略规则（两侧都可能加条目）"
+    },
+    {
+      "path": ".clang/",
+      "reason": "本机工具目录（格式配置），非任一端产品代码"
+    },
+    {
+      "path": ".handoff/",
+      "reason": "会话交接目录（工具产物），非任一端产品代码"
+    },
+    {
+      "path": ".agent/",
+      "reason": "常驻执行者的计划队列与证据（plan/checkpoint/decisions/evidence）；不属于任何平台子树，也不属契约文档面"
+    },
+    {
+      "path": ".build/derived/任务清单-按平台.md",
+      "reason": "派生件（跨端视图）已按令停止入库；本笔是把它从索引里摘掉，文件仍在 .build/ 下由 gen-platform-board 生成"
+    }
+  ],
+  "shared_ledger": [
+    {
+      "glob": "Scripts/self-test-counts.json",
+      "reason": "负例族用例数台账（JSON 无注释语法，无法走「新增行注」）——本轮随新增实测用例 34→36 同批改",
+      "by": "macos",
+      "at": "2026-11-10"
+    },
+    {
+      "glob": "Scripts/button-icon-exceptions.json",
+      "reason": "按钮图标化例外台账（JSON）——本轮删 2 条陈旧登记、补 3 条「等宽转写面树线前缀」登记",
+      "by": "macos",
+      "at": "2026-11-10"
+    },
+    {
+      "glob": "Scripts/button-icon-semantics.json",
+      "reason": "图标语义台账（JSON）——本轮 3 枚已有符号补动作键（folder / arrow.uturn.backward / arrow.clockwise），判据 H 用",
+      "by": "macos",
+      "at": "2026-11-10"
+    },
+    {
+      "glob": "Scripts/path-ownership.json",
+      "reason": "本清单自身（JSON）——本轮新增 `shared_ledger` 四条：三个 JSON 台账 + 本文件自登记；JSON 无法注 `shared-surface：`",
+      "by": "macos",
+      "at": "2026-11-10"
+    },
+    {
+      "glob": "Docs/Doyah产品开发计划任务清单-macOS.md",
+      "reason": "一单是共享面（表格里注不进 `shared-surface：` 行）——本轮把 FR-AGT-LINK-CHAN-001 版本口径列里塞的 245 字叙述搬回实现说明列、版本口径恢复 `—`（check-version-scope 判红点）",
+      "by": "macos",
+      "at": "2026-11-10"
+    },
+    {
+      "glob": "Docs/archive/root-20261026/平台对齐-Studio-Windows对macOS.md",
+      "reason": "派生件（`gen-studio-win-align.py` 产出）：真源改了一单/索引后必须重跑本件；本轮因一单列错位修正后重生成（410 条）",
+      "by": "macos",
+      "at": "2026-11-10"
+    },
+    {
+      "glob": "Scripts/rule-schema-baseline.json",
+      "reason": "JSON 基线（无处写注释）—— 2026-11-10 条文搬家后按实测重写（通用 43→41 / 项目 32→35），_note 里写明原因与机判条数变化",
+      "by": "macos",
+      "at": "2026-11-10"
+    },
+    {
+      "glob": "AGENTS.md",
+      "reason": "仓根索引（铁律目录 + 触发器）：改 §1 铁律必须同批改本页，check-agents-index 比对两边；本轮随铁律 8 改名同步",
+      "by": "macos",
+      "at": "2026-11-10"
+    },
+    {
+      "glob": "Scripts/archive/",
+      "reason": "退场脚本目录（2026-11-10 起）：只收无活引用、无条文点名的脚本，git mv 进来不 rm；清单见 Scripts/archive/README.md",
+      "by": "macos",
+      "at": "2026-11-10"
+    },
+    {
+      "glob": "Scripts/shell-face-subdirs.json",
+      "reason": "JSON 面登记表（无处写注释）：2026-11-10 新增 archive/2026-11-10 豁免条目（退场脚本 4 份）；面递归后子目录必须逐条表态",
+      "by": "macos",
+      "at": "2026-11-10"
+    },
+    {
+      "glob": "Scripts/action-router.py",
+      "reason": "2026-11-10 修「暂存区有新改动时丢掉工作区改动」的洞：原 staged_paths 只在暂存区为空时才看工作区，于是「暂存两个脚本 + 未暂存整本文档」只推断出「改判据脚本」，文档 10 条必跑判据一条没跑（注入重复 Q37 仍 rc=0）。改成 changed_paths = 暂存 ∪ 未暂存 ∪ 未跟踪；多动作时判据去重；自检 9 → 11 例",
+      "by": "macos",
+      "at": "2026-11-10"
+    }
+  ]
 }

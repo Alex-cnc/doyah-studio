@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""分册 ⊆ 全量：独立产品仓的四书分册不许出现全量四书里没有的编号。
+"""分册 ⊆ 全量：独立产品仓的分册不许出现全量书里没有的编号 / 正文行。
 
 为什么需要（人类主人 2026-11-01 重申）：
   Agent / Studio / Notes / Retro 四个功能在 PC 端是**同一个产品**，四书写在同一份全量书里（studio 仓）；
@@ -26,6 +26,8 @@ import re
 import shutil
 import sys
 import tempfile
+
+# shared-surface：2026-11-10 红#5 收口 —— 本判据两侧共用；本轮只把输出文案从「四书」改成「全量书」（2026-11-09 三书合一后已无能力书），判定面不变
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent          # studio/
 LEAD = ROOT.parent                                            # ~/dev/doyah/lead/
@@ -120,7 +122,7 @@ def run(l0_books: list[pathlib.Path], fascicles: list[tuple[str, pathlib.Path, s
         return 1
     l0 = collect(l0_books, recursive=False)
     if not quiet:
-        print(f"全量四书（{len(l0_books)} 本）编号：{len(l0)} 个")
+        print(f"全量书（{len(l0_books)} 本，2026-11-09 三书合一后无能力书）编号：{len(l0)} 个")
 
     bad: dict[str, list[str]] = {}
     linebad: dict[str, list[str]] = {}
@@ -185,7 +187,7 @@ def run(l0_books: list[pathlib.Path], fascicles: list[tuple[str, pathlib.Path, s
         print("⚠️ 覆盖声明：② 的归类靠「定义行是否含控件/构建标识」的弱启发，会漏判 ⇒ 只作分桶提示，判决靠人核。")
     if bad or linebad:
         return 1
-    print("\n✅ 分册 ⊆ 全量：分册里没有全量四书未登记的编号")
+    print("\n✅ 分册 ⊆ 全量：分册里没有全量书未登记的编号")
     return 0
 
 

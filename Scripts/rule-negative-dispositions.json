@@ -1,0 +1,134 @@
+{
+  "version": 1,
+  "purpose": "《通用开发规范》《项目管理规范》里每条带【机判】的条文，凡在文件层造不出「判据从绿变红」的负例，必须在这里逐条登记原因。判据脚本 Scripts/test-rule-negatives.py 读本件算「未处置」：既没登记用例、也不在本件里的【机判】条文一律判红。类别只有四种：needs-build（违约只能在真实构建/全量门禁里发生）· baseline-red（判据当前本身就红，附实测证据）· wrong-gate（条文指的判据根本不核对这件事，已在条文里改正）· unsupported（其他不可在文件层复现的情形，必须写清为什么）。另有 `now` 字段的条目 = 原【机判】经实测无门可指、已把条文改成【人判】，这类不再是机判条文，脚本单独报数。",
+  "readingRules": [
+    "本件只登记「造不出负例」的条文；造得出的必须进 CASES 真跑，不许拿登记代替用例（登记 ≠ 通过）。",
+    "`baseline-red` 与 `wrong-gate` 必须带 evidence（实跑的 rc 与关键输出行），不带即判红 —— 声称与实测要能对上。",
+    "每条处置的 clause 是条文标题前缀，必须唯一命中一条条文；条文被改名会让这里报错，不许静默失配。",
+    "处置不改判据脚本的行为：判据该红的仍要红（needs-build 的是「什么时候才能造出违规」，不是「判据没用」）。"
+  ],
+  "sharedSurface": "本轮（2026-11-10 负例覆盖）新增的登记件：属 Scripts/ 共享面，全部内容由本仓负例执行器读；理由 = 给「造不出文件层负例」的【机判】条文留一份可核的处置台账。",
+  "entries": [
+    {
+      "clause": "状态只在验证之后改",
+      "book": "通用开发规范.md",
+      "category": "needs-build",
+      "reason": "违约形态 = 改完代码没跑 `verify-all.sh` 就宣称完成。收尾行只由全量门禁产生（Studio `./Scripts/verify-all.sh` / `verify-core.sh` + `swift test` 的 `Executed N tests`），文件层没有任何「写了已完成但没有收尾行」的状态可造 —— 造出来的只会是另一条文档负例，与「验没验过」无关。",
+      "evidence": "判据是运行时输出而非文件状态：`verify-all.sh` 收尾行 + `Executed N tests`（本轮未跑全量，见 verify-all 报告）。"
+    },
+    {
+      "clause": "唯一入口",
+      "book": "通用开发规范.md",
+      "category": "needs-build",
+      "reason": "违约 = 用 `swift test` 单跑就宣称门禁全绿。收尾行只由唯一入口打印，文件层无法伪造「门禁确实跑过」。",
+      "evidence": "判据物 = 入口命令 + 收尾行原文，二者都只在运行输出里。"
+    },
+    {
+      "clause": "首红即退",
+      "book": "通用开发规范.md",
+      "category": "needs-build",
+      "reason": "判据是 `Scripts/test-verify-all-gate.py` —— 它自己起一个假 verify-all 跑「首红就退 / --keep-going 跑完」两种情形。要违约得让**假的 verify-all** 行为异常，那是脚本内部夹具，不在仓的文件层（改它 = 改判据自己）。",
+      "evidence": "该脚本自带 8 例负例（self-test-counts.json 的 verify-all-gate），实跑 `--self-test` 覆盖；本仓文件层没有可改的输入面。"
+    },
+    {
+      "clause": "交付包口径",
+      "book": "项目管理规范.md",
+      "category": "needs-build",
+      "reason": "违约 = `build-app.sh` 默认带 `--sandbox` 或 entitlements 缺失。前者要改构建脚本（本轮不在允许改动面），后者要真跑一次打包才能看出包形态；文件层造不出「包是沙箱的」。",
+      "evidence": "判据物 = build-app.sh 的开关与两份 entitlements 在位 + 产物 plist（`check-release-freeze-parity` B 段）；无产物时 B 段走不到。"
+    },
+    {
+      "clause": "门禁绿才落档、才出包",
+      "book": "项目管理规范.md",
+      "category": "needs-build",
+      "reason": "违约 = verify-all 有红仍执行 build-app.sh。要复现必须先制造一次真的门禁红（全量 19 项，跑一轮 20 分钟以上）再打包；文件层没有「门禁红但出了包」的可造状态。",
+      "evidence": "判据物 = verify-all 收尾行 + build-app.sh 的前置检查，二者都只在运行时出现。"
+    },
+    {
+      "clause": "出包前置与产物留存",
+      "book": "项目管理规范.md",
+      "category": "needs-build",
+      "reason": "违约 = 工作区有未提交改动仍出包 / `dist/` 留了两版。前者要真跑 build-app.sh 才触发「脏工作区拒出」，后者要有两个真实产物目录；文件层造不出。",
+      "evidence": "判据物 = build-app.sh 的脏工作区判断 + `dist/` 内实际包数（本轮 dist/ 已有 beta1.3 一版，增删它属于破坏产物，不做）。"
+    },
+    {
+      "clause": "未出包就写「未出包」",
+      "book": "项目管理规范.md",
+      "category": "wrong-gate",
+      "reason": "原判据物「`verify-all.sh` 的在途件即红段」**不存在**（2026-11-10 全仓 grep「在途件」0 命中，verify-all 里没有这一段）⇒ 属于指错门，已把条文改成 `check-release-freeze-parity.py`（产物跟随 / 旧号冒充）。「『本批未出包』有没有写原因」是文字判断，没有脚本能判，仍靠交接人核 —— 但这一半已写明在条文里，不再冒充机判覆盖。",
+      "evidence": "grep -rn 在途件 Scripts/*.py Scripts/*.sh ⇒ 0 命中；check-release-freeze-parity.py 的 B 段（产物 plist 跟随）与 C 段（旧号冒充）实测在跑，A/B/C 三段读数见其 --self-test"
+    },
+    {
+      "clause": "不弹窗要授权",
+      "book": "通用开发规范.md",
+      "category": "wrong-gate",
+      "reason": "原文【机判】写「待拍板项必须在队列里且状态词合法」。实测 `check-queue-needs-user.py` 只做四件事：`needs-user` 行点名 / 被点名的号仍未决 / 挂起要写理由 / 查无此号，外加状态词表校验；**不比对「待拍板项是否都在队列里」**（没有第二份来源可比）。「这件事该不该问主人」「有没有绕过队列直接做了」是行为，脚本判不了 ⇒ 已把判据行改成「【机判】状态词 + 点名；【人判】该不该问」。",
+      "evidence": "实跑 `python3 Scripts/check-queue-needs-user.py` ⇒ rc=0「✅ `needs-user` 点名纪律通过（`needs-user` 行 0 / 待拍板队列表数据行 10 · 号 10 / 队列行 206）」—— 读数里没有「应与队列比对」这一项；队列文件（`design/开发循环-任务队列.md`）在 .gitignore 内，干净克隆上还会整段跳过（跳过 ≠ 通过）。"
+    },
+    {
+      "clause": "报数报「还剩多少」",
+      "book": "通用开发规范.md",
+      "category": "wrong-gate",
+      "reason": "原文把 `check-doc-numbers.py` 当本条主判据。实测它只对 `doc-numbers.json` 台账里的数字做三向对账（台账 ↔ 实测 ↔ 文档现状声明），**不解析任何结论句** ⇒ 往一单里写「还剩 1 条未闭环」它照样绿。「还剩多少/缺在哪」只能人判 ⇒ 判据行已改成【人判】为主、【机判】只兜「写死的数字与实测一致」。",
+      "evidence": "实测：往 `Docs/Doyah产品开发计划任务清单-macOS.md` 写一行「还剩 1 条未闭环」后跑 `check-doc-numbers.py` ⇒ rc=0「✅ 文档数字对账通过」（绿）；对照本轮 CASE「每轮交接三件」把 `core-tests` 改成 5000 ⇒ 同脚本 rc=1，证明它只认数字不认话。"
+    },
+    {
+      "clause": "提案通道",
+      "book": "通用开发规范.md",
+      "category": "wrong-gate",
+      "reason": "原文把「提案文件存在性」写在【机判】里。实测该脚本只在 docstring 提到提案目录，**没有任何「无提案文件即红」的判定**；提案四要素与文件是否存在只能人判 ⇒ 判据行已改成【机判】只判契约节越界、【人判】提案。",
+      "evidence": "`grep -n proposals Scripts/check-exclusive-sections.py` 只命中第 40 行（docstring 的说明文字）；脚本 1000 行里没有读 `Docs/proposals/` 的代码路径。"
+    },
+    {
+      "clause": "三书版本一律由大河马输出",
+      "book": "项目管理规范.md",
+      "category": "wrong-gate",
+      "reason": "同「三书由大河马统一输出」：机判负例写「非 macOS 侧改需求书正文」，但需求书不在该脚本的契约锁定面（见上条证据），三书里只有概设被机判兜住。落笔作者与「冻结目录另立基线」都只能人判 ⇒ 判据行已按实改。",
+      "evidence": "同上：`--mine windows` 改需求书正文 ⇒ rc=0 绿；改概设契约节 ⇒ rc=1。`git log --format='%ae %s' -- Docs/` 是作者审计，不是判据脚本。"
+    },
+    {
+      "clause": "两侧平等、按平台分任务",
+      "book": "项目管理规范.md",
+      "category": "wrong-gate",
+      "reason": "原文负例「把只能在 macOS 构建的 iOS 任务派给 Linux 侧 ⇒ 必须判红（构建不了）」：没有任何脚本读派单，也没有脚本知道哪台机器能构建。`check-exclusive-sections.py` 判的是「改动落在哪个归属的节」，与派单可行性无关 ⇒ 负例已改人判 + 机判只兜越界那一半。",
+      "evidence": "`grep -rn \"派单\" Scripts/check-exclusive-sections.py` 无判定代码；该脚本的判据面只有独占节 / 契约层 / 新增节 / 旧词四类。"
+    },
+    {
+      "clause": "隔离撤销但红线还在",
+      "book": "项目管理规范.md",
+      "category": "wrong-gate",
+      "reason": "原文【机判】指 `check-notes-capability-sync.py`（宿主名扫描）。实测该脚本现在**直接崩**：它读 `Docs/Doyah产品能力规划说明书.md`，而该文件 2026-11-09 已并入需求书 ⇒ `FileNotFoundError` 退 1；它的三款判据（能力章逐字同一 / 条目齐 / 版本同批）里**也没有宿主名扫描**。宿主名红线目前无门禁可跑 ⇒ 已降为人判，脚本待补。",
+      "evidence": "实跑 ⇒ rc=1 且 Traceback：`FileNotFoundError: [Errno 2] No such file or directory: 'Docs/Doyah产品能力规划说明书.md'`（Scripts/check-notes-capability-sync.py:114）。"
+    },
+    {
+      "clause": "做了一半的写明",
+      "book": "项目管理规范.md",
+      "category": "wrong-gate",
+      "reason": "与《通用开发规范》铁律 #11 同一条错指向：`check-doc-numbers.py` 只对账写死的数字，不解析「剩/缺」结论句。本条主体是人判 ⇒ 判据行已按实改。",
+      "evidence": "实测：往一单写「还剩 1 条未闭环」⇒ `check-doc-numbers.py` rc=0 绿（同 #11 条证据）。"
+    },
+    {
+      "clause": "文档体系相关",
+      "book": "通用开发规范.md",
+      "category": "unsupported",
+      "reason": "本条不是单一判据，而是「10 条并联清单，逐条 rc=0」。清单里每条各有自己的负例（本轮用例覆盖了 check-doc-versions / doc-invariants / doc-numbers / end-sheets / plan-coverage / req-index / req-ids / exclusive-sections / doc-tables 的对应条文），而本条**自身**的违约形态是「只跑一条就宣称文档体系通过」—— 那是报告行为，不是文件状态，文件层造不出来。故不在本件造一个假用例，只登记：本条由 verify-all 的逐项实跑兜住。",
+      "evidence": "判据行本身就是清单：`check-frozen-sync` · `check-doc-versions` · `check-doc-tables` · `check-doc-invariants` · `check-rule-schema` · `check-end-sheets` 等，逐条 rc=0 —— 逐条读数只在 verify-all 收尾行里。"
+    },
+    {
+      "clause": "判据必须声明覆盖范围",
+      "book": "通用开发规范.md",
+      "category": "wrong-gate",
+      "now": "【人判】（评审人核 sources/uncovered 两段；本条已不含【机判】）",
+      "reason": "原文标【机判】「脚本 `--json` 输出必须含 `sources` / `uncovered` 两段，`uncovered` 非空而结论报『发现』即红」。实测**没有任何门禁核这件事**：仓库里只有 3 个脚本输出 `uncovered`（check-agents-index / check-button-icon-only / check-doc-chain），也没有 `--json` 契约检查。这句话是我自己写上去的机判声称 ⇒ 已改【人判】，不再计入机判条文。",
+      "evidence": "`grep -rln \"uncovered\" Scripts/*.py` ⇒ 仅 `check-agents-index.py` / `check-button-icon-only.py` / `check-doc-chain.py` / `test-rule-negatives.py`（后者是本件）；`grep -rn \"sources\" Scripts/check-*.py` 无「判据必须声明」这类判定。"
+    },
+    {
+      "clause": "版本、冻结、发布规则不在本节",
+      "book": "通用开发规范.md",
+      "category": "wrong-gate",
+      "now": "【人判】（评审人核「版本条文只在《项目管理规范》§5」；本条已不含【机判】）",
+      "reason": "原文标【机判】`check-rule-schema.py`（本节 0 条版本条文、§5 有版本条文）。实测该脚本只验六字段在场与【机判】/【人判】标记，**不读条文归属**：往本节重写一条「冻结 = 升一段」，它照样绿（已实测）。「条文写在哪一节」目前没有脚本判 ⇒ 已改【人判】。",
+      "evidence": "实测：在《通用开发规范》§3 前插入一条完整六字段的「冻结 = 升一段」条文 ⇒ `check-rule-schema.py` rc=0（只增加了一条完整条文，未判归属）；`grep -rn \"版本条文\" Scripts/*.py` 无命中。"
+    }
+  ]
+}

@@ -41,6 +41,7 @@
     python3 Scripts/check-markdown-single-source.py --root <树>  # 负例验证用（临时副本）
     python3 Scripts/check-markdown-single-source.py --self-test  # 负例自检（临时副本上写坏）
 """
+# shared-surface：2026-11-10 红#6 收口 —— 两侧共用判据；本轮把 Retro 三格生产 target 补进判据面（Package.swift 现读）
 
 from __future__ import annotations  # macOS 自带 python3 是 3.9，`X | None` 这类注解需要它
 
@@ -73,14 +74,19 @@ SHARED_CALL = re.compile(r"\bNoteBodyProjection\.parseInline\s*\(")
 #     不再混进「macOS 产品面」—— 与 `-068` 那一族同口径）；
 #   · **补上 `Tools/LicenseTool`** —— 它是唯一一个面外生产根，原单 ㈤ 的 P6 就是从那个洞回流的。
 PACKAGE = "Package.swift"
-FACE_TARGETS = ("DoyahCore", "DoyahPlatform", "DoyahCLI", "doyah-license-tool", "DoyahStudioApp")
+# 2026-11-10：周报（Retro）的 macOS 代码 2026-11-03 起随本仓走（`Package.swift` 三个 target
+# 直接指向 `Plugins/Retro/{Sources,Views,CLI}`）⇒ 它们也是生产 target，必须进面
+# （否则「Markdown 单一口径」在 Retro 那一支没人管 —— 而那支恰好有个同名 `MarkdownBlock`）。
+FACE_TARGETS = ("DoyahCore", "DoyahPlatform", "DoyahCLI", "doyah-license-tool", "DoyahStudioApp",
+                "DoyahRetroCore", "DoyahRetroUI", "DoyahRetroCLI")
 TESTS_DIR = "Tests"
 # 面里允许出现、但**不是**生产 target 源码目录的根（登记 + 理由；理由为空 ⇒ 判红）
 FACE_ROOTS_REGISTERED = {
     TESTS_DIR: "解析层用例面（testTarget `DoyahCoreTests` 的 `path:`）",
 }
 SCAN_DIRS = ("Core", "App", "Platform/macOS", "CLI",
-             "Plugins/Notes/Sources", "Plugins/Notes/Views", "Tools/LicenseTool")
+             "Plugins/Notes/Sources", "Plugins/Notes/Views", "Tools/LicenseTool",
+             "Plugins/Retro/Sources", "Plugins/Retro/Views", "Plugins/Retro/CLI")
 DEPENDENCY_FILES = ("Package.swift", "project.yml")
 
 

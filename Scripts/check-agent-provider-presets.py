@@ -47,6 +47,7 @@
     python3 Scripts/check-agent-provider-presets.py --root <树>  # 负例验证用（临时副本）
     python3 Scripts/check-agent-provider-presets.py --self-test  # 负例自检（临时副本上写坏）
 """
+# shared-surface：2026-11-10 红#6 收口 —— 两侧共用判据；本轮把 10 份探针/单测的面外宿主名逐条登记进 OUT_OF_FACE_LEDGER
 
 from __future__ import annotations  # macOS 自带 python3 是 3.9，`X | None` 这类注解需要它
 
@@ -104,6 +105,35 @@ OUT_OF_FACE_LEDGER = {
     "Tests/AgentEndpointDiagnosisTests.swift": (
         "单测夹具：端点诊断按「本地 / 远端 / 地址表边界」分档，`api.openai.com` 是被断言的输入之一"
         "（要真公网宿主名才判得出「远端需 Key」），不是预设清单的镜像"),
+    "Tests/AgentStepCounterTests.swift": (
+        "单测夹具：步骤计数要按真实 profile 构造（端点串只是构造输入，不打网络）—— 逐条登记，不整目录豁免"),
+    "TestsUISnapshot/AgentChatAnswerPriorityProbeTests.swift": (
+        "界面探针夹具：消息头显示的服务商名来自 profile 的端点，探针要照真名渲染才拍得出对照图"
+        "（与 `TestsUISnapshot/AgentChatTUILookProbeTests.swift` 同一条理由 —— 逐条登记，不整目录豁免）"),
+    "TestsUISnapshot/AgentChatCompactionProbeTests.swift": (
+        "界面探针夹具：消息头显示的服务商名来自 profile 的端点，探针要照真名渲染才拍得出对照图"
+        "（与 `TestsUISnapshot/AgentChatTUILookProbeTests.swift` 同一条理由 —— 逐条登记，不整目录豁免）"),
+    "TestsUISnapshot/AgentChatNarrationProbeTests.swift": (
+        "界面探针夹具：消息头显示的服务商名来自 profile 的端点，探针要照真名渲染才拍得出对照图"
+        "（与 `TestsUISnapshot/AgentChatTUILookProbeTests.swift` 同一条理由 —— 逐条登记，不整目录豁免）"),
+    "TestsUISnapshot/AgentChatStepListProbeTests.swift": (
+        "界面探针夹具：消息头显示的服务商名来自 profile 的端点，探针要照真名渲染才拍得出对照图"
+        "（与 `TestsUISnapshot/AgentChatTUILookProbeTests.swift` 同一条理由 —— 逐条登记，不整目录豁免）"),
+    "TestsUISnapshot/AgentChatStickyQuestionProbeTests.swift": (
+        "界面探针夹具：消息头显示的服务商名来自 profile 的端点，探针要照真名渲染才拍得出对照图"
+        "（与 `TestsUISnapshot/AgentChatTUILookProbeTests.swift` 同一条理由 —— 逐条登记，不整目录豁免）"),
+    "TestsUISnapshot/AgentJumpToBottomProbeTests.swift": (
+        "界面探针夹具：消息头显示的服务商名来自 profile 的端点，探针要照真名渲染才拍得出对照图"
+        "（与 `TestsUISnapshot/AgentChatTUILookProbeTests.swift` 同一条理由 —— 逐条登记，不整目录豁免）"),
+    "TestsUISnapshot/AgentSummaryGapAndTurnFollowProbeTests.swift": (
+        "界面探针夹具：消息头显示的服务商名来自 profile 的端点，探针要照真名渲染才拍得出对照图"
+        "（与 `TestsUISnapshot/AgentChatTUILookProbeTests.swift` 同一条理由 —— 逐条登记，不整目录豁免）"),
+    "TestsUISnapshot/AgentTranscriptFollowProbeTests.swift": (
+        "界面探针夹具：消息头显示的服务商名来自 profile 的端点，探针要照真名渲染才拍得出对照图"
+        "（与 `TestsUISnapshot/AgentChatTUILookProbeTests.swift` 同一条理由 —— 逐条登记，不整目录豁免）"),
+    "TestsUISnapshot/AgentTurnThinkingZoneProbeTests.swift": (
+        "界面探针夹具：消息头显示的服务商名来自 profile 的端点，探针要照真名渲染才拍得出对照图"
+        "（与 `TestsUISnapshot/AgentChatTUILookProbeTests.swift` 同一条理由 —— 逐条登记，不整目录豁免）"),
 }
 MIN_OUT_OF_FACE_LEDGER = 2
 

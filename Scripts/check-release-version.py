@@ -65,6 +65,7 @@ L-55 文档数字 / L-72 例数 / 本条）。
 
 退出码：0 = 全绿；1 = 判红（逐条点名文件与行号）；2 = 用法 / 夹具错误。
 """
+# shared-surface：2026-11-10 红#6 收口 —— 两侧共用判据；派生式锚点改判「非注释行」（注释里抄着同一条锚点会把写死的真行判绿，自检例 13 抓到）
 
 from __future__ import annotations
 
@@ -635,8 +636,8 @@ def derive_identity(root: pathlib.Path, ledger: dict, report: Report):
             report.bad("%s:%d 的 `%s` 是**字面量** `%s`，台账登记它是派生值（%s）——"
                        "「一处定义、多处派生」退化成手抄" % (relative, line, variable, value_text, kind))
             continue
-        if anchor not in text:
-            report.bad("%s：`%s` 的派生式变了 —— 找不到台账登记的 `%s`"
+        if not anchor_lines(text, anchor):
+            report.bad("%s：`%s` 的派生式变了 —— 找不到台账登记的 `%s`（注释里抄着不算）"
                        "（改了写法就要同批改台账与判据，否则两条路各算各的）"
                        % (relative, field, anchor))
             continue
@@ -961,6 +962,23 @@ def doc_version_label(root: pathlib.Path) -> str:
     return "beta%d.%d" % best if best else ""
 
 
+def anchor_lines(text: str, anchor: str) -> list[int]:
+    """`anchor` 出现在**非注释行**的行号（1 起）。
+
+    为什么必须挑行（2026-11-10 自检例 13 抓到的洞）：`build-app.sh` 的注释里**逐字抄着**
+    同一条派生式（第 167 行「③ `APP=...` 这行产物名派生式逐字不动」），于是 `anchor in text`
+    被注释满足 ⇒ 真行（159）被写死了也照样判绿。判据要看的是**能被执行的代码行**。
+    """
+    out: list[int] = []
+    for index, line in enumerate(text.split("\n"), 1):
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        if anchor in line:
+            out.append(index)
+    return out
+
+
 def check_release_label(root: pathlib.Path, ledger: dict, report: Report, derived_vars: dict):
     """B4 —— 发布标签：一处定义，产物名与 Info.plist 两处派生（派活单 `T-20261002-028`）。"""
     label = ledger["releaseLabel"]
@@ -1007,8 +1025,8 @@ def check_release_label(root: pathlib.Path, ledger: dict, report: Report, derive
             report.bad("%s:%d 的 `%s` = `%s`，台账 `releaseLabel` = `%s`"
                        % (relative, line, variable, value, label))
     anchor = source["derivationAnchor"]
-    if anchor not in text:
-        report.bad("%s：找不到产物名派生式 `%s`（产物名被写死了 / 不再跟着发布标签走）"
+    if not anchor_lines(text, anchor):
+        report.bad("%s：找不到产物名派生式 `%s`（产物名被写死了 / 不再跟着发布标签走；注释里抄着不算）"
                    % (relative, anchor))
     table, error = parse_plist_template(text, derived_vars)
     if table is None:

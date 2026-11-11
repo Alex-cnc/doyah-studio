@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+# shared-surface：2026-11-10 红#6 收口 —— 两侧共用负例 runner；夹具补 Retro 三格生产面（判据读 Package.swift 拿到了它们）
 """负例：`Scripts/check-note-search-route.py`（界面检索口径门禁）**红得出来吗**。
 
 **为什么单开一个脚本**：门禁绿着只能说明「现在没违规」，**不能**说明它看得见违规 ——
@@ -53,6 +54,12 @@ PRODUCTION_STUBS = {
     "Tools/LicenseTool": "夹具：生产面占位",
     "Plugins/Notes/Sources": "夹具：生产面占位",
     "Plugins/Notes/Views": "夹具：生产面占位（真文件是 `Plugins/Notes/Views/NotesPanel.swift`）",
+    # 2026-11-03 起 Retro 的 macOS 代码随本仓走（`Package.swift` 三个 target 直接指向
+    # `Plugins/Retro/{Sources,Views,CLI}`）⇒ 生产面多了这三格，夹具不铺齐就是假红
+    # （2026-11-10 自检 5 例连红就是这条：判据读 Package.swift 拿到 Retro 目录，夹具里没有）。
+    "Plugins/Retro/Sources": "夹具：生产面占位（周报内核）",
+    "Plugins/Retro/Views": "夹具：生产面占位（周报界面）",
+    "Plugins/Retro/CLI": "夹具：生产面占位（周报命令入口）",
 }
 # 登记的面外根（判据要求它存在、且不是生产目录）
 OUTSIDE_STUBS = {"Vendor": "夹具：登记的面外根占位"}

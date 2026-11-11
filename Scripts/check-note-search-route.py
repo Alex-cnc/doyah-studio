@@ -52,6 +52,7 @@
     python3 Scripts/check-note-search-route.py --json      # 机器读
     python3 Scripts/check-note-search-route.py --root <树>  # 负例验证用（临时副本）
 """
+# shared-surface：2026-11-10 红#6 收口 —— 两侧共用判据；本轮生产面下限 7 → 10（Retro 三格 2026-11-03 迁入后没跟版，缩面判不出来）
 
 from __future__ import annotations  # macOS 自带 python3 是 3.9，`X | None` 这类注解需要它
 
@@ -294,10 +295,13 @@ def function_body(text: str, name: str) -> str | None:
 
 
 # 生产面（样本 60 ㈥）：`Package.swift` 现读到的生产目录数**不得低于此数** —— 一行改动
-# （删个 target / 换个 `path:`）就能把面缩小，报个数让「缩面」当场显形。当日实测 = 7 个
-# （Core / Plugins/Notes/Sources / Platform/macOS / CLI / Tools/LicenseTool / App /
-# Plugins/Notes/Views）；真实减面（合并 target）须同步这一处常数。
-PRODUCTION_FACE_FLOOR = 7
+# （删个 target / 换个 `path:`）就能把面缩小，报个数让「缩面」当场显形。
+# 当日实测 = **10** 个（Core / Plugins/Notes/Sources / Platform/macOS / CLI / Tools/LicenseTool /
+# App / Plugins/Notes/Views / **Plugins/Retro/{CLI,Sources,Views}** —— 后三格是 2026-11-03
+# 周报 macOS 代码随本仓走时进来的）。
+# 2026-11-10：原值 7 是 Retro 迁入前的读数，没跟版 ⇒ 自检「删掉一个生产 target ⇒ 判红」变成
+# 删到 9 个仍 ≥ 7 而判绿（面被缩小却没人喊）。按实测量到 10，任何一格消失都低于下限。
+PRODUCTION_FACE_FLOOR = 10
 
 # 登记的面外根（含 `.swift` 但不是生产 target 源码目录）：逐条给理由。登记根不存在 /
 # 理由为空 / 其实是生产目录 ⇒ 判红（死登记不许留）。列在这里的根**也进判定面**。
