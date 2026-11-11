@@ -106,7 +106,15 @@ public enum MenuLocalization {
         .notesSearchScopeCurrent,
         .notesSearchScopeAll,
         .notesFavorites,
-        .notesAllNotes
+        .notesAllNotes,
+        // **笔记的导出 / 导入备份**（`2026-11-11` 修 `MenuLanguageGateTests` 32 条）：
+        // 文案表里这四项中英都有（`Localization.swift:4720-4723`），但键没登记 ⇒ 按标题反查认不出
+        // ⇒ 自愈不碰 ⇒ 那四项**停在启动语言**（英文启动切中文仍是 `Export Markdown…`）。
+        // 这就是那 32 条红的本体：2 个语言档 × 4 项 × 4 条判定。
+        .notesExportMarkdown,
+        .notesExportPlainText,
+        .notesExportBackup,
+        .notesImportBackup
     ]
 
     /// 把「任意受支持语言下的标题」翻成目标语言（自有菜单项 + 系统菜单的**顶层标题**）。
