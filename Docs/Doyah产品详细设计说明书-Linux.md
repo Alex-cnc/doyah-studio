@@ -1,6 +1,6 @@
 # Doyah产品详细设计说明书 · Linux 端
 
-> **版本** **v1.3.2**（2026-11-11 **按 macOS 活书 v1.3.1 重新对齐（主人令）**：① 补 `## 0. 文档元信息与追溯关系` 章标题，§0.1→§0.2→§0.3 顺序摆正（原来 0.3 在前、无章标题）；② 派生基准由冻结件 v1.2.0 改指活书 v1.3.1；③ 清掉机械移植留下的假类型名 4 处（`doyah_studio_dbFactory` / `doyah_studio_db` / `agent::Approval` —— 同源命令层里查无此类名）与一处自毁标题（「自绘，不用 `分栏骨架`」）；`ShellState` 经核实是同源层真名，保留并标注「本端」；④ 27 行嵌套反引号清零；⑤ **§3.33 / §3.34 / §3.35 / §3.36 / §3.37 / §3.38 / §3.39 七节按基准逐条搬契约**：判定规则、状态表、常量阈值（思考区 min(实测,200) / 终态三行 60pt / 工具行体 216 / 台账明细 240 / 吸顶条 20 / 浮动入口 22+40）、禁止行为全部照抄，落点按本端检索改写（同源前端未实现处写「无」），判据编号与基准**逐条对齐（188 = 188）**，基准实测读数只标「基准实测」不充本端；⑥ §3.25 IM 凭据补齐到 11 条判据、§3.40 补到 12 条；⑦ **冻结口径**：主人 2026-11-11 令**不冻结**（继续在 v1.3.x 上跑，等公司 Linux 版满足要求再冻）⇒ 与最新冻结件 v1.3（20261110）的差异属预期，`check-frozen-sync` 红不是缺陷；⑧ **标题去 Swift 化**：18 节标题原为 macOS API 签名（如 `### 3.17 `AgentCommandRunner.run(_ command: String, in directory: URL…``），改成能力名（「命令执行器：超时、退出码与输出截断」），原签名下沉为「基准实现签名」引用行；⑨ **§3.33 拆成四个子节**（默认折叠与结论可见性 / 流式合批与视口高度 / 跟随落点与贴底判定 / 一轮一个思考区的段模型与三行汇总），契约 27 条与基准逐条同分布（4 / 5 / 7 / 8）；⑩ **补 §3.25.1**（可靠性 / 可观测 / 长任务 / 安全 / 五环自检，6 行 + 6 条判据）；⑪ **14 处「不适用」改口为「差异（未实现）」**（主人 2026-11-11 口径：Agent Workspace 与 Database Client 两片功能区要在 Linux 端**做出来**，不是「本端不需要」）—— §3.16–§3.24 / 3.27 / 3.28 / 3.30 / 3.31 / 3.32 逐节补「本端状态 + 本端落点」段，§0.2 逐节处置同步改口；⑫ **新增 §0.4 对齐范围与施工顺序**（两片功能区的节清单、判据条数实测、六步施工顺序、读本书的三条规矩）。⑬ **撤销逐字照抄**（主人 2026-11-11 纠正：「一个是 macOS、一个是 Linux，能一字不差照抄还要按端出详设干嘛」）—— §3 恢复为「契约取基准、实现按本端技术栈重写」；⑭ **新增 §0.5 平台与技术栈映射**（12 个能力面：密钥 / 命令执行 / 沙箱 / 滚动测量 / 吸顶 / 菜单 / 通知 / 代理 / 调试器 / 搜索 / 本地存储 / 测试，每行「macOS 做法 → 本端做法 → 契约不变项」）；⑮ **40 节逐节补「本端实现（Linux）」块**：落点（Rust crate/module + Vue 组件）+ 机制与差异（退化点如实写：无沙箱、无 Keychain ACL、必须自己读代理变量）。
+> **版本** **v1.3.2**（2026-11-11 **按 macOS 活书 v1.3.1 重新对齐（主人令）**：① 补 `## 0. 文档元信息与追溯关系` 章标题，§0.1→§0.2→§0.3 顺序摆正（原来 0.3 在前、无章标题）；② 派生基准由冻结件 v1.2.0 改指活书 v1.3.1；③ 清掉机械移植留下的假类型名 4 处（`doyah_studio_dbFactory` / `doyah_studio_db` / `agent::Approval` —— 同源命令层里查无此类名）与一处自毁标题（「自绘，不用 `分栏骨架`」）；`ShellState` 经核实是同源层真名，保留并标注「本端」；④ 27 行嵌套反引号清零；⑤ **§3.33 / §3.34 / §3.35 / §3.36 / §3.37 / §3.38 / §3.39 七节按基准逐条搬契约**：判定规则、状态表、常量阈值（思考区 min(实测,200) / 终态三行 60pt / 工具行体 216 / 台账明细 240 / 吸顶条 20 / 浮动入口 22+40）、禁止行为全部照抄，落点按本端检索改写（同源前端未实现处写「无」），判据编号与基准**逐条对齐（188 = 188）**，基准实测读数只标「基准实测」不充本端；⑥ §3.25 IM 凭据补齐到 11 条判据、§3.40 补到 12 条；⑦ **冻结口径**：主人 2026-11-11 令**不冻结**（继续在 v1.3.x 上跑，等公司 Linux 版满足要求再冻）⇒ 与最新冻结件 v1.3（20261110）的差异属预期，`check-frozen-sync` 红不是缺陷；⑧ **标题去 Swift 化**：18 节标题原为 macOS API 签名（如 `### 3.17 `AgentCommandRunner.run(_ command: String, in directory: URL…``），改成能力名（「命令执行器：超时、退出码与输出截断」），原签名下沉为「基准实现签名」引用行；⑨ **§3.33 拆成四个子节**（默认折叠与结论可见性 / 流式合批与视口高度 / 跟随落点与贴底判定 / 一轮一个思考区的段模型与三行汇总），契约 27 条与基准逐条同分布（4 / 5 / 7 / 8）；⑩ **补 §3.25.1**（可靠性 / 可观测 / 长任务 / 安全 / 五环自检，6 行 + 6 条判据）；⑪ **14 处「不适用」改口为「差异（未实现）」**（主人 2026-11-11 口径：Agent Workspace 与 Database Client 两片功能区要在 Linux 端**做出来**，不是「本端不需要」）—— §3.16–§3.24 / 3.27 / 3.28 / 3.30 / 3.31 / 3.32 逐节补「本端状态 + 本端落点」段，§0.2 逐节处置同步改口；⑫ **新增 §0.4 对齐范围与施工顺序**（两片功能区的节清单、判据条数实测、六步施工顺序、读本书的三条规矩）。⑬ **撤销逐字照抄**（主人 2026-11-11 纠正：「一个是 macOS、一个是 Linux，能一字不差照抄还要按端出详设干嘛」）—— §3 恢复为「契约取基准、实现按本端技术栈重写」；⑭ **新增 §0.5 平台与技术栈映射**（12 个能力面：密钥 / 命令执行 / 沙箱 / 滚动测量 / 吸顶 / 菜单 / 通知 / 代理 / 调试器 / 搜索 / 本地存储 / 测试，每行「macOS 做法 → 本端做法 → 契约不变项」）；⑮ **40 节逐节补「本端实现（Linux）」块**：落点（Rust crate/module + Vue 组件）+ 机制与差异（退化点如实写：无沙箱、无 Keychain ACL、必须自己读代理变量）。；⑯ **新增 §0.6 本端落点现状** + 判据 `Scripts/check-lld-landing.py`：本书原先把落点写成 `crates/`、`apps/desktop/`，而这两个顶层目录在本仓**根本不存在**（真落点是 `Platform/linux/src-tauri/…` 与 `Platform/windows/App/src` 的同源前端）—— 46 处已全部改正并按「待建 / 待交接」标注，判据 3 例自检。
 > **版本** **v1.3.1**（2026-11-09 **三书合一补漏**：头部版本行与「文档版本」行对齐、引用已并入需求书的《能力规划说明书》改指需求规格书 —— 由头 = 主人从公司侧同步 Linux 详设 v1.3.0 时发现「第 3 行 v1.3.0 / 第 11 行 v1.2.1 / 第 16 行 能力规划书 v1.0.266」三号互不相干（详见 `check-doc-versions` 新增判据））｜ v1.3.0（**v1.3.0**（2026-11-09 **三书合一同步：能力规划说明书并入需求规格说明书，全产品自此为三书一单；本册内容与口径不变**）
 > **版本** **v1.2.1**（2026-11-08 **按基准 v1.2 重新移植**（主人令：「参考这个版本更新一下 Linux 版本的详细设计，除了平台差异以外的其他内容都要保持一致性」）—— 基准 = 冻结件 `Docs/frozen/Doyah产品详细设计说明书-macOS-v1.2-20261108.md`；新增 §3.31–§3.40 十节（搜索引擎 / 搜索策略 / 展示优先级 / 吸顶 / 输入历史 / 审批三档 / 过程区高度 / 工作区根两态 / 回到消息底部 / 模型档位），契约逐条照抄基准，只改落点与读数口径；§0.2 处置表 30 → **40** 行；本端 6 节「不适用」、3 节「差异」、1 节「不适用（搜索策略）」均有代码依据（同源命令层/前端 grep 命中 0）。**本端十节全部无探针 ⇒ 判据一栏一律「未测」**，不许拿基准读数充本端读数）此前 v1.2.0（
 > **派生自** `Docs/Doyah产品详细设计说明书-macOS.md` **v1.3.1**（PC 族基准 · 2026-11-11 按活书重新对齐；对应冻结件 `Docs/frozen/Doyah产品详细设计说明书-macOS-v1.3-20261110.md`）｜ 移植工具 `Scripts/port-platform-lld.py` + `Scripts/platform-port-maps/linux.json`
@@ -204,6 +204,23 @@
 
 **差异登记口径**：平台**能力**不同（如无沙箱、无 Keychain ACL）⇒ 在「机制与差异」里写清退化了什么、界面怎么如实告知；平台**做法**不同（如 sticky、portable-pty）⇒ 只写做法，契约不动。
 
+### 0.6 本端落点现状（仓里到底有什么，别把施工目标当现状）
+
+本书 §3 每节的「**落点**」= **施工目标**，不是已经写好的文件。真实情况照下面这张表（`find Platform/linux -maxdepth 3` 可复核）：
+
+| 位置 | 现状 | 说明 |
+|---|---|---|
+| `Platform/linux/src-tauri/src/{main.rs,lib.rs}` | 存在 | Tauri 2 入口与命令注册 |
+| `Platform/linux/src-tauri/Core/src/{lib,artifact,capability}.rs` | 存在 | 骨架三件（产物校验 / 能力声明） |
+| `Platform/linux/src-tauri/Cli/src/main.rs` | 存在 | 命令行入口 |
+| `Platform/linux/src-tauri/Platform/Linux/` | 存在 | 平台适配层 |
+| `Platform/linux/build.sh` | 存在 | deb / AppImage 打包 |
+| `Platform/linux/src-tauri/Core/src/{db,agent,dap}/` | **不存在（待建）** | 本书 §3 的 Rust 落点全部落在这里，按 §0.4 六步施工顺序建 |
+| Linux 前端工程（Vue） | **不存在（待交接）** | 同源前端目前只在 `Platform/windows/App/src/`；本端接管时复用同一目录结构 |
+| `Platform/linux/vendor/ripgrep/` | **不存在（待建）** | 随包 `rg` 两个架构各一份，见 §3.31 |
+
+**判据**：`python3 Scripts/check-lld-landing.py` —— 逐行抽本书「落点」里反引号的路径，要求**要么在仓里存在，要么该行标「待建 / 待交接」**；写了本仓没有的顶层目录（如 `crates/`、`apps/desktop/`）直接判红。判不了的（明示）：符号名是否合理、模块拆分是否恰当、代码是否真会长成这样 —— 这三类只能人读。
+
 ## 1. 平台基线与实现范围
 
 ### 1.1 平台基线（Agent 不得更换）
@@ -370,7 +387,7 @@
 
 **本端实现（Linux）**
 
-- **落点**：`crates/db/src/connect.rs`（Rust 同源命令层）+ `apps/desktop/src/views/ConnectionDialog.vue`
+- **落点**：`Platform/linux/src-tauri/Core/src/db/connect.rs`（Rust 同源命令层）+ 同源前端 `Platform/windows/App/src/views/ConnectionDialog.vue`（待交接）
 - **机制与差异**：连接串解析、超时、TLS 走 `tokio-postgres`/`mysql_async` 同源驱动；**凭据写 Secret Service（`secret-service` crate，libsecret 后端）**，条目名与 macOS 侧同名（`conn.<id>`），便于两端配置可对账。差异：macOS Keychain 有 ACL 弹窗，Linux Secret Service 无 ACL ——「删除连坐凭据」因此**更简单**（不需要二次确认），但必须在无桌面会话（headless）时降级为内存态并明确告知「本次不落盘」。
 
 ### 3.2 保存连接：凭据只进密钥环，配置落盘可回读
@@ -407,7 +424,7 @@
 
 **本端实现（Linux）**
 
-- **落点**：`crates/db/src/connect.rs::delete`
+- **落点**：`Platform/linux/src-tauri/Core/src/db/connect.rs::delete`（待建）
 - **机制与差异**：删除连接与删除该连接的凭据在同一事务边界内完成（先删凭据、再删配置、最后写盘）；重复删返回「已不存在」而不是错误。判据在本端用 `cargo test -p doyah-db connect_delete` 覆盖。
 
 ### 3.3 执行与多结果集（基准 `DatabaseService.execute(_:options:handle:)`）
@@ -445,7 +462,7 @@
 
 **本端实现（Linux）**
 
-- **落点**：`crates/db/src/exec.rs`（执行）+ `crates/db/src/safety.rs`（裁决）
+- **落点**：`Platform/linux/src-tauri/Core/src/db/exec.rs`（执行）+ `Platform/linux/src-tauri/Core/src/db/safety.rs`（裁决）（待建）
 - **机制与差异**：选区解析走 `sqlparser` 词法（不自己写正则）；多条按文本顺序逐条执行，结果集全保留。差异：macOS 用系统正则库，本端用同一 `sqlparser` 保证与 mssql 方言解析一致。
 
 ### 3.4 取消（基准 `DatabaseService.cancel(_:)`）
@@ -478,7 +495,7 @@
 
 **本端实现（Linux）**
 
-- **落点**：`crates/db/src/exec.rs::cancel` + `tokio_util::sync::CancellationToken`
+- **落点**：`Platform/linux/src-tauri/Core/src/db/exec.rs::cancel` + `tokio_util::sync::CancellationToken`（待建）
 - **机制与差异**：取消走驱动自带的 cancel 通道（PostgreSQL `CancelRequest` / MySQL `KILL QUERY`），**不是丢连接**；连接取消后仍可继续执行下一条。
 
 ### 3.5 执行前安全闸：选区裁决、只读策略与逐条放行
@@ -515,7 +532,7 @@
 
 **本端实现（Linux）**
 
-- **落点**：`crates/db/src/safety.rs`
+- **落点**：`Platform/linux/src-tauri/Core/src/db/safety.rs`（待建）
 - **机制与差异**：只读策略与逐条放行在此判定，判定结果随执行请求一起下发（不信任界面传值）。差异：macOS 用 Actor 保证串行，本端用 `RwLock` + 单写者。
 
 ### 3.6 审批闸（基准 `AgentApprovalGate.grant(fingerprint:at:)`）
@@ -550,7 +567,7 @@
 
 **本端实现（Linux）**
 
-- **落点**：`crates/db/src/tx.rs`
+- **落点**：`Platform/linux/src-tauri/Core/src/db/tx.rs`（待建）
 - **机制与差异**：事务面板的状态机与 macOS 同构（开始 / 提交 / 回滚 / 自动回滚）；差异：Linux 端驱动层事务对象不可跨线程，故事务句柄钉在单一任务上。
 
 ### 3.7 库对象树的分层加载（库 / 表 / 视图 / 列）
@@ -586,7 +603,7 @@
 
 **本端实现（Linux）**
 
-- **落点**：`crates/db/src/metadata.rs`
+- **落点**：`Platform/linux/src-tauri/Core/src/db/metadata.rs`（待建）
 - **机制与差异**：对象树按需加载（库→表→列），不预取；刷新不清选择。差异：macOS 用 `NSOutlineView` 懒加载，本端在 Vue 侧用虚拟列表 + 懒展开。
 
 ### 3.8 行浏览：服务端过滤、分页与前 N 行
@@ -622,7 +639,7 @@
 
 **本端实现（Linux）**
 
-- **落点**：`crates/db/src/browse.rs`
+- **落点**：`Platform/linux/src-tauri/Core/src/db/browse.rs`（待建）
 - **机制与差异**：浏览前 N 行在**服务端**过滤（`LIMIT/OFFSET` 下推），不在客户端截断。
 
 ### 3.9 行编辑状态（本端 `ShellState.applyRowEdits(_:on:key:)`）
@@ -658,7 +675,7 @@
 
 **本端实现（Linux）**
 
-- **落点**：`crates/db/src/edit.rs`
+- **落点**：`Platform/linux/src-tauri/Core/src/db/edit.rs`（待建）
 - **机制与差异**：无主键不给行编辑；影响 0 行报冲突（不静默成功）。差异：macOS 走 NSTableView 提交，本端走 Vue 表格的提交事件，判据一致。
 
 ### 3.10 DDL 脚本执行闸：先预览、再确认、带表名才删
@@ -696,7 +713,7 @@
 
 **本端实现（Linux）**
 
-- **落点**：`crates/db/src/ddl.rs`
+- **落点**：`Platform/linux/src-tauri/Core/src/db/ddl.rs`（待建）
 - **机制与差异**：未预览不得执行；删表带存在性判断；DDL 与普通查询走两条不同路径（不许混）。
 
 ### 3.11 结果导出：按目标格式生成文本
@@ -732,7 +749,7 @@
 
 **本端实现（Linux）**
 
-- **落点**：`crates/db/src/export.rs`
+- **落点**：`Platform/linux/src-tauri/Core/src/db/export.rs`（待建）
 - **机制与差异**：导出按目标格式生成文本（CSV / Markdown / SQL INSERT）；流式写出，不整表进内存。
 
 ### 3.12 表数据导入：字段映射与冲突模式的执行计划
@@ -769,7 +786,7 @@
 
 **本端实现（Linux）**
 
-- **落点**：`crates/db/src/import.rs`
+- **落点**：`Platform/linux/src-tauri/Core/src/db/import.rs`（待建）
 - **机制与差异**：导入先出执行计划（字段映射、冲突模式），确认后才写；批量用 COPY / 多值 INSERT。
 
 ### 3.13 会话监视：列出服务端活动会话
@@ -806,7 +823,7 @@
 
 **本端实现（Linux）**
 
-- **落点**：`crates/db/src/session.rs`
+- **落点**：`Platform/linux/src-tauri/Core/src/db/session.rs`（待建）
 - **机制与差异**：会话列表从 `pg_stat_activity` / `information_schema.processlist` 取；差异：Linux 端没有 macOS 的活动监视器概念，判定只看 SQL 侧读数。
 
 ### 3.14 上下文装配：按预算裁剪并保留锚点
@@ -843,7 +860,7 @@
 
 **本端实现（Linux）**
 
-- **落点**：`crates/agent/src/context.rs`
+- **落点**：`Platform/linux/src-tauri/Core/src/agent/context.rs`（待建）
 - **机制与差异**：上下文装配按预算裁剪、保留锚点（系统提示 / 当前轮 / 最近工具结果）；差异：macOS 用 Swift Actor，本端用 `Arc<ContextEngine>` + 不可变快照，保证流式期间读到的是同一版。
 
 ### 3.15 标准工具分派：审批闸在前、执行归口在后
@@ -880,7 +897,7 @@
 
 **本端实现（Linux）**
 
-- **落点**：`crates/agent/src/dispatch.rs`
+- **落点**：`Platform/linux/src-tauri/Core/src/agent/dispatch.rs`（待建）
 - **机制与差异**：标准工具分派：审批闸在前、执行归口在后；工具名与参数在分派前再校验一次（不信任模型输出）。
 
 ### 3.16 计划行数估算（Plan Rows 解析）
@@ -921,7 +938,7 @@
 
 **本端实现（Linux）**
 
-- **落点**：`crates/agent/src/plan_rows.rs`
+- **落点**：`Platform/linux/src-tauri/Core/src/agent/plan_rows.rs`（待建）
 - **机制与差异**：计划行数用 `sqlparser` 解析 `EXPLAIN` 的输出估算；解析失败返回「未知」，不猜。
 
 ### 3.17 命令执行器：超时、退出码与输出截断
@@ -959,7 +976,7 @@
 
 **本端实现（Linux）**
 
-- **落点**：`crates/agent/src/shell_session.rs`（**`portable-pty`**）+ 终端面板 `apps/desktop/src/views/Terminal.vue`（xterm.js）
+- **落点**：`Platform/linux/src-tauri/Core/src/agent/shell_session.rs`（**`portable-pty`**）+ 终端面板 同源前端 `Platform/windows/App/src/views/Terminal.vue`（待交接）（xterm.js）
 - **机制与差异**：与 macOS 的 Agent 专用 PTY 会话**等价**：按工作区根建一条 `portable-pty` 会话并复用，`cd` / 环境变量 / 函数跨命令延续；与用户自己的终端页签不共用。差异：macOS 用 `posix_spawn` + PTY，本端 `portable-pty`（fork/exec 到 `/bin/sh`），超时与退出码口径完全照契约（1–600 s，缺省 60 s）。
 
 **禁止行为**
@@ -1003,7 +1020,7 @@
 
 **本端实现（Linux）**
 
-- **落点**：`crates/agent/src/code_runner.rs`
+- **落点**：`Platform/linux/src-tauri/Core/src/agent/code_runner.rs`（待建）
 - **机制与差异**：语言隔离按解释器走子进程（bash / python3 / node），工作目录限定在工作区根；**默认零外发**（不注入网络环境变量，代理变量显式清空）。差异：macOS 用 `sandbox-exec` 策略，本端没有等价沙箱 ⇒ 退化为「工作区根 + 只读 PATH + 清空代理」，并在界面上如实标注「本端无沙箱」。
 
 **禁止行为**：禁止继承宿主全部权限；禁止写授权目录外路径；禁止在界面线程运行；禁止把失败包装成「已完成」。
@@ -1036,7 +1053,7 @@
 
 **本端实现（Linux）**
 
-- **落点**：`crates/agent/src/tool_catalog.rs`
+- **落点**：`Platform/linux/src-tauri/Core/src/agent/tool_catalog.rs`（待建）
 - **机制与差异**：工具目录按关键词返回候选（名称 / 描述 / 参数名加权），不返回全量清单。
 
 **禁止行为**：禁止把全部工具塞进上下文；禁止替模型选择；禁止对未登记名字静默回退。
@@ -1071,7 +1088,7 @@
 
 **本端实现（Linux）**
 
-- **落点**：`crates/agent/src/orchestrator.rs` + `tokio::task::JoinSet` + `Semaphore`
+- **落点**：`Platform/linux/src-tauri/Core/src/agent/orchestrator.rs` + `tokio::task::JoinSet` + `Semaphore`（待建）
 - **机制与差异**：并行编排的子任务配额与超时按子任务自己的截止时刻算（不因主控剩余时间提前掐断）；归并只回一条摘要。差异：macOS 用 `TaskGroup`，本端 `JoinSet`，语义一致。
 
 **禁止行为**：禁止把有依赖的步骤并发；禁止无上限并发；禁止让子执行体继承主控的凭据与授权；禁止归并时收整段上下文（只收摘要与产物路径）。
@@ -1108,7 +1125,7 @@
 
 **本端实现（Linux）**
 
-- **落点**：`crates/agent/src/compression.rs`
+- **落点**：`Platform/linux/src-tauri/Core/src/agent/compression.rs`（待建）
 - **机制与差异**：压缩只在会话边界发生（一轮结束 / 工具边界），不在流式中途切上下文；准入结果带原因码。
 
 **禁止行为**：禁止 per-turn 压缩（这是本节存在的原因 —— Hermes 在 `context_engine.py` 里把这条写成生命周期注释，我们落成判据）；禁止在压缩里删掉用户显式要求保留的约束（灵魂条款 / 审批结论 / 未完成待办）；禁止把「压缩失败」当错误重试（重试会二次耗预算）；禁止压缩时改写已发出的历史（只改下一轮装载的内容）。
@@ -1143,7 +1160,7 @@
 
 **本端实现（Linux）**
 
-- **落点**：`crates/agent/src/tool_registry.rs`
+- **落点**：`Platform/linux/src-tauri/Core/src/agent/tool_registry.rs`（待建）
 - **机制与差异**：注册表是工具可见性的唯一真源，按档位（profile）裁剪；静态清单在编译期生成，运行期只读。
 
 **禁止行为**：禁止在任何第二处硬编码工具清单（含界面侧的「工具开关」）；禁止按壳各写一套实现（壳只决定看得见，不决定能力）；禁止拿可见性当权限用（权限与审批走 §3.6，可见 ≠ 可执行）；禁止在运行期热改快照。
@@ -1178,7 +1195,7 @@
 
 **本端实现（Linux）**
 
-- **落点**：`crates/agent/src/hooks.rs`（`trait LifecycleHook`）
+- **落点**：`Platform/linux/src-tauri/Core/src/agent/hooks.rs`（`trait LifecycleHook`）（待建）
 - **机制与差异**：钩子只挂在真实边界（会话开始 / 轮开始 / 工具前后 / 轮结束），不挂渲染事件。差异：macOS 用协议 + Combine，本端用 trait + 广播通道。
 
 **禁止行为**：禁止 per-turn 触发 `onSessionEnd`；禁止钩子里做重试风暴或长阻塞；禁止钩子改写历史消息正文；禁止新增第六个钩子而不改本节（钩子集是封闭集合，加一个要走版本与矩阵）。
@@ -1211,7 +1228,7 @@
 
 **本端实现（Linux）**
 
-- **落点**：`crates/agent/src/memory.rs`（**未建，与基准同步**）
+- **落点**：`Platform/linux/src-tauri/Core/src/agent/memory.rs`（**未建，与基准同步**）（待建）
 - **机制与差异**：记忆写入 / 检索 / 冲突 / 上下文账本在两端都还没建；本节是设计，不是现状。
 
 **禁止行为**：禁止把记忆写入做成「模型觉得重要就静默落库」；禁止按时效平铺最近 N 条冒充检索；禁止同键两条同时进上下文；禁止账本改写正文；禁止规则文件进可写面。
@@ -1235,7 +1252,7 @@
 
 **本端实现（Linux）**
 
-- **落点**：`crates/agent/src/im/`（入站 / 出站 / 自检）+ `apps/desktop/src/views/ImSettings.vue`
+- **落点**：`Platform/linux/src-tauri/Core/src/agent/im/`（入站 / 出站 / 自检）+ 同源前端 `Platform/windows/App/src/views/ImSettings.vue`（待交接）
 - **机制与差异**：扫码接入走官方连接器的 **Node ESM 入口**（本端同样以子进程方式调，不重写协议）；凭据 AppID 进配置、AppSecret 进 **Secret Service**；五环自检顺序照契约。差异：macOS 用 Keychain + `Process`，本端 Secret Service + `tokio::process`；连接器需要 `node` 在 PATH（打包时随包一份）。
 
 **禁止行为**：禁止界面自判「已连上」（必须收到一帧或取到 token）；禁止把半套凭据落库；禁止在本端另写一套扫码协议；禁止关窗 / 取消时不杀子进程；禁止把「用户选择不收任务」写成缺陷。
@@ -1279,7 +1296,7 @@
 
 **本端实现（Linux）**
 
-- **落点**：`crates/agent/src/scope.rs`
+- **落点**：`Platform/linux/src-tauri/Core/src/agent/scope.rs`（待建）
 - **机制与差异**：路径策略只允许工作区内相对路径，规范化后比对前缀（不信任 `..`）；符号链接解析后再判。差异：macOS 可依赖 `sandbox-exec` 兜底，本端**没有沙箱** ⇒ 必须在代码层判死并给出明确拒绝原因。
 
 **禁止行为**：禁止越界静默放行；禁止把一次批准记成永久放行；禁止按工具名放行（换参数必须重新出单）；
@@ -1338,7 +1355,7 @@
 
 **本端实现（Linux）**
 
-- **落点**：`crates/agent/src/net.rs`（`reqwest`）
+- **落点**：`Platform/linux/src-tauri/Core/src/agent/net.rs`（`reqwest`）（待建）
 - **机制与差异**：联网工具走显式 HTTP 客户端，**显式读 `http_proxy` / `https_proxy` / `no_proxy`**（macOS 由系统代理自动生效，本端必须自己读）；每轮有请求预算。差异：证书走系统信任库（`rustls-native-certs`），企业内网自签证书需用户显式导入。
 
 **测试 ID**：`T-3.27-01`（DDG 空配置可搜）· `T-3.27-02`（填 Tavily key 后走 Tavily 且设置显示后端）·
@@ -1369,7 +1386,7 @@
 
 **本端实现（Linux）**
 
-- **落点**：`crates/dap/src/`（DAP 客户端，走 stdio JSON-RPC）
+- **落点**：`Platform/linux/src-tauri/Core/src/dap/`（DAP 客户端，走 stdio JSON-RPC）（待建）
 - **机制与差异**：口径层与平台无关（先落「出错时说真话」，再接进程）；差异：调试适配器路径不同（macOS 用 `debugserver`/`lldb-mi`，Linux 用 `lldb-dap` / `gdb`），适配器缺失时判「未接」而不是「无错误」。
 
 **判据**：`cargo test`（DAPCoreTests） 13 例 + `cargo test`（DAPClientTests） 7 例（假适配器测传输与单步）+ `cargo test`（DAPSmokeTests） 1 例（**真 lldb-dap 烟测**，需 `DOYAH_DAP_SMOKE=1`）。
@@ -1390,7 +1407,7 @@
 
 **本端实现（Linux）**
 
-- **落点**：`crates/agent/src/steps.rs`
+- **落点**：`Platform/linux/src-tauri/Core/src/agent/steps.rs`（待建）
 - **机制与差异**：步数口径：一次运行上限 150 步，分母固定（不随已走步数增长）。
 
 **禁止行为**
@@ -1416,7 +1433,7 @@
 
 **本端实现（Linux）**
 
-- **落点**：`crates/agent/src/subagent.rs`
+- **落点**：`Platform/linux/src-tauri/Core/src/agent/subagent.rs`（待建）
 - **机制与差异**：子任务在独立任务 + 独立上下文里跑，不继承主控的消息历史；子预算按子任务自己的截止时刻。差异：macOS 用 actor 隔离，本端用独立 `tokio` 任务 + 只读快照。
 
 **禁止行为**
@@ -1443,7 +1460,7 @@
 
 **本端实现（Linux）**
 
-- **落点**：`Platform/linux/vendor/ripgrep/{x86_64,aarch64}/rg` + `crates/agent/src/search.rs`
+- **落点**：`Platform/linux/vendor/ripgrep/{x86_64,aarch64}/rg` + `Platform/linux/src-tauri/Core/src/agent/search.rs`（待建）
 - **机制与差异**：随包 `rg`（两种架构都给）→ PATH 里的 `rg` → 内置 `find` 遍历，三级回落静默；许可证与 `THIRD-PARTY-NOTICES` 随包。差异：macOS 可只带 arm64/x86_64 双包，本端 deb/AppImage 各带对架构的二进制。
 
 **判据**：`T-3.31-01` · `T-3.31-02` · `T-3.31-03` · `T-3.31-04` 口径同基准（加速比 / 降级不抛错 / 打包面 / 预算与缓存）；**本端未测** —— 不许拿基准读数充本端读数。
@@ -1464,7 +1481,7 @@
 
 **本端实现（Linux）**
 
-- **落点**：`crates/agent/src/search_policy.rs`
+- **落点**：`Platform/linux/src-tauri/Core/src/agent/search_policy.rs`（待建）
 - **机制与差异**：多词分组、缓存作废、只读工具每轮预算；语义差异写死（大小写不敏感、不折叠变音符号、行号按 `\n` 计）。
 
 **判据**：`T-3.32-01` · `T-3.32-02` · `T-3.32-03` 口径同基准；**本端未测**。
@@ -1607,7 +1624,7 @@
 
 **本端实现（Linux）**
 
-- **落点**：`apps/desktop/src/views/AgentChat.vue` + `apps/desktop/src/composables/useAgentChat.ts`
+- **落点**：同源前端 `Platform/windows/App/src/views/AgentChat.vue`（待交接） + 同源前端 `Platform/windows/App/src/composables/useAgentChat.ts`（待交接）
 - **机制与差异**：四项判定（结论 vs 过程独白、三态折叠、工具块一行摘要、台账折行）在 Vue 侧实现；高度测量用 `ResizeObserver` + `getBoundingClientRect`（**替代 macOS 的 `NSScrollView` / 高度探针**），常量与阈值一字不改（200 / 20 / 24 / 238 / 80 / 168 pt → CSS px，1:1）。
 
 **禁止行为**
@@ -1649,7 +1666,7 @@
 
 **本端实现（Linux）**
 
-- **落点**：`apps/desktop/src/components/StickyQuestion.vue`
+- **落点**：同源前端 `Platform/windows/App/src/components/StickyQuestion.vue`（待交接）
 - **机制与差异**：吸顶条用 `position: sticky; top: 0` 实现（**不叠在正文上**，占文档流）；出现门槛沿用「提问顶边滚出视口上沿」。差异：macOS 需要手动偏移量补偿，CSS sticky 由浏览器处理，判据只看「条高 20px / 内容上沿差 0 / 行高逐点不变」。
 
 **禁止行为**
@@ -1681,7 +1698,7 @@
 
 **本端实现（Linux）**
 
-- **落点**：`apps/desktop/src/components/Composer.vue` + `apps/desktop/src/stores/inputHistory.ts`
+- **落点**：同源前端 `Platform/windows/App/src/components/Composer.vue`（待交接） + 同源前端 `Platform/windows/App/src/stores/inputHistory.ts`（待交接）
 - **机制与差异**：↑↓ 只在首行行首 / 末行行末回填；草稿逐字保真（含换行与尾随空格）；回填不发送、不抢光标。历史落盘到 XDG 数据目录（`~/.local/share/doyah/input-history.json`）。差异：macOS 用 `UserDefaults`，本端用文件；去重上限 200 条一致。
 
 **禁止行为**
@@ -1715,7 +1732,7 @@
 
 **本端实现（Linux）**
 
-- **落点**：`crates/agent/src/approval.rs` + `apps/desktop/src/components/ApprovalDialog.vue`
+- **落点**：`Platform/linux/src-tauri/Core/src/agent/approval.rs` + 同源前端 `Platform/windows/App/src/components/ApprovalDialog.vue`（待交接）
 - **机制与差异**：三档授权（仅这一次 / 本会话内 / 总是允许）+ 作用域键（工具 + 规范化参数）+ 可逐条撤回；危险面（删除 / 对外发送 / 凭据 / 越界）**不降级**。差异：macOS 用手势焦点，本端用键盘焦点，判据只判行为不判外观。
 
 **禁止行为**
@@ -1791,7 +1808,7 @@
 
 **本端实现（Linux）**
 
-- **落点**：`apps/desktop/src/components/ProcessBlock.vue`
+- **落点**：同源前端 `Platform/windows/App/src/components/ProcessBlock.vue`（待交接）
 - **机制与差异**：过程区高度 = `min(实测内容高, 200px)` 且按整行量化（`Math.ceil(h / lineHeight)`）；终态折成三行 60px；结论去壳只动展示、不改原文。差异：macOS 用自适应 layout，本端用 `ResizeObserver` 测量后显式设高，避免 WebView 里的布局抖动。
 
 **禁止行为**
@@ -1826,7 +1843,7 @@
 
 **本端实现（Linux）**
 
-- **落点**：`crates/app/src/workspace.rs`
+- **落点**：`Platform/linux/src-tauri/Core/src/workspace.rs`（待建）
 - **机制与差异**：工作区根只有两态（默认根 / 用户指定），来源可查；默认根 = XDG 数据目录下的 `workspace`，创建后验证可写。差异：macOS 走书签 + 沙箱容器，本端无沙箱 ⇒ 只做「创建 + 可写校验 + 可见提示」。
 
 **禁止行为**（照抄基准）：禁止从书签表 / 会话快照直接推出根（那是「继承」，不是「来源」）；禁止迁移静默（换了根而界面不说一句话）；禁止把默认根写进书签表（下次会被当成「用户打开」的候选）；禁止在默认根建不出来 / 不可写时假装工作区已就绪；禁止把开发仓库路径写进产品代码的候选路径。
@@ -1877,7 +1894,7 @@
 
 **本端实现（Linux）**
 
-- **落点**：`apps/desktop/src/components/JumpToBottom.vue`
+- **落点**：同源前端 `Platform/windows/App/src/components/JumpToBottom.vue`（待交接）
 - **机制与差异**：浮动入口在滚动视口**之下**的保留条里（高 40px = 呼吸 4 + 入口 22 + 底距 12 + 衬 2），距底 > 40px 且不贴底时出现；点击滚到内容底边并**恢复跟随**。差异：macOS 用 `NSClipView` 偏移判定，本端用 `scrollTop` + `scrollHeight`，滞回（40 / 4）与「出现只跳一次」判据一致。
 
 **禁止行为**
@@ -1912,7 +1929,7 @@
 
 **本端实现（Linux）**
 
-- **落点**：`crates/agent/src/profile.rs` + `apps/desktop/src/views/ModelProfiles.vue`
+- **落点**：`Platform/linux/src-tauri/Core/src/agent/profile.rs` + 同源前端 `Platform/windows/App/src/views/ModelProfiles.vue`（待交接）
 - **机制与差异**：多档（端点 + 模型 + 超时 + 每档一把密钥，密钥进 Secret Service，条目 `agent.api-key.<profileId>`）；至少留一档；上限 20 档；切档持久化、不改写历史会话。差异：macOS 每档一条 Keychain 条目，本端每位一条 Secret Service 条目，命名规则一致以便迁移。
 
 **判据**：`T-3.40-01`–`T-3.40-06` 口径同基准；**本端未测**。 · `T-3.40-01` · `T-3.40-02` · `T-3.40-03` · `T-3.40-04` · `T-3.40-05` · `T-3.40-06` · `T-3.40-07` · `T-3.40-08` · `T-3.40-09` · `T-3.40-10` · `T-3.40-11` · `T-3.40-12`（07 切到第 2 档 ⇒ 请求逐字对应该档 / 08 删当前档回落、删最后一档被拒 / 09 每档一条钥串条目 / 10 测试连接四档结局 / 11 模型候选拉到就用、拉不到退回手填 / 12 上限 20 档 + 复制/改名）

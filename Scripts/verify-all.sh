@@ -466,6 +466,7 @@ python3 Scripts/check-doc-invariants.py
 # （只把「判据行 / 契约段」里的 Npt 当契约级；实现推理段的读数不算）。
 # 只判 Linux —— Windows 详设（v1.0.8 · 511 行 · 缺 62 节）若一并判会让全量长期红，而主人明确暂不开发。
 python3 Scripts/check-lld-parity.py --target Linux
+python3 Scripts/check-lld-landing.py
 python3 Scripts/check-rule-schema.py
 python3 Scripts/test-rule-negatives.py
 python3 Scripts/check-frozen-sync.py || echo "⚠ 冻结基线有漂移（超阈值 ⇒ 该问人类『冻结到新版本吗』；不是失败）"
