@@ -67,6 +67,13 @@ TREE_FILES = [
     "Tests/AgentWebToolsTests.swift",
     # `NFR-ALL-GATE-SEC-008` 的判据族（2026-11-02 C4 第一片）造请求对象喂给流式装饰器。
     "Tests/EgressUnifiedLogTests.swift",
+    # 2026-11-10：人类主人令按三类登记的五份（连接自检探针 2 · 传输层 1 · 单测夹具 2）——
+    # 台账登记了它们，夹具树就必须有它们，否则「干净副本应当绿」这一例会假红（死登记）。
+    "Core/AgentConnectionProbe.swift",
+    "Core/AgentModelListProbe.swift",
+    "Core/HTTPTransportOverStreaming.swift",
+    "Tests/AgentConnectionProbeTests.swift",
+    "Tests/AgentProfileManagementTests.swift",
     "Scripts/verify-all.sh",
     GATE,
     LEDGER,
