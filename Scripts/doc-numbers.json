@@ -43,6 +43,10 @@
       {
         "script": "Scripts/check-no-user-data.py",
         "reason": "主人 2026-11-05 令：用户数据不许进 PUBLIC 仓。判据已达标（自检 7/7、真仓硬红 0），但「是否每次全量验收都拦」待主人拍板 ⇒ 暂为独立判据、按需跑；拍板后接进 verify-all.sh 并删本条豁免。"
+      },
+      {
+        "script": "Scripts/check-lld-parity.py",
+        "reason": "按需分析工具（2026-11-11 新建）：判「派生详设与基准的节号 / 判据编号 / 契约级阈值是否齐」。**故意不进 verify-all** —— 一旦接进去，Windows 端（详设 v1.0.8 · 511 行 · 缺 62 节 · 缺 166 判据）会让全量验收长期红，而主人 2026-11-11 明确「目前不会开发 Windows 版本」。接进闭环需先拍板：只判 Linux（绿）还是连 Windows 一起判（红）。"
       }
     ],
     "testGlob": "Scripts/test-*.py",

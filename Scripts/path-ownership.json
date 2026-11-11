@@ -219,6 +219,18 @@
       "reason": "2026-11-10 把 check-build-policy.py 接进「冻结号 ⟷ 软件号」那一项块（不动 19 项项数）—— 原来「交付包口径」这条没有门，默认包改沙箱后无人判",
       "by": "macos",
       "at": "2026-11-10"
+    },
+    {
+      "glob": "Docs/Doyah产品详细设计说明书-Linux.md",
+      "reason": "Linux 端详设（PC 族派生书，基准 macOS）：2026-11-11 主人令「按 macOS 对齐」后连改两批（契约补齐 + 判据/阈值对齐）",
+      "by": "macos",
+      "at": "2026-11-11"
+    },
+    {
+      "glob": "Scripts/doc-numbers.json",
+      "reason": "数字对账台账：2026-11-11 给新建的按需分析脚本 check-lld-parity.py 登记未闭环理由（Windows 未对齐，接进去会让全量长期红）",
+      "by": "macos",
+      "at": "2026-11-11"
     }
   ]
 }
