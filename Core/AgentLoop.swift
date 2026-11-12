@@ -568,6 +568,8 @@ public struct AgentLoop: Sendable {
         var compression = AgentCompressionTally()
         /// 上一跳已经折掉几条（滚动窗口每跳都在折 ⇒ 只报**新增**，否则「压了几轮」会虚涨）。
         var foldedSoFar = 0
+        /// 空跳（既不回正文也不调工具）已经催过几次 —— 只催一次，催完还空就如实收尾。
+        var hollowRetries = 0
         // **`FR-AI-31` ② 的证据台账**：本次运行里工具层**真的**产出了什么（写盘 / 改文件 / 命令 / 读过）。
         // 只进不出 —— 模型引用得对它才算数（见 `AgentCompletionVerifier`）。
         var evidence: [AgentCompletionEvidence] = []
@@ -742,9 +744,11 @@ public struct AgentLoop: Sendable {
 
             let hopStarted = Date()
             var text = ""
-            // 本跳的思考段（`FR-AGT-UX-CONV-012`）：只在这一跳内累计，
+            // 本跳思考段（`FR-AGT-UX-CONV-012`）：只在这一跳内累计，
             // 最终答复那一跳的那一段随结果交出去；没有这一段模型的这里是空串。
             var reasoning = ""
+            /// 端点给的结束原因（`stop` / `length` / `tool_calls` …）—— 空正文时是唯一线索。
+            var hopFinishReason: String? = nil
             var pending: [Int: (id: String?, name: String?, arguments: String)] = [:]
             var retries = 0
             var lastFailure: String? = nil
@@ -776,7 +780,10 @@ public struct AgentLoop: Sendable {
                         if let name, !name.isEmpty { entry.name = name }
                         entry.arguments += fragment
                         pending[index] = entry
-                    case .finished, .done:
+                    case .finished(let reason):
+                        // 记下来 —— 空正文时全靠它区分「模型真没话说」与「被长度截断」。
+                        if let reason, !reason.isEmpty { hopFinishReason = reason }
+                    case .done:
                         break
                     }
                 }
@@ -930,6 +937,27 @@ public struct AgentLoop: Sendable {
                 chainID: context.chainID,
                 at: startedAt))
 
+            // **空跳兜底**（2026-11-11 真机 · QQ 通道）：模型偶尔既不回正文也不调工具
+            // （内容与思考分离的端点上见过：`content` 空、`reasoning_content` 有料），
+            // 这一跳等于白跑。旧行为把它当成「答完了」直接收尾 ⇒ 手机那头收到
+            // 「跑完了但没有可读正文（步数=0）」，桌面面板上也看不出发生过什么。
+            // 这里**只催一次**：给一条明确的系统提示再要一次结论；催完还空，就带着
+            // 端点给的结束原因收尾（让「为什么没正文」有据可查，而不是一句空话）。
+            if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+               invocations.isEmpty,
+               hollowRetries < 1,
+               steps < limits.maxSteps {
+                hollowRetries += 1
+                recordTurn(context: context, kind: .approval, role: "system",
+                           text: "hollowTurn:finish=\(hopFinishReason ?? "nil") · reasoningChars=\(reasoning.count)",
+                           at: startedAt)
+                observations.append("""
+                （系统提示）上一跳你没有返回任何正文，也没有调用工具。\(hopFinishReason.map { "端点给的结束原因：\($0)。" } ?? "")
+                请直接用**文字**给出结论（做了什么、结果如何）；若还需要工具，就继续调用工具。
+                """)
+                continue
+            }
+
             guard !invocations.isEmpty else {
                 // 最后一跳（模型不再要工具）也算"跑完了一跳" ⇒ 同样到点落点（否则最后那一跳永远不留痕）。
                 if noteHopCompletedIfDue(context: context, steps: steps, executed: executed,
@@ -969,6 +997,12 @@ public struct AgentLoop: Sendable {
                             chainID: context.chainID,
                             at: startedAt))
                     }
+                }
+                // 催过一次仍然没有正文 ⇒ 收尾，但**留下原因**（否则只剩一句「没正文」可查）。
+                if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    recordTurn(context: context, kind: .approval, role: "system",
+                               text: "emptyAnswer:finish=\(hopFinishReason ?? "nil") · 催过一次仍无正文",
+                               at: startedAt)
                 }
                 return seal(AgentLoopResult(
                     outcome: .finished(text: text), steps: steps,
