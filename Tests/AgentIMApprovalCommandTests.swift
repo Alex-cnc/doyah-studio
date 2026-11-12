@@ -74,7 +74,7 @@ final class AgentIMApprovalCommandTests: XCTestCase {
         model.setIMApprovalTicketForTesting(code: "a1b2", cardID: UUID())
         let reply = model.resolveIMApproval(.init(approve: true, code: "ffff"))
         XCTAssertTrue(reply.contains("对不上"), "码不对要明说：\(reply)")
-        XCTAssertNotNil(model.imApprovalTicket, "码不对不许把票作废（人可能只是打错了）")
+        XCTAssertEqual(model.imApprovalTickets.count, 1, "码不对不许把票作废（人可能只是打错了）")
     }
 
     @MainActor
@@ -84,7 +84,7 @@ final class AgentIMApprovalCommandTests: XCTestCase {
         model.setIMApprovalTicketForTesting(code: "a1b2", cardID: card)
         let first = model.resolveIMApproval(.init(approve: false, code: "a1b2"))
         XCTAssertTrue(first.contains("已拒绝"), "第一次应当落地：\(first)")
-        XCTAssertNil(model.imApprovalTicket, "用过即焚")
+        XCTAssertTrue(model.imApprovalTickets.isEmpty, "用过即焚")
         let second = model.resolveIMApproval(.init(approve: false, code: "a1b2"))
         XCTAssertTrue(second.contains("没有等你批"), "同一句重发不许再生效：\(second)")
     }
@@ -96,6 +96,18 @@ final class AgentIMApprovalCommandTests: XCTestCase {
                                             issuedAt: Date().addingTimeInterval(-AgentChatModel.imApprovalTicketLifetime - 5))
         let reply = model.resolveIMApproval(.init(approve: true, code: "a1b2"))
         XCTAssertTrue(reply.contains("过期"), "过期要明说：\(reply)")
-        XCTAssertNil(model.imApprovalTicket)
+        XCTAssertTrue(model.imApprovalTickets.isEmpty)
+    }
+
+    /// **两张通知两个码，都得能用**（真机实测：照最新那条回码反而说对不上）。
+    @MainActor
+    func testBothCodesWorkWhenTwoNoticesAreOnScreen() {
+        let model = makeModel()
+        model.setIMApprovalTicketForTesting(code: "7135", cardID: UUID())
+        model.setIMApprovalTicketForTesting(code: "c04c", cardID: UUID())
+        let first = model.resolveIMApproval(.init(approve: false, code: "7135"))
+        XCTAssertTrue(first.contains("已拒绝"), "先看到的那个码也要能用：\(first)")
+        let second = model.resolveIMApproval(.init(approve: false, code: "c04c"))
+        XCTAssertTrue(second.contains("已拒绝"), "后看到的那个码同样要能用：\(second)")
     }
 }

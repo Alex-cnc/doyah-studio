@@ -204,7 +204,27 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
     /// 票据寿命（秒）：过时作废，避免很久以后一条「批准」把一张陈单放出去。
     static let imApprovalTicketLifetime: TimeInterval = 900
 
-    private(set) var imApprovalTicket: IMApprovalTicket?
+    /// **一张票一个码**：手机上可能同时看到两条通知（各带各的码），两条都得能用。
+    ///
+    /// 之前只有一个槽位，后到的审批请求会覆盖前一张 —— 于是「照最新那条通知回的码」
+    /// 反而对不上（真机实测：回了 c04c，回话是 "That code does not match…"）。
+    private(set) var imApprovalTickets: [String: IMApprovalTicket] = [:]
+
+    /// 同时最多记几张（手机能回去看的历史也就几条；多出来的按时间淘汰）。
+    static let imApprovalTicketCapacity = 4
+
+    private func registerIMApprovalTicket(code: String, cardID: UUID, tool: String, issuedAt: Date = Date()) {
+        let key = code.lowercased()
+        imApprovalTickets[key] = IMApprovalTicket(code: key, cardID: cardID, tool: tool, issuedAt: issuedAt)
+        // 容量按「张数」淘汰（时间淘汰交给 `resolveIMApproval` 判过期 ——
+        // 登记时就清掉的话，人等到过期再来回话会收到「没有待批的单」而不是「已过期」，
+        // 那是在说谎：单子确实等过他，只是过时了）。
+        while imApprovalTickets.count > Self.imApprovalTicketCapacity {
+            guard let oldest = imApprovalTickets.min(by: { $0.value.issuedAt < $1.value.issuedAt }),
+                  oldest.key != key else { break }
+            imApprovalTickets.removeValue(forKey: oldest.key)
+        }
+    }
 
     /// 超时之后的心跳任务（结论一到就停；见 `AgentIMHeartbeatPolicy`）。
     private var imHeartbeatTask: Task<Void, Never>?
@@ -244,8 +264,7 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
 
     /// 单测用：直接塞一张票（绕过真审批流）。
     func setIMApprovalTicketForTesting(code: String, cardID: UUID, issuedAt: Date = Date()) {
-        imApprovalTicket = IMApprovalTicket(code: code, cardID: cardID,
-                                            tool: "run_command：测试命令", issuedAt: issuedAt)
+        registerIMApprovalTicket(code: code, cardID: cardID, tool: "run_command：测试命令", issuedAt: issuedAt)
     }
 
     /// 把 IM 回来的一句话落成决定，并回一句人话。
@@ -253,17 +272,18 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
     /// **不许静默**：码不对、过期、根本没有待批的单，都要说清楚是哪一档。
     func resolveIMApproval(_ decision: AgentIMApprovalCommand.Decision) -> String {
         let language = languageProvider()
-        guard let ticket = imApprovalTicket else {
+        guard !imApprovalTickets.isEmpty else {
             return LocalizedStrings.text(.agentIMApprovalNone, language: language)
         }
-        guard ticket.code.caseInsensitiveCompare(decision.code) == .orderedSame else {
+        let key = decision.code.lowercased()
+        guard let ticket = imApprovalTickets[key] else {
             return LocalizedStrings.text(.agentIMApprovalWrongCode, language: language)
         }
         if Date().timeIntervalSince(ticket.issuedAt) > Self.imApprovalTicketLifetime {
-            imApprovalTicket = nil
+            imApprovalTickets.removeValue(forKey: key)
             return LocalizedStrings.text(.agentIMApprovalExpired, language: language)
         }
-        imApprovalTicket = nil          // 一次性：用过即焚（同一句重发不会再放行）
+        imApprovalTickets.removeValue(forKey: key)   // 一次性：用过即焚（同一句重发不会再放行）
         if decision.approve {
             // 单子已经不在（被别处处理掉了）⇒ 如实说，不许回一句「已批准」而实际什么都没发生。
             guard state.cards.contains(where: { $0.id == ticket.cardID }) else {
@@ -1397,9 +1417,8 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
                 // **远程票据**：码 = 指纹前 4 位（同一张单稳定，别人猜不到别的单）。
                 let code = String(fingerprint.prefix(4)).lowercased()
                 if let card = state.cards.last(where: { $0.approvalFingerprint == fingerprint }) {
-                    imApprovalTicket = IMApprovalTicket(code: code, cardID: card.id,
-                                                        tool: preview.isEmpty ? name : "\(name)：\(preview)",
-                                                        issuedAt: Date())
+                    registerIMApprovalTicket(code: code, cardID: card.id,
+                                             tool: preview.isEmpty ? name : "\(name)：\(preview)")
                 }
                 report(IMProgressSnapshot(hop: max(imTurnHops, 1), tool: name, summary: preview,
                                           stage: .awaitingApproval, approvalCode: code), to: reporter)
