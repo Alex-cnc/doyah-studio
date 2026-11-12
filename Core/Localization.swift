@@ -2355,6 +2355,16 @@ public enum LKey: String, CaseIterable, Sendable {
     case agentIMReplyNeedsDesktopApproval
     /// 阶段转折的两行（停在审批 / 收尾）。
     case agentIMProgressAwaiting
+    /// 等确认那一档**带上被拦的命令**（手机那头据此决定去不去桌面点）。
+    case agentIMProgressAwaitingTool
+    /// 等确认那一档**带上一次性码**（不在电脑前时回「批准 <码>」）。
+    case agentIMProgressAwaitingCode
+    /// IM 侧「批准 / 拒绝」那一组回话（主人不在电脑前时唯一的放行通道）。
+    case agentIMApprovalDone
+    case agentIMApprovalRejected
+    case agentIMApprovalWrongCode
+    case agentIMApprovalExpired
+    case agentIMApprovalNone
     case agentIMProgressFinalizing
     // 五环自检（`FR-AGT-LINK-CHAN-003` ⑨：逐环读数，失败了指到哪一环）。
     case agentIMSelfCheckRingConfiguration
@@ -6089,6 +6099,13 @@ public enum LocalizedStrings {
         .agentIMGateOutsideWorkspace: [.simplifiedChinese: "工作区之外的文件", .english: "a file outside the workspace"],
         .agentIMReplyNeedsDesktopApproval: [.simplifiedChinese: "「%@」要在桌面那台机器上批准：IM 这边不替你放行，审批单已经在桌面上等着了，批完我把结论发回来。", .english: "\"%@\" needs your approval on the desktop: IM does not waive it. The approval card is already waiting there; I will send the result once you approve."],
         .agentIMProgressAwaiting: [.simplifiedChinese: "第 %lld 步 · 停在桌面的审批上 · 已跑 %@", .english: "Step %lld · waiting for approval on the desktop · %@ elapsed"],
+        .agentIMProgressAwaitingTool: [.simplifiedChinese: "第 %lld 步 · 停在桌面等确认：%@ · 已跑 %@（在桌面点批准或拒绝）", .english: "Step %lld · waiting for your confirmation on the desktop: %@ · %@ elapsed (approve or reject it there)"],
+        .agentIMProgressAwaitingCode: [.simplifiedChinese: "第 %lld 步 · 要你拍板：%@ · 已跑 %@。不在电脑前就回「批准 %@」或「拒绝 %@」（这条命令只放行一次）。", .english: "Step %lld · needs your call: %@ · %@ elapsed. If you are away from the desktop, reply \"approve %@\" or \"reject %@\" (one command, once)."],
+        .agentIMApprovalDone: [.simplifiedChinese: "已批准「%@」，接着跑。结论出来我再发一条。", .english: "Approved “%@” — carrying on. I'll send the result when it lands."],
+        .agentIMApprovalRejected: [.simplifiedChinese: "已拒绝「%@」，这一轮按拒绝收尾。", .english: "Rejected “%@” — this run will wrap up as rejected."],
+        .agentIMApprovalWrongCode: [.simplifiedChinese: "这个码对不上现在等批的那一条。以最新那条通知里的码为准（每条命令都有自己的码）。", .english: "That code does not match what is waiting right now. Use the code from the latest notice — each command gets its own."],
+        .agentIMApprovalExpired: [.simplifiedChinese: "那条审批单已经过期（超过 15 分钟），回桌面重新发起才会生成新码。", .english: "That approval request has expired (over 15 minutes). Start it again on the desktop to get a fresh code."],
+        .agentIMApprovalNone: [.simplifiedChinese: "现在没有等你批的单 —— 有的话我会把命令和码一起发过来。", .english: "Nothing is waiting for your approval right now — when something is, I'll send the command and its code together."],
         .agentIMProgressFinalizing: [.simplifiedChinese: "第 %lld 步 · 正在收尾 · 已跑 %@", .english: "Step %lld · wrapping up · %@ elapsed"],
         .agentIMSelfCheckRingConfiguration: [.simplifiedChinese: "配置完整", .english: "Configuration"],
         .agentIMSelfCheckRingToken: [.simplifiedChinese: "token 可取", .english: "Access token"],

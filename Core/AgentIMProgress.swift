@@ -46,16 +46,19 @@ public struct AgentIMRunProgress: Equatable, Sendable {
     public var toolCalls: Int
     /// 这一跳属于哪一阶段（默认按「有工具 = tool、没工具 = thinking」推）。
     public var stage: AgentIMRunStage
+    /// 等确认那一档的**一次性码**（主人不在电脑前时，靠它从 IM 回「批准 <码>」）。
+    public var approvalCode: String?
 
     public init(hop: Int, tool: String? = nil, summary: String = "",
                 elapsed: TimeInterval, toolCalls: Int,
-                stage: AgentIMRunStage? = nil) {
+                stage: AgentIMRunStage? = nil, approvalCode: String? = nil) {
         self.hop = hop
         self.tool = tool
         self.summary = summary
         self.elapsed = elapsed
         self.toolCalls = toolCalls
         self.stage = stage ?? (tool == nil ? .thinking : .tool)
+        self.approvalCode = approvalCode
     }
 }
 
@@ -162,6 +165,19 @@ public enum AgentIMProgressText {
         // 是三种不同的处境，读者据此决定继续等还是去桌面点一下。
         switch progress.stage {
         case .awaitingApproval:
+            // **等确认要带上被拦的东西**（主人 2026-11-11：「批准的信息得发 IM 通道」）：
+            // 只说「停在审批上」，人还得跑回桌面才知道拦的是什么，等于没通知。
+            if let tool = progress.tool, !tool.isEmpty {
+                let what = toolName(tool, summary: progress.summary, limit: 120)
+                if let code = progress.approvalCode, !code.isEmpty {
+                    // **远端点一下也能放行**（主人 2026-11-11：「我只能在 QQ 指挥，不在电脑前」）：
+                    // 把一次性码印在通知里，回「批准 <码>」即放行这一条；别的命令一律不受影响。
+                    return LocalizedStrings.format(.agentIMProgressAwaitingCode, language: language,
+                                                   Int64(progress.hop), what, duration, code, code)
+                }
+                return LocalizedStrings.format(.agentIMProgressAwaitingTool, language: language,
+                                              Int64(progress.hop), what, duration)
+            }
             return LocalizedStrings.format(.agentIMProgressAwaiting, language: language,
                                           Int64(progress.hop), duration)
         case .finalizing:
@@ -179,10 +195,9 @@ public enum AgentIMProgressText {
     }
 
     /// 工具 + 参数摘要压成一段（摘要太长就截断 —— 进度行不是审计，别把命令原文整条推过去）。
-    static func toolName(_ name: String, summary: String) -> String {
+    static func toolName(_ name: String, summary: String, limit: Int = 60) -> String {
         let trimmed = summary.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return name }
-        let limit = 60
         let cut = trimmed.count > limit ? String(trimmed.prefix(limit)) + "…" : trimmed
         return "\(name)（\(cut)）"
     }

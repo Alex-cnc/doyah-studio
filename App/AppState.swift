@@ -412,6 +412,11 @@ final class AppState: ObservableObject {
     /// **跑一轮**的接线口（与 `agentScheduleRunner` 同形）：由 `DoyahStudioApp` 注入 ——
     /// `AppState` 不认识界面侧的 `AgentChatModel`，这条闭包是唯一通路。
     var agentIMTaskRunner: ((AgentIMTask, AgentIMProgressReporter?) async -> AgentIMTaskRunResult)?
+    /// **远程拍板**（2026-11-11 主人：「我只能在 QQ 指挥，不在电脑前」）。
+    ///
+    /// 宿主（`DoyahStudioApp`）把这一口接到对话模型上；`nil` = 这一路不接（单测/没有模型时）。
+    /// 返回值是**回给手机那头的一句人话**（已批准 / 码不对 / 没有待批的单…）。
+    var agentIMApprovalResolver: ((AgentIMApprovalCommand.Decision) -> String)?
     /// 传输层本体：连上后由 AppState 持有（面板关掉不掉线）。
     private var agentIMTransport: AgentIMTransport?
     /// 取 token / 取网关的那一层（★0）。真实现走 REST；判据在 Core 直测（不碰网络）。
@@ -4024,6 +4029,20 @@ final class AppState: ObservableObject {
         // 留痕（2026-10-30 主人「配置了但不能对话」）：整条链每一步都写一行，
         // 出问题能直接指着日志说卡在哪一步，不靠猜。
         StartupLog.write("IM 收到消息 id=\(message.platformMessageID) chat=\(message.chatID) 字数=\(message.text.count)", important: true)
+        // **「批准 <码>」不走跑一轮那条路**（主人 2026-11-11：「我只能在 QQ 指挥，不在电脑前」）：
+        // 它是给**正在等的那一张单**拍板，不是新任务 —— 当任务跑会白烧一跳，还会把上下文搅乱。
+        // 只认带码的句子（`AgentIMApprovalCommand` 是纯函数，解析不读状态）。
+        if let decision = AgentIMApprovalCommand.parse(message.text) {
+            StartupLog.write("IM 审批指令 approve=\(decision.approve) code=\(decision.code)", important: true)
+            guard let resolve = agentIMApprovalResolver else {
+                StartupLog.write("IM 审批指令：宿主没接解析口（跳过）")
+                return
+            }
+            let reply = resolve(decision)
+            StartupLog.write("IM 审批回话：\(reply)")
+            deliverAgentIMLateText(reply)
+            return
+        }
         let runner = makeAgentIMInboundRunner()
         Task { @MainActor [weak self] in
             guard let self else { return }

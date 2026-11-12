@@ -188,6 +188,57 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
     /// 进度出口（宿主装：`AgentIMProgressReporter`，节流与串行都在它里面）。
     /// 跑完就置 `nil` —— 收尾之后不该再有进度行。
     private var imProgressReporter: AgentIMProgressReporter?
+
+    /// **IM 远程审批票据**（2026-11-11 主人：「我只能在 QQ 指挥，不在电脑前」）。
+    ///
+    /// 桌面弹层照旧是主路；这张票是**同一个人不在电脑前时**的补充：
+    /// 一次性码印在进度行里，回「批准 <码>」或「拒绝 <码>」即落地。
+    /// 三条硬约束：**只对这一张单**生效、**只认码**、**15 分钟过期**。
+    struct IMApprovalTicket: Equatable {
+        let code: String
+        let cardID: UUID
+        let tool: String
+        let issuedAt: Date
+    }
+
+    /// 票据寿命（秒）：过时作废，避免很久以后一条「批准」把一张陈单放出去。
+    static let imApprovalTicketLifetime: TimeInterval = 900
+
+    private(set) var imApprovalTicket: IMApprovalTicket?
+
+    /// 单测用：直接塞一张票（绕过真审批流）。
+    func setIMApprovalTicketForTesting(code: String, cardID: UUID, issuedAt: Date = Date()) {
+        imApprovalTicket = IMApprovalTicket(code: code, cardID: cardID,
+                                            tool: "run_command：测试命令", issuedAt: issuedAt)
+    }
+
+    /// 把 IM 回来的一句话落成决定，并回一句人话。
+    ///
+    /// **不许静默**：码不对、过期、根本没有待批的单，都要说清楚是哪一档。
+    func resolveIMApproval(_ decision: AgentIMApprovalCommand.Decision) -> String {
+        let language = languageProvider()
+        guard let ticket = imApprovalTicket else {
+            return LocalizedStrings.text(.agentIMApprovalNone, language: language)
+        }
+        guard ticket.code.caseInsensitiveCompare(decision.code) == .orderedSame else {
+            return LocalizedStrings.text(.agentIMApprovalWrongCode, language: language)
+        }
+        if Date().timeIntervalSince(ticket.issuedAt) > Self.imApprovalTicketLifetime {
+            imApprovalTicket = nil
+            return LocalizedStrings.text(.agentIMApprovalExpired, language: language)
+        }
+        imApprovalTicket = nil          // 一次性：用过即焚（同一句重发不会再放行）
+        if decision.approve {
+            // 单子已经不在（被别处处理掉了）⇒ 如实说，不许回一句「已批准」而实际什么都没发生。
+            guard state.cards.contains(where: { $0.id == ticket.cardID }) else {
+                return LocalizedStrings.text(.agentIMApprovalNone, language: language)
+            }
+            approve(ticket.cardID)
+            return LocalizedStrings.format(.agentIMApprovalDone, language: language, ticket.tool)
+        }
+        deny(ticket.cardID)
+        return LocalizedStrings.format(.agentIMApprovalRejected, language: language, ticket.tool)
+    }
     /// 这一个 IM 轮次开跑的时刻 / 走了几跳 / 调了几次工具 / 最后一条工具（进度行与失败行都要）。
     private var imTurnStartedAt: Date?
     private var imTurnHops = 0
@@ -1300,11 +1351,20 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
                 imTurnLastTool = summary.isEmpty ? name : "\(name)：\(summary)"
                 report(IMProgressSnapshot(hop: max(imTurnHops, currentHop + 1),
                                           tool: name, summary: summary), to: reporter)
-            case .approvalRequested:
-                // 停在审批上是一次**阶段转折**：手机那头要知道「去桌面点一下」，
-                // 否则它只会看到「一直在跑」然后突然超时。
-                report(IMProgressSnapshot(hop: max(imTurnHops, 1), tool: nil, summary: "",
-                                          stage: .awaitingApproval), to: reporter)
+            case let .approvalRequested(name, fingerprint, preview, _):
+                // 停在审批上是一次**阶段转折**：手机那头要知道「**哪条命令**在等确认」，
+                // 否则它只会看到「一直在跑」然后突然超时（2026-11-11 真机：只报「等确认」，
+                // 主人还得跑回桌面才知道拦的是什么 —— 批准的信息必须随这条一起发出去）。
+                imTurnLastTool = preview.isEmpty ? name : "\(name)：\(preview)"
+                // **远程票据**：码 = 指纹前 4 位（同一张单稳定，别人猜不到别的单）。
+                let code = String(fingerprint.prefix(4)).lowercased()
+                if let card = state.cards.last(where: { $0.approvalFingerprint == fingerprint }) {
+                    imApprovalTicket = IMApprovalTicket(code: code, cardID: card.id,
+                                                        tool: preview.isEmpty ? name : "\(name)：\(preview)",
+                                                        issuedAt: Date())
+                }
+                report(IMProgressSnapshot(hop: max(imTurnHops, 1), tool: name, summary: preview,
+                                          stage: .awaitingApproval, approvalCode: code), to: reporter)
             default:
                 break
             }
@@ -1364,12 +1424,16 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
         var summary: String
         /// 这一条属于哪一阶段（判据 ③：60 秒长任务要能看到「收尾 / 停在审批」这类转折）。
         var stage: AgentIMRunStage
+        /// 等确认那一档的一次性码（别的阶段是 `nil`）。
+        var approvalCode: String?
 
-        init(hop: Int, tool: String?, summary: String, stage: AgentIMRunStage? = nil) {
+        init(hop: Int, tool: String?, summary: String, stage: AgentIMRunStage? = nil,
+             approvalCode: String? = nil) {
             self.hop = hop
             self.tool = tool
             self.summary = summary
             self.stage = stage ?? (tool == nil ? .thinking : .tool)
+            self.approvalCode = approvalCode
         }
     }
 
@@ -1380,7 +1444,8 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
                                           summary: snapshot.summary,
                                           elapsed: elapsed,
                                           toolCalls: imTurnToolCalls,
-                                          stage: snapshot.stage)
+                                          stage: snapshot.stage,
+                                          approvalCode: snapshot.approvalCode)
         Task { await reporter.report(progress) }
     }
 

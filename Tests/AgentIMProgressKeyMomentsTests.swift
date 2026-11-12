@@ -100,3 +100,40 @@ final class AgentIMProgressKeyMomentsTests: XCTestCase {
         func append(_ line: String) { lines.append(line) }
     }
 }
+
+/// **等确认那一档要带命令**（2026-11-11 真机：「这个 im 通道配置得有问题，批准的信息得发 IM 通道」）。
+///
+/// 现场：手机那头只看到 `Step 4 · waiting for approval on the desktop`，
+/// 想知道拦的是什么必须跑回桌面 —— 等于没通知。
+///
+/// 判据：① 文案里要有工具名与被拦的内容；② 长命令截到 120 字（不把网关帧撑爆）；
+/// ③ 没有工具名时退回旧文案，不许印出空括号。
+final class AgentIMProgressApprovalInfoTests: XCTestCase {
+
+    private func line(tool: String?, summary: String) -> String {
+        AgentIMProgressText.line(for: AgentIMRunProgress(hop: 4, tool: tool, summary: summary,
+                                                         elapsed: 25, toolCalls: 3,
+                                                         stage: .awaitingApproval),
+                                 language: .simplifiedChinese)
+    }
+
+    func testApprovalLineCarriesTheBlockedCommand() {
+        let text = line(tool: "run_command", summary: "git commit -m \"IM 只报关键节点\"")
+        XCTAssertTrue(text.contains("run_command"), "要说出哪个工具在等确认：\(text)")
+        XCTAssertTrue(text.contains("git commit"), "要带上被拦的命令：\(text)")
+        XCTAssertTrue(text.contains("批准"), "要告诉人在哪儿点：\(text)")
+    }
+
+    func testLongCommandIsBoundedToOneHundredTwentyCharacters() {
+        let long = String(repeating: "a", count: 400)
+        let text = line(tool: "run_command", summary: long)
+        XCTAssertTrue(text.contains("…"), "超长要截断并留省略号")
+        XCTAssertLessThan(text.count, 220, "整行不许超过 220 字：\(text.count)")
+    }
+
+    func testMissingToolFallsBackToThePlainLine() {
+        let text = line(tool: nil, summary: "")
+        XCTAssertTrue(text.contains("审批"), "没有工具名时退回旧文案：\(text)")
+        XCTAssertFalse(text.contains("（）"), "不许印空括号：\(text)")
+    }
+}

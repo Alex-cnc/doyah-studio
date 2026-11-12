@@ -301,6 +301,11 @@ struct DoyahStudioApp: App {
                     agentChat.imLateDelivery = { text in
                         appState.deliverAgentIMLateText(text)
                     }
+                    // **不在电脑前也能拍板**（2026-11-11 主人：「我只能在 QQ 指挥」）：
+                    // 手机回「批准 <码>」就直接落到那一张单上 —— 只这一条命令、一次性、15 分钟有效。
+                    appState.agentIMApprovalResolver = { decision in
+                        agentChat.resolveIMApproval(decision)
+                    }
                     appState.agentIMTaskRunner = { task, progress in
                         workspaceTabs.openAgentChat()
                         guard let root = workspace.rootPath, !root.isEmpty else {
