@@ -52,9 +52,9 @@ final class AgentIMInboundRunTests: XCTestCase {
                 if fails { throw Boom() }
                 // 进度播报口：宿主（`AgentChatModel`）在真机上每跳 / 每个工具喂一次；
                 // 夹具里给两条，验证「节流之后仍然会推」与「推在结论之前」。
-                // 一条进度：开跑 20 秒后（`firstPushAfter` = 12 秒，所以它过得去）。
-                await reporter?.report(AgentIMRunProgress(hop: 4, tool: "search",
-                                                          summary: "qq", elapsed: 20, toolCalls: 3))
+                // 一条进度：开跑 25 秒时**停在桌面等审批**（关键节点；工具步在这里已经不推了）。
+                await reporter?.report(AgentIMRunProgress(hop: 4, elapsed: 25, toolCalls: 3,
+                                                          stage: .awaitingApproval))
                 return result ?? .answered(answer)
             },
             deliver: { entry in
@@ -417,9 +417,10 @@ final class AgentIMInboundRunTests: XCTestCase {
 
     // MARK: - ⑰ 进度节流：一次长轮次不会把 QQ 刷爆
 
-    func testProgressIsThrottledToAHandfulOfLinesPerTurn() async throws {
+    /// **纯工具振荡不推**（2026-11-11 真机：一轮十几条「第 N 步 · 正在 X」把手机刷屏）。
+    /// 40 跳全在跑工具、没有审批也没有收尾 ⇒ **一条进度都不许推**，结论照发。
+    func testToolOscillationPushesNoProgressAtAll() async throws {
         let recorder = Recorder()
-        // 40 跳、每跳一个工具，时间只走 1 秒（纯步数条件都满足不了）⇒ 只有首条能出去。
         let runner = AgentIMInboundRunner(
             sessionMap: AgentIMSessionMap(directory: root),
             resultQueue: AgentIMResultQueue(directory: root),
@@ -441,10 +442,8 @@ final class AgentIMInboundRunTests: XCTestCase {
                                 connection: online, language: .simplifiedChinese)
 
         let progress = recorder.delivered.filter { $0.text.contains("还在跑") }
-        XCTAssertLessThanOrEqual(progress.count, 6, "封顶 6 条：40 跳不许推 40 条")
-        XCTAssertGreaterThanOrEqual(progress.count, 1, "再长的一轮也要有进度，不许一片空白")
-        XCTAssertTrue(progress.first?.text.contains("第 12 步") == true,
-                      "第一条进度要等 `firstPushAfter` 之后（别跟 ack 撞在一起）：\(progress.first?.text ?? "-")")
+        XCTAssertTrue(progress.isEmpty, "工具↔思考的振荡一条都不许推：\(progress.map(\.text))")
+        XCTAssertEqual(recorder.delivered.last?.text, "完了", "结论照发，且是最后一条")
     }
 
     // MARK: - ⑱ 超时那一档：说「还在跑」，不许说成「没跑起来 / 失败」
@@ -466,10 +465,12 @@ final class AgentIMInboundRunTests: XCTestCase {
         let cadence = AgentIMProgressCadence(minInterval: 25, minHopDelta: 3, maxPushes: 6)
         let t0 = Date()
         var track = AgentIMProgressCadence.Track()
-        XCTAssertFalse(cadence.admits(hop: 3, elapsed: 3, at: t0, track: track),
+        XCTAssertFalse(cadence.admits(hop: 3, elapsed: 3, stage: .awaitingApproval, at: t0, track: track),
                        "刚开跑就报 = 跟 ack 撞车，不许推")
-        XCTAssertTrue(cadence.admits(hop: 3, elapsed: 20, at: t0, track: track),
-                      "跑过 `firstPushAfter` 之后首条放行")
+        XCTAssertTrue(cadence.admits(hop: 3, elapsed: 20, stage: .awaitingApproval, at: t0, track: track),
+                      "关键节点（等审批）过了 `firstPushAfter` 就放行")
+        XCTAssertFalse(cadence.admits(hop: 3, elapsed: 20, stage: .tool, at: t0, track: track),
+                       "普通工具步到 20 秒还不许报（刷屏的正源）")
 
         track = AgentIMProgressCadence.Track(pushes: 1, lastPushAt: t0, lastHop: 1)
         XCTAssertFalse(cadence.admits(hop: 2, elapsed: 30, at: t0.addingTimeInterval(5), track: track),

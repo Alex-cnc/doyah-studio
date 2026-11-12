@@ -6042,7 +6042,7 @@ public enum LocalizedStrings {
         .agentIMReplyUnavailable: [.simplifiedChinese: "这次没跑起来：%@。没有结论可报。", .english: "Could not start this run: %@. No result to report."],
         .agentIMReplyTruncated: [.simplifiedChinese: "（结论太长，这里只发前一段；完整内容在桌面那一条会话里）", .english: "(The result is long, so only the first part is sent here. The full text is in that session on the desktop.)"],
         .agentIMReplyTaskFailed: [.simplifiedChinese: "这次跑到一半失败了（技术原因已写进桌面日志 startup.log 与 agent-audit.jsonl）。没有结论可报。", .english: "This run failed partway through (the technical reason is in the desktop logs: startup.log and agent-audit.jsonl). There is no result to report."],
-        .agentIMAck: [.simplifiedChinese: "收到，正在处理。这一轮可能要几分钟，我会边跑边报进度，跑完再发结论。", .english: "Got it — working on it. This may take a few minutes; I will report progress as I go and send the result when it is done."],
+        .agentIMAck: [.simplifiedChinese: "收到，正在处理（可能要几分钟）。跑到关键节点或需要你在桌面上点一下时我才说话，跑完发结论。", .english: "Got it — working on it (this may take a few minutes). I'll only speak up at key moments or when something needs your click on the desktop, then send the result."],
         .agentIMProgressThinking: [.simplifiedChinese: "第 %lld 步 · 在等模型出话 · 已跑 %@（还在跑）", .english: "Step %lld · waiting for the model · %@ in (still running)"],
         .agentIMProgressTool: [.simplifiedChinese: "第 %lld 步 · 正在 %@ · 已跑 %@（还在跑）", .english: "Step %lld · running %@ · %@ in (still running)"],
         .agentIMReplyStillRunning: [.simplifiedChinese: "这一轮已经跑了 %@ 还没收尾，还在继续跑（进度我会接着报）。有结论我再发一条；急的话可以在桌面点停止。", .english: "This turn has been running for %@ and is still going (I will keep reporting progress). I will send the result when it lands; you can stop it on the desktop if you need to."],

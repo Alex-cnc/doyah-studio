@@ -71,16 +71,20 @@ public struct AgentIMProgressCadence: Equatable, Sendable {
     public var minInterval: TimeInterval
     public var minHopDelta: Int
     public var maxPushes: Int
-    /// 开跑之后多久才允许推**第一条**进度（默认 12 秒）——
+    /// 开跑之后多久才允许推**第一条**关键节点（默认 20 秒）——
     /// 一开跑就报会跟 ack 撞在一起，人看到的是两条几乎一样的消息。
     public var firstPushAfter: TimeInterval
+    /// **心跳**：没有关键节点、又一声不吭跑了这么久 ⇒ 发一条「还在跑」（默认 120 秒）。
+    /// 别再拿「第 N 步」当心跳 —— 那正是刷屏的来源。
+    public var heartbeatAfter: TimeInterval
 
-    public init(minInterval: TimeInterval = 25, minHopDelta: Int = 3, maxPushes: Int = 6,
-                firstPushAfter: TimeInterval = 12) {
+    public init(minInterval: TimeInterval = 45, minHopDelta: Int = 8, maxPushes: Int = 3,
+                firstPushAfter: TimeInterval = 20, heartbeatAfter: TimeInterval = 120) {
         self.minInterval = minInterval
         self.minHopDelta = minHopDelta
         self.maxPushes = maxPushes
         self.firstPushAfter = firstPushAfter
+        self.heartbeatAfter = heartbeatAfter
     }
 
     /// 已经推过几条、上一条是什么时候 / 第几跳 / 哪个阶段推的。
@@ -108,23 +112,39 @@ public struct AgentIMProgressCadence: Equatable, Sendable {
         admits(hop: hop, elapsed: elapsed, stage: track.lastStage, at: now, track: track)
     }
 
+    /// **只报关键节点**（主人 2026-11-11 真机：「每一步的信息都发到 QQ 通道里刷屏了」）。
+    ///
+    /// `thinking ↔ tool` 的来回振荡**不算进展** —— 一次工具调用就是一次往返，
+    /// 一轮十几次工具就是二十几条「仍在跑」。真正值得打断人的只有两个转折：
+    /// **停在桌面等审批**（不动手就没法继续）与**开始收尾**（结论马上到）。
+    /// 其余时候靠两条大闸兜底：跳数够多 / 时间够久，且总条数封顶。
+    public static func isKeyStage(_ stage: AgentIMRunStage) -> Bool {
+        switch stage {
+        case .awaitingApproval, .finalizing: return true
+        case .thinking, .tool: return false
+        }
+    }
+
     /// 带阶段的那一版（**唯一判定处**）。
     ///
     /// 四条闸，按顺序：
     /// ① 封顶（`maxPushes`）—— 再长的一轮也不会超过它；
     /// ② 首条要等 `firstPushAfter` —— 别跟 ack 撞在一起；
-    /// ③ **阶段变了就放行**（`thinking → tool → finalizing` 是人最想知道的转折）；
+    /// ③ **关键阶段变了就放行**（停在审批 / 开始收尾 / 卡住 是人最想知道的转折）；
+    ///    `thinking ↔ tool` 不算关键阶段，不许一次次推；
     /// ④ 步数跳够了 **或** 时间到了。
     public func admits(hop: Int, elapsed: TimeInterval, stage: AgentIMRunStage?,
                        at now: Date, track: Track) -> Bool {
         guard track.pushes < maxPushes else { return false }
         guard track.pushes > 0 else {
-            // **第一条要等一会儿**：ack 刚发出去，紧接着再来一句「第 1 步」是噪音，
-            // 而且它离 ack 只差一秒 —— 人看不出任何进展。
-            return elapsed >= firstPushAfter
+            // **第一条**：关键节点（等审批 / 收尾）过了 `firstPushAfter` 就放；
+            // 非关键节点**只在跑久了还没吭声**时发一条心跳（`heartbeatAfter`）——
+            // 别拿「第 1 步」当第一条，它离 ack 只差一秒，人看不出任何进展。
+            if let stage, Self.isKeyStage(stage) { return elapsed >= firstPushAfter }
+            return elapsed >= max(firstPushAfter, heartbeatAfter)
         }
-        if let stage, stage != track.lastStage {
-            // 阶段变化仍守首条闸（跑不到 12 秒的一轮，转折也不推 —— 结论马上就到了）。
+        if let stage, Self.isKeyStage(stage), stage != track.lastStage {
+            // 关键转折仍守首条闸（跑不到 `firstPushAfter` 的一轮，转折也不推 —— 结论马上就到了）。
             return elapsed >= firstPushAfter
         }
         guard let last = track.lastPushAt else { return true }
@@ -201,6 +221,8 @@ public actor AgentIMProgressReporter {
 
     private var outbox: [String] = []
     private var draining = false
+    /// 这一轮已收尾 —— 之后**不再接受**进度行（结论到了以后又冒出「第 3 步」只是刷屏）。
+    private var finished = false
 
     public init(cadence: AgentIMProgressCadence = AgentIMProgressCadence(),
                 language: AppLanguage,
@@ -215,6 +237,7 @@ public actor AgentIMProgressReporter {
     /// 报一条；被节流挡下就什么都不做。返回是否**已入箱**（单测靠它断言条数）。
     @discardableResult
     public func report(_ progress: AgentIMRunProgress) -> Bool {
+        guard !finished else { return false }   // 收尾后到的「第 N 步」一律不进箱
         let now = clock()
         guard cadence.admits(hop: progress.hop, elapsed: progress.elapsed,
                              stage: progress.stage, at: now, track: track) else { return false }
@@ -233,6 +256,14 @@ public actor AgentIMProgressReporter {
         while draining {
             await Task.yield()
         }
+    }
+
+    /// **收尾关闸**（`FR-AGT-LINK-CHAN-003` 真机 2026-11-11）：关掉播报口 —— 此后再报的一律丢弃
+    /// （结论都到了，「第 4 步还在跑」只是刷屏）。**已经在箱里的照发**：它们是这一轮真实发生过的
+    /// 关键节点，先于结论到达才讲得通顺序。
+    public func finish() async {
+        finished = true
+        await drain()
     }
 
     private func startPumpIfNeeded() {

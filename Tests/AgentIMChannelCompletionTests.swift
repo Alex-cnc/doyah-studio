@@ -131,9 +131,9 @@ final class AgentIMChannelCompletionTests: XCTestCase {
         XCTAssertTrue(restarted.pending().isEmpty, "补发成功后队列必须清空")
     }
 
-    // MARK: - ③ 60 秒长任务 ⇒ 进度 ≤ 7 条且含阶段变化，结束必有一条结论
+    // MARK: - ③ 60 秒长任务 ⇒ 进度 ≤ 3 条（只报关键节点），结束必有一条结论
 
-    func testSixtySecondRunPushesAtMostSevenLinesAndReportsStageChanges() async throws {
+    func testSixtySecondRunPushesAtMostThreeLinesAndReportsKeyMoments() async throws {
         let box = Box()
         let subject = runner(box) { reporter in
             // 60 秒、每 10 秒一跳；阶段：0–19 思考、20–44 工具、45–60 收尾。
@@ -156,15 +156,15 @@ final class AgentIMChannelCompletionTests: XCTestCase {
         XCTAssertEqual(outcome, .replied(delivered: true))
 
         let progress = box.delivered.filter { $0.text.contains("已跑") }
-        XCTAssertLessThanOrEqual(progress.count, 7, "60 秒不许推超过 7 条进度：\(progress.map(\.text))")
-        XCTAssertGreaterThanOrEqual(progress.count, 2, "60 秒至少要有两条进度（不许一片空白）")
-        XCTAssertTrue(progress.contains { $0.text.contains("还在跑") || $0.text.contains("正在 read_file") },
-                      "要有「在跑工具 / 等模型」那一档：\(progress.map(\.text))")
+        XCTAssertLessThanOrEqual(progress.count, 3, "60 秒最多 3 条进度（只报关键节点）：\(progress.map(\.text))")
+        XCTAssertGreaterThanOrEqual(progress.count, 1, "60 秒至少一条进度（不许一片空白）")
+        XCTAssertFalse(progress.contains { $0.text.contains("正在 read_file") && $0.text.contains("20 秒") },
+                       "工具↔思考的振荡不许一条条推（刷屏的正源）：\(progress.map(\.text))")
         XCTAssertTrue(progress.contains { $0.text.contains("收尾") },
                       "阶段变化（收尾）必须单独有一条：\(progress.map(\.text))")
         XCTAssertEqual(box.delivered.last?.text, "60 秒那一轮跑完了", "结束必须推结论，且是最后一条")
-        // 进度封顶 6 + 结论 1（ack 是第三条消息，不在这里数）。
-        XCTAssertLessThanOrEqual(box.delivered.count, 8, "整轮消息条数要有上限：\(box.delivered.count)")
+        // 进度封顶 3 + 结论 1（ack 是另一条，不在这里数）。
+        XCTAssertLessThanOrEqual(box.delivered.count, 5, "整轮消息条数要有上限：\(box.delivered.count)")
     }
 
     // MARK: - ④ 不可逆操作经 IM 发起 ⇒ 仍进审批（拦截发生）并回人话
@@ -359,16 +359,17 @@ final class AgentIMChannelCompletionTests: XCTestCase {
 
     // MARK: - 阶段节流是纯函数（判据 ③ 的判定物）
 
+    /// **关键阶段变化才放行**（2026-11-11 真机后收窄：`thinking ↔ tool` 振荡不再算转折）。
     func testCadenceAdmitsOnStageChangeButRespectsFirstPushGate() {
         let cadence = AgentIMProgressCadence()
         let t0 = Date()
         // 刚开跑：阶段变了也不推（会跟 ack 撞车）。
         XCTAssertFalse(cadence.admits(hop: 1, elapsed: 2, stage: .tool, at: t0,
                                       track: AgentIMProgressCadence.Track()))
-        // 过了首条闸：阶段变化立刻放行（不看步数差、不看时间间隔）。
+        // 过了首条闸：**关键**阶段变化立刻放行（不看步数差、不看时间间隔）。
         let track = AgentIMProgressCadence.Track(pushes: 1, lastPushAt: t0, lastHop: 9,
                                                  lastStage: .thinking)
-        XCTAssertTrue(cadence.admits(hop: 9, elapsed: 14, stage: .finalizing,
+        XCTAssertTrue(cadence.admits(hop: 9, elapsed: 25, stage: .finalizing,
                                      at: t0.addingTimeInterval(1), track: track))
         // 同阶段、步数与时间都不够 ⇒ 不推。
         let settled = AgentIMProgressCadence.Track(pushes: 2, lastPushAt: t0, lastHop: 9,

@@ -307,12 +307,14 @@ public struct AgentIMInboundRunner {
         // ⑥ 跑 + ⑦ 回话。
         do {
             let result = try await run(task, reporter)
-            await reporter.drain()
+            // **收尾先关播报口**（2026-11-11 真机：结论之后还在往外冒「第 N 步」，QQ 那头刷屏）：
+            // 未发出的进度行丢弃，先等泵停，再推结论 —— 先后顺序因此是「关键节点 … 结论」。
+            await reporter.finish()
             let delivered = await push(AgentIMReplyText.text(for: result, language: language),
                                        message: message, now: now)
             return .replied(delivered: delivered)
         } catch {
-            await reporter.drain()
+            await reporter.finish()
             let delivered = await push(AgentIMReplyText.taskFailed(language: language),
                                        message: message, now: now)
             _ = acknowledged
