@@ -563,6 +563,9 @@ public struct AgentLoop: Sendable {
         var executed: [AgentToolInvocation] = []
         var rejected: [(name: String, reason: String)] = []
         var observations: [String] = []
+        // **同一条被连拒几次**（2026-11-11 真机：一轮 37 次被拒、56 跳里约 45 跳白烧）。
+        // 只给改法不够 —— 观察到「看完改法又试同一句」，所以第 3 次起明说别再试。
+        var refusalStreaks: [String: Int] = [:]
         var lastText = ""
         // `NFR-AI-08` ③ 的累计读数（每一跳压一次，累计到本轮结果里 —— 界面那一行吃的就是它）。
         var compression = AgentCompressionTally()
@@ -1192,9 +1195,20 @@ public struct AgentLoop: Sendable {
                     await emit(.toolFinished(name: invocation.name,
                                                           outcome: "denied:\(code.rawValue)", millis: toolMillis))
                     rejected.append((invocation.name, code.rawValue))
-                    observations.append("\(invocation.name): \(code.rawValue)/\(detail)")
+                    // **拒完要给出路**：以前只回灌 `commandNotAllowed`，模型不知道改什么，
+                    // 只能换个拼法再试 —— 这是打转的正源（见 `AgentRefusalGuidance`）。
+                    let streakKey = "\(invocation.name)|\(invocation.argumentsJSON)"
+                    refusalStreaks[streakKey, default: 0] += 1
+                    let streak = refusalStreaks[streakKey] ?? 1
+                    var feedback = "\(invocation.name): \(code.rawValue)/\(detail)\n"
+                        + AgentRefusalGuidance.message(detail: detail,
+                                                       allowed: Self.allowedCommandNames)
+                    if let escalation = AgentRefusalGuidance.escalation(streak: streak) {
+                        feedback += "\n" + escalation
+                    }
+                    observations.append(feedback)
                     recordTurn(context: context, kind: .tool, role: "tool",
-                               text: "\(invocation.name) => \(code.rawValue)",
+                               text: feedback,
                                toolName: invocation.name, toolCallID: invocation.callID, at: startedAt)
                     await audit?.record(AgentActionRecord.makeToolCall(
                         toolName: invocation.name, argumentsSummary: invocation.argumentsJSON,
@@ -1424,6 +1438,9 @@ public struct AgentLoop: Sendable {
             ? envelope.text + "\n" + envelope.report.message
             : envelope.text
     }
+
+    /// 白名单命令名（拼进拒绝反馈，别让模型继续瞎猜该用什么）。
+    static let allowedCommandNames: [String] = AgentCommandPolicy.standard.allowedExecutables.sorted()
 
     static func summary(of outcome: AgentToolOutcome) -> String {
         switch outcome {
