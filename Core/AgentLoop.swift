@@ -610,7 +610,19 @@ public struct AgentLoop: Sendable {
             let recovery = store.recover(sessionID: context.checkpointKey, requestedStep: requestedStep)
             skippedSteps = recovery.skippedSteps
             skippedCheckpointLines = recovery.skippedLines
-            if let checkpoint = recovery.checkpoint {
+            if let checkpoint = recovery.checkpoint,
+               checkpoint.stepIndex + 1 >= limits.maxSteps {
+                // **到期检查点不许续跑**（2026-11-11 真机 · QQ 通道）：上一轮被步数上限掐停时，
+                // 检查点正好落在上限那一跳。若照「steps = stepIndex + 1」接上，循环第一件事就是
+                // `steps >= maxSteps` ⇒ 一次模型调用都不发就收尾 ⇒ 手机那头永远收到
+                // 「跑完了但没有可读正文（步数=0）」，桌面面板上也看不出发生过什么。
+                // 处置：把这条点当**过期**——本轮从 0 起跑，并把原因与旧点一并留痕（不许静默丢前情）。
+                observations.append("resume: 上一轮停在第 \(checkpoint.stepIndex) 跳（= 步数上限 \(limits.maxSteps)）；"
+                                    + "本轮从头开始，前情见会话留痕")
+                recordTurn(context: context, kind: .approval, role: "system",
+                           text: "staleCheckpoint:step=\(checkpoint.stepIndex) · maxSteps=\(limits.maxSteps) · 本轮从 0 起",
+                           at: startedAt)
+            } else if let checkpoint = recovery.checkpoint {
                 // `stepIndex` = 已跑完的最后一跳（0 起）⇒ 下一跳从它 +1 开始。
                 steps = checkpoint.stepIndex + 1
                 resumedFromStep = checkpoint.stepIndex
