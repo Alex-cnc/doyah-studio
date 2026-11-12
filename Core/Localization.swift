@@ -2360,6 +2360,8 @@ public enum LKey: String, CaseIterable, Sendable {
     /// 等确认那一档**带上一次性码**（不在电脑前时回「批准 <码>」）。
     case agentIMProgressAwaitingCode
     /// IM 侧「批准 / 拒绝」那一组回话（主人不在电脑前时唯一的放行通道）。
+    /// 超时之后的心跳（「我还活着」），别让手机那头在长跑里一片死寂。
+    case agentIMHeartbeat
     case agentIMApprovalDone
     case agentIMApprovalRejected
     case agentIMApprovalWrongCode
@@ -6101,6 +6103,7 @@ public enum LocalizedStrings {
         .agentIMProgressAwaiting: [.simplifiedChinese: "第 %lld 步 · 停在桌面的审批上 · 已跑 %@", .english: "Step %lld · waiting for approval on the desktop · %@ elapsed"],
         .agentIMProgressAwaitingTool: [.simplifiedChinese: "第 %lld 步 · 停在桌面等确认：%@ · 已跑 %@（在桌面点批准或拒绝）", .english: "Step %lld · waiting for your confirmation on the desktop: %@ · %@ elapsed (approve or reject it there)"],
         .agentIMProgressAwaitingCode: [.simplifiedChinese: "第 %lld 步 · 要你拍板：%@ · 已跑 %@。不在电脑前就回「批准 %@」或「拒绝 %@」（这条命令只放行一次）。", .english: "Step %lld · needs your call: %@ · %@ elapsed. If you are away from the desktop, reply \"approve %@\" or \"reject %@\" (one command, once)."],
+        .agentIMHeartbeat: [.simplifiedChinese: "还在跑：已 %lld 分钟，走到第 %lld 步。有结论我立刻发；要停请在桌面点停止。", .english: "Still running: %lld minutes in, now at step %lld. I will send the result the moment it lands; stop it on the desktop if you need to."],
         .agentIMApprovalDone: [.simplifiedChinese: "已批准「%@」，接着跑。结论出来我再发一条。", .english: "Approved “%@” — carrying on. I'll send the result when it lands."],
         .agentIMApprovalRejected: [.simplifiedChinese: "已拒绝「%@」，这一轮按拒绝收尾。", .english: "Rejected “%@” — this run will wrap up as rejected."],
         .agentIMApprovalWrongCode: [.simplifiedChinese: "这个码对不上现在等批的那一条。以最新那条通知里的码为准（每条命令都有自己的码）。", .english: "That code does not match what is waiting right now. Use the code from the latest notice — each command gets its own."],

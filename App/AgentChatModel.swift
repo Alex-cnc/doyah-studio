@@ -206,6 +206,42 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
 
     private(set) var imApprovalTicket: IMApprovalTicket?
 
+    /// 超时之后的心跳任务（结论一到就停；见 `AgentIMHeartbeatPolicy`）。
+    private var imHeartbeatTask: Task<Void, Never>?
+
+    /// 超时那一刻报过「还在跑」，之后**每 5 分钟补一条**「我还活着」（封顶 6 条）。
+    ///
+    /// 旧行为说完「I will keep reporting progress」就再没动静 —— 一轮跑 40 分钟，
+    /// 手机那头 40 分钟死寂（2026-11-11 真机：「跑到这里就没了」）。
+    private func startIMHeartbeat(from startedAt: Date, policy: AgentIMHeartbeatPolicy = AgentIMHeartbeatPolicy()) {
+        imHeartbeatTask?.cancel()
+        imHeartbeatTask = Task { [weak self] in
+            var sent = 0
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 30 * 1_000_000_000)
+                guard let self else { return }
+                let elapsed = Date().timeIntervalSince(startedAt)
+                guard policy.shouldSend(sent: sent, elapsed: elapsed, isRunning: self.state.isRunning) else {
+                    if !self.state.isRunning { return }
+                    continue
+                }
+                sent += 1
+                let minutes = Int64(elapsed / 60)
+                let steps = Int64(max(self.state.steps.count, self.imTurnHops))
+                let line = LocalizedStrings.format(.agentIMHeartbeat, language: self.languageProvider(),
+                                                   minutes, steps)
+                StartupLog.write("IM 心跳：第 \(sent) 条 · 已跑 \(minutes) 分钟", important: true)
+                self.imLateDelivery?(line)
+            }
+        }
+    }
+
+    /// 停心跳（结论那条要发之前必须先停，否则心跳会排在结论后面）。
+    private func stopIMHeartbeat() {
+        imHeartbeatTask?.cancel()
+        imHeartbeatTask = nil
+    }
+
     /// 单测用：直接塞一张票（绕过真审批流）。
     func setIMApprovalTicketForTesting(code: String, cardID: UUID, issuedAt: Date = Date()) {
         imApprovalTicket = IMApprovalTicket(code: code, cardID: cardID,
@@ -614,6 +650,8 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
         guard !state.isRunning else {
             let elapsed = Date().timeIntervalSince(imTurnStartedAt ?? Date())
             imOutstanding = IMTurnTicket(startedAt: imTurnStartedAt ?? Date(), messageCountBefore: before)
+            // **超时之后不再沉默**：每 5 分钟一条心跳（封顶 6 条），结论一到就停。
+            startIMHeartbeat(from: imTurnStartedAt ?? Date())
             return .stillRunning(elapsed: elapsed,
                                  hop: imTurnHops,
                                  toolCalls: imTurnToolCalls,
@@ -1455,6 +1493,7 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
     /// ② 超长照旧截断（`AgentIMReplyText.bounded`），不因为补发就把网关帧撑爆；
     /// ③ 没正文时**如实说哪一档**（失败 / 跑完没正文），不静默 —— 补发一条空话比不补更糟。
     private func deliverLateIMResult(_ result: AgentLoopResult) {
+        stopIMHeartbeat()               // 结论说话之前先闭嘴：心跳排在结论后面就是刷屏
         guard let ticket = imOutstanding else { return }
         imOutstanding = nil
         guard let sink = imLateDelivery else { return }
