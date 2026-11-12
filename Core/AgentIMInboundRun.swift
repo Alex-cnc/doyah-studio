@@ -62,6 +62,10 @@ public enum AgentIMReplyText {
             let reasonLine = LocalizedStrings.text(reason.textKey, language: language)
             return LocalizedStrings.format(.agentIMReplyNeedsDesktopApproval, language: language,
                                            action.isEmpty ? reasonLine : action)
+        case .unavailable(let code) where code == "noText":
+            // **跑完了 ≠ 没跑起来**（2026-11-11 自测实测：走了 3 步、命令 exit 0，
+            // 只因模型最后一跳没落正文，回话却是 "Could not start this run" —— 在撒谎）。
+            return LocalizedStrings.text(.agentIMReplyNoText, language: language)
         case .unavailable(let code):
             return LocalizedStrings.format(.agentIMReplyUnavailable, language: language,
                                            reasonLine(code, language: language))

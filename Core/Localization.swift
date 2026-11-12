@@ -2294,6 +2294,8 @@ public enum LKey: String, CaseIterable, Sendable {
     case agentIMInboundReplied
     case agentIMReplyAwaitingApproval
     case agentIMReplyUnavailable
+    /// 跑完了但没有可读正文（**不是**「没跑起来」）。
+    case agentIMReplyNoText
     case agentIMReplyTruncated
     case agentIMReplyTaskFailed
     /// 收到即回的 ack（**先让人知道「活着」**，而不是对着空白等几分钟）。
@@ -6051,6 +6053,7 @@ public enum LocalizedStrings {
         .agentIMInboundReceived: [.simplifiedChinese: "已收到 %d 条任务", .english: "%d task(s) received"],
         .agentIMInboundReplied: [.simplifiedChinese: "已推回 %d 条结论", .english: "%d result(s) sent back"],
         .agentIMReplyAwaitingApproval: [.simplifiedChinese: "任务已停下，等你在桌面那台机器上批准（IM 不放宽审批）。批准之后结论会推到这条聊天里。", .english: "The task stopped and waits for your approval on the desktop (IM does not loosen approvals). Once approved, the result comes back to this chat."],
+        .agentIMReplyNoText: [.simplifiedChinese: "这一轮跑完了，但它没落一句结论：工具都执行了、最后却回了个空（中途的过程在桌面面板上）。再发一次多半会好；老这样我就要查模型的空跳了。", .english: "This run finished but never wrote a conclusion: the tools ran, the last hop came back empty (the steps are on the desktop pane). Sending it again usually works; if it keeps happening I need to look at the model's empty hops."],
         .agentIMReplyUnavailable: [.simplifiedChinese: "这次没跑起来：%@。没有结论可报。", .english: "Could not start this run: %@. No result to report."],
         .agentIMReplyTruncated: [.simplifiedChinese: "（结论太长，这里只发前一段；完整内容在桌面那一条会话里）", .english: "(The result is long, so only the first part is sent here. The full text is in that session on the desktop.)"],
         .agentIMReplyTaskFailed: [.simplifiedChinese: "这次跑到一半失败了（技术原因已写进桌面日志 startup.log 与 agent-audit.jsonl）。没有结论可报。", .english: "This run failed partway through (the technical reason is in the desktop logs: startup.log and agent-audit.jsonl). There is no result to report."],
