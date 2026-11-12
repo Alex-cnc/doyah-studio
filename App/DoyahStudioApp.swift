@@ -361,6 +361,7 @@ struct DoyahStudioApp: App {
                         appState.stopWorkspaceWatching()
                     }
                     // IM 通道：配好就启动即连（见 AppState.startAgentIMIfConfigured 的由来）。
+                    appState.startAgentIMFileInboxIfConfigured()
                     appState.startAgentIMIfConfigured()
                     // **Agent 那条 shell 的显示面**：第一次派活时在终端面板开一个「Agent」页签，
                     // 人就能看见命令真的在 shell 里敲（2026-10-31 主人要的就是这个）。

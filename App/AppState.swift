@@ -3879,6 +3879,55 @@ final class AppState: ObservableObject {
     /// 主人 2026-10-30：「QQ 通道虽然配置了，但还是不能对话」——根因之一：连接只在
     /// 「智能体设置 → IM 通道 → 连接」那一下发生，**重启就断**，而人不会每次开 App 都去点一遍。
     /// 口径：凭据齐（`readiness.isReady`）且「接收任务」开着 ⇒ 启动即连；关着就老实不连。
+    // MARK: - 本机自测入口（`DOYAH_IM_FILE_INBOX=<路径>`）
+
+    /// 本机自测通道：把一个 JSONL 文件当成 IM 入站（**只在这一条环境变量给了路径时开**）。
+    ///
+    /// 走的是**同一条** `acceptAgentIMInbound` —— 与 QQ 的差别只有「不联网」，
+    /// 所以跳数 / 拒因 / 心跳 / 拍板都能在终端里复现，不必请人去手机上点一轮。
+    private var imFileInbox: AgentIMFileInbox?
+    private var imFileInboxTimer: Timer?
+
+    var isAgentIMLocalTestMode: Bool {
+        ProcessInfo.processInfo.environment["DOYAH_IM_FILE_INBOX"] != nil
+    }
+
+    private var imLocalResultFileURL: URL {
+        AgentIMResultQueue.defaultDirectory.appendingPathComponent("local-results.jsonl")
+    }
+
+    /// 开自测通道（没设环境变量就什么也不做 —— 生产里这条永远是关的）。
+    func startAgentIMFileInboxIfConfigured() {
+        guard let path = ProcessInfo.processInfo.environment["DOYAH_IM_FILE_INBOX"], !path.isEmpty else {
+            return
+        }
+        let url = URL(fileURLWithPath: (path as NSString).expandingTildeInPath)
+        if !FileManager.default.fileExists(atPath: url.path) {
+            FileManager.default.createFile(atPath: url.path, contents: nil)
+        }
+        imFileInbox = AgentIMFileInbox(url: url)
+        StartupLog.write("IM 自测通道：监听 \(url.path)", important: true)
+        let timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
+            Task { @MainActor in self?.pumpAgentIMFileInbox() }
+        }
+        imFileInboxTimer = timer
+    }
+
+    private func pumpAgentIMFileInbox() {
+        guard var inbox = imFileInbox else { return }
+        let frames = inbox.drain()
+        let malformed = inbox.malformedCount
+        imFileInbox = inbox
+        if malformed > 0 {
+            StartupLog.write("IM 自测通道：\(malformed) 行解不出来（已跳过）")
+        }
+        for frame in frames {
+            if case .message = frame {
+                acceptAgentIMInbound(frame)
+            }
+        }
+    }
+
     func startAgentIMIfConfigured() {
         guard agentIMSettings.receiveTasks else {
             StartupLog.write("IM 启动：接收任务关着，不自动连")
@@ -4191,6 +4240,15 @@ final class AppState: ObservableObject {
     /// 推不出去就返回 `false`（条目留在队列里：官方那次由 `flushAgentIMOutboundQueue` 补发，
     /// 中继那次由传输层 `replayPending` 补发）。
     private func deliverAgentIMResult(_ entry: AgentIMResultQueue.Entry) async -> Bool {
+        // 自测模式下不联网：把「本该发出去的那条」写进 `local-results.jsonl`，
+        // 于是终端里能直接看到手机那头会收到什么（含心跳、拍板提示、结论）。
+        if isAgentIMLocalTestMode {
+            // 落点与转义都归 Core 那一处（宿主里再写一次文件会被源树判据判成第二套通道）。
+            AgentIMLocalResultFile.append(text: entry.text, to: imLocalResultFileURL)
+            agentIMOutboundLine = "自测投递（未联网）"
+            StartupLog.write("IM 自测投递：\(entry.text.prefix(40))…", important: true)
+            return true
+        }
         if !agentIMUsesRelay {
             guard let sender = makeAgentIMOutboundSender() else {
                 agentIMOutboundLine = AgentIMSendText.line(for: .notReady(code: "environmentMissing"),
