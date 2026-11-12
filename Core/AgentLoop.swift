@@ -566,6 +566,10 @@ public struct AgentLoop: Sendable {
         // **同一条被连拒几次**（2026-11-11 真机：一轮 37 次被拒、56 跳里约 45 跳白烧）。
         // 只给改法不够 —— 观察到「看完改法又试同一句」，所以第 3 次起明说别再试。
         var refusalStreaks: [String: Int] = [:]
+        // **同一条调用做了几次**（2026-11-11 自测：`git status --short` 连跑 3 次、每跳都回空正文，
+        // 监控报了 `spinning:3/3` 却只报警不停 ⇒ 5 跳白烧）。与 `AgentRepeatGuard` 分工：
+        // 那道闸只管只读三件、写后清账；这里**按 (工具, 参数) 全量计数**，到顶就不执行。
+        var callStrikes: [String: Int] = [:]
         var lastText = ""
         // `NFR-AI-08` ③ 的累计读数（每一跳压一次，累计到本轮结果里 —— 界面那一行吃的就是它）。
         var compression = AgentCompressionTally()
@@ -1131,6 +1135,25 @@ public struct AgentLoop: Sendable {
                         continue
                     }
                 }
+                // **同一条调用不许无限重来**：结果没变，再跑也不会有新东西。
+                // 到顶就不执行，并把「你已经做过 N 次」回灌 —— 让模型换手段，而不是再烧一跳。
+                let strikeKey = "\(invocation.name)|\(AgentRepeatGuard.canonical(invocation.argumentsJSON))"
+                callStrikes[strikeKey, default: 0] += 1
+                let strike = callStrikes[strikeKey] ?? 1
+                if strike > Self.callRepeatCeiling {
+                    let feedback = "\(invocation.name): repeat-ceiling/已经做过 \(Self.callRepeatCeiling) 次\n"
+                        + "同一条调用本轮已经执行过 \(Self.callRepeatCeiling) 次，结果没有变化，本次不再执行。"
+                        + "直接基于已有结果给结论；确实需要新信息，就换工具或换参数。"
+                    observations.append(feedback)
+                    recordTurn(context: context, kind: .tool, role: "tool", text: feedback,
+                               toolName: invocation.name, toolCallID: invocation.callID, at: startedAt)
+                    await audit?.record(AgentActionRecord.makeToolCall(
+                        toolName: invocation.name, argumentsSummary: invocation.argumentsJSON,
+                        outcome: .denied, detail: "repeat-ceiling/\(strike)",
+                        sessionID: context.sessionID, hopIndex: steps - 1,
+                        chainID: context.chainID, at: startedAt))
+                    continue
+                }
                 let toolStartedAt = Date()
                 // `dispatch_subtasks` 是**异步**的（要真起子循环、并行跑），同步的 `AgentToolDispatcher`
                 // 跑不了它 ⇒ 在循环这一层认领；其余工具照旧走分发器（契约不动）。
@@ -1440,6 +1463,9 @@ public struct AgentLoop: Sendable {
     }
 
     /// 白名单命令名（拼进拒绝反馈，别让模型继续瞎猜该用什么）。
+    /// 同一条调用最多执行几次（第 N+1 次起不执行，直接回一句「别再试」）。
+    static let callRepeatCeiling = 3
+
     static let allowedCommandNames: [String] = AgentCommandPolicy.standard.allowedExecutables.sorted()
 
     static func summary(of outcome: AgentToolOutcome) -> String {
