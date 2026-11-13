@@ -191,6 +191,9 @@ struct AgentChatView: View {
                     // （见 `StickyQuestionScroller`：`scrollTo(id)` 会命中 ForEach 条目容器，低 28.5pt）。
                     stickyScroller.scrollQuestionToTop()
                 }) {
+                        // 视口高要参与**排版**（短内容贴底），所以走 GeometryReader 拿；
+                        // 背景 spy 的那份读数只用于判定，拿来排版会晚一帧。
+                        GeometryReader { viewport in
                         ScrollView {
                         // 块间距跟「紧凑模式」（`FR-AGT-UX-CONV-012` ②）：紧档用发丝间距。
                         LazyVStack(alignment: .leading,
@@ -271,6 +274,10 @@ struct AgentChatView: View {
                                 .background(AgentTranscriptTailAnchor())
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
+                        // **短内容贴底**：内容比视口短时，把这块撑到视口高并底部对齐 ——
+                        // 空白留在上面，最新一句永远贴着输入框（2026-11-13 真机：几行摘要被顶在最上面，
+                        // 下面一大片空背景，看着像布局坏了）。
+                        .frame(minHeight: max(0, viewport.size.height - Spacing.m * 2), alignment: .bottom)
                         .padding(.horizontal, Spacing.l).padding(.vertical, Spacing.m)
                         // 贴底判定（§3.33.3）：读数器一次给三样（吸顶 / 距底 / 贴底），
                         // 判定本身住在 `StickyQuestionSpy` 的状态机里。挂在内容根上（不是底部哨兵）——
@@ -296,12 +303,10 @@ struct AgentChatView: View {
                             if jumpVisible != showsJumpToBottom { showsJumpToBottom = jumpVisible }
                         })
                     }
-                    // **内容短时贴底**（2026-11-13 真机：一轮只有几行摘要 + 结论 ⇒ 内容被顶在
-                    // 视口最上面，下方空出一大片背景，看着像「布局坏了」）。
-                    // 对话区的高度本来就是**吃剩余空间**的（不是固定值）—— 缺的是「短内容往哪边靠」：
-                    // 聊天窗口的默认是**贴底**（最新一句永远贴着输入框上方），空出来的空间留在上面。
-                    // `.bottom` 同时定住**初次进入**的落点，省掉「打开就先滚一下」的那套补丁。
+                    // 初次进入也落在底部（内容短时上面那条 minHeight 已经把它按住了）。
                     .defaultScrollAnchor(.bottom)
+                    }
+                    .onAppear { follow() }
                     .onChange(of: followRequests) { _, _ in follow() }
                     .onChange(of: model.scrollTick) { _ in follow() }
                     .onChange(of: model.isRunning) { _ in follow() }
