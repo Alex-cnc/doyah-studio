@@ -271,6 +271,34 @@ final class AgentIMQQProvisioningTests: XCTestCase {
         XCTAssertEqual(fetchCount, 1, "单飞被打破 ⇒ 重连风暴会被 QQ 限流")
     }
 
+    /// 冷静窗：重连风暴下「每一跳都来要一次 token」不许变成「每一跳都打一次网络」。
+    /// 这条也是上面单飞用例的兜底 —— 先后到达（而不是同时到达）时，靠窗口而不是靠调度运气。
+    func testForceRefreshWithinGraceReusesJustFetchedToken() async throws {
+        let vault = AgentIMQQTokenVault()
+        let counter = Counter()
+        let token = AgentIMQQToken(value: "tok-grace", expiresIn: 7200, obtainedAt: fixedNow)
+
+        _ = try await vault.current(now: fixedNow, forceRefresh: true) {
+            await counter.bump()
+            return token
+        }
+        // 1 秒后再来要（两次重连的典型间隔）：窗口内不许再打一次网络。
+        _ = try await vault.current(now: fixedNow.addingTimeInterval(1), forceRefresh: true) {
+            await counter.bump()
+            return token
+        }
+        let withinGrace = await counter.value
+        XCTAssertEqual(withinGrace, 1, "冷静窗被打破 ⇒ 连续重连每次都换 token，然后被限流")
+
+        // 窗口外的强制刷新仍然要换 —— 否则真过期时换不动。
+        _ = try await vault.current(now: fixedNow.addingTimeInterval(5), forceRefresh: true) {
+            await counter.bump()
+            return token
+        }
+        let beyondGrace = await counter.value
+        XCTAssertEqual(beyondGrace, 2, "窗口外还不换 ⇒ token 过期后永远换不到")
+    }
+
     func testVaultKeepsUsableTokenWhenRefreshFails() async throws {
         // 换不到新 token 时：手上那把还没过期就继续用（因为换不到就断线，比用旧 token 再试更糟）。
         let vault = AgentIMQQTokenVault()

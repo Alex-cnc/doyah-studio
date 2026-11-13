@@ -363,10 +363,18 @@ public actor AgentIMQQTokenVault {
         inFlight = nil
     }
 
+    /// `forceRefresh` 的**冷静窗**（秒）：刚换到手的一把，窗口内不再换第二把。
+    ///
+    /// 为什么要有：`forceRefresh` 的调用方是传输层，它每断一次线就来要一次。
+    /// 两次重连相隔几十毫秒时若每次都真去换，就成了「断线 → 换 token → 换 token 被限流 → 更断」的
+    /// 正反馈；而且这种「先后到」在测试里表现为**时快时慢**的单飞失败（不是实现有锁漏，是窗口太窄）。
+    public var refreshGrace: TimeInterval = 2
+
     /// 要一把能用的 token：还新鲜就直接给，快到期就换，同时来的几个调用方共用一次请求。
     public func current(now: Date = Date(),
                         forceRefresh: Bool = false,
                         fetch: @escaping @Sendable () async throws -> AgentIMQQToken) async throws -> AgentIMQQToken {
+        if forceRefresh, let token, now.timeIntervalSince(token.obtainedAt) < refreshGrace { return token }
         if !forceRefresh, let token, !token.needsRefresh(now: now) { return token }
         if let inFlight { return try await inFlight.value }
         let task = Task { try await fetch() }
