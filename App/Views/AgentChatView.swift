@@ -200,9 +200,7 @@ struct AgentChatView: View {
                                    spacing: appState.agentDisplayPreferences.compact ? Spacing.hair : Spacing.xs) {
                             // **空态**（§9.1.16 ⑦）：新会话一片空白时，给一句能直接发出去的起手话。
                             // 空白屏不是「干净」，是「不知道该说什么」—— 别的区域都有空态，这里不该例外。
-                            if AgentChatEmptyStateGate.shouldShow(messageCount: model.messages.count,
-                                                                  cardCount: model.cards.count,
-                                                                  isRunning: model.isRunning) {
+                            if showsStartupPanel {
                                 startupPanel
                             }
                             ForEach(Array(model.messages.enumerated()), id: \.element.id) { index, message in
@@ -277,7 +275,10 @@ struct AgentChatView: View {
                         // **短内容贴底**：内容比视口短时，把这块撑到视口高并底部对齐 ——
                         // 空白留在上面，最新一句永远贴着输入框（2026-11-13 真机：几行摘要被顶在最上面，
                         // 下面一大片空背景，看着像布局坏了）。
-                        .frame(minHeight: max(0, viewport.size.height - Spacing.m * 2), alignment: .bottom)
+                        // 只有**真会话**才贴底；空态那块（图标 / 产品名 / 可用工具数）是「起手页」，
+                        // 它本来就该在**上面** —— 贴底等于把它按在输入框上（2026-11-13 真机反馈）。
+                        .frame(minHeight: max(0, viewport.size.height - Spacing.m * 2),
+                               alignment: showsStartupPanel ? .top : .bottom)
                         .padding(.horizontal, Spacing.l).padding(.vertical, Spacing.m)
                         // 贴底判定（§3.33.3）：读数器一次给三样（吸顶 / 距底 / 贴底），
                         // 判定本身住在 `StickyQuestionSpy` 的状态机里。挂在内容根上（不是底部哨兵）——
@@ -361,6 +362,13 @@ struct AgentChatView: View {
     ///     画个 `(0)` 会让人以为「有这一层、只是还没装」；
     ///   · 底部汇总只报**真的数**（工具 / MCP server），不写 `/help for commands`
     ///     （本端没有 slash 命令，写了就是教人去敲一个不存在的东西）。
+    /// 空态起手页是否在显示（视图与贴底排版共用这一份判定）。
+    private var showsStartupPanel: Bool {
+        AgentChatEmptyStateGate.shouldShow(messageCount: model.messages.count,
+                                          cardCount: model.cards.count,
+                                          isRunning: model.isRunning)
+    }
+
     private var startupPanel: some View {
         VStack(alignment: .leading, spacing: Spacing.l) {
             // ① 品牌块：**应用图标 + 大号等宽艺术字 + 一行暗色副题**
