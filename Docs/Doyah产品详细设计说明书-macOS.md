@@ -1,10 +1,11 @@
 # Doyah产品详细设计说明书（macOS）
 
-> **当前版本**：**v1.3.1**（2026-11-09）
+> **当前版本**：**v1.3.2**（2026-11-11）
 
 | 版本 | 日期 | 变更要点（逐轮细节看 git 提交） |
 |---|---|---|
-| **v1.3.1** | 2026-11-09 | 三书合一补漏 |
+| **v1.3.2** | 2026-11-11 | §3.25.1 按实装补五条：只报关键节点 / 远程拍板 / 长跑心跳 / 打转熔断 / 被拒给出路 + 自测通道 |
+| v1.3.1 | 2026-11-09 | 三书合一补漏 |
 | v1.3.0 | 2026-11-09 | 三书合一同步 |
 | v1.2.0 | 2026-11-08 | 开段：v1.1 段冻成 `v1.2-20261108`（七份），活书转 v1.2 段 |
 | v1.2.1 | 2026-11-08 | §3.40 补齐多 Provider / 多模型的配置面 |
@@ -35,7 +36,7 @@
 ## 0. 文档元信息与追溯关系
 
 - 项目/功能名称：Doyah · macOS 端全部能力（Studio 工作区与数据库 / Notes / Retro 宿主 / Agent 在 Studio 内的表现 / 授权呈现）
-- 文档版本：v1.3.1（头部版本同步）（2026-11-05 补登记 11-04 真机修的四类缺陷：§3.29 步数计数与步骤详单上限、§3.30 子代理委派三条隔离约束、§3.25 入站 ack / 进度节流 / 失败落盘 / 重复闸 / 通知角标）
+- 文档版本：v1.3.2（头部版本同步）（2026-11-05 补登记 11-04 真机修的四类缺陷：§3.29 步数计数与步骤详单上限、§3.30 子代理委派三条隔离约束、§3.25 入站 ack / 进度节流 / 失败落盘 / 重复闸 / 通知角标）
 - 实现范围（2026-10-25 实测件数）：`Core/` 260 个 `.swift` + `App/` 133 个 `.swift` + `Platform/macOS/` 5 个文件 + `CLI/` 4 个文件；测试面 `Tests/` 283 个文件
 - 上游依据：
   - 概要设计说明书：`Docs/Doyah产品概要设计说明书.md` v1.0.13（含 §11.4 非功能归属 47 条与 §21 标准对照）
@@ -994,7 +995,12 @@
 | 重投去重 | `Core/AgentIMInboundRun.swift`（`AgentIMInboundLedger`） | 平台消息号**先认领再跑**（`remember` 返回 `false` 即不跑）；台账落盘 `im-inbound-seen.json`、保最近 500 条 ⇒ 进程重启后同一条仍判重复。被判重复时经 `onDuplicate` 回调通知宿主计数（状态页读数），**不写结果队列**（重复不是结论） | `T-3.25-06`：同一条投 3 次 ⇒ 执行 1 次、报 2 次重复、计数 2 |
 | 断线补发 | `Core/AgentIMOutboundSend.swift`（`AgentIMOutboundDrain`）/ `Core/AgentIMChannel.swift`（`AgentIMResultQueue`） | 结果**先入队再推**、**推成才 ack**；补发只取 `ackedAt == nil` 的条目，同一趟里同一条 `id` 只发一次（`seen` 集合）；`Report` 逐条给出 `deliveredIDs` / `failedIDs`。队列落盘 `im-results.jsonl`（追加写），重启后 `pending()` 仍能读出未 ack 的那几条 | `T-3.25-07`：3 条待发、第 2 条网络失败 ⇒ 首趟发 1/3、重启后待发只剩第 2 条、次趟只发第 2 条且与首趟 id 无交集 |
 | 可观测四读数 | `Core/AgentIMObservability.swift`（`AgentIMChannelStatusBoard`） | 四读数固定身份 `connection` / `delivery` / `queue` / `failure`。连接状态取传输层那一档（`AgentIMStatusKind.of`）；收发时刻只在**真的发生**那一刻写（收到一条入站 / 投递成功）；待发条数**现读队列**（不另记计数器）；失败记「阶段 + 机器码」，人话在读取时按当前语言翻。一次成功外发即清掉旧失败（否则面板挂着一条像还在失败的红字） | `T-3.25-08`：四读数各取真值；失败那一条是人话（不含 `{`）、且点明是哪一环 |
-| 长任务进度 | `Core/AgentIMProgress.swift` | 四条闸按序：① 封顶 `maxPushes`（6）；② 首条等 `firstPushAfter`（12s，避开 ack）；③ **阶段变化即放行**（`thinking` / `tool` / `awaitingApproval` / `finalizing`）；④ 步数跳够 3 跳 **或** 距上条 ≥ 25s。阶段转折各有一句话（收尾 / 停在审批），不拿工具行凑。收尾前 `drain()` 保证结论**排在进度之后**；失败必推可读原因 | `T-3.25-09`：60 秒一轮 ⇒ 进度 ≤ 7 条、含「收尾」那条、最后一条是结论 |
+| 长任务进度（**只报关键节点**） | `Core/AgentIMProgress.swift` | 只认两类转折：**停在审批**（`.awaitingApproval`）、**开始收尾**（`.finalizing`）；`thinking ↔ tool` 来回**一律不推**（这是刷屏正源）。四道闸按序：① 封顶 `maxPushes`（3）；② 首条等 `firstPushAfter`（20s，避开 ack）；③ 距上条 ≥ `minInterval`（45s）；④ 步数跳够 `minHopDelta`（8）。阶段转折各有一句话，不拿工具行凑。收尾前 `finish()` 关闸 + `drain()`，保证结论**排在那几条关键节点之后**；失败必推可读原因 | `Tests/AgentIMProgressKeyMomentsTests`（5 例：振荡不推 / 等审批与收尾推 / 封顶 3 / 结论后丢弃） |
+| **远程拍板** | `Core/AgentIMApprovalCommand.swift`（纯解析）+ `App/AgentChatModel.swift`（票据）+ `App/AppState.swift`（入口） | 通知带**被拦命令**与**一次性码**（指纹前 4 位）；解析只认「批准 / 拒绝 / approve / reject + 4–8 位十六进制」，**裸「批准」不算指令**。票据**一码一票**（`[String: IMApprovalTicket]`，容量 4 按时间淘汰）：码不认识的**不作废**、用过**即焚**、`imApprovalTicketLifetime`（900s）过期、单子已被别处处理则如实说「没有等你批的单」。入口在 `acceptAgentIMInbound` 里**建任务之前**拦下（不当新任务跑、不白烧一跳） | `Tests/AgentIMApprovalCommandTests`（10 例：解析 5 + 票据 5，含「裸批准不放行」「码不对不作废」「一次性」「过期」「两条通知两个码都能用」） |
+| **长跑心跳** | `Core/AgentIMHeartbeat.swift`（纯策略）+ `App/AgentChatModel.swift`（`startIMHeartbeat` / `stopIMHeartbeat`） | `shouldSend(sent:elapsed:isRunning:)`：**还在跑**才发；默认 `firstAt` 360s 首条、`interval` 300s、`maxSends` 6；`deliverLateIMResult` 先 `stopIMHeartbeat()` —— 结论不许排在心跳后面。文案带「已 N 分钟、第 N 步」 | `Tests/AgentIMHeartbeatTests`（5 例：首条 6 分钟 / 间隔 5 分钟 / 跑完停 / 封顶 6 / 文案读数） |
+| **打转熔断** | `Core/AgentLoop.swift`（`callRepeatCeiling` + `callStrikes`） | 同一条（工具 + `AgentRepeatGuard.canonical(参数)`）一轮最多执行 **3** 次，第 4 次起**不执行**并回灌「已经做过 3 次，换工具或换参数，否则直接给结论」；审计记 `repeat-ceiling/N`。与 `AgentRepeatGuard` 分工：那道闸只管 `read_file` / `list_dir` / `search` 且写后清账，这道按全量计数 | `Tests/AgentLoopRepeatedCallTests`（2 例：6 跳同一调用只执行 3 次且仍出结论 / 两次不许提前掐） |
+| **被拒给出路** | `Core/AgentRefusalGuidance.swift` | 每种拒因翻成**能照做的一句**：`;`/`&` → 一次一条拆成多次；`>` → 用 `write_file`；`\|` → 交给 `grep`/`find` 自己的参数；`./x.sh` → 走解释器；不在白名单 → 点名 + 亮白名单。同一条连拒第 2 次提醒、第 3 次起明说「不要再试」 | `Tests/AgentRefusalGuidanceTests`（8 例，含升级逐级加重） |
+| **自测通道** | `Core/AgentIMFileInbox.swift` + `App/AppState.swift`（`DOYAH_IM_FILE_INBOX`） | 设了环境变量才开：该 JSONL 新增一行 = 一条入站，走**同一条** `acceptAgentIMInbound`（差别只有不联网）；投递落 `agent-im/local-results.jsonl`。只吃增量、只吃整行（半行留到下一轮）、坏帧记数、文件被截断自动复位 | `Tests/AgentIMFileInboxTests`（4 例） |
 | 不可逆仍审批 | `Core/AgentIMOriginGate.swift` + `Core/AgentTaskScope.swift`（`AgentScopeGate.judge`） | 代签路径（任务范围内不问人）在放行前先判危险面：**删除 / 对外发送 / 凭据 / 越界**四档（`AgentApprovalHazard.allowsGrant == false`）一律转人工，且**不认盘上已有的授权**。IM 发起侧用 `AgentIMOriginGate(origin: .im)` 同一判定；被挡下时回 `blockedByApproval`，回话必须说清「是哪一类操作 / IM 不放行 / 去桌面批」，**不准假装跑完** | `T-3.25-10`：`delete_records` + `rm -rf` ⇒ 判 `destructive`、有旧授权也要桌面批、手机上收到的回话含「桌面」且不含「已完成」 |
 | 五环自检 | `Core/AgentIMSelfCheck.swift`（`AgentIMSelfCheckRunner`）/ `App/AgentIMSelfCheckLive.swift` | 五环固定顺序：配置完整 → token 可取 → 握手成功 → 收一帧 → 发一帧。**串联执行**：前一环红即停，后面几环记 `blocked(by:)`（「没跑到」），**不记红**。握手 / 收帧 / 发帧**共用一条连接**（三环各开一条会把「自己的 Hello」当成「会话事件」）。读数只显示 AppID 尾 4 位与帧类型摘要 | `T-3.25-11`：正例五环全绿且逐条有读数；Secret 置空 ⇒ 只有第一环红、后四环「没跑到」；token 失败 ⇒ 指到第二环 |
 
