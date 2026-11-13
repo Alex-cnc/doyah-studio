@@ -1,6 +1,7 @@
 import AppKit
 import SwiftUI
 import DoyahCore
+import DoyahPlatform
 
 @main
 struct DoyahStudioApp: App {
@@ -306,6 +307,18 @@ struct DoyahStudioApp: App {
                     appState.agentIMApprovalResolver = { decision in
                         agentChat.resolveIMApproval(decision)
                     }
+                    // **最小命令层**（需求 ⑭）：`/stop` 掐当前这一跑、`/status` 报现况。
+                    // 两条都只读/只停，**不动待批单、不改权限**。
+                    appState.agentIMCommandStopHandler = {
+                        guard agentChat.isRunning else { return false }
+                        agentChat.stop()
+                        return true
+                    }
+                    appState.agentIMCommandStatusProvider = {
+                        agentChat.isRunning ? "正在跑一轮（进度在桌面面板）" : "空闲"
+                    }
+                    // **入站附件下载**（需求 ⑫）：出网实现在 Platform 侧，这里只给闭包。
+                    appState.agentIMAttachmentDownloader = AgentIMQQClients.attachmentDownloader()
                     appState.agentIMTaskRunner = { task, progress in
                         workspaceTabs.openAgentChat()
                         guard let root = workspace.rootPath, !root.isEmpty else {

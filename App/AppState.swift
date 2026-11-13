@@ -417,6 +417,13 @@ final class AppState: ObservableObject {
     /// 宿主（`DoyahStudioApp`）把这一口接到对话模型上；`nil` = 这一路不接（单测/没有模型时）。
     /// 返回值是**回给手机那头的一句人话**（已批准 / 码不对 / 没有待批的单…）。
     var agentIMApprovalResolver: ((AgentIMApprovalCommand.Decision) -> String)?
+    /// **最小命令层**（需求 ⑭）：`/stop` 要掐的是「界面侧那一跑」，`AppState` 拿不到它 ⇒ 同样走注入。
+    /// 返回 `true` = 真的掐掉了；`false` = 本来就没在跑（**如实说，不假装停过**）。
+    var agentIMCommandStopHandler: (() -> Bool)?
+    /// **`/status` 的现读真值**：宿主给一句人话（在跑 / 空闲 + 第几步），不给就说「未知」。
+    var agentIMCommandStatusProvider: (() -> String)?
+    /// **入站附件下载**（需求 ⑫）：出网实现在 `Platform/`，装配缝只注入闭包（`check-network-egress` 的纪律）。
+    var agentIMAttachmentDownloader: (@Sendable (URL) async throws -> Data)?
     /// 传输层本体：连上后由 AppState 持有（面板关掉不掉线）。
     private var agentIMTransport: AgentIMTransport?
     /// 取 token / 取网关的那一层（★0）。真实现走 REST；判据在 Core 直测（不碰网络）。
@@ -4071,13 +4078,77 @@ final class AppState: ObservableObject {
     /// 顺序不在界面这一层定 —— `AgentIMInboundRunner.handle` 是唯一一条链
     /// （策略 → 去重 → 建任务 → ack → 跑（边跑边报进度）→ 入队 → 推 → 推成才 ack）；
     /// 这里只把两个闭包给它：一个跑（接进界面的对话模型，审批照旧）、一个推（传输层 send）。
+    /// **命令层的三条回话**（需求 ⑭）。全部走 `deliverAgentIMLateText`：命令不建任务、不起一轮。
+    private func handleAgentIMCommand(_ command: AgentIMCommand) {
+        let language = agentIMLanguage
+        switch command {
+        case .stop:
+            let stopped = agentIMCommandStopHandler?() ?? false
+            let text = LocalizedStrings.text(stopped ? .agentIMCommandStopped : .agentIMCommandNotRunning,
+                                             language: language)
+            StartupLog.write("IM 命令 /stop → 掐掉=\(stopped)", important: true)
+            deliverAgentIMLateText(text)
+        case .status:
+            let running = agentIMCommandStatusProvider?()
+                ?? LocalizedStrings.text(.agentIMCommandNotRunning, language: language)
+            let text = LocalizedStrings.format(.agentIMCommandStatus, language: language, running)
+            deliverAgentIMLateText(text)
+        case .unknown(let name):
+            let text = LocalizedStrings.format(.agentIMCommandUnknown, language: language, "/" + name)
+            deliverAgentIMLateText(text)
+        }
+    }
+
+    /// 按钮 ACK（`PUT /interactions/{id}`）：不 ACK，用户那边看到的是错误标记。
+    private func ackAgentIMInteraction(_ interaction: AgentIMInteraction) async {
+        guard let environment = agentIMSettings.environment else { return }
+        let acker = AgentIMQQInteractionAcker(client: AgentIMQQClients.interaction(),
+                                              environment: environment,
+                                              token: { [weak self] in
+                                                  guard let self else { throw AgentIMQQProvisionProblem.tokenMissing }
+                                                  return try await self.fetchAgentIMQQToken()
+                                              })
+        let outcome = await acker.ack(interaction)
+        StartupLog.write("IM 按钮 ACK \(outcome.code)")
+    }
+
+    /// 把附件取到本机会话目录（0600）；取不到也返回（带 `note`，回执会如实说）。
+    private func storeAgentIMAttachments(_ attachments: [AgentIMInboundAttachment]) async -> [AgentIMInboundAttachment] {
+        let downloader = agentIMAttachmentDownloader ?? { _ in throw URLError(.unsupportedURL) }
+        let store = AgentIMInboundAttachmentStore(
+            directory: AgentIMResultQueue.defaultDirectory.appendingPathComponent("attachments"),
+            download: downloader)
+        return await store.store(attachments)
+    }
+
     private func acceptAgentIMInbound(_ frame: AgentIMInboundFrame) {
+        // 按钮点击（内联按钮）：先 ACK（不 ACK 用户看到错误标记），再把按钮变成**同一句决定**。
+        if case .interaction(let interaction) = frame {
+            StartupLog.write("IM 按钮点击 id=\(interaction.interactionID) data=\(interaction.buttonData)", important: true)
+            Task { [weak self] in await self?.ackAgentIMInteraction(interaction) }
+            guard let decision = AgentIMQQButtonData.decision(from: interaction.buttonData) else {
+                StartupLog.write("IM 按钮数据认不出（不当放行）：\(interaction.buttonData)")
+                return
+            }
+            if let resolve = agentIMApprovalResolver {
+                let reply = resolve(decision)
+                StartupLog.write("IM 按钮拍板回话：\(reply)")
+                deliverAgentIMLateText(reply)
+            }
+            return
+        }
         guard case .message(let message) = frame else { return }
         // 逾期补发要知道「回哪条聊天 / 回哪一条消息」—— 那一轮收尾时入站帧早就没在手上了。
         agentIMLastInbound = message
         // 留痕（2026-10-30 主人「配置了但不能对话」）：整条链每一步都写一行，
         // 出问题能直接指着日志说卡在哪一步，不靠猜。
         StartupLog.write("IM 收到消息 id=\(message.platformMessageID) chat=\(message.chatID) 字数=\(message.text.count)", important: true)
+        // **最小命令层**（需求 ⑭）与审批指令同层：都不建任务。
+        // `/stop` 只掐当前这一跑，**不清待批单、不改权限**；不认识的斜杠句如实说，不当派活。
+        if let command = AgentIMCommand.parse(message.text) {
+            handleAgentIMCommand(command)
+            return
+        }
         // **「批准 <码>」不走跑一轮那条路**（主人 2026-11-11：「我只能在 QQ 指挥，不在电脑前」）：
         // 它是给**正在等的那一张单**拍板，不是新任务 —— 当任务跑会白烧一跳，还会把上下文搅乱。
         // 只认带码的句子（`AgentIMApprovalCommand` 是纯函数，解析不读状态）。
@@ -4090,6 +4161,26 @@ final class AppState: ObservableObject {
             let reply = resolve(decision)
             StartupLog.write("IM 审批回话：\(reply)")
             deliverAgentIMLateText(reply)
+            return
+        }
+        // **附件先取到本机**（需求 ⑫）：取到就回执一行、把路径拼进提示词；取不到也如实说。
+        var frame = frame
+        if !message.attachments.isEmpty {
+            frame = .message(message)
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                let stored = await self.storeAgentIMAttachments(message.attachments)
+                let receipt = AgentIMAttachmentReceipt.line(for: stored, language: self.agentIMLanguage)
+                if let receipt { self.deliverAgentIMLateText(receipt) }
+                var updated = message
+                // 取过了就不再带附件（否则会自己调自己，无限递归）。
+                updated.attachments = []
+                let paths = stored.compactMap(\.localPath)
+                if !paths.isEmpty {
+                    updated.text = message.text + "\n\n（附件已存到本机：" + paths.joined(separator: "、") + "）"
+                }
+                self.acceptAgentIMInbound(.message(updated))
+            }
             return
         }
         let runner = makeAgentIMInboundRunner()
@@ -4188,6 +4279,21 @@ final class AppState: ObservableObject {
             StartupLog.write("IM 补发：没有记下入站消息（跳过）")
             return
         }
+        // 正文里的 `MEDIA:/路径`（需求 ⑫）：先发媒体、再把标签摘掉发文字 —— 标签本身不许出现在手机上。
+        let extracted = AgentIMMediaTag.extract(from: text)
+        if !extracted.paths.isEmpty {
+            let paths = extracted.paths
+            let target = AgentIMOutboundTarget(kind: message.chatKind, openID: message.chatID)
+            let replyTo = message.platformMessageID
+            Task { @MainActor [weak self] in
+                await self?.sendAgentIMMedia(paths: paths, target: target, replyTo: replyTo)
+            }
+        }
+        let text = extracted.text
+        guard !text.isEmpty else {
+            StartupLog.write("IM 补发：正文只有媒体标签，文字部分跳过（媒体已单独发）")
+            return
+        }
         let entry: AgentIMResultQueue.Entry
         do {
             entry = try agentIMResultQueue.enqueue(chatID: message.chatID,
@@ -4239,6 +4345,29 @@ final class AppState: ObservableObject {
     ///
     /// 推不出去就返回 `false`（条目留在队列里：官方那次由 `flushAgentIMOutboundQueue` 补发，
     /// 中继那次由传输层 `replayPending` 补发）。
+    /// 发一批本机媒体（`MEDIA:` 标签里的那些）。逐条发、逐条记结果；**一条失败不挡后面**。
+    private func sendAgentIMMedia(paths: [String], target: AgentIMOutboundTarget,
+                                  replyTo: String?) async {
+        guard let environment = agentIMSettings.environment else { return }
+        let sender = AgentIMQQMediaSender(
+            client: AgentIMQQClients.media(),
+            environment: environment,
+            sequences: AgentIMReplySeqLedger(directory: AgentIMResultQueue.defaultDirectory),
+            token: { [weak self] in
+                guard let self else { throw AgentIMQQProvisionProblem.tokenMissing }
+                return try await self.fetchAgentIMQQToken()
+            })
+        for (index, path) in paths.enumerated() {
+            let outcome = await sender.send(path: path, target: target,
+                                            entryID: "media-\(UUID().uuidString)-\(index)",
+                                            replyTo: replyTo)
+            StartupLog.write("IM 媒体 \(path) → \(outcome.code)", important: true)
+            if let failure = AgentIMDeliveryFailure.classify(outcome) {
+                agentIMStatusBoard.recordFailure(stage: .send, code: failure.machineCode)
+            }
+        }
+    }
+
     private func deliverAgentIMResult(_ entry: AgentIMResultQueue.Entry) async -> Bool {
         // 自测模式下不联网：把「本该发出去的那条」写进 `local-results.jsonl`，
         // 于是终端里能直接看到手机那头会收到什么（含心跳、拍板提示、结论）。

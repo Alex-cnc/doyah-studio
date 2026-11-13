@@ -500,10 +500,21 @@ public enum AgentIMQQHandshake {
             }
             return .unknown(op: "READY")
         }
-        guard let text = (data["content"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines),
+        // 按钮点击（内联按钮）：**没有正文**，凭据在 `data.data.resolved.button_data` 里。
+        if event == "INTERACTION_CREATE" {
+            if let interaction = AgentIMQQInteractionParser.parse(data) {
+                return .interaction(interaction)
+            }
+            return .unknown(op: event)
+        }
+        // 附件先解（图 / 文件随消息一起来；纯附件消息的正文可以是空的）。
+        let attachments = AgentIMInboundAttachmentParser.parse(data)
+        let rawText = (data["content"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !(rawText.isEmpty && attachments.isEmpty),
               let messageID = data["id"] as? String else {
             return .unknown(op: event)
         }
+        let text = rawText
         let author = data["author"] as? [String: Any]
         let sender = (author?["user_openid"] as? String)
             ?? (author?["member_openid"] as? String)
@@ -520,7 +531,8 @@ public enum AgentIMQQHandshake {
                                                   senderID: sender,
                                                   text: text,
                                                   receivedAt: receivedAt,
-                                                  chatKind: kind))
+                                                  chatKind: kind,
+                                                  attachments: attachments))
         default:
             return .unknown(op: event)
         }

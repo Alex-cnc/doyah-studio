@@ -65,14 +65,16 @@ final class AgentIMOutboundSendTests: XCTestCase {
 
     private func sender(_ client: FakeClient,
                         environment: AgentIMQQEnvironment = .production,
-                        directory: URL? = nil) -> AgentIMOutboundSender {
+                        directory: URL? = nil,
+                        richText: Bool = true) -> AgentIMOutboundSender {
         AgentIMOutboundSender(client: client,
                               environment: environment,
                               sequences: AgentIMReplySeqLedger(directory: directory ?? root),
                               token: {
                                   AgentIMQQToken(value: "tok-abc", expiresIn: 7200,
                                                  obtainedAt: Date(timeIntervalSince1970: 0))
-                              })
+                              },
+                              richText: richText)
     }
 
     private func entry(id: String = "e1",
@@ -122,7 +124,8 @@ final class AgentIMOutboundSendTests: XCTestCase {
 
     func testPassiveReplyCarriesMessageIDAndNumericTypeAndSequence() async throws {
         let client = FakeClient()
-        _ = await sender(client).send(entry: entry())
+        // 富文本是默认档（需求 ⑪）；这一条专门钉**降级后的纯文本档**，所以要显式关掉。
+        _ = await sender(client, richText: false).send(entry: entry())
         let payload = try XCTUnwrap(client.calls.first?.payload)
 
         // 数字就是数字：`"msg_type":"0"` 会被官方按类型校验拒掉。
@@ -131,6 +134,19 @@ final class AgentIMOutboundSendTests: XCTestCase {
         XCTAssertEqual(bodyObject(payload)["msg_id"] as? String, "msg-in-1")
         XCTAssertEqual(bodyObject(payload)["msg_seq"] as? Int, 1)
         XCTAssertEqual(bodyObject(payload)["content"] as? String, "统计跑完了：3 张表，0 条异常")
+    }
+
+    /// 需求 ⑪ 的正例：默认档就是富文本（`msg_type=2` + `markdown.content`），源码不许直出。
+    func testDefaultSendGoesOutAsMarkdown() async throws {
+        let client = FakeClient()
+        _ = await sender(client).send(entry: entry())
+        let payload = try XCTUnwrap(client.calls.first?.payload)
+        let object = bodyObject(payload)
+        XCTAssertEqual(object["msg_type"] as? Int, 2)
+        let markdown = try XCTUnwrap(object["markdown"] as? [String: Any])
+        XCTAssertEqual(markdown["content"] as? String, "统计跑完了：3 张表，0 条异常")
+        XCTAssertEqual(object["msg_id"] as? String, "msg-in-1")
+        XCTAssertEqual(object["msg_seq"] as? Int, 1)
     }
 
     func testActiveMessageCarriesNeitherMessageIDNorSequence() async throws {

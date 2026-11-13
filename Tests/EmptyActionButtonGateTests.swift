@@ -214,8 +214,8 @@ final class EmptyActionButtonGateTests: XCTestCase {
         XCTAssertTrue(problems.isEmpty, problems.joined(separator: "\n"))
 
         // 读数（不是断言口径，是给报告用的实测值）
-        XCTAssertEqual(sightings.count, 51, "守卫条数与搬家时的实测值不等 —— 要么产品变了（更新本行），要么口径坏了")
-        XCTAssertEqual(ledger.entries.count, 51, "台账条数与搬家时不等")
+        XCTAssertEqual(sightings.count, 52, "守卫条数与搬家时的实测值不等 —— 要么产品变了（更新本行），要么口径坏了")
+        XCTAssertEqual(ledger.entries.count, 52, "台账条数与搬家时不等")
     }
 
     // MARK: - B / C / D 逐条处置

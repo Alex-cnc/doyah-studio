@@ -137,6 +137,8 @@ public struct AgentIMGatewaySigner: Sendable {
 /// 一帧入站的解析结果（**坏帧不静默丢**：返回 `nil`，由调用方如实记一条）。
 public enum AgentIMInboundFrame: Equatable, Sendable {
     case message(AgentIMInboundMessage)
+    /// 用户点了内联按钮（官方 `INTERACTION_CREATE`）：要 ACK，并当作一次拍板。
+    case interaction(AgentIMInteraction)
     case pong
     /// 网关握手完成（官方 `op=0 / t=READY`）：带着 `session_id`，断线后靠它 **Resume** 而不是重开新会话。
     case ready(sessionID: String)

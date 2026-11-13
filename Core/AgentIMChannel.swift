@@ -39,15 +39,19 @@ public struct AgentIMInboundMessage: Codable, Equatable, Sendable {
     public var receivedAt: Date
     /// 私聊还是群（回话走哪条端点由它定）。
     public var chatKind: AgentIMChatKind
+    /// 随这一条消息来的附件（已解但**还没取到本机**：取文件由入站入口做，见 ⑫）。
+    public var attachments: [AgentIMInboundAttachment]
 
     public init(platformMessageID: String, chatID: String, senderID: String,
-                text: String, receivedAt: Date = Date(), chatKind: AgentIMChatKind = .c2c) {
+                text: String, receivedAt: Date = Date(), chatKind: AgentIMChatKind = .c2c,
+                attachments: [AgentIMInboundAttachment] = []) {
         self.platformMessageID = platformMessageID
         self.chatID = chatID
         self.senderID = senderID
         self.text = text
         self.receivedAt = receivedAt
         self.chatKind = chatKind
+        self.attachments = attachments
     }
 }
 

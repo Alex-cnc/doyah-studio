@@ -73,22 +73,42 @@ public enum AgentIMQQMessageEndpoint {
 public struct AgentIMQQMessageBody: Equatable, Sendable {
 
     public static let textMessageType = 0
+    /// 富文本（`msg_type=2` + `markdown.content`）—— 需求 ⑪：正文要给样式，不许直出 Markdown 源码。
+    public static let markdownMessageType = 2
 
     public var content: String
     public var messageID: String?
     public var sequence: Int?
+    /// 非空 ⇒ 走富文本档（`content` 发空串，正文在 `markdown.content`）。
+    public var markdown: String?
+    /// 内联按钮（已拼好的 JSON：`{"content":{"rows":[…]}}`）；`nil` = 不带按钮。
+    public var keyboardJSON: String?
 
-    public init(content: String, messageID: String? = nil, sequence: Int? = nil) {
+    public init(content: String, messageID: String? = nil, sequence: Int? = nil,
+                markdown: String? = nil, keyboardJSON: String? = nil) {
         self.content = content
         self.messageID = messageID
         self.sequence = sequence
+        self.markdown = markdown
+        self.keyboardJSON = keyboardJSON
     }
+
+    public var messageType: Int { markdown == nil ? Self.textMessageType : Self.markdownMessageType }
 
     public var isPassive: Bool { messageID != nil }
 
     /// 键序固定（判据按串比时不至于今天一样明天不一样）。
     public func jsonString() -> String {
-        var object: [String: Any] = ["content": content, "msg_type": Self.textMessageType]
+        var object: [String: Any] = ["content": markdown == nil ? content : "",
+                                     "msg_type": messageType]
+        if let markdown, !markdown.isEmpty {
+            object["markdown"] = ["content": markdown]
+        }
+        if let keyboardJSON,
+           let data = keyboardJSON.data(using: .utf8),
+           let keyboard = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            object["keyboard"] = keyboard
+        }
         if let messageID, !messageID.isEmpty { object["msg_id"] = messageID }
         if let sequence, messageID != nil { object["msg_seq"] = sequence }
         guard let data = try? JSONSerialization.data(withJSONObject: object, options: [.sortedKeys]),
@@ -251,15 +271,20 @@ public struct AgentIMOutboundSender: Sendable {
     public var sequences: AgentIMReplySeqLedger
     /// 现取 token（到期前换、单飞都由 `AgentIMQQTokenVault` 保证；这里只管用）。
     public var token: @Sendable () async throws -> AgentIMQQToken
+    /// 正文是否走富文本档（默认开：需求 ⑪）。关掉只在**真机确认客户端不渲染**时用，
+    /// 关掉之后正文会退回纯文本 —— 那属于降级，不是另一种正常形态。
+    public var richText: Bool
 
     public init(client: any AgentIMOutboundHTTPClient,
                 environment: AgentIMQQEnvironment,
                 sequences: AgentIMReplySeqLedger,
-                token: @escaping @Sendable () async throws -> AgentIMQQToken) {
+                token: @escaping @Sendable () async throws -> AgentIMQQToken,
+                richText: Bool = true) {
         self.client = client
         self.environment = environment
         self.sequences = sequences
         self.token = token
+        self.richText = richText
     }
 
     public func send(entry: AgentIMResultQueue.Entry) async -> AgentIMSendOutcome {
@@ -290,19 +315,32 @@ public struct AgentIMOutboundSender: Sendable {
         }
 
         let replyTo = (messageID?.isEmpty == false) ? messageID : nil
-        let body = AgentIMQQMessageBody(content: content,
-                                        messageID: replyTo,
-                                        sequence: sequences.sequence(forEntry: entryID,
-                                                                     replyTo: replyTo,
-                                                                     at: at))
-        let response: AgentIMHTTPResponse
-        do {
-            response = try await client.post(url, payload: body.jsonString(),
-                                             headers: tokenValue.authorizationHeaders)
-        } catch {
-            return .networkFailed
+        // 长正文分块（需求 ⑪）：一次 send 可能发出多条 —— 每条各自分配序号（同一 `msg_id` 下递增），
+        // 中途失败就整条算没发全（结果留在队列里，补发时从头再来，序号复用所以不会出现重复结论）。
+        let chunks = richText ? AgentIMOutboundChunker.split(content)
+                              : [AgentIMOutboundChunker.Chunk(text: content)]
+        guard !chunks.isEmpty else { return .notReady(code: "emptyContent") }
+        var lastOutcome: AgentIMSendOutcome = .notReady(code: "emptyChunks")
+        for (index, chunk) in chunks.enumerated() {
+            let chunkEntryID = chunks.count == 1 ? entryID : "\(entryID)#\(index)"
+            let body = AgentIMQQMessageBody(content: chunk.text,
+                                            messageID: replyTo,
+                                            sequence: sequences.sequence(forEntry: chunkEntryID,
+                                                                         replyTo: replyTo,
+                                                                         at: at),
+                                            markdown: richText ? chunk.text : nil)
+            let response: AgentIMHTTPResponse
+            do {
+                response = try await client.post(url, payload: body.jsonString(),
+                                                 headers: tokenValue.authorizationHeaders)
+            } catch {
+                return .networkFailed
+            }
+            let outcome = Self.outcome(for: response)
+            guard outcome.isDelivered else { return outcome }
+            lastOutcome = outcome
         }
-        return Self.outcome(for: response)
+        return lastOutcome
     }
 
     /// 响应 → 结局。认识的码给可读原因，**不认识的把状态与它自己的码原样带出去**。

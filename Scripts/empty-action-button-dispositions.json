@@ -326,6 +326,12 @@
       "guard": "let path = ProcessInfo.processInfo.environment[\"DOYAH_IM_FILE_INBOX\"], !path.isEmpty",
       "form": "internal",
       "reason": "IM 自测通道的启动前置（`DOYAH_IM_FILE_INBOX` 未设即不开）：不是按钮前置 —— 生产里这条路径根本不存在，设了才轮询那个 JSONL。"
+    },
+    {
+      "func": "deliverAgentIMLateText",
+      "guard": "!text.isEmpty",
+      "form": "internal",
+      "reason": "媒体标签专项：正文里只有 `MEDIA:/路径` 时，文字部分为空 —— 这一条不是按钮前置，是「别发一条空消息」；媒体已经在同一处单独发走了。"
     }
   ]
 }

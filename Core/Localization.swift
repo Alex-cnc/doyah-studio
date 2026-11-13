@@ -2298,6 +2298,24 @@ public enum LKey: String, CaseIterable, Sendable {
     case agentIMReplyNoText
     case agentIMReplyTruncated
     case agentIMReplyTaskFailed
+    /// 入站附件回执（需求 ⑫：收到 N 个附件必须说清）。
+    case agentIMAttachmentReceipt
+    case agentIMAttachmentMissing
+    /// 最小命令层（需求 ⑭）。
+    case agentIMCommandStopped
+    case agentIMCommandNotRunning
+    case agentIMCommandStatus
+    case agentIMCommandUnknown
+    /// 媒体出站的两档拒收（需求 ⑫）。
+    case agentIMMediaLinkNotAllowed
+    case agentIMMediaUnreadable
+    /// 主动消息失败三档（需求 ⑭）。
+    case agentIMFailureQuota
+    case agentIMFailureTransient
+    case agentIMFailureNetwork
+    /// 审批按钮的两种标签（内联按钮）。
+    case agentIMButtonApprove
+    case agentIMButtonReject
     /// 收到即回的 ack（**先让人知道「活着」**，而不是对着空白等几分钟）。
     case agentIMAck
     /// 跑的中途那一行：等模型出话（第 %lld 步 · 已跑 %@）。
@@ -6057,6 +6075,19 @@ public enum LocalizedStrings {
         .agentIMReplyUnavailable: [.simplifiedChinese: "这次没跑起来：%@。没有结论可报。", .english: "Could not start this run: %@. No result to report."],
         .agentIMReplyTruncated: [.simplifiedChinese: "（结论太长，这里只发前一段；完整内容在桌面那一条会话里）", .english: "(The result is long, so only the first part is sent here. The full text is in that session on the desktop.)"],
         .agentIMReplyTaskFailed: [.simplifiedChinese: "这次跑到一半失败了（技术原因已写进桌面日志 startup.log 与 agent-audit.jsonl）。没有结论可报。", .english: "This run failed partway through (the technical reason is in the desktop logs: startup.log and agent-audit.jsonl). There is no result to report."],
+        .agentIMAttachmentReceipt: [.simplifiedChinese: "收到 %lld 个附件：%@（已存到本机会话目录，可以直接让我处理）", .english: "Got %lld attachment(s): %@ (saved next to this session; ask me to work on them)"],
+        .agentIMAttachmentMissing: [.simplifiedChinese: "（没取到）", .english: "(not fetched)"],
+        .agentIMCommandStopped: [.simplifiedChinese: "已经掐掉当前这一跑（待批的单子还在，审批没有因为这条命令放宽）。", .english: "Stopped the current run (pending approvals are untouched; this command does not relax approvals)."],
+        .agentIMCommandNotRunning: [.simplifiedChinese: "现在没有在跑的一轮，不用掐。", .english: "Nothing is running right now, so there is nothing to stop."],
+        .agentIMCommandStatus: [.simplifiedChinese: "现在：%@", .english: "Status: %@"],
+        .agentIMCommandUnknown: [.simplifiedChinese: "没有这个命令：%@。可用：/stop（掐掉当前这一跑）、/status（报当前状态）。", .english: "Unknown command: %@. Available: /stop (stop the current run), /status (report current state)."],
+        .agentIMMediaLinkNotAllowed: [.simplifiedChinese: "只发本机文件：链接不代下载（要发的话先把文件存到本机）。", .english: "Only local files: links are not downloaded for you (save the file locally first)."],
+        .agentIMMediaUnreadable: [.simplifiedChinese: "这个文件读不到（路径不对、不是文件，或没有权限）。", .english: "That file cannot be read (bad path, not a file, or no permission)."],
+        .agentIMFailureQuota: [.simplifiedChinese: "今天的消息配额用完了 —— 这一条发不出去，重试也没用，明天或换通道再说。", .english: "Daily message quota is used up — this one cannot be sent today; retrying will not help."],
+        .agentIMFailureTransient: [.simplifiedChinese: "平台那边瞬时失败，已经重试过一次；再不行就等一小会儿。", .english: "Transient failure on the platform side; retried once already."],
+        .agentIMFailureNetwork: [.simplifiedChinese: "本机连不上平台（网络 / 代理 / 掉线），要先重连再发。", .english: "Cannot reach the platform (network / proxy / offline); reconnect before retrying."],
+        .agentIMButtonApprove: [.simplifiedChinese: "批准", .english: "Approve"],
+        .agentIMButtonReject: [.simplifiedChinese: "拒绝", .english: "Reject"],
         .agentIMAck: [.simplifiedChinese: "收到，正在处理（可能要几分钟）。跑到关键节点或需要你在桌面上点一下时我才说话，跑完发结论。", .english: "Got it — working on it (this may take a few minutes). I'll only speak up at key moments or when something needs your click on the desktop, then send the result."],
         .agentIMProgressThinking: [.simplifiedChinese: "第 %lld 步 · 在等模型出话 · 已跑 %@（还在跑）", .english: "Step %lld · waiting for the model · %@ in (still running)"],
         .agentIMProgressTool: [.simplifiedChinese: "第 %lld 步 · 正在 %@ · 已跑 %@（还在跑）", .english: "Step %lld · running %@ · %@ in (still running)"],
