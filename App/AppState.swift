@@ -4080,6 +4080,12 @@ final class AppState: ObservableObject {
     /// 这里只把两个闭包给它：一个跑（接进界面的对话模型，审批照旧）、一个推（传输层 send）。
     /// **命令层的三条回话**（需求 ⑭）。全部走 `deliverAgentIMLateText`：命令不建任务、不起一轮。
     private func handleAgentIMCommand(_ command: AgentIMCommand, replyLanguage language: AppLanguage) {
+        // 语言三档读数：存储 / 解析 / 生效。出过「界面中文、IM 回英文」这种偏差，留一条能自证的账。
+        StartupLog.write("IM 命令语言：存储="
+            + (UserDefaults.standard.string(forKey: LanguagePreference.storageKey) ?? "nil")
+            + " 解析=" + LocalizationManager.shared.language.rawValue
+            + " 生效=" + LocalizationManager.shared.effectiveLanguage.rawValue
+            + " 本次=" + language.rawValue)
         switch command {
         case .stop:
             let stopped = agentIMCommandStopHandler?() ?? false
