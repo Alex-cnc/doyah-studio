@@ -2305,6 +2305,8 @@ public enum LKey: String, CaseIterable, Sendable {
     case agentIMCommandStopped
     case agentIMCommandNotRunning
     case agentIMCommandStatus
+    case agentIMStatusRunning
+    case agentIMStatusIdle
     case agentIMCommandUnknown
     /// 媒体出站的两档拒收（需求 ⑫）。
     case agentIMMediaLinkNotAllowed
@@ -6080,6 +6082,8 @@ public enum LocalizedStrings {
         .agentIMCommandStopped: [.simplifiedChinese: "已经掐掉当前这一跑（待批的单子还在，审批没有因为这条命令放宽）。", .english: "Stopped the current run (pending approvals are untouched; this command does not relax approvals)."],
         .agentIMCommandNotRunning: [.simplifiedChinese: "现在没有在跑的一轮，不用掐。", .english: "Nothing is running right now, so there is nothing to stop."],
         .agentIMCommandStatus: [.simplifiedChinese: "现在：%@", .english: "Status: %@"],
+        .agentIMStatusRunning: [.simplifiedChinese: "正在跑一轮（进度在桌面面板）", .english: "running a turn (progress is on the desktop panel)"],
+        .agentIMStatusIdle: [.simplifiedChinese: "空闲", .english: "idle"],
         .agentIMCommandUnknown: [.simplifiedChinese: "没有这个命令：%@。可用：/stop（掐掉当前这一跑）、/status（报当前状态）。", .english: "Unknown command: %@. Available: /stop (stop the current run), /status (report current state)."],
         .agentIMMediaLinkNotAllowed: [.simplifiedChinese: "只发本机文件：链接不代下载（要发的话先把文件存到本机）。", .english: "Only local files: links are not downloaded for you (save the file locally first)."],
         .agentIMMediaUnreadable: [.simplifiedChinese: "这个文件读不到（路径不对、不是文件，或没有权限）。", .english: "That file cannot be read (bad path, not a file, or no permission)."],

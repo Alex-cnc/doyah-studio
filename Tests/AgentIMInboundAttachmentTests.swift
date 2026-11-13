@@ -127,6 +127,15 @@ final class AgentIMInboundAttachmentTests: XCTestCase {
     }
 
     /// 主人用中文发 `/status`，答复就得是中文（界面语言是给菜单用的）。
+    /// 状态回话必须**整句单一语言**：中文词嵌进英文句（`Status: 空闲`）是上一版的实缺陷。
+    func testStatusWordsAreLocalisedNotMixed() {
+        XCTAssertEqual(LocalizedStrings.text(.agentIMStatusIdle, language: .english), "idle")
+        XCTAssertEqual(LocalizedStrings.text(.agentIMStatusIdle, language: .simplifiedChinese), "空闲")
+        XCTAssertEqual(LocalizedStrings.text(.agentIMStatusRunning, language: .english).contains("空闲"), false)
+        XCTAssertEqual(LocalizedStrings.format(.agentIMCommandStatus, language: .english, "idle"), "Status: idle")
+        XCTAssertEqual(LocalizedStrings.format(.agentIMCommandStatus, language: .simplifiedChinese, "空闲"), "现在：空闲")
+    }
+
     func testReplyLanguageFollowsIncomingText() {
         XCTAssertEqual(AgentIMCommand.replyLanguage(for: "/status", fallback: .english), .english,
                        "纯拉丁命令跟界面语言 —— 来文里没中文就不猜")

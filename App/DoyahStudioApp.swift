@@ -314,9 +314,7 @@ struct DoyahStudioApp: App {
                         agentChat.stop()
                         return true
                     }
-                    appState.agentIMCommandStatusProvider = {
-                        agentChat.isRunning ? "正在跑一轮（进度在桌面面板）" : "空闲"
-                    }
+                    appState.agentIMCommandStatusProvider = { agentChat.isRunning }
                     // **入站附件下载**（需求 ⑫）：出网实现在 Platform 侧，这里只给闭包。
                     appState.agentIMAttachmentDownloader = AgentIMQQClients.attachmentDownloader()
                     appState.agentIMTaskRunner = { task, progress in

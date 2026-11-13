@@ -420,8 +420,9 @@ final class AppState: ObservableObject {
     /// **最小命令层**（需求 ⑭）：`/stop` 要掐的是「界面侧那一跑」，`AppState` 拿不到它 ⇒ 同样走注入。
     /// 返回 `true` = 真的掐掉了；`false` = 本来就没在跑（**如实说，不假装停过**）。
     var agentIMCommandStopHandler: (() -> Bool)?
-    /// **`/status` 的现读真值**：宿主给一句人话（在跑 / 空闲 + 第几步），不给就说「未知」。
-    var agentIMCommandStatusProvider: (() -> String)?
+    /// **`/status` 的现读真值**：宿主只回「在不在跑」（`true`/`false`），
+    /// 文案由本层按语言出 —— 让宿主拼人话就会拼出「Status: 空闲」这种半中半英。
+    var agentIMCommandStatusProvider: (() -> Bool)?
     /// **入站附件下载**（需求 ⑫）：出网实现在 `Platform/`，装配缝只注入闭包（`check-network-egress` 的纪律）。
     var agentIMAttachmentDownloader: (@Sendable (URL) async throws -> Data)?
     /// 传输层本体：连上后由 AppState 持有（面板关掉不掉线）。
@@ -4083,7 +4084,6 @@ final class AppState: ObservableObject {
         // 语言三档读数：存储 / 解析 / 生效。出过「界面中文、IM 回英文」这种偏差，留一条能自证的账。
         StartupLog.write("IM 命令语言：存储="
             + (UserDefaults.standard.string(forKey: LanguagePreference.storageKey) ?? "nil")
-            + " 解析=" + LocalizationManager.shared.language.rawValue
             + " 生效=" + LocalizationManager.shared.effectiveLanguage.rawValue
             + " 本次=" + language.rawValue)
         switch command {
@@ -4094,8 +4094,9 @@ final class AppState: ObservableObject {
             StartupLog.write("IM 命令 /stop → 掐掉=\(stopped) 语言=\(language.rawValue)", important: true)
             deliverAgentIMLateText(text)
         case .status:
-            let running = agentIMCommandStatusProvider?()
-                ?? LocalizedStrings.text(.agentIMCommandNotRunning, language: language)
+            let isRunning = agentIMCommandStatusProvider?() ?? false
+            let running = LocalizedStrings.text(isRunning ? .agentIMStatusRunning : .agentIMStatusIdle,
+                                                language: language)
             let text = LocalizedStrings.format(.agentIMCommandStatus, language: language, running)
             deliverAgentIMLateText(text)
         case .unknown(let name):
