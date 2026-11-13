@@ -189,6 +189,19 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
     /// 跑完就置 `nil` —— 收尾之后不该再有进度行。
     private var imProgressReporter: AgentIMProgressReporter?
 
+    /// **审批请求对外转发**（`FR-AGT-LINK-CHAN-003` ⑧：审批主路是桌面弹层，IM 是同一张单的第二条路）。
+    ///
+    /// 为什么要单开一条继电器：进度播报器只在 **IM 发起**的轮次里存在；
+    /// 桌面发起的一轮一旦停在审批上，手机那头什么都收不到 —— 人不在电脑前就只能干等。
+    struct IMApprovalNotice: Equatable, Sendable {
+        public let code: String
+        public let tool: String
+        public let cardID: UUID
+    }
+
+    /// 宿主接线（`AppState.pushAgentIMApprovalRequest`）：发不发得出、发到哪条聊天，都由宿主判。
+    var imApprovalRelay: ((IMApprovalNotice) -> Void)?
+
     /// **IM 远程审批票据**（2026-11-11 主人：「我只能在 QQ 指挥，不在电脑前」）。
     ///
     /// 桌面弹层照旧是主路；这张票是**同一个人不在电脑前时**的补充：
@@ -212,6 +225,28 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
 
     /// 同时最多记几张（手机能回去看的历史也就几条；多出来的按时间淘汰）。
     static let imApprovalTicketCapacity = 4
+
+    /// 审批事件无论哪条轮次都要落这两件事：**登记远程票据** + **送到手机**。
+    ///
+    /// 2026-11-13 真机缺陷：这两句原来写在「有播报器才进」的分支里 ⇒ **桌面发起**的一轮
+    /// 停在审批上时，手机上什么都没有（只弹在 PC 端，主人 20 多分钟没法放行）。
+    private func handleApprovalRequested(name: String, fingerprint: String, preview: String) {
+        // **远程票据**：码 = 指纹前 4 位（同一张单稳定，别人猜不到别的单）。
+        let code = String(fingerprint.prefix(4)).lowercased()
+        guard let card = state.cards.last(where: { $0.approvalFingerprint == fingerprint }) else { return }
+        let tool = preview.isEmpty ? name : "\(name)：\(preview)"
+        registerIMApprovalTicket(code: code, cardID: card.id, tool: tool)
+        relayApprovalToIM(code: code, tool: tool, cardID: card.id)
+    }
+
+    /// 把「有一条命令在等确认」送到手机。
+    ///
+    /// - IM 发起的那一轮：进度播报器随后会带码报这条（`stage: .awaitingApproval`），这里不重复发；
+    /// - **桌面发起的那一轮**：没有播报器 ⇒ 走继电器，宿主按「最后一条 IM 聊天」发一条带按钮的通知。
+    private func relayApprovalToIM(code: String, tool: String, cardID: UUID) {
+        guard let relay = imApprovalRelay else { return }
+        relay(IMApprovalNotice(code: code, tool: tool, cardID: cardID))
+    }
 
     private func registerIMApprovalTicket(code: String, cardID: UUID, tool: String, issuedAt: Date = Date()) {
         let key = code.lowercased()
@@ -1414,17 +1449,17 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
                 // 否则它只会看到「一直在跑」然后突然超时（2026-11-11 真机：只报「等确认」，
                 // 主人还得跑回桌面才知道拦的是什么 —— 批准的信息必须随这条一起发出去）。
                 imTurnLastTool = preview.isEmpty ? name : "\(name)：\(preview)"
-                // **远程票据**：码 = 指纹前 4 位（同一张单稳定，别人猜不到别的单）。
-                let code = String(fingerprint.prefix(4)).lowercased()
-                if let card = state.cards.last(where: { $0.approvalFingerprint == fingerprint }) {
-                    registerIMApprovalTicket(code: code, cardID: card.id,
-                                             tool: preview.isEmpty ? name : "\(name)：\(preview)")
-                }
-                report(IMProgressSnapshot(hop: max(imTurnHops, 1), tool: name, summary: preview,
-                                          stage: .awaitingApproval, approvalCode: code), to: reporter)
+                // **只发一条**：带「批准 / 拒绝」两颗按钮的那张卡（`handleApprovalRequested` 里发）。
+                // 再补一条纯文字「等确认」就是同一件事说两遍，手机上还要人自己去对码。
+                handleApprovalRequested(name: name, fingerprint: fingerprint, preview: preview)
             default:
                 break
             }
+        }
+        // **没有播报器的轮次**（桌面发起 / 面板里跑）：上面整段被 `if let reporter` 挡掉了，
+        // 审批请求于是只留在桌面 —— 手机那头一无所知。
+        if imProgressReporter == nil, case let .approvalRequested(name, fingerprint, preview, _) = event {
+            handleApprovalRequested(name: name, fingerprint: fingerprint, preview: preview)
         }
         // **代签那一档（`FR-AI-34`）建单即已批** ⇒ 观测口立刻兑现。
         // `observe` 在循环里是 `await` 的 ⇒ 这次写盘落在**下一跳之前**，

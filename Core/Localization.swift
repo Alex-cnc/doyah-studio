@@ -2317,6 +2317,7 @@ public enum LKey: String, CaseIterable, Sendable {
     case agentIMFailureNetwork
     /// 审批按钮的两种标签（内联按钮）。
     case agentIMButtonApprove
+    case agentIMApprovalRequest
     case agentIMButtonReject
     /// 收到即回的 ack（**先让人知道「活着」**，而不是对着空白等几分钟）。
     case agentIMAck
@@ -6091,6 +6092,10 @@ public enum LocalizedStrings {
         .agentIMFailureTransient: [.simplifiedChinese: "平台那边瞬时失败，已经重试过一次；再不行就等一小会儿。", .english: "Transient failure on the platform side; retried once already."],
         .agentIMFailureNetwork: [.simplifiedChinese: "本机连不上平台（网络 / 代理 / 掉线），要先重连再发。", .english: "Cannot reach the platform (network / proxy / offline); reconnect before retrying."],
         .agentIMButtonApprove: [.simplifiedChinese: "批准", .english: "Approve"],
+        .agentIMApprovalRequest: [
+            .simplifiedChinese: "有一条命令在等确认：%@\n码 %@\n回「批准 %@」或点下面的按钮（15 分钟内有效）。",
+            .english: "A command is waiting for approval: %@\nCode %@\nReply \"approve %@\" or tap a button below (valid 15 min)."
+        ],
         .agentIMButtonReject: [.simplifiedChinese: "拒绝", .english: "Reject"],
         .agentIMAck: [.simplifiedChinese: "收到，正在处理（可能要几分钟）。跑到关键节点或需要你在桌面上点一下时我才说话，跑完发结论。", .english: "Got it — working on it (this may take a few minutes). I'll only speak up at key moments or when something needs your click on the desktop, then send the result."],
         .agentIMProgressThinking: [.simplifiedChinese: "第 %lld 步 · 在等模型出话 · 已跑 %@（还在跑）", .english: "Step %lld · waiting for the model · %@ in (still running)"],

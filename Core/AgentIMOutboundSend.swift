@@ -290,13 +290,15 @@ public struct AgentIMOutboundSender: Sendable {
     public func send(entry: AgentIMResultQueue.Entry) async -> AgentIMSendOutcome {
         guard let target = entry.target else { return .notReady(code: "noTarget") }
         return await send(text: entry.text, target: target,
-                          entryID: entry.id, replyTo: entry.replyToMessageID)
+                          entryID: entry.id, replyTo: entry.replyToMessageID,
+                          keyboardJSON: entry.keyboardJSON)
     }
 
     public func send(text: String,
                      target: AgentIMOutboundTarget,
                      entryID: String,
                      replyTo messageID: String?,
+                     keyboardJSON: String? = nil,
                      at: Date = Date()) async -> AgentIMSendOutcome {
         let content = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !content.isEmpty else { return .notReady(code: "emptyContent") }
@@ -328,7 +330,8 @@ public struct AgentIMOutboundSender: Sendable {
                                             sequence: sequences.sequence(forEntry: chunkEntryID,
                                                                          replyTo: replyTo,
                                                                          at: at),
-                                            markdown: richText ? chunk.text : nil)
+                                            markdown: richText ? chunk.text : nil,
+                                            keyboardJSON: index == 0 ? keyboardJSON : nil)
             let response: AgentIMHTTPResponse
             do {
                 response = try await client.post(url, payload: body.jsonString(),

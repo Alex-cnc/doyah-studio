@@ -119,10 +119,13 @@ public struct AgentIMResultQueue: Sendable {
         public var target: AgentIMOutboundTarget?
         /// 被动回复要带的 `msg_id`：这条结果是回哪一句派活。
         public var replyToMessageID: String?
+        /// **内联按钮**（JSON 字符串，QQ 的 `keyboard` 字段）：审批单那条要带「批准 / 拒绝」两颗，
+        /// 人在手机上点一下就行，不用回文字码。老条目没有这个字段 ⇒ `nil`，照旧发纯文本。
+        public var keyboardJSON: String?
 
         public init(id: String, chatID: String, text: String, createdAt: Date,
                     ackedAt: Date? = nil, target: AgentIMOutboundTarget? = nil,
-                    replyToMessageID: String? = nil) {
+                    replyToMessageID: String? = nil, keyboardJSON: String? = nil) {
             self.id = id
             self.chatID = chatID
             self.text = text
@@ -130,6 +133,7 @@ public struct AgentIMResultQueue: Sendable {
             self.ackedAt = ackedAt
             self.target = target
             self.replyToMessageID = replyToMessageID
+            self.keyboardJSON = keyboardJSON
         }
     }
 
@@ -142,9 +146,11 @@ public struct AgentIMResultQueue: Sendable {
     public func enqueue(chatID: String, text: String,
                         id: String = UUID().uuidString, at: Date = Date(),
                         target: AgentIMOutboundTarget? = nil,
-                        replyToMessageID: String? = nil) throws -> Entry {
+                        replyToMessageID: String? = nil,
+                        keyboardJSON: String? = nil) throws -> Entry {
         let entry = Entry(id: id, chatID: chatID, text: text, createdAt: at,
-                          target: target, replyToMessageID: replyToMessageID)
+                          target: target, replyToMessageID: replyToMessageID,
+                          keyboardJSON: keyboardJSON)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]

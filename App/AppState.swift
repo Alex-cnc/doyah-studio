@@ -4146,6 +4146,7 @@ final class AppState: ObservableObject {
         guard case .message(let message) = frame else { return }
         // 逾期补发要知道「回哪条聊天 / 回哪一条消息」—— 那一轮收尾时入站帧早就没在手上了。
         agentIMLastInbound = message
+        agentIMLastChatStore.remember(kind: message.chatKind, openID: message.chatID)
         // 留痕（2026-10-30 主人「配置了但不能对话」）：整条链每一步都写一行，
         // 出问题能直接指着日志说卡在哪一步，不靠猜。
         StartupLog.write("IM 收到消息 id=\(message.platformMessageID) chat=\(message.chatID) 字数=\(message.text.count)", important: true)
@@ -4277,13 +4278,38 @@ final class AppState: ObservableObject {
     /// 最近一条入站消息（逾期补发与失败留痕都要它：那时帧早就不在手上了）。
     private var agentIMLastInbound: AgentIMInboundMessage?
 
+    /// 最后一条说过话的 IM 聊天（落盘）：桌面发起的一轮停在审批上时，就推到这里。
+    /// 没有它，`agentIMLastInbound == nil` ⇒ 审批那条推送无处可去（2026-11-13 真机卡 20 分钟）。
+    private var agentIMLastChatStore: AgentIMLastChatStore {
+        AgentIMLastChatStore(directory: AgentIMResultQueue.defaultDirectory)
+    }
+
+    /// 审批请求送到手机（`AgentChatModel.imApprovalRelay` 的落点）。
+    ///
+    /// 只发「哪条命令 + 一次性码 + 两颗按钮」：点按钮与回「批准 <码>」走同一张票，权限一步没放宽。
+    func pushAgentIMApprovalRequest(_ notice: AgentChatModel.IMApprovalNotice) {
+        let language = agentIMLanguage
+        let text = LocalizedStrings.format(.agentIMApprovalRequest, language: language,
+                                           notice.tool, notice.code, notice.code)
+        let keyboard = AgentIMQQKeyboard.approval(code: notice.code, language: language)
+        StartupLog.write("IM 审批请求 → 手机：码=\(notice.code) 工具=\(notice.tool)", important: true)
+        deliverAgentIMLateText(text, keyboardJSON: keyboard)
+    }
+
     /// 逾期补发一条：那一轮收尾时把结论送回同一条聊天。
     ///
     /// 与 `deliverAgentIMResult` 同一出口（官方 REST / 自建中继都在里面分岔），
     /// 推不出去则**留在队列里**（`flushAgentIMOutboundQueue` 重连补发）并留一行日志。
-    func deliverAgentIMLateText(_ text: String) {
+    func deliverAgentIMLateText(_ text: String, keyboardJSON: String? = nil) {
         guard let message = agentIMLastInbound else {
-            StartupLog.write("IM 补发：没有记下入站消息（跳过）")
+            // **桌面发起的一轮**没有入站消息（例如审批请求）：退到最后一条聊天的落盘记录。
+            guard let chat = agentIMLastChatStore.load() else {
+                StartupLog.write("IM 补发：既没有入站消息、也没有落盘的聊天（跳过）")
+                return
+            }
+            StartupLog.write("IM 补发：走落盘的最后一条聊天 \(chat.openID.prefix(8))")
+            enqueueAgentIMText(text, keyboardJSON: keyboardJSON,
+                               target: chat.target, chatID: chat.openID, replyTo: nil)
             return
         }
         // 正文里的 `MEDIA:/路径`（需求 ⑫）：先发媒体、再把标签摘掉发文字 —— 标签本身不许出现在手机上。
@@ -4301,13 +4327,20 @@ final class AppState: ObservableObject {
             StartupLog.write("IM 补发：正文只有媒体标签，文字部分跳过（媒体已单独发）")
             return
         }
+        enqueueAgentIMText(text, keyboardJSON: keyboardJSON,
+                           target: AgentIMOutboundTarget(kind: message.chatKind, openID: message.chatID),
+                           chatID: message.chatID, replyTo: message.platformMessageID)
+    }
+
+    /// 入队 + 立刻推一次；推不出去就留在队列里（重连补发），不冒充「已送达」。
+    private func enqueueAgentIMText(_ text: String, keyboardJSON: String?,
+                                    target: AgentIMOutboundTarget, chatID: String,
+                                    replyTo: String?) {
         let entry: AgentIMResultQueue.Entry
         do {
-            entry = try agentIMResultQueue.enqueue(chatID: message.chatID,
-                                                   text: text,
-                                                   target: AgentIMOutboundTarget(kind: message.chatKind,
-                                                                                 openID: message.chatID),
-                                                   replyToMessageID: message.platformMessageID)
+            entry = try agentIMResultQueue.enqueue(chatID: chatID, text: text, target: target,
+                                                   replyToMessageID: replyTo,
+                                                   keyboardJSON: keyboardJSON)
         } catch {
             StartupLog.write("IM 补发入队失败：\(error)")
             return

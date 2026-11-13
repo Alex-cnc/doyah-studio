@@ -307,6 +307,11 @@ struct DoyahStudioApp: App {
                     appState.agentIMApprovalResolver = { decision in
                         agentChat.resolveIMApproval(decision)
                     }
+                    // **审批请求也要送到手机**：桌面弹层是主路，IM 是同一张单的第二条路。
+                    // 桌面发起的一轮没有 IM 入站消息，靠这条继电器推到最后一条聊天（落盘的）。
+                    agentChat.imApprovalRelay = { notice in
+                        appState.pushAgentIMApprovalRequest(notice)
+                    }
                     // **最小命令层**（需求 ⑭）：`/stop` 掐当前这一跑、`/status` 报现况。
                     // 两条都只读/只停，**不动待批单、不改权限**。
                     appState.agentIMCommandStopHandler = {
