@@ -45,4 +45,16 @@ public enum AgentIMCommand: Equatable, Sendable {
         }
         return base
     }
+
+    /// **命令回话跟着来文走**：主人用中文发 `/status`，答复就该是中文 ——
+    /// 界面语言是给菜单用的，不是给对面那个人用的（他可能在电话里、看不到界面）。
+    public static func replyLanguage(for text: String, fallback: AppLanguage) -> AppLanguage {
+        for scalar in text.unicodeScalars {
+            switch scalar.value {
+            case 0x4E00...0x9FFF, 0x3400...0x4DBF, 0xF900...0xFAFF: return .simplifiedChinese
+            default: continue
+            }
+        }
+        return fallback
+    }
 }

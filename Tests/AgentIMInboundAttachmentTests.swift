@@ -126,6 +126,15 @@ final class AgentIMInboundAttachmentTests: XCTestCase {
         XCTAssertEqual(AgentIMCommand.parse("/restart"), .unknown("restart"))
     }
 
+    /// 主人用中文发 `/status`，答复就得是中文（界面语言是给菜单用的）。
+    func testReplyLanguageFollowsIncomingText() {
+        XCTAssertEqual(AgentIMCommand.replyLanguage(for: "/status", fallback: .english), .english,
+                       "纯拉丁命令跟界面语言 —— 来文里没中文就不猜")
+        XCTAssertEqual(AgentIMCommand.replyLanguage(for: "现在什么情况", fallback: .english), .simplifiedChinese)
+        XCTAssertEqual(AgentIMCommand.replyLanguage(for: "/status please", fallback: .simplifiedChinese), .simplifiedChinese)
+        XCTAssertEqual(AgentIMCommand.replyLanguage(for: "/status", fallback: .simplifiedChinese), .simplifiedChinese)
+    }
+
     func testBotSuffixIsTolerated() {
         XCTAssertEqual(AgentIMCommand.parse("/stop@doyahbot", botSuffix: "DoyahBot"), .stop)
         XCTAssertEqual(AgentIMCommand.parse("/stop@other", botSuffix: "DoyahBot"), .unknown("stop@other"))

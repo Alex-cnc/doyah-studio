@@ -4079,14 +4079,13 @@ final class AppState: ObservableObject {
     /// （策略 → 去重 → 建任务 → ack → 跑（边跑边报进度）→ 入队 → 推 → 推成才 ack）；
     /// 这里只把两个闭包给它：一个跑（接进界面的对话模型，审批照旧）、一个推（传输层 send）。
     /// **命令层的三条回话**（需求 ⑭）。全部走 `deliverAgentIMLateText`：命令不建任务、不起一轮。
-    private func handleAgentIMCommand(_ command: AgentIMCommand) {
-        let language = agentIMLanguage
+    private func handleAgentIMCommand(_ command: AgentIMCommand, replyLanguage language: AppLanguage) {
         switch command {
         case .stop:
             let stopped = agentIMCommandStopHandler?() ?? false
             let text = LocalizedStrings.text(stopped ? .agentIMCommandStopped : .agentIMCommandNotRunning,
                                              language: language)
-            StartupLog.write("IM 命令 /stop → 掐掉=\(stopped)", important: true)
+            StartupLog.write("IM 命令 /stop → 掐掉=\(stopped) 语言=\(language.rawValue)", important: true)
             deliverAgentIMLateText(text)
         case .status:
             let running = agentIMCommandStatusProvider?()
@@ -4146,7 +4145,8 @@ final class AppState: ObservableObject {
         // **最小命令层**（需求 ⑭）与审批指令同层：都不建任务。
         // `/stop` 只掐当前这一跑，**不清待批单、不改权限**；不认识的斜杠句如实说，不当派活。
         if let command = AgentIMCommand.parse(message.text) {
-            handleAgentIMCommand(command)
+            handleAgentIMCommand(command, replyLanguage: AgentIMCommand.replyLanguage(for: message.text,
+                                                                                   fallback: agentIMLanguage))
             return
         }
         // **「批准 <码>」不走跑一轮那条路**（主人 2026-11-11：「我只能在 QQ 指挥，不在电脑前」）：
