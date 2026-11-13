@@ -296,6 +296,12 @@ struct AgentChatView: View {
                             if jumpVisible != showsJumpToBottom { showsJumpToBottom = jumpVisible }
                         })
                     }
+                    // **内容短时贴底**（2026-11-13 真机：一轮只有几行摘要 + 结论 ⇒ 内容被顶在
+                    // 视口最上面，下方空出一大片背景，看着像「布局坏了」）。
+                    // 对话区的高度本来就是**吃剩余空间**的（不是固定值）—— 缺的是「短内容往哪边靠」：
+                    // 聊天窗口的默认是**贴底**（最新一句永远贴着输入框上方），空出来的空间留在上面。
+                    // `.bottom` 同时定住**初次进入**的落点，省掉「打开就先滚一下」的那套补丁。
+                    .defaultScrollAnchor(.bottom)
                     .onChange(of: followRequests) { _, _ in follow() }
                     .onChange(of: model.scrollTick) { _ in follow() }
                     .onChange(of: model.isRunning) { _ in follow() }
