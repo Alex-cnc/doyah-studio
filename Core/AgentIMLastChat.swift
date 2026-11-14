@@ -49,10 +49,39 @@ public struct AgentIMLastChatStore: Sendable {
     }
 
     public func load() -> Chat? {
+        if let chat = loadRecorded() { return chat }
+        return loadUniqueSession()
+    }
+
+    /// `im-last-chat.json`（本文件记的那一条）。
+    private func loadRecorded() -> Chat? {
         guard let data = try? Data(contentsOf: fileURL) else { return nil }
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         guard let chat = try? decoder.decode(Chat.self, from: data), !chat.openID.isEmpty else { return nil }
         return chat
+    }
+
+    /// **退路：`im-sessions.json`**（通道自己记的「说过话的每条聊天 → 会话 ID」，键形如 `qq:<openID>`）。
+    ///
+    /// 2026-11-14 真机：桌面发起的一轮停在审批上，日志里 `IM 审批请求 → 手机：码=d18a` 已经打出来了，
+    /// 紧接着却是「既没有入站消息、也没有落盘的聊天（跳过）」—— 因为 `im-last-chat.json` 是本版新加的，
+    /// 之前说过话的那条聊天只存在于 `im-sessions.json` 里。人不在电脑前，卡片还是出不去。
+    ///
+    /// 纪律不变：**只认唯一候选**。去掉自测用的 `selftest` 后只剩一条才用；多于一条宁可返回 `nil`，
+    /// 绝不按顺序猜一个（推错人比不推更糟）。
+    private func loadUniqueSession() -> Chat? {
+        let url = directory.appendingPathComponent("im-sessions.json")
+        guard let data = try? Data(contentsOf: url),
+              let table = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
+        let openIDs = Set(table.keys.compactMap { key -> String? in
+            let parts = key.split(separator: ":", maxSplits: 1).map(String.init)
+            guard parts.count == 2, parts[0] == "qq" else { return nil }
+            let openID = parts[1]
+            guard !openID.isEmpty, openID != "selftest" else { return nil }
+            return openID
+        })
+        guard openIDs.count == 1, let only = openIDs.first else { return nil }
+        return Chat(kind: .c2c, openID: only, updatedAt: .distantPast)
     }
 }

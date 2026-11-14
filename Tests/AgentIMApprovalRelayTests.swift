@@ -98,4 +98,51 @@ final class AgentIMApprovalRelayTests: XCTestCase {
         let pending = queue.pending()
         XCTAssertEqual(pending.first?.keyboardJSON, keyboard, "落盘再读回来不许把按钮弄丢")
     }
+    /// 退路：`im-last-chat.json` 还没有（本版新加）时，退到 `im-sessions.json` 的**唯一**候选。
+    func testFallsBackToTheOnlySessionWhenNoLastChatRecorded() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("last-chat-fallback-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let sessions = ["qq:51F9D1286CB793F5F7E7016DF8E45C9A": "780B97A6-212D-4B95-B31C-0389801EDAA0",
+                        "qq:selftest": "778DD7BA-9396-444E-A1DD-9E88FB1FE314"]
+        try JSONSerialization.data(withJSONObject: sessions)
+            .write(to: dir.appendingPathComponent("im-sessions.json"))
+
+        let chat = AgentIMLastChatStore(directory: dir).load()
+        XCTAssertEqual(chat?.openID, "51F9D1286CB793F5F7E7016DF8E45C9A",
+                       "只剩一条真聊天时应当认出它（自测那条不算）")
+        XCTAssertEqual(chat?.kind, .c2c)
+    }
+
+    /// 多于一条候选 ⇒ **不猜**（推错人比不推更糟）。
+    func testDoesNotGuessWhenSeveralSessionsExist() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("last-chat-many-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let sessions = ["qq:AAA": "1", "qq:BBB": "2"]
+        try JSONSerialization.data(withJSONObject: sessions)
+            .write(to: dir.appendingPathComponent("im-sessions.json"))
+
+        XCTAssertNil(AgentIMLastChatStore(directory: dir).load(),
+                     "两条候选还挑一条 = 猜；这条必须返回 nil")
+    }
+
+    /// 落盘的那条**优先**于退路。
+    func testRecordedLastChatWinsOverSessions() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("last-chat-priority-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let sessions = ["qq:AAA": "1", "qq:BBB": "2"]
+        try JSONSerialization.data(withJSONObject: sessions)
+            .write(to: dir.appendingPathComponent("im-sessions.json"))
+        let store = AgentIMLastChatStore(directory: dir)
+        store.remember(kind: .group, openID: "GROUP-1")
+
+        let chat = store.load()
+        XCTAssertEqual(chat?.openID, "GROUP-1", "有落盘记录时必须用它，不许被退路顶掉")
+        XCTAssertEqual(chat?.kind, .group)
+    }
 }

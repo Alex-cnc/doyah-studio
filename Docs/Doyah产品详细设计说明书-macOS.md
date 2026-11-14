@@ -1,10 +1,11 @@
 # Doyah产品详细设计说明书（macOS）
 
-> **当前版本**：**v1.3.6**（2026-11-13）
+> **当前版本**：**v1.3.7**（2026-11-14）
 
 | 版本 | 日期 | 变更要点（逐轮细节看 git 提交） |
 |---|---|---|
-| **v1.3.6** | 2026-11-13 | §3.33.5 对话区纵向落点：起手页在上、短会话贴底、一份判定 `showsStartupPanel`；判据 `T-3.33-14`（重心差值 + 读数对调必红） |
+| **v1.3.7** | 2026-11-14 | 审批目标聊天加退路：`im-last-chat.json` 还没写过 ⇒ 认 `im-sessions.json` 的**唯一**候选（去 `selftest`，多于一条不猜）；真机日志证实「补发：跳过」正是这条缺口 |
+| v1.3.6 | 2026-11-13 | §3.33.5 对话区纵向落点：起手页在上、短会话贴底、一份判定 `showsStartupPanel`；判据 `T-3.33-14`（重心差值 + 读数对调必红） |
 | v1.3.5 | 2026-11-13 | 审批请求补「桌面发起的一轮也推手机」：事件处理从「有播报器才进」提到无条件（真机缺陷：确认只弹 PC 端，卡 20 分钟），目标聊天落盘 `im-last-chat.json`；按钮卡与文字码只发一条 |
 | v1.3.4 | 2026-11-13 | 六项全部落地：§3.25.1 的五行改成实装落点（分块器 / 附件件 / 失败判 / 命令解析各独立成件），并补第六行「内联审批按钮」（`INTERACTION_CREATE` + ACK，`T-3.25-16`） |
 | v1.3.3 | 2026-11-13 | §3.25.1 补五行：富文本正文（4000 分块不许截断）/ 原生媒体出站（三类失败分开）/ 入站附件 / 主动消息失败归因 / 最小命令层（`/stop` `/status` 不绕审批） |
@@ -40,7 +41,7 @@
 ## 0. 文档元信息与追溯关系
 
 - 项目/功能名称：Doyah · macOS 端全部能力（Studio 工作区与数据库 / Notes / Retro 宿主 / Agent 在 Studio 内的表现 / 授权呈现）
-- 文档版本：v1.3.6（头部版本同步）（2026-11-05 补登记 11-04 真机修的四类缺陷：§3.29 步数计数与步骤详单上限、§3.30 子代理委派三条隔离约束、§3.25 入站 ack / 进度节流 / 失败落盘 / 重复闸 / 通知角标）
+- 文档版本：v1.3.7（头部版本同步）（2026-11-05 补登记 11-04 真机修的四类缺陷：§3.29 步数计数与步骤详单上限、§3.30 子代理委派三条隔离约束、§3.25 入站 ack / 进度节流 / 失败落盘 / 重复闸 / 通知角标）
 - 实现范围（2026-10-25 实测件数）：`Core/` 260 个 `.swift` + `App/` 133 个 `.swift` + `Platform/macOS/` 5 个文件 + `CLI/` 4 个文件；测试面 `Tests/` 283 个文件
 - 上游依据：
   - 概要设计说明书：`Docs/Doyah产品概要设计说明书.md` v1.0.13（含 §11.4 非功能归属 47 条与 §21 标准对照）
@@ -1010,7 +1011,7 @@
 | **入站附件** | `Core/AgentIMInboundAttachment.swift`（解析 / 落地 0600 / 回执）+ `Core/AgentIMQQProvisioning.swift`（解帧） | 解 `attachments`：下载到会话临时目录（0600）、把「文件名 + 大小 + 本地路径」交给会话；回执说「收到 N 个附件」并逐条列名，解不出如实说「有附件但没取到」；附件不参与去重键 | `T-3.25-13`：带附件的入站帧 → 断言落地且回执含文件名；负例：静默忽略附件判红 |
 | **主动消息失败归因** | `Core/AgentIMDeliveryFailure.swift`（三档判）+ `Core/AgentIMObservability.swift`（`failure` 读数） | 主动消息（无 `msg_id`）被拒时记「阶段 + 机器码」并按**配额 / 瞬时 / 网络**三档归因，人话在读取时翻；配额那一档要在界面上明说「今天发不出去了」，不许混成「网络错误」；被动回复成功不得清掉主动消息的配额失败 | `T-3.25-14`：三个假响应 → 三种人话；负例：配额失败被说成网络错误判红 |
 | **最小命令层** | `Core/AgentIMCommand.swift`（纯解析）+ `App/AppState.swift`（`acceptAgentIMInbound`，与审批指令同层、建任务之前）+ `App/DoyahStudioApp.swift`（`/stop` 掐当前这一跑） | 认 `/stop` 与 `/status`（前缀匹配、不分大小写、只认整词）；`/stop` 只置当前这一跑的取消标志，**不清待批单、不改权限**；`/status` 回四读数里的人话一版；不认识的 `/x` 回「没有这个命令」并列可用命令；命令不进任务队列 | `T-3.25-15`：`/stop` `/status` 各一例 + 未知命令一例；负例：`/stop` 后待批单消失必须判红 |
-| **内联审批按钮** | `Core/AgentIMQQInteraction.swift`（`AgentIMQQKeyboard` / 帧解析 / `AgentIMQQInteractionAcker`）+ `Platform/macOS/URLSessionAgentIMQQClient.swift`（`put`）+ `App/AppState.swift`（`ackAgentIMInteraction`） | 通知带两个按钮（批准 / 拒绝）：数据形如 `approve:<码>` / `reject:<码>`，只认 4–8 位十六进制码（认不出**不当作放行**，不猜）；**桌面发起的一轮也要推**（该轮没有进度播报器）：审批事件不论哪条轮次都登记票据并走 `AgentChatModel.imApprovalRelay` ⇒ `AppState.pushAgentIMApprovalRequest`，目标 = 入站那条聊天，没有入站则用落盘的「最后一条聊天」（`Core/AgentIMLastChat.swift`）；点击推 `INTERACTION_CREATE` ⇒ **先 ACK**（`PUT /interactions/{id}` + `{"code":0}`，不 ACK 用户看到错误标记）再落决定；决定与「批准 <码>」走**同一张票据**（一码一票 / 一次性 / 900 秒过期）；interaction id 是外部输入，只放行字母数字与 `-_` 再拼进路径 | `T-3.25-16`：面板 JSON 两个按钮两份数据、**桌面发起的一轮**停在审批上必须叫醒继电器（负例：无播报器时不再静默）、`approve:` 坏码不放行、ACK 走 `PUT /interactions/{id}`；负例：路径带 `../` 必须 `badInteractionID` 且不发请求 |
+| **内联审批按钮** | `Core/AgentIMQQInteraction.swift`（`AgentIMQQKeyboard` / 帧解析 / `AgentIMQQInteractionAcker`）+ `Platform/macOS/URLSessionAgentIMQQClient.swift`（`put`）+ `App/AppState.swift`（`ackAgentIMInteraction`） | 通知带两个按钮（批准 / 拒绝）：数据形如 `approve:<码>` / `reject:<码>`，只认 4–8 位十六进制码（认不出**不当作放行**，不猜）；**桌面发起的一轮也要推**（该轮没有进度播报器）：审批事件不论哪条轮次都登记票据并走 `AgentChatModel.imApprovalRelay` ⇒ `AppState.pushAgentIMApprovalRequest`，目标 = 入站那条聊天，没有入站则用落盘的「最后一条聊天」（`Core/AgentIMLastChat.swift`；落盘还没写过时退到 `im-sessions.json` 的**唯一**候选，去掉 `selftest` 后多于一条就返回 `nil`，绝不按顺序猜）；点击推 `INTERACTION_CREATE` ⇒ **先 ACK**（`PUT /interactions/{id}` + `{"code":0}`，不 ACK 用户看到错误标记）再落决定；决定与「批准 <码>」走**同一张票据**（一码一票 / 一次性 / 900 秒过期）；interaction id 是外部输入，只放行字母数字与 `-_` 再拼进路径 | `T-3.25-16`：面板 JSON 两个按钮两份数据、**桌面发起的一轮**停在审批上必须叫醒继电器（负例：无播报器时不再静默）、`approve:` 坏码不放行、ACK 走 `PUT /interactions/{id}`；负例：路径带 `../` 必须 `badInteractionID` 且不发请求 |
 | 不可逆仍审批 | `Core/AgentIMOriginGate.swift` + `Core/AgentTaskScope.swift`（`AgentScopeGate.judge`） | 代签路径（任务范围内不问人）在放行前先判危险面：**删除 / 对外发送 / 凭据 / 越界**四档（`AgentApprovalHazard.allowsGrant == false`）一律转人工，且**不认盘上已有的授权**。IM 发起侧用 `AgentIMOriginGate(origin: .im)` 同一判定；被挡下时回 `blockedByApproval`，回话必须说清「是哪一类操作 / IM 不放行 / 去桌面批」，**不准假装跑完** | `T-3.25-10`：`delete_records` + `rm -rf` ⇒ 判 `destructive`、有旧授权也要桌面批、手机上收到的回话含「桌面」且不含「已完成」 |
 | 五环自检 | `Core/AgentIMSelfCheck.swift`（`AgentIMSelfCheckRunner`）/ `App/AgentIMSelfCheckLive.swift` | 五环固定顺序：配置完整 → token 可取 → 握手成功 → 收一帧 → 发一帧。**串联执行**：前一环红即停，后面几环记 `blocked(by:)`（「没跑到」），**不记红**。握手 / 收帧 / 发帧**共用一条连接**（三环各开一条会把「自己的 Hello」当成「会话事件」）。读数只显示 AppID 尾 4 位与帧类型摘要 | `T-3.25-11`：正例五环全绿且逐条有读数；Secret 置空 ⇒ 只有第一环红、后四环「没跑到」；token 失败 ⇒ 指到第二环 |
 
