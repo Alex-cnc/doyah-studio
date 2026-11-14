@@ -145,4 +145,36 @@ final class AgentIMApprovalRelayTests: XCTestCase {
         XCTAssertEqual(chat?.openID, "GROUP-1", "有落盘记录时必须用它，不许被退路顶掉")
         XCTAssertEqual(chat?.kind, .group)
     }
+    // MARK: - 刷屏闸门（2026-11-14 真机：一串「没有待批的单」+ 两张一样的卡）
+
+    func testSameApprovalIsPushedOnceWithinItsLife() {
+        var gate = AgentIMFloodGate()
+        let t0 = Date(timeIntervalSince1970: 1_000)
+        XCTAssertTrue(gate.shouldPushApproval(code: "6b1b", at: t0), "第一次必须推")
+        XCTAssertFalse(gate.shouldPushApproval(code: "6b1b", at: t0.addingTimeInterval(30)),
+                       "同一张单 30 秒后再要确认，不许再推一张卡")
+        XCTAssertTrue(gate.shouldPushApproval(code: "6b1b", at: t0.addingTimeInterval(901)),
+                      "过了票据寿命（900 秒）就该当新单推")
+        XCTAssertTrue(gate.shouldPushApproval(code: "b726", at: t0.addingTimeInterval(1)),
+                      "**别的单**不许被前一张挡住")
+    }
+
+    func testInteractionRetryIsAckedButAnsweredOnce() {
+        var gate = AgentIMFloodGate()
+        XCTAssertTrue(gate.shouldReplyToInteraction(id: "IX-1"), "第一次点击要回话")
+        for _ in 0..<19 {
+            XCTAssertFalse(gate.shouldReplyToInteraction(id: "IX-1"),
+                           "平台重试同一个 interaction_id ⇒ 只 ACK，不再回话（否则手机上 20 条一样的话）")
+        }
+        XCTAssertTrue(gate.shouldReplyToInteraction(id: "IX-2"), "新的点击另算")
+    }
+
+    func testGateForgetsOldestWhenMemoryIsFull() {
+        var gate = AgentIMFloodGate(interactionMemory: 3)
+        for i in 0..<3 { _ = gate.shouldReplyToInteraction(id: "IX-\(i)") }
+        _ = gate.shouldReplyToInteraction(id: "IX-3")
+        XCTAssertTrue(gate.shouldReplyToInteraction(id: "IX-0"),
+                      "记忆只有 3 个时，最旧的那个该被忘掉（否则长跑一轮就把记忆吃满）")
+        XCTAssertFalse(gate.shouldReplyToInteraction(id: "IX-3"), "最近那个还在记忆里")
+    }
 }

@@ -417,6 +417,11 @@ final class AppState: ObservableObject {
     /// 宿主（`DoyahStudioApp`）把这一口接到对话模型上；`nil` = 这一路不接（单测/没有模型时）。
     /// 返回值是**回给手机那头的一句人话**（已批准 / 码不对 / 没有待批的单…）。
     var agentIMApprovalResolver: ((AgentIMApprovalCommand.Decision) -> String)?
+
+    /// **同一件事只说一遍**（点击重试 / 同一张单重复要确认）：规则在 `Core/AgentIMFloodGate.swift`。
+    /// 真机（2026-11-14）：手机上一串「没有待批的单」20 多条 + 两张一样的审批卡，都是没去重。
+    private var imFloodGate = AgentIMFloodGate()
+
     /// **最小命令层**（需求 ⑭）：`/stop` 要掐的是「界面侧那一跑」，`AppState` 拿不到它 ⇒ 同样走注入。
     /// 返回 `true` = 真的掐掉了；`false` = 本来就没在跑（**如实说，不假装停过**）。
     var agentIMCommandStopHandler: (() -> Bool)?
@@ -4130,8 +4135,14 @@ final class AppState: ObservableObject {
     private func acceptAgentIMInbound(_ frame: AgentIMInboundFrame) {
         // 按钮点击（内联按钮）：先 ACK（不 ACK 用户看到错误标记），再把按钮变成**同一句决定**。
         if case .interaction(let interaction) = frame {
-            StartupLog.write("IM 按钮点击 id=\(interaction.interactionID) data=\(interaction.buttonData)", important: true)
+            // **ACK 永远先发**（重复事件也发：平台要的就是那个 200，缺一次它就继续重试）。
             Task { [weak self] in await self?.ackAgentIMInteraction(interaction) }
+            let id = interaction.interactionID
+            guard imFloodGate.shouldReplyToInteraction(id: id) else {
+                StartupLog.write("IM 按钮点击重复（同一次点击的平台重试），只 ACK 不回话：\(id)")
+                return
+            }
+            StartupLog.write("IM 按钮点击 id=\(id) data=\(interaction.buttonData)", important: true)
             guard let decision = AgentIMQQButtonData.decision(from: interaction.buttonData) else {
                 StartupLog.write("IM 按钮数据认不出（不当放行）：\(interaction.buttonData)")
                 return
@@ -4291,6 +4302,12 @@ final class AppState: ObservableObject {
         let language = agentIMLanguage
         let text = LocalizedStrings.format(.agentIMApprovalRequest, language: language,
                                            notice.tool, notice.code, notice.code)
+        // **同一张单只推一次**：一轮里同一个指纹被反复要确认（工具重试）时，手机不该收到一串一样的卡。
+        guard imFloodGate.shouldPushApproval(code: notice.code) else {
+            let age = Int(imFloodGate.ageOfPushedApproval(code: notice.code) ?? 0)
+            StartupLog.write("IM 审批请求：码=\(notice.code) 已经在 \(age) 秒前推过，不再推")
+            return
+        }
         let keyboard = AgentIMQQKeyboard.approval(code: notice.code, language: language)
         StartupLog.write("IM 审批请求 → 手机：码=\(notice.code) 工具=\(notice.tool)", important: true)
         deliverAgentIMLateText(text, keyboardJSON: keyboard)
