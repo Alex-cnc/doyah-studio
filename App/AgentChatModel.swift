@@ -236,6 +236,20 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
         guard let card = state.cards.last(where: { $0.approvalFingerprint == fingerprint }) else { return }
         let tool = preview.isEmpty ? name : "\(name)：\(preview)"
         registerIMApprovalTicket(code: code, cardID: card.id, tool: tool)
+    }
+
+    /// **只有真的要人拍板才叫醒手机**（2026-11-14 真机：手机上连着几张卡，点哪张都回
+    /// 「没有待批的单」—— 因为代签档（`FR-AI-34`）建单即已批，卡在手机上是废的）。
+    ///
+    /// 判定读卡片自己的状态：`.pendingApproval` = 在等人；`.approved` = 代签已批，不推。
+    private func relayApprovalIfStillPending(name: String, fingerprint: String, preview: String) {
+        guard let card = state.cards.last(where: { $0.approvalFingerprint == fingerprint }) else { return }
+        guard card.isPendingApproval else {
+            StartupLog.write("IM 审批请求：代签档已自动批准（\(fingerprint.prefix(4))），不推手机")
+            return
+        }
+        let code = String(fingerprint.prefix(4)).lowercased()
+        let tool = preview.isEmpty ? name : "\(name)：\(preview)"
         relayApprovalToIM(code: code, tool: tool, cardID: card.id)
     }
 
@@ -1464,10 +1478,12 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
         // **代签那一档（`FR-AI-34`）建单即已批** ⇒ 观测口立刻兑现。
         // `observe` 在循环里是 `await` 的 ⇒ 这次写盘落在**下一跳之前**，
         // 模型下一跳看到的是「文件已改」，而不是「还在等一个不会来的人」。
-        if case .approvalRequested = event {
+        if case let .approvalRequested(name, fingerprint, preview, _) = event {
             for card in state.cards where card.isAwaitingApply {
                 await applyApproved(cardID: card.id)
             }
+            // **代签兑现之后再判**：还停在 `.pendingApproval` 才是真的要人拍板。
+            relayApprovalIfStillPending(name: name, fingerprint: fingerprint, preview: preview)
         }
     }
 

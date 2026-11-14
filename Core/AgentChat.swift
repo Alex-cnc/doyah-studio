@@ -119,6 +119,13 @@ public struct AgentToolCard: Identifiable, Equatable, Sendable {
         return false
     }
 
+    /// **真的在等人拍板**（`.pendingApproval`）。代签档（`FR-AI-34`）建单即 `.approved`，
+    /// 那不是「等人」—— 手机那头不该收到一张点了会回「没有待批的单」的废卡。
+    public var isPendingApproval: Bool {
+        if case .pendingApproval = outcome { return true }
+        return false
+    }
+
     /// 等审批时的**指纹**（界面拿它去兑现那一次批准）。
     public var approvalFingerprint: String? {
         switch outcome {

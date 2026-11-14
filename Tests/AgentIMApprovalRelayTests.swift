@@ -177,4 +177,19 @@ final class AgentIMApprovalRelayTests: XCTestCase {
                       "记忆只有 3 个时，最旧的那个该被忘掉（否则长跑一轮就把记忆吃满）")
         XCTAssertFalse(gate.shouldReplyToInteraction(id: "IX-3"), "最近那个还在记忆里")
     }
+    // MARK: - 「只有真的要人拍板才叫醒手机」
+
+    /// `.pendingApproval` = 在等人 ⇒ 要推；代签档建单即 `.approved` ⇒ **不推**
+    /// （真机：手机上连着几张卡，点哪张都回「没有待批的单」）。
+    func testOnlyPendingCardsCountAsWaitingForAHuman() {
+        let pending = AgentToolCard(name: "run_command", arguments: "{}",
+                                    outcome: .pendingApproval(fingerprint: "fd20ef75", preview: "cat x"))
+        XCTAssertTrue(pending.isPendingApproval, "停在 .pendingApproval 才是真的在等人")
+        XCTAssertEqual(pending.approvalFingerprint, "fd20ef75")
+
+        let signed = AgentToolCard(name: "write_file", arguments: "{}",
+                                   outcome: .approved(fingerprint: "6b1b0000", preview: "write x"))
+        XCTAssertFalse(signed.isPendingApproval, "代签档建单即已批 —— 这不是「等人」，不该推手机")
+        XCTAssertTrue(signed.isAwaitingApply, "代签那一档仍在等宿主观测口兑现（与「等人」是两件事）")
+    }
 }
