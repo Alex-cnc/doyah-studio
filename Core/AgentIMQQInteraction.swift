@@ -164,6 +164,10 @@ public struct AgentIMQQInteractionAcker: Sendable {
         do {
             let response = try await client.put(url, payload: #"{"code":0}"#,
                                                 headers: tokenValue.authorizationHeaders)
+            // ACK 的回执是**空体 `{}`**（没有 `id`）：不能拿「外发那条」的判定（它要求 `id`，
+            // 空体会被判成 `responseNotJSON` —— 2026-11-14 真机就报这个，看着像失败其实平台已收下）。
+            // 官方文档：`PUT /interactions/{id}` 成功回 `{}`。2xx 即算 ACK 成功。
+            if response.isSuccess { return .delivered(messageID: nil) }
             return AgentIMOutboundSender.outcome(for: response)
         } catch {
             return .networkFailed

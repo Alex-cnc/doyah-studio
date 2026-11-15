@@ -138,4 +138,27 @@ final class AgentIMQQInteractionTests: XCTestCase {
         XCTAssertEqual(intents & (1 << 25), 1 << 25, "消息事件位不能丢")
         XCTAssertEqual(intents & (1 << 26), 1 << 26, "互动事件位必须在，否则按钮是哑的")
     }
+    /// **ACK 的空体 `{}` 必须算成功**：官方回执就是 `{}`，没有 `id`。用「外发」的判定会把它
+    /// 判成 `responseNotJSON`（2026-11-14 真机日志：`IM 按钮 ACK responseNotJSON`，其实平台已收下）。
+    func testAckTreatsEmptyObjectAsDelivered() async {
+        let client = FakeClient(response: AgentIMHTTPResponse(status: 200, body: "{}"))
+        let acker = AgentIMQQInteractionAcker(
+            client: client, environment: .sandbox,
+            token: { AgentIMQQToken(value: "tok", expiresIn: 7200, obtainedAt: Date()) })
+        let outcome = await acker.ack(AgentIMInteraction(interactionID: "inter-9",
+                                                        buttonData: "approve:c04c",
+                                                        chatID: "u-1", userID: "u-1", chatKind: .c2c))
+        XCTAssertEqual(outcome, .delivered(messageID: nil), "2xx 空体 = ACK 成功，不许报 responseNotJSON")
+    }
+
+    func testAckStillReportsRealFailures() async {
+        let client = FakeClient(response: AgentIMHTTPResponse(status: 401, body: ""))
+        let acker = AgentIMQQInteractionAcker(
+            client: client, environment: .sandbox,
+            token: { AgentIMQQToken(value: "tok", expiresIn: 7200, obtainedAt: Date()) })
+        let outcome = await acker.ack(AgentIMInteraction(interactionID: "inter-9",
+                                                        buttonData: "approve:c04c",
+                                                        chatID: "u-1", userID: "u-1", chatKind: .c2c))
+        XCTAssertEqual(outcome, .unauthorized, "真失败不许被 2xx 兜底吞掉")
+    }
 }
