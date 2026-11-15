@@ -31,6 +31,7 @@ import DoyahCore
 ///   SwiftUI 的 `Text` 在这台宿主里不落 `NSTextField`，没有 frame 可量（与本族其它探针同一条边界）；
 /// · 星野背景自带亮点 ⇒ 只认「同一行连续 ≥ 4 个亮像素」，单点星不算字迹；
 /// · 默认 `XCTSkip`（要 `DOYAH_UI_SNAPSHOT=1`）—— 与其它端上探针同一条纪律：取证才跑。
+/// 判据：`T-3.33-14`（起手页在上 / 短会话贴底，读数对调必须判红）。
 final class AgentChatAnchorProbeTests: XCTestCase {
 
     static let pageSize = CGSize(width: 900, height: 620)

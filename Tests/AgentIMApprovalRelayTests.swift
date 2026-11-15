@@ -7,6 +7,7 @@ import XCTest
 /// 三件事分开验：① 桌面发起的一轮停在审批上时，继电器被叫醒、票据登记；② 那条通知带码 + 两颗按钮；
 /// ③ 「最后一条聊天」落盘得住（否则重启后桌面发起的审批又无处可去）。
 @MainActor
+/// 判据：`T-3.25-16`（审批递送 / 按钮带码）/ `T-3.25-17`（刷屏闸门）/ `T-3.25-18`（只推真在等人的单）。
 final class AgentIMApprovalRelayTests: XCTestCase {
 
     private var root: URL!

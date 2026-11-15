@@ -3,6 +3,7 @@ import XCTest
 
 /// 内联审批按钮（需求 ⑧「平台支持时改为内联按钮，码保留为兜底」）：
 /// 按钮数据由我们定、点击必须 ACK、按钮与「批准 <码>」走**同一条**票据判定。
+/// 判据：`T-3.25-16`（按钮数据窄解析 / `action.type` 必须为 1 / ACK 路径）。
 final class AgentIMQQInteractionTests: XCTestCase {
 
     private var root: URL!
