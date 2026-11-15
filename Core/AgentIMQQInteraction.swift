@@ -63,8 +63,10 @@ public enum AgentIMQQKeyboard {
         [
             "id": id,
             "render_data": ["label": label, "visited_label": visited, "style": style],
-            // type = 2（回调）；permission.type = 2（所有人可点，具体到谁能放行由票据判）
-            "action": ["type": 2, "permission": ["type": 2], "data": data, "enter": true]
+            // **action.type = 1 才是回调**（平台推 `INTERACTION_CREATE` 的唯一取值）；
+            // `2` 是链接跳转 —— 带 data 也不推事件，真机表现为「点了没反应、日志零事件」。
+            // permission.type = 2（所有人可点，具体到谁能放行由票据判）。
+            "action": ["type": 1, "permission": ["type": 2], "data": data, "enter": true]
         ]
     }
 }

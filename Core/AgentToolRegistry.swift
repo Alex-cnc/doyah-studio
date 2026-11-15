@@ -216,7 +216,10 @@ public struct AgentToolRegistry: Sendable {
             // 每路 `{"id","label","prompt","budgetSeconds"?}` —— 参数类型表只支持标量，
             // 所以整段 JSON 以字符串传；解析失败如实拒（`badArguments`），不猜。
             AgentToolDefinition(name: "dispatch_subtasks",
-                                summary: "把几路互不依赖的子任务派给子代理并行做（需审批）；"
+                                summary: "把几路互不依赖的子任务派给子代理并行做（需审批）。"
+                                    + "**何时必须派**：用户明确要求并行（「并行」「同时」「一起查」）且子任务互不依赖时，"
+                                    + "即使每个都很小也要派 —— 别再以「文件太小、开子代理更慢」为由跳过；"
+                                    + "**何时不派**：任务有先后依赖、或只有一路时，自己串行做；"
                                     + "参数 tasks 是 JSON 数组字符串，每项 {\"id\",\"label\",\"prompt\",\"budgetSeconds\"?}，"
                                     + "结果按「标签#子任务ID」标来源汇总回来",
                                 capability: .dispatchSubtasks,

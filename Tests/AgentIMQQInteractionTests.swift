@@ -110,4 +110,20 @@ final class AgentIMQQInteractionTests: XCTestCase {
         XCTAssertEqual(outcome, .notReady(code: "badInteractionID"), "外部输入不许拼进路径")
         XCTAssertTrue(client.puts.isEmpty)
     }
+    /// **`action.type` 必须是 1（回调）**：取 2 是链接跳转，带 data 也不推 `INTERACTION_CREATE`
+    /// —— 真机上表现为「点了没反应、日志里零事件」（2026-11-14 实测：历史全量 0 条按钮事件）。
+    func testButtonsUseCallbackActionNotLink() throws {
+        let json = AgentIMQQKeyboard.approval(code: "fd20", language: .simplifiedChinese)
+        let root = try JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any]
+        let rows = (root?["content"] as? [String: Any])?["rows"] as? [[String: Any]]
+        let buttons = rows?.first?["buttons"] as? [[String: Any]]
+        XCTAssertEqual(buttons?.count, 2, "审批必须是两颗按钮")
+        for button in buttons ?? [] {
+            let action = button["action"] as? [String: Any]
+            XCTAssertEqual(action?["type"] as? Int, 1, "回调按钮的 action.type 必须是 1；2 = 链接，平台不会推事件")
+            XCTAssertEqual((action?["permission"] as? [String: Any])?["type"] as? Int, 2,
+                           "permission.type = 2 才是所有人可点")
+            XCTAssertFalse((action?["data"] as? String ?? "").isEmpty, "回调必须带 data")
+        }
+    }
 }
