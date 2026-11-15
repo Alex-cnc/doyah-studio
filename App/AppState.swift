@@ -416,6 +416,18 @@ final class AppState: ObservableObject {
     ///
     /// 宿主（`DoyahStudioApp`）把这一口接到对话模型上；`nil` = 这一路不接（单测/没有模型时）。
     /// 返回值是**回给手机那头的一句人话**（已批准 / 码不对 / 没有待批的单…）。
+    /// **IMA 回话语言**：跟用户说的语言（2026-11-14 主人拍板「不随系统」）。
+    /// 学到就落盘（`user-language.json`），按钮点击这种没有正文的动作也照它回话。
+    private(set) var agentIMUserLanguage = AgentIMUserLanguage.load(from: AppState.agentIMUserLanguageURL) ?? AgentIMUserLanguage()
+    static var agentIMUserLanguageURL: URL {
+        AgentIMResultQueue.defaultDirectory.appendingPathComponent("user-language.json")
+    }
+
+    /// 当前该用哪门语言回话：学到的优先，没学到退界面语言。
+    func agentIMReplyLanguage() -> AppLanguage {
+        agentIMUserLanguage.resolved(fallback: agentIMLanguage)
+    }
+
     var agentIMApprovalResolver: ((AgentIMApprovalCommand.Decision) -> String)?
 
     /// **同一件事只说一遍**（点击重试 / 同一张单重复要确认）：规则在 `Core/AgentIMFloodGate.swift`。
@@ -4155,6 +4167,11 @@ final class AppState: ObservableObject {
             return
         }
         guard case .message(let message) = frame else { return }
+        // **学用户说话的语言**（回话跟它走，不随界面语言）：纯数字/表情学不出，不覆盖已学到的。
+        if agentIMUserLanguage.learn(from: message.text) {
+            agentIMUserLanguage.save(to: Self.agentIMUserLanguageURL)
+            StartupLog.write("IM 回话语言：学到 \(agentIMUserLanguage.language?.rawValue ?? "-")")
+        }
         // 逾期补发要知道「回哪条聊天 / 回哪一条消息」—— 那一轮收尾时入站帧早就没在手上了。
         agentIMLastInbound = message
         agentIMLastChatStore.remember(kind: message.chatKind, openID: message.chatID)

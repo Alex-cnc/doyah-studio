@@ -86,7 +86,10 @@ final class AgentIMApprovalCommandTests: XCTestCase {
         XCTAssertTrue(first.contains("已拒绝"), "第一次应当落地：\(first)")
         XCTAssertTrue(model.imApprovalTickets.isEmpty, "用过即焚")
         let second = model.resolveIMApproval(.init(approve: false, code: "a1b2"))
-        XCTAssertTrue(second.contains("没有等你批"), "同一句重发不许再生效：\(second)")
+        // 2026-11-14 改：第二次点击要如实说「已经批过或拒过了」，不再跟「没有待批的单」混成一句
+        // （真机：连点两次收到「码对不上」，最容易被误读成码打错了）。
+        XCTAssertTrue(second.contains("已经批过或拒过"), "同一句重发要说是用过了：\(second)")
+        XCTAssertFalse(second.contains("对不上"), "不许把「用过了」说成「码不对」：\(second)")
     }
 
     @MainActor
@@ -109,5 +112,26 @@ final class AgentIMApprovalCommandTests: XCTestCase {
         XCTAssertTrue(first.contains("已拒绝"), "先看到的那个码也要能用：\(first)")
         let second = model.resolveIMApproval(.init(approve: false, code: "c04c"))
         XCTAssertTrue(second.contains("已拒绝"), "后看到的那个码同样要能用：\(second)")
+    }
+    // MARK: - ⑥ 回话语言跟用户走（2026-11-14 主人拍板：不随系统）
+
+    @MainActor
+    func testApprovalReplyFollowsTheUserNotTheInterface() {
+        let model = AgentChatModel()
+        model.languageProvider = { .english }            // 界面是英文
+        model.imLanguageProvider = { .simplifiedChinese } // 但用户说中文
+        let reply = model.resolveIMApproval(.init(approve: true, code: "a1b2"))
+        XCTAssertTrue(reply.contains("没有等你批"), "回话该是中文：\(reply)")
+        XCTAssertFalse(reply.contains("Nothing is waiting"), "不许跟界面语言走：\(reply)")
+    }
+
+    @MainActor
+    func testExpiredCodeClickedAgainSaysExpired() {
+        let model = makeModel()
+        model.setIMApprovalTicketForTesting(code: "a1b2", cardID: UUID(),
+                                            issuedAt: Date().addingTimeInterval(-AgentChatModel.imApprovalTicketLifetime - 5))
+        _ = model.resolveIMApproval(.init(approve: true, code: "a1b2"))
+        let again = model.resolveIMApproval(.init(approve: true, code: "a1b2"))
+        XCTAssertTrue(again.contains("过期"), "过期后再点仍要说过期，不许说码不对：\(again)")
     }
 }

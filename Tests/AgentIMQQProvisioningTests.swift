@@ -334,7 +334,10 @@ final class AgentIMQQProvisioningTests: XCTestCase {
         XCTAssertEqual(identify["op"] as? Int, 2, "Identify 必须是 op=2")
         let data = try XCTUnwrap(identify["d"] as? [String: Any])
         XCTAssertEqual(data["token"] as? String, "QQBot tok-abc")
-        XCTAssertEqual(data["intents"] as? Int, AgentIMQQHandshake.intentsC2CAndGroup)
+        // 2026-11-14：订阅面 = 消息 + **互动**（`1<<26`）。只订消息时按钮点击永远不下发
+        // —— 旧断言写的是 `intentsC2CAndGroup`，等于把这个缺陷钉成了「正确」。
+        XCTAssertEqual(data["intents"] as? Int, AgentIMQQHandshake.intentsDefault)
+        XCTAssertEqual(AgentIMQQHandshake.intentsDefault & (1 << 26), 1 << 26, "互动事件位必须在")
 
         let heartbeat = try XCTUnwrap(ProvisionerSupport.jsonObject(AgentIMQQHandshake.heartbeatFrame(sequence: 7)))
         XCTAssertEqual(heartbeat["op"] as? Int, 1, "心跳必须是 op=1")

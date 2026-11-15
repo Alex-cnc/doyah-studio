@@ -2388,6 +2388,7 @@ public enum LKey: String, CaseIterable, Sendable {
     case agentIMApprovalDone
     case agentIMApprovalRejected
     case agentIMApprovalWrongCode
+    case agentIMApprovalAlreadyUsed
     case agentIMApprovalExpired
     case agentIMApprovalNone
     case agentIMProgressFinalizing
@@ -6150,6 +6151,7 @@ public enum LocalizedStrings {
         .agentIMApprovalDone: [.simplifiedChinese: "已批准「%@」，接着跑。结论出来我再发一条。", .english: "Approved “%@” — carrying on. I'll send the result when it lands."],
         .agentIMApprovalRejected: [.simplifiedChinese: "已拒绝「%@」，这一轮按拒绝收尾。", .english: "Rejected “%@” — this run will wrap up as rejected."],
         .agentIMApprovalWrongCode: [.simplifiedChinese: "这个码对不上现在等批的那一条。以最新那条通知里的码为准（每条命令都有自己的码）。", .english: "That code does not match what is waiting right now. Use the code from the latest notice — each command gets its own."],
+        .agentIMApprovalAlreadyUsed: [.simplifiedChinese: "这张单已经批过或拒过了（一个码只能用一次）。", .english: "That approval was already decided — each code works only once."],
         .agentIMApprovalExpired: [.simplifiedChinese: "那条审批单已经过期（超过 15 分钟），回桌面重新发起才会生成新码。", .english: "That approval request has expired (over 15 minutes). Start it again on the desktop to get a fresh code."],
         .agentIMApprovalNone: [.simplifiedChinese: "现在没有等你批的单 —— 有的话我会把命令和码一起发过来。", .english: "Nothing is waiting for your approval right now — when something is, I'll send the command and its code together."],
         .agentIMProgressFinalizing: [.simplifiedChinese: "第 %lld 步 · 正在收尾 · 已跑 %@", .english: "Step %lld · wrapping up · %@ elapsed"],

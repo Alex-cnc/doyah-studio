@@ -307,6 +307,9 @@ struct DoyahStudioApp: App {
                     appState.agentIMApprovalResolver = { decision in
                         agentChat.resolveIMApproval(decision)
                     }
+                    // **回话语言跟用户走**（2026-11-14）：按钮点击没有正文，用学到的语言；
+                    // 学不到才退到界面语言（旧行为：一律界面语言 ⇒ 中文使用者收到英文回话）。
+                    agentChat.imLanguageProvider = { appState.agentIMReplyLanguage() }
                     // **审批请求也要送到手机**：桌面弹层是主路，IM 是同一张单的第二条路。
                     // 桌面发起的一轮没有 IM 入站消息，靠这条继电器推到最后一条聊天（落盘的）。
                     agentChat.imApprovalRelay = { notice in

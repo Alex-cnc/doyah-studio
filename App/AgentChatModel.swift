@@ -127,6 +127,8 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
     var dailyUsageRecorder: ((Int) -> Void)?
     /// 文案语言（界面语言，缺省跟随本机语言设置）。
     var languageProvider: () -> AppLanguage = { LocalizationManager.shared.effectiveLanguage }
+    /// **IM 回话语言**（跟用户说的语言，不随界面）：宿主装；`nil` = 退到 `languageProvider`。
+    var imLanguageProvider: (() -> AppLanguage)?
     /// **显示开关的真值源**（`FR-AGT-UX-CONV-012`）：宿主每次现读 ⇒ 面板上改一项，
     /// 下一次按发送 / 下一次重绘就按新的来（不必重启）。缺省 = 契约默认那一份。
     var displayPreferencesProvider: () -> AgentDisplayPreferences = { AgentDisplayPreferences() }
@@ -222,6 +224,25 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
     /// 之前只有一个槽位，后到的审批请求会覆盖前一张 —— 于是「照最新那条通知回的码」
     /// 反而对不上（真机实测：回了 c04c，回话是 "That code does not match…"）。
     private(set) var imApprovalTickets: [String: IMApprovalTicket] = [:]
+
+    /// **已经用掉 / 过期的票**：同一个码再点一次，要如实说「这张单已经批过 / 过期了」，
+    /// 而不是「码对不上」（2026-11-14 真机：连点两次收到 `That code does not match…`，看得人发蒙）。
+    private(set) var imApprovalBurned: [String: IMApprovalBurned] = [:]
+
+    enum IMApprovalBurned: Equatable {
+        case approved(Date)
+        case rejected(Date)
+        case expired(Date)
+
+        var at: Date {
+            switch self {
+            case .approved(let date), .rejected(let date), .expired(let date): return date
+            }
+        }
+    }
+
+    /// 烧掉的票记多少条（够回看一段对话；满了按时间淘汰最旧的）。
+    static let imApprovalBurnedCapacity = 32
 
     /// 同时最多记几张（手机能回去看的历史也就几条；多出来的按时间淘汰）。
     static let imApprovalTicketCapacity = 4
@@ -320,29 +341,56 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
     ///
     /// **不许静默**：码不对、过期、根本没有待批的单，都要说清楚是哪一档。
     func resolveIMApproval(_ decision: AgentIMApprovalCommand.Decision) -> String {
-        let language = languageProvider()
-        guard !imApprovalTickets.isEmpty else {
+        // **回话语言跟用户说的语言走**（2026-11-14 主人拍板）：按钮点击没有正文，
+        // 所以读「最近一次说话学到的那门语言」；从没说过话才退到界面语言。
+        let language = imLanguageProvider?() ?? languageProvider()
+        let key = decision.code.lowercased()
+        // 一张票都没登记、这个码也没烧过 ⇒ 如实说「没有待批的单」（别把这种情况说成码不对）。
+        if imApprovalTickets.isEmpty, imApprovalBurned[key] == nil {
             return LocalizedStrings.text(.agentIMApprovalNone, language: language)
         }
-        let key = decision.code.lowercased()
         guard let ticket = imApprovalTickets[key] else {
+            // 先看它是不是**已经用掉 / 过期**的那张：如实说清楚，别跟「码对不上」混成一句。
+            if let burned = imApprovalBurned[key] {
+                switch burned {
+                case .approved, .rejected:
+                    return LocalizedStrings.text(.agentIMApprovalAlreadyUsed, language: language)
+                case .expired:
+                    return LocalizedStrings.text(.agentIMApprovalExpired, language: language)
+                }
+            }
             return LocalizedStrings.text(.agentIMApprovalWrongCode, language: language)
         }
         if Date().timeIntervalSince(ticket.issuedAt) > Self.imApprovalTicketLifetime {
             imApprovalTickets.removeValue(forKey: key)
+            burn(key, .expired(Date()))
             return LocalizedStrings.text(.agentIMApprovalExpired, language: language)
         }
         imApprovalTickets.removeValue(forKey: key)   // 一次性：用过即焚（同一句重发不会再放行）
         if decision.approve {
             // 单子已经不在（被别处处理掉了）⇒ 如实说，不许回一句「已批准」而实际什么都没发生。
             guard state.cards.contains(where: { $0.id == ticket.cardID }) else {
+                burn(key, .expired(Date()))
                 return LocalizedStrings.text(.agentIMApprovalNone, language: language)
             }
             approve(ticket.cardID)
+            burn(key, .approved(Date()))
             return LocalizedStrings.format(.agentIMApprovalDone, language: language, ticket.tool)
         }
         deny(ticket.cardID)
+        burn(key, .rejected(Date()))
         return LocalizedStrings.format(.agentIMApprovalRejected, language: language, ticket.tool)
+    }
+
+    /// 记下「这张票已经烧了」以及烧掉的原因（容量按条数淘汰最旧的）。
+    private func burn(_ key: String, _ reason: IMApprovalBurned) {
+        imApprovalBurned[key] = reason
+        // 容量按条数淘汰最旧的（刚好塞进来的那张不淘汰，否则这次点击就白记了）。
+        while imApprovalBurned.count > Self.imApprovalBurnedCapacity {
+            guard let oldest = imApprovalBurned.min(by: { $0.value.at < $1.value.at }),
+                  oldest.key != key else { break }
+            imApprovalBurned.removeValue(forKey: oldest.key)
+        }
     }
     /// 这一个 IM 轮次开跑的时刻 / 走了几跳 / 调了几次工具 / 最后一条工具（进度行与失败行都要）。
     private var imTurnStartedAt: Date?
