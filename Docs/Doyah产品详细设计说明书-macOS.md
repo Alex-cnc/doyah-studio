@@ -1,6 +1,6 @@
 # Doyah产品详细设计说明书（macOS）
 
-> **当前版本**：**v1.3.9**（2026-11-14）
+> **当前版本**：**v1.3.10**（2026-11-14）
 
 | 版本 | 日期 | 变更要点（逐轮细节看 git 提交） |
 |---|---|---|
@@ -43,7 +43,7 @@
 ## 0. 文档元信息与追溯关系
 
 - 项目/功能名称：Doyah · macOS 端全部能力（Studio 工作区与数据库 / Notes / Retro 宿主 / Agent 在 Studio 内的表现 / 授权呈现）
-- 文档版本：v1.3.9（头部版本同步）（2026-11-05 补登记 11-04 真机修的四类缺陷：§3.29 步数计数与步骤详单上限、§3.30 子代理委派三条隔离约束、§3.25 入站 ack / 进度节流 / 失败落盘 / 重复闸 / 通知角标）
+- 文档版本：v1.3.10（头部版本同步）（2026-11-05 补登记 11-04 真机修的四类缺陷：§3.29 步数计数与步骤详单上限、§3.30 子代理委派三条隔离约束、§3.25 入站 ack / 进度节流 / 失败落盘 / 重复闸 / 通知角标）
 - 实现范围（2026-10-25 实测件数）：`Core/` 260 个 `.swift` + `App/` 133 个 `.swift` + `Platform/macOS/` 5 个文件 + `CLI/` 4 个文件；测试面 `Tests/` 283 个文件
 - 上游依据：
   - 概要设计说明书：`Docs/Doyah产品概要设计说明书.md` v1.0.13（含 §11.4 非功能归属 47 条与 §21 标准对照）
@@ -1014,12 +1014,14 @@
 | **主动消息失败归因** | `Core/AgentIMDeliveryFailure.swift`（三档判）+ `Core/AgentIMObservability.swift`（`failure` 读数） | 主动消息（无 `msg_id`）被拒时记「阶段 + 机器码」并按**配额 / 瞬时 / 网络**三档归因，人话在读取时翻；配额那一档要在界面上明说「今天发不出去了」，不许混成「网络错误」；被动回复成功不得清掉主动消息的配额失败 | `T-3.25-14`：三个假响应 → 三种人话；负例：配额失败被说成网络错误判红 |
 | **最小命令层** | `Core/AgentIMCommand.swift`（纯解析）+ `App/AppState.swift`（`acceptAgentIMInbound`，与审批指令同层、建任务之前）+ `App/DoyahStudioApp.swift`（`/stop` 掐当前这一跑） | 认 `/stop` 与 `/status`（前缀匹配、不分大小写、只认整词）；`/stop` 只置当前这一跑的取消标志，**不清待批单、不改权限**；`/status` 回四读数里的人话一版；不认识的 `/x` 回「没有这个命令」并列可用命令；命令不进任务队列 | `T-3.25-15`：`/stop` `/status` 各一例 + 未知命令一例；负例：`/stop` 后待批单消失必须判红 |
 | **内联审批按钮** | `Core/AgentIMQQInteraction.swift`（`AgentIMQQKeyboard` / 帧解析 / `AgentIMQQInteractionAcker`）+ `Platform/macOS/URLSessionAgentIMQQClient.swift`（`put`）+ `App/AppState.swift`（`ackAgentIMInteraction`） | 通知带两个按钮（批准 / 拒绝）：数据形如 `approve:<码>` / `reject:<码>`，只认 4–8 位十六进制码（认不出**不当作放行**，不猜）；**桌面发起的一轮也要推**（该轮没有进度播报器）：审批事件不论哪条轮次都登记票据并走 `AgentChatModel.imApprovalRelay` ⇒ `AppState.pushAgentIMApprovalRequest`，目标 = 入站那条聊天，没有入站则用落盘的「最后一条聊天」（`Core/AgentIMLastChat.swift`；落盘还没写过时退到 `im-sessions.json` 的**唯一**候选，去掉 `selftest` 后多于一条就返回 `nil`，绝不按顺序猜）；**只推「真在等人」的单**（卡片 `outcome == .pendingApproval`；代签档建单即 `.approved` 不推 —— 否则手机上是一张点了回「没有待批的单」的废卡）；**同一件事只说一遍**（`Core/AgentIMFloodGate.swift`：同一 `interaction_id` 只回一句、同一审批码 900 秒内只推一次）；点击推 `INTERACTION_CREATE` ⇒ **先 ACK**（重复事件也 ACK，只是不再回话）（`PUT /interactions/{id}` + `{"code":0}`，不 ACK 用户看到错误标记）再落决定；决定与「批准 <码>」走**同一张票据**（一码一票 / 一次性 / 900 秒过期）；interaction id 是外部输入，只放行字母数字与 `-_` 再拼进路径 | `T-3.25-16`：面板 JSON 两个按钮两份数据、**桌面发起的一轮**停在审批上必须叫醒继电器（负例：无播报器时不再静默）、`approve:` 坏码不放行、ACK 走 `PUT /interactions/{id}`；负例：路径带 `../` 必须 `badInteractionID` 且不发请求 |
+| **刷屏闸门**（同一件事只说一遍） | `Core/AgentIMFloodGate.swift`（纯值类型，视图与判据读同一份）+ `App/AppState.swift` 两处接线（点击事件 / 审批推送） | 同一 `interaction_id` **只回一句话**，重复送达仍 **ACK**（平台要的就是那个 200）；同一审批码 **900 秒内只推一次**（与远程票据同寿命）；记忆 **200** 条、先进先出，满了先忘最旧的 | `T-3.25-17`：同码两次推送只发一张、同一点击连送 20 次只回一句、记忆满时最旧那条被忘掉；负例：20 次重试刷出 20 条回话，判红 |
+| **只推真在等人的单** | `Core/AgentChat.swift`（`AgentToolCard.isPendingApproval`）+ `App/AgentChatModel.swift`（`handleApprovalRequested` 只登记票据；`relayApprovalIfStillPending` 在代签兑现**之后**判） | 只有 `outcome == .pendingApproval` 才推手机；`.approved`（代签档建单即已批）**不推**并记日志「代签档已自动批准，不推手机」；判断位置必须在 `applyApproved` 之后 | `T-3.25-18`：`.pendingApproval` 判真、`.approved` 判假，代签轮次零推送；负例：代签档给手机推卡，判红 |
 | 不可逆仍审批 | `Core/AgentIMOriginGate.swift` + `Core/AgentTaskScope.swift`（`AgentScopeGate.judge`） | 代签路径（任务范围内不问人）在放行前先判危险面：**删除 / 对外发送 / 凭据 / 越界**四档（`AgentApprovalHazard.allowsGrant == false`）一律转人工，且**不认盘上已有的授权**。IM 发起侧用 `AgentIMOriginGate(origin: .im)` 同一判定；被挡下时回 `blockedByApproval`，回话必须说清「是哪一类操作 / IM 不放行 / 去桌面批」，**不准假装跑完** | `T-3.25-10`：`delete_records` + `rm -rf` ⇒ 判 `destructive`、有旧授权也要桌面批、手机上收到的回话含「桌面」且不含「已完成」 |
 | 五环自检 | `Core/AgentIMSelfCheck.swift`（`AgentIMSelfCheckRunner`）/ `App/AgentIMSelfCheckLive.swift` | 五环固定顺序：配置完整 → token 可取 → 握手成功 → 收一帧 → 发一帧。**串联执行**：前一环红即停，后面几环记 `blocked(by:)`（「没跑到」），**不记红**。握手 / 收帧 / 发帧**共用一条连接**（三环各开一条会把「自己的 Hello」当成「会话事件」）。读数只显示 AppID 尾 4 位与帧类型摘要 | `T-3.25-11`：正例五环全绿且逐条有读数；Secret 置空 ⇒ 只有第一环红、后四环「没跑到」；token 失败 ⇒ 指到第二环 |
 
 **禁止行为**：禁止「推失败也 ack」（补发就再也不会发生）；禁止把去重台账写进内存了事（重启后重跑一遍是最贵的缺陷）；禁止状态页用占位符 / 原始 JSON 充数；禁止「每次工具调用都推进度」（真机一轮 82 次工具调用）；禁止用「本会话内允许 / 总是允许」覆盖四类不可逆操作；禁止自检把没跑的那几环画红。
 
-**测试 ID**：`T-3.25-06` · `T-3.25-07` · `T-3.25-08` · `T-3.25-09` · `T-3.25-10` · `T-3.25-11`（`Tests/AgentIMChannelCompletionTests`，11 例）。
+**测试 ID**：`T-3.25-06` · `T-3.25-07` · `T-3.25-08` · `T-3.25-09` · `T-3.25-10` · `T-3.25-11`（`Tests/AgentIMChannelCompletionTests`，11 例）· `T-3.25-12`～`T-3.25-16`（六项实装，各 3～7 例，见各行的负例）· `T-3.25-17` / `T-3.25-18`（刷屏闸门与只推等人，`Tests/AgentIMApprovalRelayTests` 14 例）。
 
 ### 3.26 工作区外访问（越界授权）
 
