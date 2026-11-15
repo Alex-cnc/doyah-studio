@@ -402,8 +402,18 @@ public enum AgentIMQQHandshake {
 
     public static let authorizationHeaderName = "Authorization"
 
-    /// 群与 C2C 消息事件（官方 intents 位；本轮只订这一类：聊天里派活要的就是它）。
+    /// 群与 C2C 消息事件（官方 intents 位：聊天里派活要的就是它）。
     public static let intentsC2CAndGroup = 1 << 25
+
+    /// **互动事件**（按钮点击 `INTERACTION_CREATE`，官方 intents 位 `1 << 26`）。
+    ///
+    /// 不订这一位，平台**根本不会**把点击推过来 —— 真机上表现为点了没反应、日志零事件，
+    /// 客户端还可能提示「请求第三方失败」（它去投递时找不到接收方）。2026-11-14 实测：
+    /// 旧值只订了 `1 << 25`，所以按钮怎么改都是哑的。
+    public static let intentsInteraction = 1 << 26
+
+    /// 订阅面 = 群/单聊消息 + 互动事件。
+    public static let intentsDefault = intentsC2CAndGroup | intentsInteraction
 
     public enum Op: Int, Sendable {
         case dispatch = 0
@@ -417,7 +427,7 @@ public enum AgentIMQQHandshake {
     }
 
     public static func identifyFrame(token: AgentIMQQToken,
-                                    intents: Int = intentsC2CAndGroup) -> String {
+                                    intents: Int = intentsDefault) -> String {
         encode([
             "op": Op.identify.rawValue,
             "d": [

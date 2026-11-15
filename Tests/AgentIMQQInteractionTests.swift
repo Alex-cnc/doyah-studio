@@ -127,4 +127,15 @@ final class AgentIMQQInteractionTests: XCTestCase {
             XCTAssertFalse((action?["data"] as? String ?? "").isEmpty, "回调必须带 data")
         }
     }
+    /// **订阅面必须含互动事件位**：只订 `1 << 25`（消息）时，按钮点击永远不会推过来
+    /// —— 真机上表现为「点了没反应、日志零事件」，客户端提示「请求第三方失败」。
+    func testIdentifySubscribesToInteractionEvents() throws {
+        XCTAssertEqual(AgentIMQQHandshake.intentsInteraction, 1 << 26)
+        let frame = AgentIMQQHandshake.identifyFrame(token: AgentIMQQToken(value: "t", obtainedAt: Date()))
+        let root = try JSONSerialization.jsonObject(with: Data(frame.utf8)) as? [String: Any]
+        let d = root?["d"] as? [String: Any]
+        let intents = try XCTUnwrap(d?["intents"] as? Int)
+        XCTAssertEqual(intents & (1 << 25), 1 << 25, "消息事件位不能丢")
+        XCTAssertEqual(intents & (1 << 26), 1 << 26, "互动事件位必须在，否则按钮是哑的")
+    }
 }

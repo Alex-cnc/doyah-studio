@@ -341,7 +341,7 @@ public actor AgentIMTransport {
                     }
                     if !resumed, let identify = await handshake.identify() {
                         try await sock.send(identify)
-                        log?("IM 新会话：Identify")
+                        log?("IM 新会话：Identify（intents=\(AgentIMQQHandshake.intentsDefault) = 消息 1<<25 | 互动 1<<26）")
                     }
                 }
             } catch {
