@@ -1,6 +1,6 @@
 # Doyah产品详细设计说明书（macOS）
 
-> **当前版本**：**v1.3.15**（2026-11-14）
+> **当前版本**：**v1.3.16**（2026-11-16）
 
 | 版本 | 日期 | 变更要点（逐轮细节看 git 提交） |
 |---|---|---|
@@ -43,7 +43,7 @@
 ## 0. 文档元信息与追溯关系
 
 - 项目/功能名称：Doyah · macOS 端全部能力（Studio 工作区与数据库 / Notes / Retro 宿主 / Agent 在 Studio 内的表现 / 授权呈现）
-- 文档版本：v1.3.15（头部版本同步）（2026-11-05 补登记 11-04 真机修的四类缺陷：§3.29 步数计数与步骤详单上限、§3.30 子代理委派三条隔离约束、§3.25 入站 ack / 进度节流 / 失败落盘 / 重复闸 / 通知角标）
+- 文档版本：v1.3.16（头部版本同步）（2026-11-05 补登记 11-04 真机修的四类缺陷：§3.29 步数计数与步骤详单上限、§3.30 子代理委派三条隔离约束、§3.25 入站 ack / 进度节流 / 失败落盘 / 重复闸 / 通知角标）
 - 实现范围（2026-10-25 实测件数）：`Core/` 260 个 `.swift` + `App/` 133 个 `.swift` + `Platform/macOS/` 5 个文件 + `CLI/` 4 个文件；测试面 `Tests/` 283 个文件
 - 上游依据：
   - 概要设计说明书：`Docs/Doyah产品概要设计说明书.md` v1.0.13（含 §11.4 非功能归属 47 条与 §21 标准对照）
@@ -1017,6 +1017,7 @@
 | **刷屏闸门**（同一件事只说一遍） | `Core/AgentIMFloodGate.swift`（纯值类型，视图与判据读同一份）+ `App/AppState.swift` 两处接线（点击事件 / 审批推送） | 同一 `interaction_id` **只回一句话**，重复送达仍 **ACK**（平台要的就是那个 200）；同一审批码 **900 秒内只推一次**（与远程票据同寿命）；记忆 **200** 条、先进先出，满了先忘最旧的 | `T-3.25-17`：同码两次推送只发一张、同一点击连送 20 次只回一句、记忆满时最旧那条被忘掉；负例：20 次重试刷出 20 条回话，判红 |
 | **只推真在等人的单** | `Core/AgentChat.swift`（`AgentToolCard.isPendingApproval`）+ `App/AgentChatModel.swift`（`handleApprovalRequested` 只登记票据；`relayApprovalIfStillPending` 在代签兑现**之后**判） | 只有 `outcome == .pendingApproval` 才推手机；`.approved`（代签档建单即已批）**不推**并记日志「代签档已自动批准，不推手机」；判断位置必须在 `applyApproved` 之后 | `T-3.25-18`：`.pendingApproval` 判真、`.approved` 判假，代签轮次零推送；负例：代签档给手机推卡，判红 |
 | **回话语言跟用户**（不随界面） | `Core/AgentIMUserLanguage.swift`（纯值类型：`infer` 汉字→中文 / 拉丁→英文 / 数字表情学不出；`learn` 不覆盖已知；`resolved(fallback:)`）+ `App/AppState.swift`（入站消息里学、落盘 `agent-im/user-language.json` 0600、出口 `agentIMReplyLanguage()`）+ `App/AgentChatModel.swift`（`imLanguageProvider`，审批回话优先用它） | 学到就用学到的；没学到才退界面语言；落盘跨重启有效 | `T-3.25-19`：中文/英文/表情三种推断、表情不覆盖、落盘 0600 与读回、`imLanguageProvider` 优先于 `languageProvider`；负例：中文用户点按钮收英文回话，判红 |
+| **登录即启动**（未签名构建） | `Core/LaunchAtLogin.swift`（决策）+ `Platform/macOS/SMAppServiceLoginItem.swift`（正规签名路径）+ `Core/LaunchAgentLoginItem.swift`（**兜底**：`~/Library/LaunchAgents/studio.doyah.DoyahStudio.launch-at-login.plist`，RunAtLoad，路径=当前可执行文件）+ `AppState.applyLaunchAtLogin()`（启动即同步，开关改动即落） | `SMAppService` 报 `.unavailable`（本机 ad-hoc 签名实测如此）时走兜底；两条通道语义相同：登录即启动 | `T-REL-006-2`：注册一次不重复 / 关掉真注销 / 待批准不伪装 / 注册器缺失报不可用；`T-REL-006-3`：plist 键齐全、路径转义、装删可观测、兜底真的接管；负例：把 `.unavailable` 画成已开启，判红 |
 | **用过的码如实回话**（三档） | `App/AgentChatModel.swift`（`imApprovalBurned`：批准/拒绝/过期，容量 32 按时间淘汰；码不在票里时先查它） | ① 码从来没登记过 → 「对不上」；② 已批准或已拒绝过 → 「已经批过或拒过了，一个码只能用一次」；③ 超过 15 分钟 → 「过期」；④ 一张票都没有 → 「现在没有等你批的单」 | `T-3.25-20`：四档各自的回话与「第二次点击不说是码不对」；负例：把「用过了」说成「码不对」，判红 |
 | 不可逆仍审批 | `Core/AgentIMOriginGate.swift` + `Core/AgentTaskScope.swift`（`AgentScopeGate.judge`） | 代签路径（任务范围内不问人）在放行前先判危险面：**删除 / 对外发送 / 凭据 / 越界**四档（`AgentApprovalHazard.allowsGrant == false`）一律转人工，且**不认盘上已有的授权**。IM 发起侧用 `AgentIMOriginGate(origin: .im)` 同一判定；被挡下时回 `blockedByApproval`，回话必须说清「是哪一类操作 / IM 不放行 / 去桌面批」，**不准假装跑完** | `T-3.25-10`：`delete_records` + `rm -rf` ⇒ 判 `destructive`、有旧授权也要桌面批、手机上收到的回话含「桌面」且不含「已完成」 |
 | 五环自检 | `Core/AgentIMSelfCheck.swift`（`AgentIMSelfCheckRunner`）/ `App/AgentIMSelfCheckLive.swift` | 五环固定顺序：配置完整 → token 可取 → 握手成功 → 收一帧 → 发一帧。**串联执行**：前一环红即停，后面几环记 `blocked(by:)`（「没跑到」），**不记红**。握手 / 收帧 / 发帧**共用一条连接**（三环各开一条会把「自己的 Hello」当成「会话事件」）。读数只显示 AppID 尾 4 位与帧类型摘要 | `T-3.25-11`：正例五环全绿且逐条有读数；Secret 置空 ⇒ 只有第一环红、后四环「没跑到」；token 失败 ⇒ 指到第二环 |

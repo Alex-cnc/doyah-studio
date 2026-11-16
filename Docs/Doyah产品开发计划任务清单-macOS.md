@@ -1,5 +1,6 @@
 # Doyah产品开发计划任务清单 · macOS 端
 > 上游（活书）：同端《Doyah产品详细设计说明书 · macOS端》（`Docs/Doyah产品详细设计说明书-macOS.md`）> 需求规格说明书 > 概要设计说明书；本文件只记「要做什么」，不复制上游正文。
+> **版本** **v1.3.30**（2026-11-16 登录项接线 + 未签名构建的 LaunchAgent 兜底）
 > **版本** **v1.3.29**（2026-11-14 IM 回话语言跟用户 · 用过的码三档如实回话）
 > **版本** **v1.3.28**（2026-11-14 按钮真机点通 · ACK 空体 `{}` 不再误报 responseNotJSON）
 > **版本** **v1.3.27**（2026-11-14 按钮真因：Identify 缺互动事件位 1<<26，已补；前一条「回调地址」结论作废）
@@ -552,7 +553,7 @@
 | NFR-ALL-GATE-REL-003 | 配置文件写入使用原子写，避免半截文件 | 4.2 NFR-REL | 基线必备 | — | ✅ | ✅ | v0.1.0-alpha | — |
 | NFR-ALL-GATE-REL-004 | 配置文件损坏时给出可读错误，不静默清空 | 4.2 NFR-REL | 基线必备 | — | ✅ | ✅ | v0.1.0-alpha | — |
 | NFR-ALL-GATE-REL-005 | 页签在异步回调中被关闭时不得下标越界 | 4.2 NFR-REL | 基线必备 | — | ✅ | ✅ | v0.1.0-alpha | — |
-| NFR-ALL-GATE-REL-006 | **网关随系统启动与常驻**：桌面端「随系统启动」开关（可关），开启后登录即由本进程常驻并拉起 IM 通道，无需人工打开主窗口；关窗不终止通道 | 4.2 NFR-REL | 基线必备 | 中 | 🟡 | 🟡｜**2026-11-11 进展**：决策层 `Core/LaunchAtLogin.swift` + `Core/BackgroundResidency.swift` 已落，平台注册器 `Platform/macOS/SMAppServiceLoginItem.swift` 已落，`Tests/BackgroundResidencyTests` **13 例 0 失败**（开关×系统状态九种组合、关窗结局、菜单栏入口）。**未闭**：界面开关、App 生命周期接线（关窗不终止 + 状态项）、真机点验 | v1.1+ |未开始。条文 = 需求书 §4.2 `NFR-ALL-GATE-REL-006`；能力点 = 能力书 §3.6.1 网关（附录 C #1「常驻 vs 拉起」的出厂默认真值仍待主人定，本条只规定「有开关、开启即在线」）。实现形态 = 登录项（`SMAppService.mainApp`）+ 菜单栏常驻 + `didWake` 即时重连；**不做独立守护进程**|
+| NFR-ALL-GATE-REL-006 | **网关随系统启动与常驻**：桌面端「随系统启动」开关（可关），开启后登录即由本进程常驻并拉起 IM 通道，无需人工打开主窗口；关窗不终止通道 | 4.2 NFR-REL | 基线必备 | 中 | 🟡 | 🟡｜**2026-11-11 进展**：决策层 `Core/LaunchAtLogin.swift` + `Core/BackgroundResidency.swift` 已落，平台注册器 `Platform/macOS/SMAppServiceLoginItem.swift` 已落，`Tests/BackgroundResidencyTests` **13 例 0 失败**（开关×系统状态九种组合、关窗结局、菜单栏入口）。**未闭**：界面开关、App 生命周期接线（关窗不终止 + 状态项）、真机点验 | v1.1+ |未开始。条文 = 需求书 §4.2 `NFR-ALL-GATE-REL-006`；能力点 = 能力书 §3.6.1 网关（附录 C #1「常驻 vs 拉起」的出厂默认真值仍待主人定，本条只规定「有开关、开启即在线」）。实现形态 = 登录项（`SMAppService.mainApp`）+ 菜单栏常驻 + `didWake` 即时重连；**不做独立守护进程**｜**2026-11-16 接线完成（真机重启前）**：早上系统更新重启 ⇒ 应用没自己起、手机发消息没人接。根因：决策层 `LaunchAtLoginDecision` 与 `SMAppServiceLoginItem` 两个件早就在，**没有任何调用点**。已接线：`AppState.launchAtLogin`（缺省开）+ `applyLaunchAtLogin()` 启动即同步 + 设置页 IM 段开关；**并补兜底**：本机 beta 包 ad-hoc 签名（`TeamIdentifier=not set`）⇒ `SMAppService` 永远 `.notFound`，改走 `~/Library/LaunchAgents/studio.doyah.DoyahStudio.launch-at-login.plist`（RunAtLoad=true，路径=当前可执行文件）。真机读数：13:22 日志 `走 LaunchAgent 兜底 ⇒ 已开启`，plist 已在盘。判据：`LaunchAtLoginWiringTests` 4 例 + `LaunchAgentFallbackTests` 4 例。**仍差一次现实重启验证**（本条不提前翻 ✅）|
 | NFR-ALL-GATE-SEC-001 | 密码存储：不得写入连接配置文件 | 4.3 NFR-SEC | 基线必备 | — | ✅ | ✅ | v0.1.0-alpha | — |
 | NFR-ALL-GATE-SEC-002 | 连接配置文件不包含密码 | 4.3 NFR-SEC | 基线必备 | — | ✅ | ✅ | v0.1.0-alpha | — |
 | NFR-ALL-GATE-SEC-003 | 启用平台沙箱（若该平台有），仅申请网络客户端与用户选择文件的读写权限 | 4.3 NFR-SEC | 基线必备 | — | ✅ | ✅ | v0.1.0-alpha | — |
