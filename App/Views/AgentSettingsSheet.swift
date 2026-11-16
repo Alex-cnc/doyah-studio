@@ -655,6 +655,16 @@ struct AgentSettingsSheet: View {
                         .foregroundStyle(Theme.text(.secondary))
                         .fixedSize(horizontal: false, vertical: true)
 
+                    Toggle(isOn: $appState.launchAtLogin) {
+                        Label(L(.agentIMLaunchAtLogin), systemImage: "power")
+                    }
+                    .help(L(.agentIMLaunchAtLoginHint))
+                    .accessibilityIdentifier("agent-im-launch-at-login")
+                    Text(appState.launchAtLoginLine)
+                        .font(Theme.font(.caption))
+                        .foregroundStyle(Theme.text(.secondary))
+                        .fixedSize(horizontal: false, vertical: true)
+
                     // 高级项：自建中继地址。默认折叠、默认留空 —— 认不出会报错，但不挡主路径
                     // （主人 2026-10-28：「自建中继地址」降为高级项）。
                     DisclosureGroup(L(.agentIMRelayAdvanced)) {

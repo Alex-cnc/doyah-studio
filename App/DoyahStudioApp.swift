@@ -310,6 +310,10 @@ struct DoyahStudioApp: App {
                     // **回话语言跟用户走**（2026-11-14）：按钮点击没有正文，用学到的语言；
                     // 学不到才退到界面语言（旧行为：一律界面语言 ⇒ 中文使用者收到英文回话）。
                     agentChat.imLanguageProvider = { appState.agentIMReplyLanguage() }
+                    // **登录项接线**（`NFR-ALL-GATE-REL-006`）：决策层与 SMAppService 实现早就在，
+                    // 但没人调 ⇒ 系统重启后应用不会自己起来，手机发消息没人接。
+                    appState.loginItemRegistrar = SMAppServiceLoginItem()
+                    appState.applyLaunchAtLogin()
                     // **审批请求也要送到手机**：桌面弹层是主路，IM 是同一张单的第二条路。
                     // 桌面发起的一轮没有 IM 入站消息，靠这条继电器推到最后一条聊天（落盘的）。
                     agentChat.imApprovalRelay = { notice in

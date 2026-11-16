@@ -2388,7 +2388,14 @@ public enum LKey: String, CaseIterable, Sendable {
     case agentIMApprovalDone
     case agentIMApprovalRejected
     case agentIMApprovalWrongCode
-    case agentIMApprovalAlreadyUsed
+    case agentIMLaunchAtLogin
+    case agentIMLaunchAtLoginHint
+    case agentIMLaunchAtLoginOn
+    case agentIMLaunchAtLoginOff
+    case agentIMLaunchAtLoginNeedsApproval
+    case agentIMLaunchAtLoginUnavailable
+    case agentIMLaunchAtLoginFailed
+case agentIMApprovalAlreadyUsed
     case agentIMApprovalExpired
     case agentIMApprovalNone
     case agentIMProgressFinalizing
@@ -6151,6 +6158,13 @@ public enum LocalizedStrings {
         .agentIMApprovalDone: [.simplifiedChinese: "已批准「%@」，接着跑。结论出来我再发一条。", .english: "Approved “%@” — carrying on. I'll send the result when it lands."],
         .agentIMApprovalRejected: [.simplifiedChinese: "已拒绝「%@」，这一轮按拒绝收尾。", .english: "Rejected “%@” — this run will wrap up as rejected."],
         .agentIMApprovalWrongCode: [.simplifiedChinese: "这个码对不上现在等批的那一条。以最新那条通知里的码为准（每条命令都有自己的码）。", .english: "That code does not match what is waiting right now. Use the code from the latest notice — each command gets its own."],
+        .agentIMLaunchAtLogin: [.simplifiedChinese: "开机自启（登录后自动上线，QQ 通道不掉线）", .english: "Launch at login (stay online after a restart)"],
+        .agentIMLaunchAtLoginHint: [.simplifiedChinese: "重启电脑后自动启动并连上 IM。系统若要求批准，会提示去「系统设置 → 通用 → 登录项」允许。", .english: "Starts the app after a restart so the IM channel stays up. If macOS asks for approval, allow it in System Settings → General → Login Items."],
+        .agentIMLaunchAtLoginOn: [.simplifiedChinese: "已开启：重启后会自动启动。", .english: "On — starts automatically after a restart."],
+        .agentIMLaunchAtLoginOff: [.simplifiedChinese: "已关闭：重启电脑后需要手动打开。", .english: "Off — you'll need to start it manually after a restart."],
+        .agentIMLaunchAtLoginNeedsApproval: [.simplifiedChinese: "系统要求你批准：去「系统设置 → 通用 → 登录项」允许 Doyah Studio。", .english: "macOS needs your approval — allow Doyah Studio in System Settings → General → Login Items."],
+        .agentIMLaunchAtLoginUnavailable: [.simplifiedChinese: "这个构建不能注册登录项（未签名或不在应用目录），重启后要手动打开。", .english: "This build can't register a login item (unsigned or outside Applications) — start it manually after a restart."],
+        .agentIMLaunchAtLoginFailed: [.simplifiedChinese: "上一次注册失败：重启后可能要手动打开。", .english: "Last registration failed — you may need to start it manually after a restart."],
         .agentIMApprovalAlreadyUsed: [.simplifiedChinese: "这张单已经批过或拒过了（一个码只能用一次）。", .english: "That approval was already decided — each code works only once."],
         .agentIMApprovalExpired: [.simplifiedChinese: "那条审批单已经过期（超过 15 分钟），回桌面重新发起才会生成新码。", .english: "That approval request has expired (over 15 minutes). Start it again on the desktop to get a fresh code."],
         .agentIMApprovalNone: [.simplifiedChinese: "现在没有等你批的单 —— 有的话我会把命令和码一起发过来。", .english: "Nothing is waiting for your approval right now — when something is, I'll send the command and its code together."],

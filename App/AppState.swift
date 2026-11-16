@@ -423,6 +423,55 @@ final class AppState: ObservableObject {
         AgentIMResultQueue.defaultDirectory.appendingPathComponent("user-language.json")
     }
 
+    // MARK: - 登录项（`NFR-ALL-GATE-REL-006` 的前半）
+
+    /// 「登录即启动」的用户意愿（`UserDefaults`，缺省**开**）。
+    ///
+    /// 2026-11-16 真机事实：早上系统更新重启，应用不会自己起来 ⇒ 手机发消息没人接，
+    /// 主人第一反应是「QQ 通道坏了」。缺的正是这条接线（决策层与 SMAppService 实现早就在，
+    /// 但没人调它们）。
+    @Published var launchAtLogin: Bool = UserDefaults.standard.object(forKey: "launchAtLogin") as? Bool ?? true {
+        didSet {
+            UserDefaults.standard.set(launchAtLogin, forKey: "launchAtLogin")
+            applyLaunchAtLogin()
+        }
+    }
+
+    /// 上一次同步后的真实状态（`.unavailable` / `.requiresApproval` 要如实显示，不许画成已开启）。
+    @Published private(set) var launchAtLoginStatus: LaunchAtLoginStatus = .disabled
+    /// 平台注册器（macOS 装 `SMAppServiceLoginItem`；缺失 = 本端不支持）。
+    var loginItemRegistrar: LoginItemRegistering?
+
+    /// 把「用户意愿 + 系统现状」按 Core 的决策层落一次（启动时调一次；开关变化时再调）。
+    func applyLaunchAtLogin() {
+        guard let registrar = loginItemRegistrar else {
+            launchAtLoginStatus = .unavailable
+            return
+        }
+        let plan = LaunchAtLoginDecision.plan(desired: launchAtLogin, current: registrar.status)
+        switch plan.action {
+        case .register:
+            do { try registrar.register() } catch { StartupLog.write("登录项注册失败：\(error)") }
+        case .unregister:
+            do { try registrar.unregister() } catch { StartupLog.write("登录项注销失败：\(error)") }
+        case .requestApproval, .none:
+            break
+        }
+        launchAtLoginStatus = registrar.status
+        StartupLog.write("登录项：意愿=\(launchAtLogin) 动作=\(plan.action) 现状=\(launchAtLoginStatus.rawValue)（\(plan.reason)）")
+    }
+
+    /// 界面用的一句话（不可用 / 待批准都要说人话，不许静默）。
+    var launchAtLoginLine: String {
+        switch launchAtLoginStatus {
+        case .enabled: return LocalizedStrings.text(.agentIMLaunchAtLoginOn, language: agentIMLanguage)
+        case .requiresApproval: return LocalizedStrings.text(.agentIMLaunchAtLoginNeedsApproval, language: agentIMLanguage)
+        case .unavailable: return LocalizedStrings.text(.agentIMLaunchAtLoginUnavailable, language: agentIMLanguage)
+        case .failed: return LocalizedStrings.text(.agentIMLaunchAtLoginFailed, language: agentIMLanguage)
+        case .disabled: return LocalizedStrings.text(.agentIMLaunchAtLoginOff, language: agentIMLanguage)
+        }
+    }
+
     /// 当前该用哪门语言回话：学到的优先，没学到退界面语言。
     func agentIMReplyLanguage() -> AppLanguage {
         agentIMUserLanguage.resolved(fallback: agentIMLanguage)
