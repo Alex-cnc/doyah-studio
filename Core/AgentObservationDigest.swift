@@ -28,6 +28,16 @@ public struct AgentObservationDigestPolicy: Equatable, Sendable {
     public var verbatimCharacters: Int
     /// 折叠后一条摘要的字符上限（够认出「这是什么、多大」）。
     public var digestCharacters: Int
+    /// **钉住的路径数**：最近读过的这么多个不同路径，各留**最近一次读取的正文开头**（不许折叠）。
+    ///
+    /// 2026-11-16 真机（`agent-audit.jsonl`）：一个 132 步的回合里
+    /// `read_file Docs/平台实现状态.json` **42 次**、同一脚本 40 次、同一目录 26 次。
+    /// 旧策略「最近 4 条原样，其余只留路径+大小」的问题是：模型**认得出读过、却拿不到内容**，
+    /// 于是只能再读一次 —— 折一次、读一次，折成死循环。这条改为「按路径钉住窗口」：
+    /// 路径还在、**内容开头也在**，下一跳直接用，不必重读。
+    public var pinnedPaths: Int
+    /// 钉住的那一段留多少字符（截断，不是全文：一屏 6KB 的头部足够回答绝大多数「这个文件有什么」）。
+    public var pinnedCharacters: Int
     /// 台账最多留几行（按**最近**的留；更早的并成一句计数，不假装还在）。
     ///
     /// 100 行 ≈ 7KB ≈ 1.8k token：足够放下「这一轮读过哪些文件」，又不至于把省下来的钱吃回去。
@@ -36,11 +46,15 @@ public struct AgentObservationDigestPolicy: Equatable, Sendable {
     public init(keepRecent: Int = 4,
                 verbatimCharacters: Int = 600,
                 digestCharacters: Int = 220,
-                maxLedgerLines: Int = 100) {
+                maxLedgerLines: Int = 100,
+                pinnedPaths: Int = 6,
+                pinnedCharacters: Int = 2_400) {
         self.keepRecent = max(0, keepRecent)
         self.verbatimCharacters = max(0, verbatimCharacters)
         self.digestCharacters = max(1, digestCharacters)
         self.maxLedgerLines = max(1, maxLedgerLines)
+        self.pinnedPaths = max(0, pinnedPaths)
+        self.pinnedCharacters = max(0, pinnedCharacters)
     }
 
     /// 产品默认：最近 6 条原样 + 短条目原样 + 40 行台账。
@@ -54,6 +68,8 @@ public struct AgentObservationDigestReport: Equatable, Sendable {
     public var foldedEntries: Int
     public var keptEntries: Int
     public var ledgerLines: Int
+    /// 被**钉住**的旧长条目数（正文开头仍在上下文里）。
+    public var pinnedEntries: Int = 0
     /// 台账之外还有多少条更早的（**如实报数**，不假装还在）。
     public var beyondLedger: Int
     public var charactersBefore: Int
@@ -73,8 +89,10 @@ public struct AgentObservationDigestReport: Equatable, Sendable {
                 charactersAfter: Int = 0,
                 estimatedTokensSaved: Int = 0,
                 digests: [String] = [],
-                marker: String? = nil) {
+                marker: String? = nil,
+                pinnedEntries: Int = 0) {
         self.didFold = didFold
+        self.pinnedEntries = pinnedEntries
         self.foldedEntries = foldedEntries
         self.keptEntries = keptEntries
         self.ledgerLines = ledgerLines
@@ -118,22 +136,42 @@ public enum AgentObservationDigester {
         var folded: [String] = []
         var foldedCharacters = 0
 
-        for entry in observations[..<boundary] {
-            // 短条目**原样留着**：错误码 / 退出码 / 写回执是结论的证据，折掉就等于把证据折没了。
-            if entry.count <= policy.verbatimCharacters { continue }
-            folded.append(entry)
-            foldedCharacters += entry.count
+        // **先挑要钉住的**：从新到旧，每个不同路径取最近一次读取的正文开头。
+        // 只钉长条目（短条目本来就原样留着），钉的条数 ≤ `pinnedPaths`。
+        var pinnedByKey: [String: String] = [:]      // key → 钉住的那一段
+        var pinnedOrder: [String] = []               // 保持「新的在前」
+        var occurrences: [String: Int] = [:]         // key → 一共读过几次
+        // **已经折过的不再折**（幂等）：否则第二趟会把「钉住的那一段」再折成台账行，
+        // 折两次和折一次结果不一样 —— 那等于每跳都在自损。
+        for entry in observations[..<boundary]
+        where entry.count > policy.verbatimCharacters && !isAlreadyDigested(entry) {
             let key = ledgerKey(of: entry)
-            if let index = ledger.firstIndex(where: { $0.key == key }) {
-                // 同一个文件读过多次 ⇒ 合成一行，并记下次数（「读过 2 次」比两行同名更有用）。
-                let count = occurrenceCount(in: ledger[index].line) + 1
-                ledger[index].line = ledgerLine(key: key, entry: entry, count: count)
-            } else {
-                ledger.append((key, ledgerLine(key: key, entry: entry, count: 1)))
+            occurrences[key, default: 0] += 1
+            if pinnedByKey[key] == nil, pinnedOrder.count < policy.pinnedPaths, policy.pinnedCharacters > 0 {
+                pinnedByKey[key] = pinnedExcerpt(entry, budget: policy.pinnedCharacters)
+                pinnedOrder.append(key)
             }
         }
 
-        guard !folded.isEmpty else {
+        for entry in observations[..<boundary] {
+            // 短条目**原样留着**：错误码 / 退出码 / 写回执是结论的证据，折掉就等于把证据折没了。
+            if entry.count <= policy.verbatimCharacters { continue }
+            if isAlreadyDigested(entry) { continue }
+            let key = ledgerKey(of: entry)
+            if pinnedByKey[key] != nil { continue }   // 钉住的路径不进台账（正文已在下面）
+            folded.append(entry)
+            foldedCharacters += entry.count
+            let times = occurrences[key, default: 1]
+            if let index = ledger.firstIndex(where: { $0.key == key }) {
+                ledger[index].line = ledgerLine(key: key, entry: entry, count: times)
+            } else {
+                ledger.append((key, ledgerLine(key: key, entry: entry, count: times)))
+            }
+        }
+
+        // 注意：**钉住也算折过**。全部旧条目都被钉住时（同一文件读两次这种小样本），
+        // `folded` 是空的 —— 那时若提前返回，「路径 + 正文开头」就一个都留不下，等于没钉。
+        guard !folded.isEmpty || !pinnedOrder.isEmpty else {
             var report = AgentObservationDigestReport.none
             report.keptEntries = observations.count
             report.charactersBefore = before
@@ -148,17 +186,21 @@ public enum AgentObservationDigester {
             ledger = Array(ledger.suffix(policy.maxLedgerLines))
         }
 
-        let marker = markerText(foldedEntries: folded.count,
+        let marker = markerText(foldedEntries: folded.count + pinnedOrder.count,
                                 ledgerLines: ledger.count,
                                 beyondLedger: beyond)
         let kept = Array(observations[boundary...])
-        let prefix = [marker] + ledger.map(\.line)
+        let pinned = pinnedOrder.map { key in
+            "\(key) · 读过 \(occurrences[key] ?? 1) 次 · 已钉住最近一段（截断）：\n"
+                + (pinnedByKey[key] ?? "")
+        }
+        let prefix = [marker] + ledger.map(\.line) + pinned
         let entries = prefix + kept
         let after = joinedLength(entries)
 
         let report = AgentObservationDigestReport(
             didFold: true,
-            foldedEntries: folded.count,
+            foldedEntries: folded.count + pinnedOrder.count,
             keptEntries: kept.count,
             ledgerLines: ledger.count,
             beyondLedger: beyond,
@@ -167,7 +209,8 @@ public enum AgentObservationDigester {
             // 省下的量 = 折掉的正文 − 台账 + 说明那一截（可以是负数，如实给）。
             estimatedTokensSaved: AgentContextCompressor.estimatedTokens(characters: max(0, before - after)),
             digests: folded.suffix(8).map { digest(of: $0, budget: policy.digestCharacters) },
-            marker: marker)
+            marker: marker,
+            pinnedEntries: pinnedOrder.count)
         return (prefix, kept, entries, report)
     }
 
@@ -211,12 +254,37 @@ public enum AgentObservationDigester {
         if firstLine.range(of: #":\d+B"#, options: .regularExpression) != nil,
            let head = firstLine.range(of: #":\d+B"#, options: .regularExpression) {
             return String(firstLine[..<head.upperBound])
-                + " · 已折叠\(times)（正文不在本跳上下文里；要某段用 offset/limit 重读）"
+                + " · 已折叠\(times)" + preview(entry)
         }
         if let bodyStart = firstLine.range(of: "（") {
             return String(firstLine[..<bodyStart.lowerBound]) + "（已折叠\(times)）"
         }
         return "\(key) · 已折叠\(times)（\(entry.count) 字符；要正文用 offset/limit 重读）"
+    }
+
+    /// 这一条是不是**已经被折过**的（台账行 / 钉住段）—— 幂等靠它。
+    static func isAlreadyDigested(_ entry: String) -> Bool {
+        let firstLine = entry.split(whereSeparator: { $0.isNewline }).first.map(String.init) ?? entry
+        return firstLine.contains("已折叠") || firstLine.contains("已钉住最近一段")
+    }
+
+    /// 钉住的那一段：抬头 + 正文开头（截断到 `budget`）。
+    static func pinnedExcerpt(_ entry: String, budget: Int) -> String {
+        guard entry.count > budget else { return entry }
+        return String(entry.prefix(budget)) + "…（截断）"
+    }
+
+    /// 台账行的摘要：取抬头之后的第一行**有内容**的文字（跳过空行与 untrusted 包装）。
+    static func preview(_ entry: String) -> String {
+        let lines = entry.split(whereSeparator: { $0.isNewline }).map(String.init)
+        for line in lines.dropFirst() {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            if trimmed.isEmpty { continue }
+            if trimmed.hasPrefix("<untrusted-data") || trimmed.hasPrefix("---") { continue }
+            let flat = trimmed.replacingOccurrences(of: "\t", with: " ")
+            return "（首行：" + (flat.count > 100 ? String(flat.prefix(100)) + "…" : flat) + "）"
+        }
+        return "（正文不在本跳上下文里；要某段用 offset/limit 精确读）"
     }
 
     static func occurrenceCount(in line: String) -> Int {
@@ -233,8 +301,11 @@ public enum AgentObservationDigester {
 
     /// 插进观察段的那一行 —— **英数形态**：发给模型的系统侧记号，不是界面文案。
     static func markerText(foldedEntries: Int, ledgerLines: Int, beyondLedger: Int) -> String {
+        // 旧的这句是 `read a section again with read_file offset/limit` —— **它在教模型重读**：
+        // 2026-11-16 真机就是照这句话把同一个文件读了 42 次。改成「已钉住的开头直接用，别再整篇重读」。
         var text = "[earlier results folded: \(foldedEntries) entries -> \(ledgerLines) ledger lines"
-            + " (path + size only; read a section again with read_file offset/limit, or search to locate it)"
+            + " (pinned excerpts below cover the most recent read of each path;"
+            + " for other ranges use offset/limit — do NOT re-read a whole file)"
         if beyondLedger > 0 { text += "; \(beyondLedger) older ones not listed" }
         return text + "]"
     }

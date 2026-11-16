@@ -31,7 +31,7 @@ final class AgentContextSlimmingTests: XCTestCase {
 
     // MARK: - ① 折叠
 
-    func testFoldKeepsRecentVerbatimAndFoldsOlderBulkyEntries() {
+    func testFoldKeepsRecentVerbatimAndPinsOneExcerptPerPath() {
         let policy = AgentObservationDigestPolicy.standard
         let bulky = String(repeating: "x", count: 5_000)
         var observations: [String] = []
@@ -40,28 +40,41 @@ final class AgentContextSlimmingTests: XCTestCase {
         }
         let folded = AgentObservationDigester.fold(observations, policy: policy)
         let recent = policy.keepRecent
-        let foldedCount = 12 - recent
+        let older = 12 - recent
 
         XCTAssertTrue(folded.report.didFold)
-        XCTAssertEqual(folded.report.foldedEntries, foldedCount,
-                       "12 条 − 最近 \(recent) 条 = 折 \(foldedCount) 条")
+        XCTAssertEqual(folded.report.foldedEntries, older, "旧的长条目一共 \(older) 条，都离开了「原样」档")
+        XCTAssertEqual(folded.report.pinnedEntries, min(policy.pinnedPaths, older),
+                       "其中最近 \(policy.pinnedPaths) 个不同路径被钉住")
+
         // 最近几条原样：正文一个字节都不许动。
         for index in (12 - recent)..<12 {
             XCTAssertTrue(folded.recent.joined(separator: "\n").contains("Core/F\(index).swift:\(9_000 + index)B"),
                           "最近的第 \(index) 条要原样留着")
             XCTAssertTrue(folded.recent.contains { $0.contains(bulky) }, "最近那条的正文要原样在")
         }
-        // 折掉的那些：**路径还在**（模型据此知道「我读过它」），正文不在。
-        for index in 0..<foldedCount {
-            XCTAssertTrue(folded.entries.contains { $0.hasPrefix("file:Core/F\(index).swift") && $0.contains("已折叠") },
-                          "第 \(index) 条要折成一行台账且**保留抬头**：\(folded.entries.prefix(3))")
+
+        // **钉住的那几条：开头正文仍在上下文里**（这是 2026-11-16 的回归点 —— 只留路径+大小 ⇒ 模型重读）。
+        let pinned = folded.entries.filter { $0.contains("已钉住最近一段") }
+        XCTAssertEqual(pinned.count, policy.pinnedPaths, "钉住的路径数按策略来")
+        for block in pinned {
+            XCTAssertTrue(block.contains("xxxx"), "钉住的段落必须带正文开头，不能只有尺寸：\(block.prefix(80))")
+            XCTAssertLessThanOrEqual(block.count, policy.pinnedCharacters + 200,
+                                     "钉住要截断，不许把全文塞回来：\(block.count) 字符")
         }
-        XCTAssertEqual(folded.entries.filter { $0.contains(bulky) }.count, recent,
-                       "只有最近 \(recent) 条带正文；折掉的正文不许还在（否则等于没折）")
-        XCTAssertGreaterThan(folded.report.estimatedTokensSaved, 0)
+
+        // 更早的那几条：只有台账行（路径 + 已折叠 + 一句摘要）。
+        let ledger = folded.entries.filter { $0.hasPrefix("file:Core/F") && $0.contains("已折叠") }
+        XCTAssertEqual(ledger.count, older - policy.pinnedPaths,
+                       "没钉住的老条目才进台账：\(ledger)")
+        for line in ledger {
+            XCTAssertTrue(line.contains("首行：") || line.contains("offset/limit"),
+                          "台账行要给一句摘要，不能只剩尺寸：\(line)")
+        }
+
+        // 正文总量：钉住的截断版 + 最近几条原文，不许等于「全部原文」。
+        XCTAssertLessThan(folded.report.charactersAfter, folded.report.charactersBefore)
         XCTAssertNotNil(folded.report.marker)
-        XCTAssertTrue(folded.report.marker?.contains("offset/limit") == true,
-                      "说明行要告诉模型怎么复读某一段")
     }
 
     func testShortObservationsAreNeverFolded() {
@@ -73,7 +86,7 @@ final class AgentContextSlimmingTests: XCTestCase {
         XCTAssertEqual(folded.entries, observations)
     }
 
-    func testSameFileFoldedTwiceBecomesOneLedgerLineWithCount() {
+    func testSameFileFoldedTwiceBecomesOnePinnedBlockSayingHowManyTimes() {
         let bulky = String(repeating: "y", count: 3_000)
         var observations: [String] = [
             fileObservation("Core/Big.swift", bytes: 90_000, body: bulky),
@@ -81,9 +94,11 @@ final class AgentContextSlimmingTests: XCTestCase {
         ]
         observations.append(contentsOf: (0..<6).map { _ in "search: 0 个文件名命中 · 0 处内容命中" })
         let folded = AgentObservationDigester.fold(observations, policy: .standard)
-        let ledger = folded.entries.filter { $0.hasPrefix("file:Core/Big.swift") }
-        XCTAssertEqual(ledger.count, 1, "同一个文件只占一行：\(ledger)")
-        XCTAssertTrue(ledger.first?.contains("读过 2 次") == true, "要记下读了几次：\(ledger)")
+        let blocks = folded.entries.filter { $0.hasPrefix("file:Core/Big.swift") }
+        XCTAssertEqual(blocks.count, 1, "同一个文件只占一段（钉住或台账），不许出现两段：\(blocks)")
+        XCTAssertTrue(blocks.first?.contains("读过 2 次") == true, "要记下读了几次：\(blocks)")
+        XCTAssertTrue(blocks.first?.contains("yyy") == true,
+                      "而且要带正文开头 —— 只写「读过 2 次」却不给内容，模型只能再读一次（真机 42 次）")
     }
 
     func testLedgerIsCappedAndSaysHowManyOlderOnesAreGone() {
@@ -96,7 +111,8 @@ final class AgentContextSlimmingTests: XCTestCase {
                                                  digestCharacters: 120, maxLedgerLines: 10)
         let folded = AgentObservationDigester.fold(observations, policy: policy)
         XCTAssertEqual(folded.report.ledgerLines, 10, "台账按上限收口")
-        XCTAssertEqual(folded.report.beyondLedger, 30, "40 条可折 − 10 行台账 = 30 条更早的**如实报数**")
+        XCTAssertEqual(folded.report.beyondLedger, 24,
+                       "40 条 − 6 条钉住 = 34 条进台账，40 与 10 的差要扣掉钉住的 6 条（如实报数）")
         XCTAssertTrue(folded.report.marker?.contains("not listed") == true, "说明行要报出没列几条")
     }
 
@@ -264,4 +280,45 @@ final class AgentContextSlimmingTests: XCTestCase {
         _ = await loop.run(context: context)
         XCTAssertEqual(dispatcher.invoked.count, 12, "0 = 不限（旧行为逐字不变）")
     }
+    // MARK: - ①b 回归：2026-11-16 真机「同一文件被读 42 次」
+
+    /// 真机读数（`agent-audit.jsonl`，回合 `chat-D6334101`）：132 步 / 172 次工具调用，其中
+    /// `read_file Docs/平台实现状态.json` **42 次**、同一脚本 40 次、同一目录 26 次。
+    /// 根因：折下来只剩「路径 + 大小」，模型认得出读过、拿不到内容 ⇒ 只能再读。
+    /// 这条判的就是「折过之后，**正文开头还在上下文里**」。
+    func testRepeatedReadOfOnePathStillCarriesItsContentAfterFold() {
+        let body = (0..<40).map { "第 \($0) 节：能力完成度读数 …" }.joined(separator: "\n")
+        var observations: [String] = []
+        for _ in 0..<20 {
+            observations.append(fileObservation("Docs/平台实现状态.json", bytes: 7_757, body: body))
+        }
+        observations.append(contentsOf: (0..<6).map { _ in "search: 3 个词 · 9 个文件名命中" })
+        let folded = AgentObservationDigester.fold(observations, policy: .standard)
+        let joined = folded.entries.joined(separator: "\n")
+
+        XCTAssertTrue(joined.contains("第 0 节"), "同一文件读 20 次之后，正文开头必须还在：\(joined.prefix(300))")
+        XCTAssertTrue(joined.contains("读过 20 次") || joined.contains("读过"), "要报出读了几次：\(joined.prefix(300))")
+
+        // 该路径只许出现**一段**（钉住），不许又钉又折出两段。
+        let blocks = folded.entries.filter { $0.hasPrefix("file:Docs/平台实现状态.json") }
+        XCTAssertEqual(blocks.count, 1, "同一路径只留一段：\(blocks.map { String($0.prefix(40)) })")
+
+        // 上下文不许等于「20 份全文」—— 钉住是截断的。
+        XCTAssertLessThan(folded.report.charactersAfter, folded.report.charactersBefore)
+    }
+
+    /// 说明行不许再教模型「重读」—— 旧文案 `read a section again with read_file offset/limit`
+    /// 就是那 42 次重读的直接诱因。
+    func testMarkerDoesNotInviteReReadingTheWholeFile() {
+        let bulky = String(repeating: "q", count: 4_000)
+        var observations = (0..<10).map { fileObservation("Core/H\($0).swift", bytes: 8_000, body: bulky) }
+        observations.append(contentsOf: (0..<4).map { _ in "search: 0 命中" })
+        let folded = AgentObservationDigester.fold(observations, policy: .standard)
+        let marker = folded.report.marker ?? ""
+        XCTAssertTrue(marker.contains("pinned excerpts"), "要告诉模型「开头已钉住，直接用」：\(marker)")
+        XCTAssertTrue(marker.contains("do NOT re-read"), "要明确禁止整篇重读：\(marker)")
+        XCTAssertFalse(marker.contains("read a section again"),
+                       "旧的「再读一次」引导必须消失：\(marker)")
+    }
+
 }
