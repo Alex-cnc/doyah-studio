@@ -27,4 +27,18 @@ final class AgentMediaCapabilityPromptTests: XCTestCase {
         let stripped = prompt.replacingOccurrences(of: "MEDIA:/绝对路径", with: "")
         XCTAssertFalse(stripped.contains("MEDIA:/"), "删掉写法后就不该再命中 —— 否则这条判据是恒真的废判据")
     }
+    /// **大文件先搜后读**（2026-11-16 真机）：679KB 的一单 ≈ 118 窗，模型一窗窗读、同一文件读了 42 次。
+    /// 判据：提示词里必须写明「还剩几窗 → M > 8 就先 search 定位」。
+    func testPromptTeachesToSearchBeforeReadingHugeFiles() {
+        XCTAssertTrue(prompt.contains("全篇约 N 窗"), "要教它读回执里的窗数：\(prompt.suffix(300))")
+        XCTAssertTrue(prompt.contains("先 `search` 定位关键词"), "大文件要先搜后读：\(prompt.suffix(300))")
+        XCTAssertTrue(prompt.contains("不许") && prompt.contains("一窗窗读到底"),
+                      "要明说「不许一窗窗读到底」：\(prompt.suffix(300))")
+    }
+
+    /// 负例：把这条删掉，上面那条必须判红。
+    func testRemovingTheLargeFileRuleMakesTheCheckFail() {
+        let stripped = prompt.replacingOccurrences(of: "全篇约 N 窗", with: "（旧文案）")
+        XCTAssertFalse(stripped.contains("全篇约 N 窗"), "删掉之后判据要能看见差别")
+    }
 }

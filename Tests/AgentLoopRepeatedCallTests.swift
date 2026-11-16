@@ -15,6 +15,8 @@ final class AgentLoopRepeatedCallTests: XCTestCase {
     private final class LoopingClient: LLMStreamingClient, @unchecked Sendable {
         private let lock = NSLock()
         private(set) var calls = 0
+        /// 有没有哪一跳的请求是「工具全摘掉」的（关工具闸门的判据）。
+        private(set) var emptyToolsSeen = false
         /// 前 N 跳都发同一条工具调用，之后给正文。
         let toolHops: Int
         init(toolHops: Int) { self.toolHops = toolHops }
@@ -23,6 +25,7 @@ final class AgentLoopRepeatedCallTests: XCTestCase {
             lock.lock()
             calls += 1
             let index = calls
+            if let tools = request.tools, tools.isEmpty { emptyToolsSeen = true }
             lock.unlock()
             if index <= toolHops {
                 return AsyncThrowingStream { continuation in
@@ -71,6 +74,31 @@ final class AgentLoopRepeatedCallTests: XCTestCase {
                                        sessionID: UUID().uuidString, workspace: directory.path)
         let result = await loop.run(context: context)
         return (result, dispatcher)
+    }
+
+    /// **走死路要有一条硬闸**（2026-11-16 真机）：`repeat-ceiling` 从第 4 次一路拒到第 15 次，
+    /// 模型还在重发 —— 21 分钟、48 次被拒、CPU 99.7%，最后一句话都没给出来。
+    /// 判据：连续 6 次「过了宽限的死路」之后，**请求里的工具必须被摘掉**，逼它用已有结果给结论。
+    func testDeadEndsTurnToolsOffSoTheModelMustAnswer() async {
+        let (result, dispatcher, client) = await runCapturing(hops: 30)
+        XCTAssertEqual(dispatcher.executed, AgentLoop.callRepeatCeiling,
+                       "执行次数仍以平局上限 \(AgentLoop.callRepeatCeiling) 为界")
+        XCTAssertTrue(client.emptyToolsSeen,
+                      "死路攒够之后必须把工具摘掉（只改 tool_choice 有的供应商照样吐工具调用）")
+        XCTAssertTrue(result.text.contains("结论"), "关工具之后仍要给出结论：\(result.text)")
+    }
+
+    private func runCapturing(hops: Int) async -> (AgentLoopResult, CountingDispatcher, LoopingClient) {
+        let dispatcher = CountingDispatcher()
+        let client = LoopingClient(toolHops: hops)
+        let loop = AgentLoop(client: client, dispatcher: dispatcher,
+                             sessionStore: AgentSessionStore(directory: directory))
+        let context = AgentLoopContext(systemPrompt: "s", userPrompt: "看一眼",
+                                       baseRequest: LLMRequest(endpoint: URL(string: "http://127.0.0.1:11434/v1")!,
+                                                               model: "m", systemPrompt: "", userPrompt: ""),
+                                       sessionID: UUID().uuidString, workspace: directory.path)
+        let result = await loop.run(context: context)
+        return (result, dispatcher, client)
     }
 
     func testSameCallIsExecutedThreeTimesAtMost() async {

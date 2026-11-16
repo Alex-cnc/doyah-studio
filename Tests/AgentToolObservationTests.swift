@@ -75,4 +75,23 @@ final class AgentToolObservationTests: XCTestCase {
         XCTAssertTrue(observation.contains("\"offset\":"), "要告诉模型下一段怎么读")
         XCTAssertLessThan(observation.count, AgentLoop.maxObservationCharacters + 200)
     }
+    /// **回执要带「这份文件要走几趟」**（2026-11-16 真机）：679KB 的一单按 5.7KB 一窗 ≈ 118 窗，
+    /// 那个回合里模型同一文件读了 42 次、`--open` 40 次 —— 它不知道自己在第几窗、还剩几窗。
+    /// 判据：① 截断时回执里有「全篇约 N 窗…还剩 M 窗」；② 剩余窗数多时明说「别一窗窗读到底」；
+    /// ③ 小文件不许出现这句（避免每条回执都挂一句吓唬人的话）。
+    func testWindowAnnotationTellsHowManyWindowsRemain() throws {
+        let big = String(repeating: "行内容\n", count: 4_000)
+        try big.write(to: root.appendingPathComponent("big.txt"), atomically: true, encoding: .utf8)
+        let tools = AgentWorkspaceTools(root: root)
+
+        let bigObservation = AgentLoop.summary(of: tools.readFile(path: "big.txt"))
+        XCTAssertTrue(bigObservation.contains("全篇约 "), "要报出全篇约几窗：\(bigObservation.suffix(200))")
+        XCTAssertTrue(bigObservation.contains("还剩 "), "要报出还剩几窗：\(bigObservation.suffix(200))")
+        XCTAssertTrue(bigObservation.contains("别一窗窗读到底"),
+                      "剩余窗数多时必须明说「先用 search 定位」：\(bigObservation.suffix(200))")
+
+        try "一两行\n".write(to: root.appendingPathComponent("small.txt"), atomically: true, encoding: .utf8)
+        let smallObservation = AgentLoop.summary(of: tools.readFile(path: "small.txt"))
+        XCTAssertFalse(smallObservation.contains("别一窗窗读到底"), "小文件不许挂大文件告警：\(smallObservation)")
+    }
 }
