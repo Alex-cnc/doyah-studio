@@ -1,6 +1,6 @@
 # Doyah产品详细设计说明书（macOS）
 
-> **当前版本**：**v1.3.16**（2026-11-16）
+> **当前版本**：**v1.3.17**（2026-11-16）
 
 | 版本 | 日期 | 变更要点（逐轮细节看 git 提交） |
 |---|---|---|
@@ -43,7 +43,7 @@
 ## 0. 文档元信息与追溯关系
 
 - 项目/功能名称：Doyah · macOS 端全部能力（Studio 工作区与数据库 / Notes / Retro 宿主 / Agent 在 Studio 内的表现 / 授权呈现）
-- 文档版本：v1.3.16（头部版本同步）（2026-11-05 补登记 11-04 真机修的四类缺陷：§3.29 步数计数与步骤详单上限、§3.30 子代理委派三条隔离约束、§3.25 入站 ack / 进度节流 / 失败落盘 / 重复闸 / 通知角标）
+- 文档版本：v1.3.17（头部版本同步）（2026-11-05 补登记 11-04 真机修的四类缺陷：§3.29 步数计数与步骤详单上限、§3.30 子代理委派三条隔离约束、§3.25 入站 ack / 进度节流 / 失败落盘 / 重复闸 / 通知角标）
 - 实现范围（2026-10-25 实测件数）：`Core/` 260 个 `.swift` + `App/` 133 个 `.swift` + `Platform/macOS/` 5 个文件 + `CLI/` 4 个文件；测试面 `Tests/` 283 个文件
 - 上游依据：
   - 概要设计说明书：`Docs/Doyah产品概要设计说明书.md` v1.0.13（含 §11.4 非功能归属 47 条与 §21 标准对照）
@@ -1009,7 +1009,7 @@
 | **被拒给出路** | `Core/AgentRefusalGuidance.swift` | 每种拒因翻成**能照做的一句**：`;`/`&` → 一次一条拆成多次；`>` → 用 `write_file`；`\|` → 交给 `grep`/`find` 自己的参数；`./x.sh` → 走解释器；不在白名单 → 点名 + 亮白名单。同一条连拒第 2 次提醒、第 3 次起明说「不要再试」 | `Tests/AgentRefusalGuidanceTests`（8 例，含升级逐级加重） |
 | **自测通道** | `Core/AgentIMFileInbox.swift` + `App/AppState.swift`（`DOYAH_IM_FILE_INBOX`） | 设了环境变量才开：该 JSONL 新增一行 = 一条入站，走**同一条** `acceptAgentIMInbound`（差别只有不联网）；投递落 `agent-im/local-results.jsonl`。只吃增量、只吃整行（半行留到下一轮）、坏帧记数、文件被截断自动复位 | `Tests/AgentIMFileInboxTests`（4 例） |
 | **富文本正文** | `Core/AgentIMOutboundSend.swift`（`markdown` 档 + 分块发送）+ `Core/AgentIMOutboundChunker.swift` | 正文走平台原生 markdown 消息类型（`msg_type=2`），**正文里仍是 Markdown**，由客户端渲染；单条上限 **4000 字**，超限切成多块、块间 `msg_seq` 递增、顺序不裂；切块只在段落/围栏边界下刀，围栏未闭合不许切；**不许截断**（宁可多发几块）。注意：本行指 IM 通道，`§5.3.8` 那条是桌面页签的渲染，两条判据互不替代 | `T-3.25-11`：4000 字 md 出站 → 断言切成 ≥2 块、块序连续、拼回来逐字节等于原文；负例：把超限正文截断要判红 |
-| **原生媒体出站** | `Core/AgentIMOutboundSend.swift`（媒体档）+ `Core/AgentIMQQMedia.swift`（上传换句柄） | 图 / 文件 / 语音走原生媒体档（`msg_type=7`）：先 `POST /v2/users/{openid}/files`（群走 `/v2/groups/{group_openid}/files`）上传换 `file_info` 再发；**只收本机文件路径**，http(s) 一律拒绝并说明「不代下载」；失败三分：`40093001` 瞬时（可重试）/ `40093002` 当日配额（**不可重试**，直接说配额）/ 其它网络错（重连后再试一次） | `T-3.25-12`：三类失败各一个假响应 → 断言一个重试、一个判配额、一个判网络；负例：把 URL 当图片发必须判红 |
+| **原生媒体出站** | `Core/AgentIMOutboundSend.swift`（媒体档）+ `Core/AgentIMQQMedia.swift`（上传换句柄） | 图 / 文件 / 语音走原生媒体档（`msg_type=7`）：先 `POST /v2/users/{openid}/files`（群走 `/v2/groups/{group_openid}/files`）上传换 `file_info` 再发；**只收本机文件路径**，http(s) 一律拒绝并说明「不代下载」；失败三分：`40093001` 瞬时（可重试）/ `40093002` 当日配额（**不可重试**，直接说配额）/ 其它网络错（重连后再试一次） | `T-3.25-12`：三类失败各一个假响应 → 断言一个重试、一个判配额、一个判网络；负例：把 URL 当图片发必须判红 ｜**2026-11-16 补**：提示词必须显式教 `MEDIA:/绝对路径`（只发真实存在的路径、明确没有截图能力），否则「能力在、模型不知道」等于用不出来；媒体目标在桌面发起的一轮里回退到落盘的最后一条聊天。判据 `Tests/AgentMediaCapabilityPromptTests` + 负例「删掉写法判红」|
 | **入站附件** | `Core/AgentIMInboundAttachment.swift`（解析 / 落地 0600 / 回执）+ `Core/AgentIMQQProvisioning.swift`（解帧） | 解 `attachments`：下载到会话临时目录（0600）、把「文件名 + 大小 + 本地路径」交给会话；回执说「收到 N 个附件」并逐条列名，解不出如实说「有附件但没取到」；附件不参与去重键 | `T-3.25-13`：带附件的入站帧 → 断言落地且回执含文件名；负例：静默忽略附件判红 |
 | **主动消息失败归因** | `Core/AgentIMDeliveryFailure.swift`（三档判）+ `Core/AgentIMObservability.swift`（`failure` 读数） | 主动消息（无 `msg_id`）被拒时记「阶段 + 机器码」并按**配额 / 瞬时 / 网络**三档归因，人话在读取时翻；配额那一档要在界面上明说「今天发不出去了」，不许混成「网络错误」；被动回复成功不得清掉主动消息的配额失败 | `T-3.25-14`：三个假响应 → 三种人话；负例：配额失败被说成网络错误判红 |
 | **最小命令层** | `Core/AgentIMCommand.swift`（纯解析）+ `App/AppState.swift`（`acceptAgentIMInbound`，与审批指令同层、建任务之前）+ `App/DoyahStudioApp.swift`（`/stop` 掐当前这一跑） | 认 `/stop` 与 `/status`（前缀匹配、不分大小写、只认整词）；`/stop` 只置当前这一跑的取消标志，**不清待批单、不改权限**；`/status` 回四读数里的人话一版；不认识的 `/x` 回「没有这个命令」并列可用命令；命令不进任务队列 | `T-3.25-15`：`/stop` `/status` 各一例 + 未知命令一例；负例：`/stop` 后待批单消失必须判红 |

@@ -4435,10 +4435,24 @@ final class AppState: ObservableObject {
         let extracted = AgentIMMediaTag.extract(from: text)
         if !extracted.paths.isEmpty {
             let paths = extracted.paths
-            let target = AgentIMOutboundTarget(kind: message.chatKind, openID: message.chatID)
-            let replyTo = message.platformMessageID
-            Task { @MainActor [weak self] in
-                await self?.sendAgentIMMedia(paths: paths, target: target, replyTo: replyTo)
+            // **桌面发起的一轮也要发得出去**：2026-11-16 真机，「把图发我」是在桌面问的，
+            // `agentIMLastInbound` 为空 ⇒ 媒体分支整段被跳过，手机那头什么也没收到。
+            // 目标回退到落盘的最后一条聊天（与文字同一出口）。
+            let resolved: (target: AgentIMOutboundTarget, replyTo: String?)?
+            if let message = agentIMLastInbound {
+                resolved = (AgentIMOutboundTarget(kind: message.chatKind, openID: message.chatID),
+                            message.platformMessageID)
+            } else if let chat = agentIMLastChatStore.load() {
+                StartupLog.write("IM 媒体：走落盘的最后一条聊天 \(chat.openID.prefix(8))")
+                resolved = (AgentIMOutboundTarget(kind: chat.kind, openID: chat.openID), nil)
+            } else {
+                StartupLog.write("IM 媒体：既没有入站消息、也没有落盘的聊天（跳过）")
+                resolved = nil
+            }
+            if let resolved {
+                Task { @MainActor [weak self] in
+                    await self?.sendAgentIMMedia(paths: paths, target: resolved.target, replyTo: resolved.replyTo)
+                }
             }
         }
         let text = extracted.text

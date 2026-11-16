@@ -18,31 +18,24 @@ public enum LaunchAgentLoginItem {
     public static let label = "studio.doyah.DoyahStudio.launch-at-login"
 
     /// plist 正文（纯函数：可被用例逐字段判，不碰磁盘）。
+    ///
+    /// 用 `PropertyListSerialization` 生成，不手写 XML 头：手写那版把
+    /// `-//Apple//DTD PLIST 1.0//EN` 当成英文展示文案塞进了 Core（棘轮 B 当场报红），
+    /// 而且路径里的 `&` `<` `>` 还得自己转义 —— 交给序列化器一次就对了。
     public static func plist(executablePath: String, label: String = label) -> String {
-        // 用 plist XML 手写：字段少、可读、便于人在 Finder 里核对。
-        let escaped = executablePath
-            .replacingOccurrences(of: "&", with: "&amp;")
-            .replacingOccurrences(of: "<", with: "&lt;")
-            .replacingOccurrences(of: ">", with: "&gt;")
-        return """
-        <?xml version="1.0" encoding="UTF-8"?>
-        <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-        <plist version="1.0">
-        <dict>
-            <key>Label</key>
-            <string>\(label)</string>
-            <key>ProgramArguments</key>
-            <array>
-                <string>\(escaped)</string>
-            </array>
-            <key>RunAtLoad</key>
-            <true/>
-            <key>ProcessType</key>
-            <string>Interactive</string>
-        </dict>
-        </plist>
-
-        """
+        let body: [String: Any] = [
+            "Label": label,
+            "ProgramArguments": [executablePath],
+            "RunAtLoad": true,
+            "ProcessType": "Interactive",
+        ]
+        guard let data = try? PropertyListSerialization.data(fromPropertyList: body,
+                                                             format: .xml,
+                                                             options: 0),
+              let xml = String(data: data, encoding: .utf8) else {
+            return ""
+        }
+        return xml
     }
 
     /// plist 该放哪（`~/Library/LaunchAgents/<label>.plist`）。

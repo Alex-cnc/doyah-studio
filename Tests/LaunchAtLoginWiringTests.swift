@@ -1,5 +1,6 @@
 import XCTest
 @testable import DoyahCore
+@testable import DoyahPlatform
 @testable import DoyahStudioApp
 
 /// 判据：`T-REL-006-2`（登录项接线）——
