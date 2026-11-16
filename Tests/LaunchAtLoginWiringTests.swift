@@ -91,18 +91,23 @@ final class LaunchAgentFallbackTests: XCTestCase {
     }
 
     func testFallbackTakesOverWhenSMAppServiceSaysUnavailable() {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("la-\(UUID().uuidString)", isDirectory: true)
+        let plist = directory.appendingPathComponent("\(LaunchAgentLoginItem.label).plist")
         let state = AppState()
+        state.launchAgentURL = plist      // 绝不写真实 LaunchAgents（会删掉主人真在用的登录项）
         let fake = FakeUnavailableRegistrar()
         state.loginItemRegistrar = fake
         state.launchAtLogin = true
         state.applyLaunchAtLogin()
         XCTAssertEqual(state.launchAtLoginStatus, .enabled,
                        "SMAppService 不可用时必须走兜底，而不是把开关留成「不可用」")
-        XCTAssertTrue(LaunchAgentLoginItem.isInstalled(at: LaunchAgentLoginItem.url()),
+        XCTAssertTrue(LaunchAgentLoginItem.isInstalled(at: plist),
                       "兜底要真的写出 plist（本机 ad-hoc 签名下 SMAppService 永远 notFound）")
         // 收尾：把测试写出来的 plist 删掉，别留在主人的 LaunchAgents 里。
         state.launchAtLogin = false
-        XCTAssertFalse(LaunchAgentLoginItem.isInstalled(at: LaunchAgentLoginItem.url()))
+        XCTAssertFalse(LaunchAgentLoginItem.isInstalled(at: plist))
+        try? FileManager.default.removeItem(at: directory)
     }
 
     private final class FakeUnavailableRegistrar: LoginItemRegistering {

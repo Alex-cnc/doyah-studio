@@ -441,6 +441,9 @@ final class AppState: ObservableObject {
     @Published private(set) var launchAtLoginStatus: LaunchAtLoginStatus = .disabled
     /// 平台注册器（macOS 装 `SMAppServiceLoginItem`；缺失 = 本端不支持）。
     var loginItemRegistrar: LoginItemRegistering?
+    /// 兜底 plist 的落点（**可注入**：用例必须写临时目录 —— 曾经在用例里写真实路径，
+    /// 跑测试把主人 `~/Library/LaunchAgents` 里的登录项删掉了）。
+    var launchAgentURL: URL = LaunchAgentLoginItem.url()
 
     /// 把「用户意愿 + 系统现状」按 Core 的决策层落一次（启动时调一次；开关变化时再调）。
     func applyLaunchAtLogin() {
@@ -470,7 +473,7 @@ final class AppState: ObservableObject {
 
     /// 未签名构建的兜底：写/删 `~/Library/LaunchAgents/<label>.plist`，状态按**文件在不在**如实报。
     private func applyLaunchAgentFallback() {
-        let url = LaunchAgentLoginItem.url()
+        let url = launchAgentURL
         if launchAtLogin {
             guard let executable = Bundle.main.executableURL?.path else {
                 launchAtLoginStatus = .unavailable
