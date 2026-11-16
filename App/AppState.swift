@@ -448,6 +448,13 @@ final class AppState: ObservableObject {
             launchAtLoginStatus = .unavailable
             return
         }
+        // **兜底通道**：本机构建没有正规签名（ad-hoc，`TeamIdentifier=not set`），
+        // `SMAppService` 一律 `.notFound` ⇒ 走 `~/Library/LaunchAgents` 的 plist。
+        // 两者语义相同：登录即启动；区别只是签名要求（见 `LaunchAgentLoginItem` 的边界说明）。
+        if registrar.status == .unavailable {
+            applyLaunchAgentFallback()
+            return
+        }
         let plan = LaunchAtLoginDecision.plan(desired: launchAtLogin, current: registrar.status)
         switch plan.action {
         case .register:
@@ -459,6 +466,35 @@ final class AppState: ObservableObject {
         }
         launchAtLoginStatus = registrar.status
         StartupLog.write("登录项：意愿=\(launchAtLogin) 动作=\(plan.action) 现状=\(launchAtLoginStatus.rawValue)（\(plan.reason)）")
+    }
+
+    /// 未签名构建的兜底：写/删 `~/Library/LaunchAgents/<label>.plist`，状态按**文件在不在**如实报。
+    private func applyLaunchAgentFallback() {
+        let url = LaunchAgentLoginItem.url()
+        if launchAtLogin {
+            guard let executable = Bundle.main.executableURL?.path else {
+                launchAtLoginStatus = .unavailable
+                StartupLog.write("登录项：拿不到可执行文件路径，兜底通道不可用")
+                return
+            }
+            do {
+                try LaunchAgentLoginItem.install(executablePath: executable, at: url)
+                launchAtLoginStatus = .enabled
+                StartupLog.write("登录项：走 LaunchAgent 兜底（\(url.path)）⇒ 已开启：\(executable)")
+            } catch {
+                launchAtLoginStatus = .failed
+                StartupLog.write("登录项：LaunchAgent 兜底写失败 \(error)")
+            }
+        } else {
+            do {
+                try LaunchAgentLoginItem.remove(at: url)
+                launchAtLoginStatus = .disabled
+                StartupLog.write("登录项：LaunchAgent 兜底已移除")
+            } catch {
+                launchAtLoginStatus = .failed
+                StartupLog.write("登录项：LaunchAgent 兜底移除失败 \(error)")
+            }
+        }
     }
 
     /// 界面用的一句话（不可用 / 待批准都要说人话，不许静默）。
