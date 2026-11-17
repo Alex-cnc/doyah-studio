@@ -365,7 +365,7 @@ def run_self_test() -> int:
 
         with tempfile.TemporaryDirectory() as tmp:
             fixture = pathlib.Path(tmp)
-            (fixture / "Docs").mkdir(parents=True)
+            (fixture / SPEC_REL).parent.mkdir(parents=True, exist_ok=True)   # 表已迁到 .agent/，自测树也要建出那一层
             (fixture / SPEC_REL).write_text(text)
             problems, _, counts = check(fixture)
 

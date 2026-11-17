@@ -521,6 +521,7 @@ def run_self_test() -> int:
         with tempfile.TemporaryDirectory() as tmp:
             root = pathlib.Path(tmp) / "Studio"
             (root / "Docs/design").mkdir(parents=True)
+            (root / SPEC_REL).parent.mkdir(parents=True, exist_ok=True)   # 表已迁到 .agent/
             (root / QUEUE_REL).write_text(current["queue"], encoding="utf-8")
             (root / SPEC_REL).write_text(current["spec"], encoding="utf-8")
             for rel, content in case.extra:
