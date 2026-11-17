@@ -220,6 +220,13 @@
       "category": "unsupported",
       "reason": "判据物 `check-doc-sync.py` 的输入是**提交历史**（最近 N 个提交里碰代码没碰文档的那些），文件层没有「同一批」这个概念可造；夹具里造两个提交等于造一个 git 仓。",
       "evidence": "`check-doc-sync.py` 在 verify-all 第 1 项内跑（只报告不拦截）；同批性由人看改动集。"
+    },
+    {
+      "clause": "迁移必须幂等可重入：重复执行不许产生重复数据",
+      "book": "通用开发规范.md",
+      "category": "unsupported",
+      "reason": "本条的机判只兜「迁移用例必须绿」（swift test），而「重复执行是否产生重复数据」要真跑两次迁移 + 查库；文件层造不出「同一个迁移跑两遍」的状态（夹具里没有库，也没有第二次执行）。",
+      "evidence": "`swift test` 全量 5789 例 0 失败（19 skip）在本轮 verify-all 内实测；幂等本身由人判。"
     }
   ]
 }
