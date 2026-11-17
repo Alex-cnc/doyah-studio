@@ -101,6 +101,111 @@
       "category": "baseline-red",
       "reason": "判据 `check-release-version.py` 当前整体 rc=1（红在 C3 工程过期），基线红时任何改动都是 rc=1 ⇒ 造不出「渠道/受众没写才红」的可判对照。",
       "evidence": "实跑 2026-11-16：`python3 Scripts/check-release-version.py` → rc=1，`RESULT: FAIL`，失败项为 `C3 目标 DoyahPlatform：磁盘上有、生成物里没有的 .swift：LaunchAgentLoginItem.swift（工程过期）`。"
+    },
+    {
+      "clause": "派生件只许从真源生成，`--check` 必须绿",
+      "book": "通用开发规范.md",
+      "category": "unsupported",
+      "reason": "本条文是给**已存在的门禁**补规则文字（原先「有判据无规则」）。生成物与真源的一致性只能在**生成/校验过程**里判：`gen-*.py --check` 比对的是「真源 → 生成物」的差值，文件层没有可造的稳定对照（造一个生成物副本就变成判另一个仓）。gen-platform-board / gen-platform-parity / gen-sqlite-constants 有自测，gen-studio-win-align 无。",
+      "evidence": "实跑 2026-11-16：`gen-platform-board.py --check`、`gen-platform-parity.py --check`、`gen-sqlite-constants.py --check` 均在 verify-all 第 1 项内 rc=0；`gen-studio-win-align.py` 无 `--self-test` 分支（grep 无 self-test）。"
+    },
+    {
+      "clause": "跨仓 / 跨册的同源副本必须逐字一致",
+      "book": "通用开发规范.md",
+      "category": "unsupported",
+      "reason": "本条文是给**已存在的门禁**补规则文字（原先「有判据无规则」）。比对对象是**另一个仓/另一本书**的副本，本仓文件层造不出「别处那份改了」的状态；`check-doc-sync` 本身只报告不拦截。",
+      "evidence": "`check-tri-repo-parity.py` 有 `--self-test`（verify-all 第 1 项内跑）；`check-doc-sync.py` 只报告。"
+    },
+    {
+      "clause": "台账状态机：实现 ✅ 而判据没跟上，不许留在台账里",
+      "book": "通用开发规范.md",
+      "category": "unsupported",
+      "reason": "本条文是给**已存在的门禁**补规则文字（原先「有判据无规则」）。违规形态 = 台账某行两列状态互相矛盾；但台账是**活件**，用例若真去改它，改的就是生产数据（CASES 机制只允许改夹具与本文件的副本）。",
+      "evidence": "`check-status-gap.py` / `check-version-scope.py` 均有 `--self-test`，verify-all 第 1 项内跑。"
+    },
+    {
+      "clause": "卡点表与队列必须与台账同源",
+      "book": "通用开发规范.md",
+      "category": "unsupported",
+      "reason": "本条文是给**已存在的门禁**补规则文字（原先「有判据无规则」）。同属活件（一单 §7.1 与 `.agent/pending-agenda.md`），改它就是改生产数据；集合对账只能在真件上判。",
+      "evidence": "`check-blocker-table.py` / `check-pending-agenda.py` / `check-doc-q-series.py` 均有自测；其中 Q 系列与队列两条的自测本轮刚修好（8/8、11/11）。"
+    },
+    {
+      "clause": "批次与取号只许由生成器产出",
+      "book": "通用开发规范.md",
+      "category": "unsupported",
+      "reason": "本条文是给**已存在的门禁**补规则文字（原先「有判据无规则」）。取号判据读的是**真仓的号空间**（max+1），夹具里造不出「别人已经取了号」的历史。",
+      "evidence": "`plan-batches.py --check` 与 `next-doc-version.py` 均无 `--self-test`；负例 = 手改 `batches.yaml` 一行后跑 `--check`，手工执行一次即可。"
+    },
+    {
+      "clause": "Core 平台中立、脚本不写死环境、shell 编码安全",
+      "book": "通用开发规范.md",
+      "category": "unsupported",
+      "reason": "本条文是给**已存在的门禁**补规则文字（原先「有判据无规则」）。三条都是**全仓静态扫描**：违规形态是把平台依赖/连接信息/裸变量写进任意 .swift 或 .sh，夹具得复制整个仓才判得动，那不是文件层负例。",
+      "evidence": "`check-core-portability.py` 有 `--self-test`；`check-script-env-parameterization.py` 与 `check-shell-locale-safety.py` 无，负例取手工加一行。"
+    },
+    {
+      "clause": "第三方件必须登台账 + 现编现跑",
+      "book": "通用开发规范.md",
+      "category": "unsupported",
+      "reason": "本条文是给**已存在的门禁**补规则文字（原先「有判据无规则」）。vendored 台账判据要读 `sqlite3.h` 与交付文件的实际指纹，夹具造不出「改了一个编译宏」的真实差异。",
+      "evidence": "`check-vendored-sqlite.py` / `gen-sqlite-constants.py` 有 `--self-test`；`smoke-vendored-sqlite.py` 是现编现跑（无自测，本身即实测）。"
+    },
+    {
+      "clause": "单一出处：解析器与预设只有一份，其余只许消费",
+      "book": "通用开发规范.md",
+      "category": "unsupported",
+      "reason": "本条文是给**已存在的门禁**补规则文字（原先「有判据无规则」）。「有没有第二份实现」是**跨目录结构判据**，夹具里得摆两套目录树才判得动。",
+      "evidence": "`check-markdown-single-source.py` / `check-agent-provider-presets.py` / `check-plugin-assembly.py` 均有 `--self-test`。"
+    },
+    {
+      "clause": "失败必须说清楚，不可读的值必须承认认不出",
+      "book": "通用开发规范.md",
+      "category": "unsupported",
+      "reason": "本条文是给**已存在的门禁**补规则文字（原先「有判据无规则」）。覆盖面判据比的是「失败分支集合 ↔ 文案集合」，文案例外表在脚本里，夹具造出的新分支不会被识别为违规（会误报成「新增未登记文案」）。",
+      "evidence": "`check-cell-decode-coverage.py` 有 `--self-test`；`check-cli-failure-readability.py` / `check-connection-failure-coverage.py` 无，负例取手工删一条文案。"
+    },
+    {
+      "clause": "性能阈值与读数必须落台账",
+      "book": "通用开发规范.md",
+      "category": "unsupported",
+      "reason": "本条文是给**已存在的门禁**补规则文字（原先「有判据无规则」）。判据读实测 JSON（冷启动 / 结果集滚动），夹具里没有真实测量环境，造出的读数一律是假的 —— 判了也不算数。",
+      "evidence": "`check-perf-ledger.py` / `check-result-scroll-ledger.py` 有 `--self-test`；`measure-cold-start.py` / `measure-result-set.py` 是测量器本身。"
+    },
+    {
+      "clause": "平台矩阵必须实测，配置面通过不算通过",
+      "book": "通用开发规范.md",
+      "category": "unsupported",
+      "reason": "本条文是给**已存在的门禁**补规则文字（原先「有判据无规则」）。实测判据要真机读数；文件层只能造配置面，而「配置面通过」正是本条**要否掉**的东西 —— 造出来等于自证。",
+      "evidence": "`measure-platform-matrix.py` 无 `--self-test`（测量器）；`check-platform-compat.py` 有自测。"
+    },
+    {
+      "clause": "网络出口按面给显式清单，离线模块必须零出口",
+      "book": "通用开发规范.md",
+      "category": "unsupported",
+      "reason": "本条文是给**已存在的门禁**补规则文字（原先「有判据无规则」）。出口清单是全仓文件级清单，夹具造「新增一个未登记出口」要复制够多的目录才被识别。",
+      "evidence": "`check-network-egress.py` 无 `--self-test`，但其负例由 `test-network-egress-gate.py` 专门承担；`check-notes-offline.py` 无；`check-note-storage-unity.py` 有。"
+    },
+    {
+      "clause": "模块解耦与检索口径必须如实标注",
+      "book": "通用开发规范.md",
+      "category": "unsupported",
+      "reason": "本条文是给**已存在的门禁**补规则文字（原先「有判据无规则」）。跨模块引用的判据看的是目录边界，夹具要摆「主程序 + 插件」两棵树；检索路线判据要真查询路径。",
+      "evidence": "`check-note-module-isolation.py` / `check-note-search-route.py` 无 `--self-test`，负例由 `test-note-search-route.py` 承担。"
+    },
+    {
+      "clause": "平台差异必须两侧登记并逐条对账",
+      "book": "通用开发规范.md",
+      "category": "unsupported",
+      "reason": "本条文是给**已存在的门禁**补规则文字（原先「有判据无规则」）。`P-*` 表在文档里，判据按两侧条目对账；改真表就是改生产数据。",
+      "evidence": "`check-p-parity.py` 有 `--self-test`。"
+    },
+    {
+      "clause": "AGENTS.md 是索引不是副本，必须与规范同号",
+      "book": "通用开发规范.md",
+      "category": "unsupported",
+      "reason": "本条文是给**已存在的门禁**补规则文字（原先「有判据无规则」）。本条判的是入口页与规范 §1 的**条数/编号一致**；真改 `AGENTS.md` 会使全量门禁当场红（钩子每次都跑），不适合做可回滚用例 —— 现有 `check-agents-index.py --self-test` 已覆盖。",
+      "evidence": "`check-agents-index.py` 有 `--self-test`（verify-all 第 1 项内跑）；本轮改 AGENTS.md 指针时实测 rc=0。"
     }
   ]
 }
