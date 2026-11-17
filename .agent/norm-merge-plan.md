@@ -14,15 +14,15 @@
 
 | # | 文件 | 依赖形态 | 处理批 | 勾 |
 |---|---|---|---|---|
-| 1 | `Scripts/check-rule-schema.py` | `NORMS` 两本 + `PROJECT_REF` 单向引用正则 + 切条规则（遇 `#` 断条） | P1 宽容 / P6 收紧 | ⬜ |
-| 2 | `Scripts/rule-schema-baseline.json` | 每本条数与完整数（通用 41 / 项目 35），**只许降不许升** | P3 | ⬜ |
-| 3 | `Scripts/test-rule-negatives.py` | **46 条用例以条文标题前缀为键** | P3（只改 book 映射） | ⬜ |
-| 4 | `Scripts/rule-negative-dispositions.json` | 8 条处置（5+3）带 `book` 字段 | P3 | ⬜ |
-| 5 | `Scripts/check-doc-versions.py` | Q 号唯一性校验指向项目规范 §4 | P3 | ⬜ |
-| 6 | `Scripts/check-queue-needs-user.py` | Q 表状态词表校验 | P3 | ⬜ |
-| 7 | `Scripts/check-pending-agenda.py` | 按表头定位 Q 表（不按节号） | P3 | ⬜ |
-| 8 | `Scripts/check-doc-q-series.py` | `SPEC_REL` 写死项目规范路径 | P3 | ⬜ |
-| 9 | `Scripts/action-router.py` | 必读清单里带**节号**（§2/§3/§4）+ 路由正则 | P3 | ⬜ |
+| 1 | `Scripts/check-rule-schema.py` | `NORMS` 两本 + `PROJECT_REF` 单向引用正则 + 切条规则（遇 `#` 断条） | P1 宽容 / P6 收紧 | ✅ |
+| 2 | `Scripts/rule-schema-baseline.json` | 每本条数与完整数（通用 41 / 项目 35），**只许降不许升** | P3 | ✅ |
+| 3 | `Scripts/test-rule-negatives.py` | **46 条用例以条文标题前缀为键** | P3（只改 book 映射） | ✅ 未跨书搬 ⇒ 零改动 |
+| 4 | `Scripts/rule-negative-dispositions.json` | 8 条处置（5+3）带 `book` 字段 | P3 | ✅ |
+| 5 | `Scripts/check-doc-versions.py` | Q 号唯一性校验指向项目规范 §4 | P3 | ✅ |
+| 6 | `Scripts/check-queue-needs-user.py` | Q 表状态词表校验 | P3 | ✅ |
+| 7 | `Scripts/check-pending-agenda.py` | 按表头定位 Q 表（不按节号） | P3 | ✅ |
+| 8 | `Scripts/check-doc-q-series.py` | `SPEC_REL` 写死项目规范路径 | P3 | ✅ |
+| 9 | `Scripts/action-router.py` | 必读清单里带**节号**（§2/§3/§4）+ 路由正则 | P3 | ✅ |
 | 10 | `AGENTS.md` | 8 处引用（§1 铁律 ↔ 通用 §1；§3 责任边界 → 项目规范） | P5 | ⬜ |
 | 11 | `~/.hermes/skills/…`（5 个文件） | `gate-enforced-rules`（3 reference + 1 脚本）、`enforcement-entrypoint` | P5 | ⬜ |
 
@@ -60,3 +60,10 @@
 2. **46 条用例键断**：只有改标题才会断；P2 硬约束“标题逐字不动”。
 3. **门禁历史红**：`verify-all` 第 4 项 8 条欠账（基线本红）→ 如实报“本来红”，不算本批引入。
 4. **Q 表迁移后四处判据同时找不到表**：P3 同批改 4 个脚本，不许分两次提交。
+
+## 6 P1–P3 执行记录（2026-11-16，提交 a14335a6）
+
+- **P1**：`rule-schema.json` 增可选字段「归属环节」（必填=false ⇒ 不破坏棘轮）；新增 `Scripts/rule-sections.json`（27 环节 + `enforce:false`）；`check-rule-schema.py` 增 `bad_sections()`；自检 **6→8**（写错环节⇒红 / 合法⇒绿）。
+- **P2**：76 条（41+35）逐条插入 `- **归属环节**：<ID>`，横切铁律挂 `全局`；**前后条文标题集合完全相等**（脚本断言）；两册各加环节索引（通用 9 / 项目 12 个环节有条文，其余不出现即空白）；删掉旧 §1.5。
+- **P3**：Q 表 10 行迁 `.agent/pending-agenda.md`（保留 `## 4 …待…拍板` 锚点）；项目规范改指针；4 脚本改指后全绿；**未跨书搬条文** ⇒ 46 条用例键与 baseline 零改动。
+- **本红（非本批引入）**：`check-self-test-counts` 在 origin/master 已 rc=1（`check-book-subset` / `check-release-version` 基线本红），已在干净 worktree 复核。
