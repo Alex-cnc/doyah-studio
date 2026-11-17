@@ -70,19 +70,30 @@ def load_section_ids() -> set[str]:
     return {e["id"] for e in data.get("环节", [])} | {"全局"}
 
 
+def load_enforce() -> bool:
+    """rule-sections.json 的 `enforce`：false=宽容期（缺字段不红），true=收紧（每条必须挂环节）。"""
+    try:
+        return bool(json.loads((ROOT / "Scripts" / "rule-sections.json").read_text(encoding="utf-8")).get("enforce"))
+    except (OSError, ValueError):
+        return False
+
+
 def bad_sections(text: str, schema: dict) -> list[str]:
-    """写了「归属环节」但取值不在环节表里的条文（宽容期：不写不算错）。"""
+    """环节归属校验：取值必须合法；`enforce=true` 时每条都**必须**有归属环节。"""
     if not SECTION_IDS:
         return []
     names = set(schema["字段"].keys())
+    strict = load_enforce()
     out = []
     for title, body in split_clauses(text, names):
-        for line in body.split("\n"):
-            if "**归属环节**" not in line:
-                continue
-            value = line.split("：", 1)[1].strip().strip("`").split()[0] if "：" in line else ""
-            if value not in SECTION_IDS:
-                out.append(f"{title}⇒归属环节「{value}」不在环节表里")
+        hits = [l for l in body.split("\n") if "**归属环节**" in l]
+        if not hits:
+            if strict:
+                out.append(f"{title}⇒收紧期缺「归属环节」")
+            continue
+        value = hits[0].split("：", 1)[1].strip().strip("`").split()[0] if "：" in hits[0] else ""
+        if value not in SECTION_IDS:
+            out.append(f"{title}⇒归属环节「{value}」不在环节表里")
     return out
 
 
@@ -230,6 +241,7 @@ def self_test(schema: dict) -> int:
 - **判据**：【机判】`true`。
 - **负例**：改坏必红。
 - **读数口径**：无。
+- **归属环节**：B1
 - **归属**：本条文自身。
 """
     miss_negative = good.replace("- **负例**：改坏必红。\n", "")
@@ -237,12 +249,14 @@ def self_test(schema: dict) -> int:
     ghost_script = good.replace("- **判据**：【机判】`true`。", "- **判据**：【机判】`Scripts/no-such-gate.py`。")
     cites_project = good.replace("- **读数口径**：无。", "- **读数口径**：见《项目管理规范》§5。")
     generic_ok = good  # 同一条文放进「通用」这一侧，只要不引用项目规范就该绿
-    bad_section = good.replace("- **归属**：本条文自身。", "- **归属环节**：ZZ9\n- **归属**：本条文自身。")
-    good_section = good.replace("- **归属**：本条文自身。", "- **归属环节**：B1\n- **归属**：本条文自身。")
+    bad_section = good.replace("**归属环节**：B1", "**归属环节**：ZZ9")
+    good_section = good
+    no_section = good.replace("- **归属环节**：B1\n", "")
     cases = [
         ("六字段齐全", good, True),
         ("归属环节写错 ⇒ 判红", bad_section, False),
         ("归属环节合法 ⇒ 绿", good_section, True),
+        ("收紧期缺归属环节 ⇒ 判红", no_section, False),
         ("缺负例字段", miss_negative, False),
         ("判据没标机判/人判", no_judge_kind, False),
         ("通用条文引用项目规范 ⇒ 判红", cites_project, False),

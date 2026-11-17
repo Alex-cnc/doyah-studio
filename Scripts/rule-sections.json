@@ -1,7 +1,7 @@
 {
   "schema": "doyah-rule-sections/1",
-  "enforce": false,
-  "说明": "enforce=false 期间：条文缺「归属环节」不判红，只校验写了的取值合法；收紧时改 true 并要求每条都能落到环节上。",
+  "enforce": true,
+  "说明": "enforce=true（2026-11-16 收紧）：每条条文必须挂「归属环节」，且取值必须是本文件里声明的 27 个 ID 之一或 `全局`；缺或错均判红。",
   "环节": [
     {
       "id": "A1",

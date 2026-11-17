@@ -53,7 +53,7 @@ python3 Scripts/action-router.py --for 改平台详设   # 该动作：必读什
 - 要建/改三书或一单 → 规范 §2 三书一单、§4 门禁清单
 - 要提交 → §1 第 3、4 条
 - 要写或改门禁、判据、验收脚本 → §1 第 13、14、15 条
-- 要跨端、跨仓动手 → §3 责任边界 + `Docs/项目管理规范.md`
+- 要跨端、跨仓动手 → 《项目管理规范》§2 谁做什么（责任边界）+ §1 产品与平台口径
 - 要动交付/发布 → `Scripts/check-release-version.py` 与发布方案
 
 ## 3 判据命令（先跑，再说话）
@@ -65,6 +65,7 @@ python3 Scripts/action-router.py --for 改平台详设   # 该动作：必读什
 | 文档不变量 | `python3 Scripts/check-doc-invariants.py`、`check-doc-tables.py`、`check-doc-numbers.py` |
 | 一单与需求对齐 | `python3 Scripts/check-plan-coverage.py` |
 | 本页与规范是否一致 | `python3 Scripts/check-agents-index.py` |
+| 条文挂了哪个环节 / 环节有没有空白 | `python3 Scripts/check-rule-schema.py`（含「归属环节」校验）· 定义在 `Scripts/rule-sections.json` · 反向索引见规范 §1.6 |
 
 ## 4 这个仓的事实（会变，但变了要改这里）
 
