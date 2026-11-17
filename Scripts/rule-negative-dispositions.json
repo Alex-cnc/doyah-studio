@@ -206,6 +206,20 @@
       "category": "unsupported",
       "reason": "本条文是给**已存在的门禁**补规则文字（原先「有判据无规则」）。本条判的是入口页与规范 §1 的**条数/编号一致**；真改 `AGENTS.md` 会使全量门禁当场红（钩子每次都跑），不适合做可回滚用例 —— 现有 `check-agents-index.py --self-test` 已覆盖。",
       "evidence": "`check-agents-index.py` 有 `--self-test`（verify-all 第 1 项内跑）；本轮改 AGENTS.md 指针时实测 rc=0。"
+    },
+    {
+      "clause": "每条需求必须带可判验收口径",
+      "book": "通用开发规范.md",
+      "category": "unsupported",
+      "reason": "本条判据分两半：`check-doc-tables` 只判表格列存在与列数一致，判不了「口径够不够硬」；口径质量只能人读。要造「口径为空」的文件层负例，等于往生产需求书里加一条空口径需求 —— 违规可造，但造出来的是一条真需求，会让台账与索引同时红（连带 3 个门禁），不是一个可回滚的单点用例。",
+      "evidence": "`check-doc-tables.py` 在 verify-all 第 1 项内 rc=0（表格校验通过 72 个文件）；口径质量部分由人判。"
+    },
+    {
+      "clause": "改契约必须同批改下游",
+      "book": "通用开发规范.md",
+      "category": "unsupported",
+      "reason": "判据物 `check-doc-sync.py` 的输入是**提交历史**（最近 N 个提交里碰代码没碰文档的那些），文件层没有「同一批」这个概念可造；夹具里造两个提交等于造一个 git 仓。",
+      "evidence": "`check-doc-sync.py` 在 verify-all 第 1 项内跑（只报告不拦截）；同批性由人看改动集。"
     }
   ]
 }
