@@ -58,7 +58,7 @@ MILESTONES: list[tuple[str, tuple[str, ...]]] = [
                 "FR-STD-DB-IO-", "FR-STD-DB-META-", "FR-STD-DB-RES-", "FR-STD-DB-SESS-",
                 "FR-STD-DB-TASK-", "FR-STD-DB-DRV-009")),
     ("v0.4.0", ("FR-NTS-NOTE-", "FR-NTS-TODO-")),
-    ("v0.5.0", ("FR-AGT-TOOL-", "FR-AGT-OPS-OBS-002", "FR-AGT-UX-", "FR-AGT-PLAN-",
+    ("v0.5.0", ("FR-AGT-TOOL-", "FR-AGT-OPS-OBS-002", "FR-AGT-UX-", "FR-AGT-PLAN-", "FR-AGT-CORE-LOOP-",
                 "FR-AGT-LINK-", "FR-AGT-KNOW-MEM-003", "NFR-ALL-GATE-AI-",
                 "AC-ALL-GATE-AI-")),
     ("v0.6.0", ("FR-STD-ALL-LIC-00", "FR-STD-WS-LIC-001", "FR-STD-ALL-PLUG-005",
