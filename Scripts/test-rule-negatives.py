@@ -50,6 +50,7 @@ PRODUCT_DESIGN = "Docs/Doyah产品概要设计说明书.md"      # 记号：共�
 SRS = "Docs/Doyah产品需求规格说明书.md"
 PLAN = "Docs/Doyah产品开发计划任务清单-macOS.md"
 PM = "Docs/项目管理规范.md"
+QFILE = ".agent/pending-agenda.md"   # 2026-11-16 待拍板队列迁出规范 §4：Q 行现在在这里
 GENERAL = "Docs/通用开发规范.md"
 
 # 契约层锁定用的判据参数：以对侧（windows）身份改概设 ⇒ 越界必须判红
@@ -82,7 +83,7 @@ def run(script: str, *args: str) -> int:
 
 # ── 违规动作 ────────────────────────────────────────────────────────────────
 def violate_status_word(ctx) -> None:
-    ctx.patch(PM, "| Notes 安卓端开工前置 | ⏳ 待提供 |", "| Notes 安卓端开工前置 | 讨论中 |")
+    ctx.patch(QFILE, "| Notes 安卓端开工前置 | ⏳ 待提供 |", "| Notes 安卓端开工前置 | 讨论中 |")
 
 
 def violate_doc_version_row(ctx) -> None:
@@ -165,6 +166,9 @@ def violate_internal_ip(ctx) -> None:
               + "\n\n- 示例密钥：`" + FAKE_KEY + "`（不该出现在 PUBLIC 仓）\n")
 
 
+# 注：`包标签 = 出包序号`（check-release-version）与 `分册的需求书与概设不许按端拆`（check-book-subset）
+# 的判据当前基线红（前者实质红在 C3 工程过期、后者红在 Notes 分册自造 14 行），没有可判的绿基线，
+# 已改为 `rule-negative-dispositions.json` 的 baseline-red 处置（附 rc=1 实测证据）。判据回绿后把两行加回来即可复活。
 # 注：本条负例的判据（check-frozen-sync）当前基线红（活书漂移，主人 2026-11-11 令「不冻结」），
 # 已改登记为 baseline-red 处置；等冻结到新版本、判据回绿后，把 CASES 那一行加回来即可复活。
 def violate_frozen_edit(ctx) -> None:
@@ -182,9 +186,9 @@ def violate_bold_heading(ctx) -> None:
 
 def violate_dup_q(ctx) -> None:
     """编号唯一：把 Q37 行复制一份（同号两行）。"""
-    t = (ROOT / PM).read_text(encoding="utf-8")
+    t = (ROOT / QFILE).read_text(encoding="utf-8")
     line = next(l for l in t.split("\n") if l.startswith("| **Q37**"))
-    ctx.write(PM, t.replace(line, line + "\n" + line, 1))
+    ctx.write(QFILE, t.replace(line, line + "\n" + line, 1))
 
 
 def violate_version_regress(ctx) -> None:
@@ -362,9 +366,9 @@ def violate_doc_gate_skipped(ctx) -> None:
     `action-router --changed --check --fast` 本身就是文件层的入场判据，违规造得出来。
     （顺带修出它自己的洞：原实现只看暂存区，暂存两个脚本就丢掉未暂存的文档改动 ⇒ 这里造得出而它 rc=0。）
     """
-    t = (ROOT / PM).read_text(encoding="utf-8")
+    t = (ROOT / QFILE).read_text(encoding="utf-8")
     line = next(l for l in t.split("\n") if l.startswith("| **Q37**"))
-    ctx.write(PM, t.replace(line, line + "\n" + line, 1))
+    ctx.write(QFILE, t.replace(line, line + "\n" + line, 1))
 
 
 # ── 2026-11-10 触发实验新增：把「只有登记」的条文逐条真撞一遍 ─────────────────
@@ -421,8 +425,12 @@ CASES = [
     ("一单永远只有一份活件",            "check-end-sheets.py",         violate_end_sheet_snapshot, ()),
     ("冻结号 = 软件号",                "check-release-freeze-parity.py", violate_freeze_parity, ()),
     ("公开仓不留凭据",            "check-no-user-data.py",       violate_internal_ip, ()),
+    ("配置与凭据：默认值、可回退、不进日志",      "check-no-user-data.py",       violate_internal_ip, ()),
+    ("安全与隐私：默认最小权限，凭据与个人内容不出本机", "check-no-user-data.py",       violate_internal_ip, ()),
     # ── 第二轮新增（2026-11-10）────────────────────────────────────────────
     ("开工先看工作区",                "check-path-ownership.py",     violate_side_tree,
+     ("--diff-file", str(SIDE_TREE_DIFF)), ("--diff-file", str(EMPTY_DIFF))),
+    ("代码写法：局部改动优先",          "check-path-ownership.py",     violate_side_tree,
      ("--diff-file", str(SIDE_TREE_DIFF)), ("--diff-file", str(EMPTY_DIFF))),
     ("一条拍板只落一处结论",           "check-status-consistency.py", violate_status_annotation, ()),
     ("每条判据配一条",                "check-self-test-counts.py",   violate_selftest_count, ("--no-run",)),
@@ -443,8 +451,6 @@ CASES = [
     ("并发写版本号先重读文件",          "check-doc-versions.py",       violate_version_downgrade, ()),
     ("端详设从本族基准派生",      "check-platform-derivation.py", violate_derivation_declaration, ()),
     ("macOS 冻结 ⇒ 同日同步 Linux",     "check-platform-derivation.py", violate_derivation_row, ()),
-    ("包标签 = 出包序号",               "check-release-version.py",    violate_release_label, ()),
-    ("分册的需求书与概设不许按端拆",      "check-book-subset.py",        violate_fascicle_stale, ()),
     ("归口改判必须落判据例外台账",        "check-button-icon-only.py",   violate_button_text, ()),
 ]
 

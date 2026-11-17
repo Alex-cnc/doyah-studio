@@ -89,6 +89,9 @@ HEAVY = {"__swift_test__", "__npm_test__", "__verify_all__"}
 ROUTES: list[tuple[str, str]] = [
     (r"^Docs/.*\.md$", "改文档"),
     (r"^AGENTS\.md$|^Docs/通用开发规范\.md$|^Docs/项目管理规范\.md$", "改文档"),
+    # 2026-11-16：待拍板队列（Q 号表）迁到过程件，它仍属「改文档」——否则改 Q 行不触发文档判据，
+    # 实测后果：`文档改动必过门禁` 的负例从「红」退化成「绿」（失灵）。
+    (r"^\.agent/pending-agenda\.md$", "改文档"),
     (r"^Scripts/.*\.(py|sh)$|^Scripts/hooks/", "改判据脚本"),
     (r"\.swift$", "改代码"),
     (r"^Platform/windows/App/src/.*\.(vue|ts)$", "改前端"),

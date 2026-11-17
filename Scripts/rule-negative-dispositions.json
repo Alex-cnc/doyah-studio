@@ -66,6 +66,41 @@
       "category": "baseline-red",
       "reason": "判据 `Scripts/check-frozen-sync.py` 当前本身就红：漂移 40 行即决策点的规则下，活书 Linux 详设与最新冻结件已差 645 行。主人 2026-11-11 明确拍板「不冻结啊，就是在 v1.3.x 上继续跑，等公司的 Linux 版本更新后如果满足要求再冻结」⇒ 在冻结发生之前，这条判据的基线恒红，负例无法在文件层稳定造出（造出来也分不清是违规还是既有漂移）。",
       "evidence": "`python3 Scripts/check-frozen-sync.py` rc=1：`Doyah产品详细设计说明书-Linux 与 v1.3（20261110）差 645 行（+456 / −189）· 超阈值 ⇒ 该问『冻结到新版本吗』`；其余四书 0 行差异。冻结回绿后应把 CASES 里那行加回（动作函数 violate_frozen_edit 已保留）。"
+    },
+    {
+      "clause": "包标签 = 出包序号",
+      "book": "项目管理规范.md",
+      "category": "baseline-red",
+      "reason": "判据 `check-release-version.py` 当前整体 rc=1，但红在别处：C3 生成物过期（磁盘上有、生成物里没有的 .swift：LaunchAgentLoginItem.swift 等）。脚本把「标签 / 工程清单 / 冻结件」判在同一进程，基线红时任何改动都是 rc=1 ⇒ 造不出「标签不一致才红」的可判状态。",
+      "evidence": "实跑 2026-11-16：`python3 Scripts/check-release-version.py` → rc=1，末行 `RESULT: FAIL`，失败项为 `C3 目标 DoyahPlatform：磁盘上有、生成物里没有的 .swift：LaunchAgentLoginItem.swift（工程过期）`、`C3 目标 DoyahStudioTests：…AgentIMUserLanguageTests.swift` 等，**没有**标签不一致项。标签读数正常：`marketingVersion = 1.3.0`、`buildVersion = 2551`。"
+    },
+    {
+      "clause": "分册的需求书与概设不许按端拆",
+      "book": "通用开发规范.md",
+      "category": "baseline-red",
+      "reason": "判据 `check-book-subset.py` 当前 rc=1：Doyah Notes 的概要 / 需求分册正文共 14 行不在全量书里（分册自造内容，待收口）。基线红时任何改动都是 rc=1 ⇒ 造不出「分册自造才红」的干净对照。",
+      "evidence": "实跑 2026-11-16：`python3 Scripts/check-book-subset.py` → rc=1，输出 `⚠️ Doyah Notes产品概要设计说明书.md：正文有 2 行不在全量书里` + `⚠️ Doyah Notes产品需求规格说明书.md：正文有 12 行不在全量书里`，收尾「处理：这些是分册自造的内容」。全量书编号 494 个。"
+    },
+    {
+      "clause": "代码评审与提交：一个提交只做一件事，且必须自证",
+      "book": "通用开发规范.md",
+      "category": "needs-build",
+      "reason": "违约 = 一个提交塞三件无关修改、或提交信息无验证输出。判据是 `action-router.py --changed --check`，读的是本次 git diff 与钩子上下文；文件层造不出「一个提交里有两件事」这种需要真实提交历史的状态。",
+      "evidence": "判据物 = 钩子运行时的 `--changed` 推断结果与提交信息正文，二者都只在运行时存在。"
+    },
+    {
+      "clause": "测试：每条新行为配一条能红的用例，删断言不许仍然绿",
+      "book": "通用开发规范.md",
+      "category": "needs-build",
+      "reason": "违约 = 删掉断言让用例恒绿。判据是 `swift test` 的 `Executed N tests, 0 failures` 收尾行，只在编译 + 运行后产生；文件层无法伪造「跑过且红过」。",
+      "evidence": "判据物 = `swift test` 收尾行（全量实测 5789 例 0 失败 / 19 skip）。"
+    },
+    {
+      "clause": "发布与分发：先定渠道与受众，再谈「发了」",
+      "book": "通用开发规范.md",
+      "category": "baseline-red",
+      "reason": "判据 `check-release-version.py` 当前整体 rc=1（红在 C3 工程过期），基线红时任何改动都是 rc=1 ⇒ 造不出「渠道/受众没写才红」的可判对照。",
+      "evidence": "实跑 2026-11-16：`python3 Scripts/check-release-version.py` → rc=1，`RESULT: FAIL`，失败项为 `C3 目标 DoyahPlatform：磁盘上有、生成物里没有的 .swift：LaunchAgentLoginItem.swift（工程过期）`。"
     }
   ]
 }
