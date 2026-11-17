@@ -41,3 +41,20 @@
 - **规范能不能答「这事归哪个环节、凭哪条、怎么判」：能，27/27。** 27 个环节里 21 个有机判，6 个只有人判且已声明覆盖范围。
 - **判据会不会真红：会，5 条反证全中，字节级还原。**
 - **还欠的**：`verify-all` 第 4 项因 2 条 `baseline-red` 处置未登记而红（`check-release-version` / `check-book-subset`），连带 `check-self-test-counts`；这一批不是本次引入，但要真绿必须补处置登记。
+
+## 六 收口补充（2026-11-16 22:40，提交 4c2b7262）
+
+第 4 项四处判据的现状：
+
+| 判据 | 现状 |
+|---|---|
+| `test-rule-negatives.py` | ✅ **rc=0** —— 用例 46 → 47，处置 8 → 13，未处置 0，实测红 47/47 |
+| `check-doc-q-series.py --self-test` | ✅ 8/8 |
+| `check-queue-needs-user.py --self-test` | ✅ 11/11 |
+| `check-self-test-counts.py` | ❌ 仍红，但根因**不在规范**：它依赖的 `release-version` 与 `result-scroll-ledger` 两族本身 rc=1（C3 工程过期 / 探针未挂载），这两族不修它不会绿 |
+
+**这一轮真正抓到的真回归**（只有全量跑才暴露）：
+1. Q 表迁走后，`test-rule-negatives` 的 3 条负例（状态词表 / 编号唯一 / 文档改动必过门禁）全部造不出违规 —— 判据静默退化；
+2. `action-router` 不认 `.agent/pending-agenda.md`，改 Q 行不触发文档判据 ⇒ 「文档改动必过门禁」的负例从红退化成绿（失灵）。
+
+两条已修，且都用负例实测证明恢复。
