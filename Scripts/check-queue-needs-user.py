@@ -57,7 +57,7 @@ import tempfile
 
 QUEUE_REL = "Docs/design/开发循环-任务队列.md"
 # 2026-10-31：待拍板队列搬家（《通用开发规范》§6 → 《项目管理规范》§4 待人类主人拍板的队列）。
-SPEC_REL = "Docs/项目管理规范.md"
+SPEC_REL = ".agent/pending-agenda.md"   # 2026-11-16 从项目规范 §4 迁出
 # 小节名 → 条目号前缀（与 doyah-loop-watch.py / doyah-loop-status.py 同源）
 SECTION_PREFIX = {"Studio 队列": "L", "Notes 队列": "N", "Retro 队列": "R"}
 # 本仓提案目录里「还没裁」的状态词（其余 = 已结）

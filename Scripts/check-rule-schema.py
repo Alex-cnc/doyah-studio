@@ -57,6 +57,35 @@ def dangling_scripts(text: str, schema: dict) -> list[str]:
     return missing
 
 
+SECTION_IDS: set[str] = set()
+
+
+def load_section_ids() -> set[str]:
+    """从 Scripts/rule-sections.json 取合法环节 ID（含 `全局`）；文件缺失则返回空集 ⇒ 本校验跳过。"""
+    p = ROOT / "Scripts" / "rule-sections.json"
+    try:
+        data = json.loads(p.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return set()
+    return {e["id"] for e in data.get("环节", [])} | {"全局"}
+
+
+def bad_sections(text: str, schema: dict) -> list[str]:
+    """写了「归属环节」但取值不在环节表里的条文（宽容期：不写不算错）。"""
+    if not SECTION_IDS:
+        return []
+    names = set(schema["字段"].keys())
+    out = []
+    for title, body in split_clauses(text, names):
+        for line in body.split("\n"):
+            if "**归属环节**" not in line:
+                continue
+            value = line.split("：", 1)[1].strip().strip("`").split()[0] if "：" in line else ""
+            if value not in SECTION_IDS:
+                out.append(f"{title}⇒归属环节「{value}」不在环节表里")
+    return out
+
+
 def project_refs(text: str, schema: dict) -> list[str]:
     """通用规范里引用了项目规范的条文标题（空列表 = 单向干净）。"""
     names = set(schema["字段"].keys())
@@ -141,6 +170,8 @@ def main(argv: list[str]) -> int:
     if "--self-test" in argv:
         return self_test(schema)
 
+    global SECTION_IDS
+    SECTION_IDS = load_section_ids()
     base = json.loads(BASELINE.read_text(encoding="utf-8")) if BASELINE.exists() else {}
     bad: list[str] = []
     rows: list[str] = []
@@ -152,6 +183,8 @@ def main(argv: list[str]) -> int:
         if name == GENERIC_BOOK:
             for title in project_refs(text, schema):
                 bad.append(f"{name}: 条文「{title}」引用了项目规范 —— 只许项目规范引用本件（单向）")
+        for bad_sec in bad_sections(text, schema):
+            bad.append(f"{name}: {bad_sec}")
         for miss in dangling_scripts(text, schema):
             bad.append(f"{name}: 条文点名的脚本不存在 —— 「{miss}」（判据悬空，删脚本必须同批改条文）")
         incomplete = total - complete
@@ -189,6 +222,8 @@ def main(argv: list[str]) -> int:
 
 
 def self_test(schema: dict) -> int:
+    global SECTION_IDS
+    SECTION_IDS = load_section_ids()
     good = """- **样例条文**：这条条文的首行正文承载「是什么」，长度必须够八个字
 - **是什么**：一句话。
 - **不是什么**：边界。
@@ -202,8 +237,12 @@ def self_test(schema: dict) -> int:
     ghost_script = good.replace("- **判据**：【机判】`true`。", "- **判据**：【机判】`Scripts/no-such-gate.py`。")
     cites_project = good.replace("- **读数口径**：无。", "- **读数口径**：见《项目管理规范》§5。")
     generic_ok = good  # 同一条文放进「通用」这一侧，只要不引用项目规范就该绿
+    bad_section = good.replace("- **归属**：本条文自身。", "- **归属环节**：ZZ9\n- **归属**：本条文自身。")
+    good_section = good.replace("- **归属**：本条文自身。", "- **归属环节**：B1\n- **归属**：本条文自身。")
     cases = [
         ("六字段齐全", good, True),
+        ("归属环节写错 ⇒ 判红", bad_section, False),
+        ("归属环节合法 ⇒ 绿", good_section, True),
         ("缺负例字段", miss_negative, False),
         ("判据没标机判/人判", no_judge_kind, False),
         ("通用条文引用项目规范 ⇒ 判红", cites_project, False),
@@ -213,7 +252,8 @@ def self_test(schema: dict) -> int:
     ok = 0
     for name, text, want_pass in cases:
         total, complete, problems = audit(text, schema)
-        passed = total == 1 and not problems and not project_refs(text, schema) and not dangling_scripts(text, schema)
+        passed = (total == 1 and not problems and not project_refs(text, schema)
+                  and not dangling_scripts(text, schema) and not bad_sections(text, schema))
         mark = "✓" if passed == want_pass else "✗"
         if passed == want_pass:
             ok += 1

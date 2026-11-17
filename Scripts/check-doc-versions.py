@@ -288,7 +288,7 @@ def run(quiet: bool = False) -> int:
     files = targets()
     for path in files:
         problems.extend(check_doc(path))
-    problems.extend(check_queue(DOCS / "项目管理规范.md"))
+    problems.extend(check_queue(ROOT / ".agent" / "pending-agenda.md"))
 
     if problems:
         print(f"❌ 版本纪律未通过（{len(problems)} 处 / 受检 {len(files)} 份）：")
