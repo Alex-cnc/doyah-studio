@@ -55,6 +55,25 @@ def targets() -> list[pathlib.Path]:
     return out
 
 
+def table_top_version(lines: list[str]) -> str | None:
+    """版本表首行 = 当前版本（**版本表是唯一源**）。
+
+    2026-11-18 主人令：「版本头要了干啥，有版本表就行了」——同一个事实写两处必然漂
+    （实测：头部 v1.3.26 而表顶停在 v1.3.12，差 12 版）。故删掉各书头部「当前版本」行，
+    当前版本一律以版本表首行为准；没有版本表的文件（一单是逐条 blockquote 日志）走下面的兜底。
+    """
+    for i, ln in enumerate(lines):
+        if re.match(r"^\|\s*版本\s*\|\s*日期\s*\|", ln):
+            for cand in lines[i + 2:i + 6]:
+                m = re.match(r"^\|\s*\**\s*(v\d+\.\d+\.\d+)\s*\**\s*\|", cand)
+                if m:
+                    return m.group(1)
+                if cand.startswith("#"):
+                    break
+            return None
+    return None
+
+
 def header_version(lines: list[str]) -> str | None:
     """首条「版本」行里的版本号（= 文件头的自称版本）。"""
     for line in lines[:HEAD_SCAN_LINES]:
@@ -209,34 +228,6 @@ def check_step(path: pathlib.Path, current: str | None,
         return []
     return [f"{rel}: {msg}"] if (msg := step_problem(old, current)) else []
 
-def check_version_table(rel: str, lines: list[str], version: str) -> list[str]:
-    """版本表（变更台账）顶行必须 = 头部版本。
-
-    许的是「表顶不许落后」：中间缺的版次仍要人补，但表顶差一版就说明连最新一版都没记。
-    实测（2026-11-18）：概设头部 v1.3.24、表顶还停在 v1.3.12（差 12 版）；
-    需求书差 3 版、macOS 详设差 10 版、Linux 详设差 11 版。
-    **只认「版本 | 日期 | 变更要点」表头**：一单的版本是逐条 blockquote，里程碑表首格也是版本号，
-    不按表头认会误判（实测踩过：一单被读成「表顶 v0.2.0」）。
-    """
-    start = None
-    for i, ln in enumerate(lines):
-        if re.match(r"^\|\s*版本\s*\|\s*日期\s*\|", ln):
-            start = i + 2  # 跳过表头与分隔行
-            break
-    if start is None:
-        return []
-    for ln in lines[start:start + 3]:
-        m = re.match(r"^\|\s*\**\s*(v\d+\.\d+\.\d+)\s*\**\s*\|", ln)
-        if m:
-            top = m.group(1)
-            if top != version:
-                return [f"{rel}: 版本表顶行 `{top}` ≠ 头部 `{version}` —— 每一版都要在版本表登记一行（缺的版次以 git log 补）"]
-            return []
-        if ln.startswith("#"):  # 表空了
-            break
-    return []
-
-
 def check_doc(path: pathlib.Path, frozen_dir: pathlib.Path | None = None) -> list[str]:
     try:
         rel = path.relative_to(ROOT).as_posix()
@@ -247,7 +238,7 @@ def check_doc(path: pathlib.Path, frozen_dir: pathlib.Path | None = None) -> lis
 
     # 版本历史可能有多条（活书头部逐轮追加）：步进对比两侧一律取**最大号**，
     # 否则头部旧行排在前面时会把「没动过」误判成降段。
-    version = max_version(versions_all(lines)) or header_version(lines)
+    version = table_top_version(lines) or max_version(versions_all(lines)) or header_version(lines)
     if version is None:
         problems.append(f"{rel}: 头部 {HEAD_SCAN_LINES} 行内读不出版本号（应为 `v1.0.NNN`）")
     else:
@@ -264,7 +255,6 @@ def check_doc(path: pathlib.Path, frozen_dir: pathlib.Path | None = None) -> lis
         else:
             problems.extend(check_rollover(rel, path.stem, three, frozen_dir or FROZEN_DIR, path))
             problems.extend(check_step(path, version, frozen_dir))
-            problems.extend(check_version_table(rel, lines, version))
             disorder = order_problem(lines)
             if disorder:
                 problems.append(f"{rel}: {disorder}")
@@ -285,7 +275,8 @@ def check_doc(path: pathlib.Path, frozen_dir: pathlib.Path | None = None) -> lis
     if row is not None and version is not None:
         found = re.search(r"文档版本：\*{0,2}(v\d+\.\d+\.\d+)", row)
         if found is None:
-            problems.append(f"{rel}: 「文档版本」行读不出三段式版本号")
+            # 2026-11-18 口径收敛：版本表是唯一源，正文那行不再写死号（写「以版本表首行为准」）
+            pass
         elif found.group(1) != version:
             problems.append(
                 f"{rel}: 「文档版本：{found.group(1)}」与头部最新版本 {version} 不一致 "
