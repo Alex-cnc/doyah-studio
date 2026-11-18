@@ -1039,7 +1039,109 @@ public struct AgentLoop: Sendable {
                     reasoning: reasoning.isEmpty ? nil : reasoning))
             }
 
-            for invocation in budgeted {
+            /// **只读批的判定**（`FR-AGT-CORE-LOOP-012` ②）：连续 ≥2 条满足全部条件才成批 ——
+            /// 已登记 / `level == .readOnly` / `approval == .none` / 不是子代理派单 / 参数合规 / 没到重复上限，
+            /// 且**策略面全放行**（装了钩子或基线不是 allow 时一律不批：那时每条都要单独判定与留痕）。
+            /// 宁可少并行，不许在没把握时并发。
+            func readOnlyBatchPrefix(_ remaining: ArraySlice<AgentToolInvocation>) -> [AgentToolInvocation] {
+                guard policyHooks == nil, policyBaseline == .allow else { return [] }
+                return AgentToolBatchPlanner.parallelPrefix(Array(remaining)) { candidate in
+                    guard let definition = registry.definition(named: candidate.name) else { return false }
+                    guard definition.level == .readOnly, definition.approval == .none else { return false }
+                    guard definition.capability != .dispatchSubtasks else { return false }
+                    guard AgentToolSchemaValidator.validate(argumentsJSON: candidate.argumentsJSON,
+                                                            against: definition) == nil else { return false }
+                    let key = "\(candidate.name)|\(AgentRepeatGuard.canonical(candidate.argumentsJSON))"
+                    return (callStrikes[key] ?? 0) < Self.callRepeatCeiling
+                }
+            }
+
+            /// 同批并发跑，**回灌按调用序**，每条审计带同一个批号（`batch:<id>#i/n`）。
+            /// 批内只可能是只读 ⇒ 没有审批单、没有写盘，所以这一段只有三种结局：成功 / 拒 /（理论上不到的）待批。
+            func runReadOnlyBatch(_ batch: [AgentToolInvocation], batchID: String) async {
+                // ① 先按调用序推「开始」：模型看到的过程行顺序 = 它发调用的顺序，不受完成先后影响。
+                for invocation in batch {
+                    let key = "\(invocation.name)|\(AgentRepeatGuard.canonical(invocation.argumentsJSON))"
+                    callStrikes[key, default: 0] += 1
+                    await emit(.toolStarted(name: invocation.name,
+                                            summary: AgentToolSummary.line(fromArgumentsJSON: invocation.argumentsJSON)))
+                }
+                let batchStartedAt = Date()
+                let results = await AgentToolBatchRunner.run(batch) { [dispatcher, approvals] invocation in
+                    await dispatcher.dispatchAsync(invocation, approvals: approvals)
+                }
+                // 批内每条的真实耗时拿不到（并发跑）⇒ 统一报**整批墙钟**。比编一个假的分条耗时诚实。
+                let millis = max(1, Int(Date().timeIntervalSince(batchStartedAt) * 1000))
+                monitor?.noteProgress()
+                for (offset, result) in results.enumerated() {
+                    let invocation = batch[offset]
+                    guard let definition = registry.definition(named: invocation.name) else { continue }
+                    let token = AgentToolBatchID.token(batch: batchID, index: offset + 1, count: batch.count)
+                    switch result.outcome {
+                    case .needsApproval(let request):
+                        await emit(.toolFinished(name: invocation.name, outcome: "pendingApproval", millis: millis))
+                        await emit(.approvalRequested(name: request.toolName,
+                                                      fingerprint: request.fingerprint,
+                                                      preview: request.payload,
+                                                      baseDigest: request.baseDigest))
+                        rejected.append((invocation.name, AgentToolRefusal.approvalRequired.rawValue))
+                        observations.append("\(invocation.name): \(request.toolName)/\(request.fingerprint)")
+                        recordTurn(context: context, kind: .approval, role: "system",
+                                   text: "\(request.toolName) => \(request.fingerprint)", at: startedAt)
+                        await audit?.record(AgentActionRecord.makeToolCall(
+                            toolName: invocation.name, argumentsSummary: invocation.argumentsJSON,
+                            outcome: .pendingApproval, detail: "\(request.fingerprint)|\(token)",
+                            sessionID: context.sessionID, hopIndex: steps - 1, chainID: context.chainID, at: startedAt))
+                    case .refused(let code, let detail):
+                        await emit(.toolFinished(name: invocation.name,
+                                                 outcome: "denied:\(code.rawValue)", millis: millis))
+                        rejected.append((invocation.name, code.rawValue))
+                        let streakKey = "\(invocation.name)|\(invocation.argumentsJSON)"
+                        refusalStreaks[streakKey, default: 0] += 1
+                        let streak = refusalStreaks[streakKey] ?? 1
+                        var feedback = "\(invocation.name): \(code.rawValue)/\(detail)\n"
+                            + AgentRefusalGuidance.message(detail: detail, allowed: Self.allowedCommandNames)
+                        if let escalation = AgentRefusalGuidance.escalation(streak: streak) {
+                            feedback += "\n" + escalation
+                        }
+                        observations.append(feedback)
+                        recordTurn(context: context, kind: .tool, role: "tool", text: feedback,
+                                   toolName: invocation.name, toolCallID: invocation.callID, at: startedAt)
+                        await audit?.record(AgentActionRecord.makeToolCall(
+                            toolName: invocation.name, argumentsSummary: invocation.argumentsJSON,
+                            outcome: .denied, detail: "\(code.rawValue)/\(detail)|\(token)",
+                            sessionID: context.sessionID, hopIndex: steps - 1, chainID: context.chainID, at: startedAt))
+                    default:
+                        executed.append(invocation)
+                        if let recorded = Self.completionEvidence(from: result.outcome, definition: definition,
+                                                                  step: steps - 1) {
+                            evidence.append(recorded)
+                        }
+                        await emit(.toolFinished(name: invocation.name, outcome: "executed", millis: millis))
+                        let summary = Self.summary(of: result.outcome)
+                        observations.append("\(invocation.name): \(summary)")
+                        recordTurn(context: context, kind: .tool, role: "tool",
+                                   text: "\(invocation.name) => \(summary)",
+                                   toolName: invocation.name, toolCallID: invocation.callID, at: startedAt)
+                        await audit?.record(AgentActionRecord.makeToolCall(
+                            toolName: invocation.name, argumentsSummary: invocation.argumentsJSON,
+                            outcome: .executed, detail: "\(summary)|\(token)",
+                            sessionID: context.sessionID, hopIndex: steps - 1, chainID: context.chainID, at: startedAt))
+                    }
+                }
+            }
+
+            // 批内并发、批间串行：游标推进，遇到连续的只读段就整段并发跑，否则落回下面的单条串行路径。
+            var invocationCursor = 0
+            while invocationCursor < budgeted.count {
+                let batch = readOnlyBatchPrefix(budgeted[invocationCursor...])
+                if !batch.isEmpty {
+                    await runReadOnlyBatch(batch, batchID: AgentToolBatchID.make())
+                    invocationCursor += batch.count
+                    continue
+                }
+                let invocation = budgeted[invocationCursor]
+                invocationCursor += 1
                 // ⑤ 未登记 ⇒ 不执行，如实回灌
                 guard let definition = registry.definition(named: invocation.name) else {
                     let reason = AgentToolRefusal.unregistered.rawValue
