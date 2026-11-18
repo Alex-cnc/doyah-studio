@@ -186,12 +186,60 @@ def landing_purity(text: str) -> list[str]:
     return bad
 
 
+def _generic_clause_refs(text: str) -> list[dict]:
+    """通用册条文 → 标题 / 归属环节 / 引用的落点号（含标题行上的引用）。"""
+    clause_re = re.compile(r"^(?:\d+\.|-)\s+\*\*(?P<t>[^*]{2,120}?)\*\*")
+    env_re = re.compile(r"^- \*\*归属环节\*\*：(.+)$")
+    field = {"判据", "负例", "覆盖范围", "不是什么", "归属环节", "处理方式", "为什么", "读数口径", "归属", "落点"}
+    out: list[dict] = []
+    cur = None
+    for line in text.split("\n"):
+        em = env_re.match(line)
+        if em:
+            if cur is not None and not cur["env"]:
+                cur["env"] = em.group(1).strip()
+            continue
+        cm = clause_re.match(line)
+        if cm and cm.group("t").strip() not in field:
+            cur = {"title": cm.group("t").strip(), "env": "", "refs": [int(x) for x in LANDING_REF.findall(line)]}
+            out.append(cur)
+            continue
+        if cur is not None:
+            for r in LANDING_REF.findall(line):
+                if int(r) not in cur["refs"]:
+                    cur["refs"].append(int(r))
+    return out
+
+
 def landing_drift(generic: str, project: str) -> list[str]:
-    """通用册的 〈落点 #NN〉 ↔ 项目册 §0.6 表：双向对账（空列表 = 一致）。"""
+    """通用册的 〈落点 #NN〉 ↔ 项目册落点表：**号、环节、用在三样都要对得上**。
+
+    为什么连后两列也判：号对得上只说明"有这么一行"，而「环节」写错 = 查表的人找错环节、
+    「用在」是占位 = 这一行等于没人维护。前两版判据只看号，于是 8 行环节是默认值、
+    11 行「用在」是「见条文引用处」也照样绿 —— 判据自欺比没有判据更糟。
+    """
     refs = {int(x) for x in LANDING_REF.findall(generic)}
     rows = {int(x) for x in LANDING_ROW.findall(project)}
     drift = [f"〈落点 #{r:02d}〉在项目册落点表里不存在（悬空引用）" for r in sorted(refs - rows)]
     drift += [f"落点表 #{r:02d} 没有任何条文引用（空行）" for r in sorted(rows - refs)]
+
+    clause_rows = re.compile(r"^\| #(?P<id>\d+) \| `[^`]+` \| (?P<env>[^|]+) \| (?P<use>[^|]+) \|", re.M)
+    clauses = _generic_clause_refs(generic)
+    for m in clause_rows.finditer(project):
+        cid = int(m.group("id"))
+        users = [c for c in clauses if cid in c["refs"]]
+        if not users:
+            continue
+        env_cells = {x.strip() for x in m.group("env").split("/") if x.strip() and x.strip() != "—"}
+        env_true = {c["env"] for c in users if c["env"]}
+        if env_true and env_cells != env_true:
+            drift.append(f"落点表 #{cid:02d} 的「环节」写 {sorted(env_cells) or ['—']}，"
+                         f"引用它的条文实际挂 {sorted(env_true)}")
+        use = m.group("use").strip()
+        if use in ("—", "见条文引用处"):
+            drift.append(f"落点表 #{cid:02d} 的「用在」是占位（{use}）—— 这行没人维护")
+        elif not any(c["title"][:5] in use for c in users):
+            drift.append(f"落点表 #{cid:02d} 的「用在」没点到真实引用者（实际：{users[0]['title'][:16]}）")
     return drift
 
 
@@ -393,10 +441,16 @@ def self_test(schema: dict) -> int:
             ok += 1
         print(f"  {mark} {name} ⇒ {'绿' if passed else '红'}，应为{'绿' if want_pass else '红'}")
     # 落点双向对账：悬空引用必须判红、空行必须判红
+    clause_with_ref = ("- **样例条文**：这条条文的首行正文承载「是什么」，长度必须够八个字\n"
+                       "- **判据**：【机判】〈落点 #01〉。\n"
+                       "- **归属环节**：B1\n")
     drift_cases = [
-        ("落点悬空 ⇒ 判红", "〈落点 #901〉", "| #01 | `x` | 全局 | y |", False),
-        ("落点表有空行 ⇒ 判红", "〈落点 #01〉", "| #01 | `x` | 全局 | y |\n| #902 | `z` | 全局 | w |", False),
-        ("落点双向一致 ⇒ 绿", "〈落点 #01〉", "| #01 | `x` | 全局 | y |", True),
+        ("落点悬空 ⇒ 判红", clause_with_ref, "| #01 | `x` | B1 | 样例条文 |\n| #901 | `z` | B1 | 样例条文 |", False),
+        ("落点表有空行 ⇒ 判红", clause_with_ref, "| #01 | `x` | B1 | 样例条文 |\n| #902 | `z` | B1 | w |", False),
+        ("落点双向一致 ⇒ 绿", clause_with_ref, "| #01 | `x` | B1 | 样例条文 |", True),
+        ("落点表「环节」写错 ⇒ 判红", clause_with_ref, "| #01 | `x` | C9 | 样例条文 |", False),
+        ("落点表「用在」是占位 ⇒ 判红", clause_with_ref, "| #01 | `x` | B1 | 见条文引用处 |", False),
+        ("落点表「用在」点到别人 ⇒ 判红", clause_with_ref, "| #01 | `x` | B1 | 另一条不相干的条文 |", False),
     ]
     for name, generic, project, want_pass in drift_cases:
         passed = not landing_drift(generic, project)
