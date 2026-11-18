@@ -103,17 +103,56 @@ def coverage_gap(text: str, schema: dict) -> list[str]:
     棘轮：数量记 `rule-schema-baseline.json` 的「覆盖范围缺」，**只许降不许升**。
     判不了：覆盖范围写得对不对（那是人判），只判「有没有写」。
     """
-    fields = set(schema["字段"])
+    fields = set(schema["字段"]) | {"覆盖范围"}
     gap, cur = [], None
     for ln in text.split("\n"):
-        m = re.match(r"^- \*\*(.+?)\*\*：", ln)
-        if m and m.group(1) not in fields | {"覆盖范围"}:
-            cur = {"title": m.group(1), "has_cov": False}
+        m = CLAUSE_RE.match(ln)
+        # 「曾经的错指向」是挂在条文里的**注解**（踩坑记录），不是条文本身：它夹在六字段中间，
+        # 会被当成一个块。按前缀排除，避免把注解算成「缺覆盖范围的条文」。
+        if m and m.group("title") not in fields and not m.group("title").startswith("曾经的"):
+            cur = {"title": m.group("title"), "has_cov": False, "fields": 0}
             gap.append(cur)
             continue
-        if cur is not None and "覆盖范围" in ln:
-            cur["has_cov"] = True
-    return [b["title"] for b in gap if not b["has_cov"]]
+        if cur is not None:
+            if "覆盖范围" in ln:
+                cur["has_cov"] = True
+            if re.match(r"^- \*\*(判据|负例|读数口径|不是什么|归属|归属环节|是什么)\*\*", ln):
+                cur["fields"] += 1
+    # 只算真条文：块内至少两个六字段才算。文档里的加粗注解（「曾经的错指向」）与流程步骤项不是条文
+    return [b["title"] for b in gap if b["fields"] >= 2 and not b["has_cov"]]
+
+
+def index_drift(text: str, schema: dict) -> list[str]:
+    """§1.6 反向索引（环节 → 条文）与条文实际归属对账。
+
+    索引表是手写的 ⇒ 加了条文忘改索引时，索引会静静落后。判「每行列出的条数 = 实际挂该环节的条数」，
+    不判标题文字（表里是缩写，逐字比会误报）。
+    """
+    from collections import Counter
+    fields = set(schema["字段"]) | {"覆盖范围"}
+    actual: Counter = Counter()
+    cur_is_clause = False
+    for ln in text.split("\n"):
+        m = CLAUSE_RE.match(ln)
+        if m and m.group("title") not in fields:
+            cur_is_clause = True
+            continue
+        m2 = re.match(r"^- \*\*归属环节\*\*：(.*)$", ln)
+        if m2 and cur_is_clause:
+            for sec in re.findall(r"([A-F][1-9]|全局)", m2.group(1)):
+                actual[sec] += 1
+    m_sec = re.search(r"^## \d+\.\d+ 环节索引", text, re.M)
+    start = m_sec.start() if m_sec else -1
+    end = text.find("\n## ", start + 5) if start >= 0 else -1
+    section = text[start:end if end > 0 else len(text)]
+    listed: Counter = Counter()
+    for row in re.findall(r"^\|\s*`([A-F][1-9]|全局)`\s*\|([^|]*)\|([^|]*)\|\s*$", section, re.M):
+        listed[row[0]] = len([x for x in row[2].split("·") if x.strip()])
+    out = []
+    for sec in sorted(set(listed) | set(actual)):
+        if listed.get(sec, 0) != actual.get(sec, 0):
+            out.append(f"§1.6 索引「{sec}」列了 {listed.get(sec, 0)} 条，条文实际挂 {actual.get(sec, 0)} 条（加了条文要同批改索引）")
+    return out
 
 
 def project_refs(text: str, schema: dict) -> list[str]:
@@ -213,6 +252,8 @@ def main(argv: list[str]) -> int:
         if name == GENERIC_BOOK:
             for title in project_refs(text, schema):
                 bad.append(f"{name}: 条文「{title}」引用了项目规范 —— 只许项目规范引用本件（单向）")
+        for drift in index_drift(text, schema):
+            bad.append(f"{name}: {drift}")
         for bad_sec in bad_sections(text, schema):
             bad.append(f"{name}: {bad_sec}")
         for miss in dangling_scripts(text, schema):

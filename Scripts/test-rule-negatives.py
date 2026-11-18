@@ -235,6 +235,17 @@ def violate_freeze_parity(ctx) -> None:
     ctx.write("Scripts/release-version.json", json.dumps(d, ensure_ascii=False, indent=2) + "\n")
 
 
+def violate_perf_threshold_loosened(ctx) -> None:
+    """性能台账：把冷启动阈值从 2000ms 悄悄放宽到 2500ms ⇒ check-perf-ledger 必须判红。
+
+    这条负例造的是**判据 A**（阈值只有一个写者、且不许悄悄放宽），不是造读数 ——
+    读数面要真机跑探针，属 needs-build。
+    """
+    d = json.loads((ROOT / "Scripts" / "perf-baseline.json").read_text(encoding="utf-8"))
+    d["coldStart"]["limitMs"] = 2500
+    ctx.write("Scripts/perf-baseline.json", json.dumps(d, ensure_ascii=False, indent=2) + "\n")
+
+
 def violate_linux_sync(ctx) -> None:
     """macOS 冻结 ⇒ 同日同步 Linux：拿掉同日那份 Linux 冻结件。"""
     cands = sorted((ROOT / "Docs" / "frozen").glob("*-Linux-v1.3-*.md"))
@@ -417,7 +428,7 @@ CASES = [
     ("交付包口径",                    "check-build-policy.py",        violate_build_sandbox_flip, ()),
     ("文档改动必过门禁",               "action-router.py",             violate_doc_gate_skipped, ("--changed", "--check", "--fast")),
     ("状态只写词表词",                "check-queue-needs-user.py",   violate_status_word, ()),
-# 2026-11-18 撤下「版本只写头部」：口径收敛为「版本表唯一源」，头部那行已删，违规形态不复存在（转处置登记）
+# 2026-11-18 撤下「版本只写头部」（条文已改名为「版本只写一处（版本表首行）」）：口径收敛为「版本表唯一源」，头部那行已删，违规形态不复存在（转处置登记）
     ("不擅自扩大文档体系",             "check-doc-invariants.py",     violate_extra_doc, ()),
     ("编号形制五段式",                "check-req-ids.py",            violate_bad_req_id, ("--all",)),
     ("数字与路径都不写死",             "check-doc-numbers.py",        violate_doc_numbers, ()),
@@ -447,6 +458,8 @@ CASES = [
     ("新需求登记一次性落齐派生出口",     "check-req-index.py",          violate_req_index_drift, ()),
     ("负例（本条自己也要有）",          "check-rule-schema.py",        violate_missing_negative_field, ()),
     ("每轮交接三件",                  "check-doc-numbers.py",        violate_handover_count, ()),
+    # ── 第三轮新增（2026-11-18 · 运行层 §7.8 的机判条文）────────────────
+    ("性能读数必须落台账",             "check-perf-ledger.py",        violate_perf_threshold_loosened, ()),
     ("契约层锁定",                    "check-exclusive-sections.py", violate_contract_layer, EXCLUSIVE_ARGS),
     ("能力变 → 跟 Notes 的能力契约",    "check-exclusive-sections.py", violate_notes_clause_in_studio, EXCLUSIVE_ARGS),
     ("主人直接指令",                  "check-exclusive-sections.py", violate_allow_marker_pair, EXCLUSIVE_ARGS),

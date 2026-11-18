@@ -236,11 +236,32 @@
       "evidence": "命令即判据：`codesign --verify --deep --strict <App>` / `spctl -a -vv <App>`，输出须为 accepted。本轮未重跑出包，记「未验」而非通过。"
     },
     {
-      "clause": "版本只写头部",
+      "clause": "版本只写一处（版本表首行）",
       "book": "项目管理规范.md",
       "category": "unsupported",
-      "reason": "2026-11-18 口径收敛为「版本表是唯一源」：各书头部「当前版本 vX」与正文「文档版本：vX」已删，「只在头部写版本」这种违规形态在文件里已无法构造。取代它的形态是「版本表首行缺失/非三段式/回退」，分别由 `自动冻结`、`冻结 = 升一段`、`并发写版本号先重读文件` 三条实测用例覆盖。",
+      "reason": "2026-11-18 口径收敛为「版本表是唯一源」：各书头部「当前版本 vX」与正文「文档版本：vX」已删，「只在头部写版本」这种违规形态在文件里已无法构造。取代它的形态是「版本表首行缺失/非三段式/回退」，分别由 `自动冻结`、`冻结 = 升一段`、`并发写版本号先重读文件` 三条实测用例覆盖。｜2026-11-18 条文改名：原名「版本只写头部」教的是旧口径（两处同值），已按「版本表唯一源」重写。",
       "evidence": "check-doc-versions.py 现以版本表首行为当前版本（`table_top_version`），头部不再参与判定。"
+    },
+    {
+      "clause": "审计字段必须结构化落盘，不是拼一句话",
+      "book": "通用开发规范.md",
+      "category": "needs-build",
+      "reason": "判据物是 `swift test --filter AgentDecisionAuditTests` 的四条用例（跳过记为 notice / 强制与跳过成对 / 通知双出口 / 静默不留记录）。文件层造不出这四种记录形态 —— 要造就得改 `Core/` 里的审计写入代码再编一遍（数分钟）。",
+      "evidence": "命令：`swift test --filter AgentDecisionAuditTests`；本轮未跑（§7.8 只新增条文，未改审计代码），记「未验」而非通过。"
+    },
+    {
+      "clause": "用户可见文案不许硬编码，只许比基线更少",
+      "book": "通用开发规范.md",
+      "category": "needs-build",
+      "reason": "判据物是 `Tests/LocalizationCoreRatchetTests.swift`（含汉字字面量数不得高于基线）。造负例要在 `Core/` 里真加一句中文字面量再编一遍跑测试；文件层直接改基线 JSON 只能造出「基线被改小」，那判的是另一件事。",
+      "evidence": "命令：`swift test --filter LocalizationCoreRatchetTests`；本轮未跑负例，记「未验」。"
+    },
+    {
+      "clause": "语言清单只有已登记的那几门，菜单层也要判",
+      "book": "通用开发规范.md",
+      "category": "needs-build",
+      "reason": "判据物是 `TestsUISnapshot/MenuLanguageGateTests.swift`，注释里写明**要真 App**（`run-manual-verification-probes.sh` 打包之后那一步）。造「菜单出现第三种语言」必须先构建一个含该语言的 App，文件层无法构造。",
+      "evidence": "命令：`Scripts/run-manual-verification-probes.sh --filter MenuLanguageGateTests`（需先 build-app）；本轮未跑。"
     }
   ]
 }
