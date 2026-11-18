@@ -97,6 +97,25 @@ def bad_sections(text: str, schema: dict) -> list[str]:
     return out
 
 
+def coverage_gap(text: str, schema: dict) -> list[str]:
+    """写了【判据】却没声明「覆盖范围」的条文标题（铁律 13 的落地判据）。
+
+    棘轮：数量记 `rule-schema-baseline.json` 的「覆盖范围缺」，**只许降不许升**。
+    判不了：覆盖范围写得对不对（那是人判），只判「有没有写」。
+    """
+    fields = set(schema["字段"])
+    gap, cur = [], None
+    for ln in text.split("\n"):
+        m = re.match(r"^- \*\*(.+?)\*\*：", ln)
+        if m and m.group(1) not in fields | {"覆盖范围"}:
+            cur = {"title": m.group(1), "has_cov": False}
+            gap.append(cur)
+            continue
+        if cur is not None and "覆盖范围" in ln:
+            cur["has_cov"] = True
+    return [b["title"] for b in gap if not b["has_cov"]]
+
+
 def project_refs(text: str, schema: dict) -> list[str]:
     """通用规范里引用了项目规范的条文标题（空列表 = 单向干净）。"""
     names = set(schema["字段"].keys())
@@ -209,9 +228,14 @@ def main(argv: list[str]) -> int:
             bad.append(f"{name}: 缺字段条文 {incomplete} 条 > 基线 {prev_incomplete} 条（新条文不许裸奔）")
         if complete < prev.get("完整", 0) and not first_baseline:
             bad.append(f"{name}: 六字段完整 {complete} 条 < 基线 {prev.get('完整', 0)} 条（不许把完整条文改回散文）")
-        rows.append(f"  {name}: 条文 {total} 条 · 完整 {complete} · 缺字段 {incomplete}")
+        gap = coverage_gap(text, schema)
+        prev_gap = prev.get("覆盖范围缺", 0)
+        if len(gap) > prev_gap and not first_baseline:
+            bad.append(f"{name}: {len(gap)} 条条文写了判据却没声明覆盖范围（> 基线 {prev_gap}）—— 铁律 13：覆盖不全只许报「未知」，不许报「发现」")
+        rows.append(f"  {name}: 条文 {total} 条 · 完整 {complete} · 缺字段 {incomplete} · 缺覆盖范围 {len(gap)}")
         new_base[name] = {"总数": max(total, floor_total), "完整": max(complete, prev.get("完整", 0)),
-                          "缺字段": min(incomplete, prev_incomplete) if prev else incomplete}
+                          "缺字段": min(incomplete, prev_incomplete) if prev else incomplete,
+                          "覆盖范围缺": min(len(gap), prev_gap) if prev else len(gap)}
         for p in problems[:40]:
             rows.append(f"    · {p}")
 

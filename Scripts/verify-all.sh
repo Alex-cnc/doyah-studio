@@ -189,7 +189,11 @@ for argument in "$@"; do
   case "${argument}" in
     --require-all) REQUIRE_ALL=1 ;;
     --keep-going) KEEP_GOING=1 ;;
-    *) echo "⚠️ 认不出的参数：${argument}（本脚本只认 --require-all / --keep-going）" >&2 ;;
+    --list)
+      # 门禁清单的唯一源就是本脚本：项名与顺序从自身源码取，不另抄一份（抄了必漂）
+      grep -oE '==> [0-9]+/19 [^"]+' "$0" | sed 's/==> //'
+      exit 0 ;;
+    *) echo "❌ 认不出的参数：${argument}（只认 --require-all / --keep-going / --list）" >&2; exit 2 ;;
   esac
 done
 
