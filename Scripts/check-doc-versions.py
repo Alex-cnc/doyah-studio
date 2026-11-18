@@ -316,7 +316,7 @@ def run(quiet: bool = False) -> int:
             print(f"   · {item}")
         return 1
     if not quiet:
-        print(f"✅ 版本纪律通过：{len(files)} 份书/单头部均为三段式 `vX.Y.NNN`（≤999），书内无变更记录节")
+        print(f"✅ 版本纪律通过：{len(files)} 份书/单的版本号（版本表首行 / 一单取日志首条）均为三段式 `vX.Y.NNN`（≤999），书内无变更记录节")
     return 0
 
 
