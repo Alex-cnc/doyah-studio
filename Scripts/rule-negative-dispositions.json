@@ -227,6 +227,13 @@
       "category": "unsupported",
       "reason": "本条的机判只兜「迁移用例必须绿」（swift test），而「重复执行是否产生重复数据」要真跑两次迁移 + 查库；文件层造不出「同一个迁移跑两遍」的状态（夹具里没有库，也没有第二次执行）。",
       "evidence": "`swift test` 全量 5789 例 0 失败（19 skip）在本轮 verify-all 内实测；幂等本身由人判。"
+    },
+    {
+      "clause": "出包必须签名并验证；分发到他人机器前必须公证",
+      "book": "通用开发规范.md",
+      "category": "needs-build",
+      "reason": "判据物是 `codesign --verify` 与 `spctl -a -vv` 对一个**真实出包**的结果；文件层造不出「未签名包」——要造就得先真构建一个未签名 .app（数分钟 + 真证书），那不是文件层负例。",
+      "evidence": "命令即判据：`codesign --verify --deep --strict <App>` / `spctl -a -vv <App>`，输出须为 accepted。本轮未重跑出包，记「未验」而非通过。"
     }
   ]
 }
