@@ -206,7 +206,7 @@
 | FR-AGT-CORE-LOOP-009 | 循环与工具 | 基线必备 | ✅ | — | ⬜ |
 | FR-AGT-CORE-LOOP-010 | 循环与工具 | 基线必备 | ✅ | — | ⬜ |
 | FR-AGT-CORE-LOOP-011 | 循环与工具 | 常用增强 | ✅ | — | ⬜ |
-| FR-AGT-CORE-LOOP-012 | 循环与工具 | 基线必备 | ⬜ | — | ⬜ |
+| FR-AGT-CORE-LOOP-012 | 循环与工具 | 基线必备 | ✅ | — | ⬜ |
 | FR-NTS-NOTE-CAPTURE-001 | 快速捕获 | 基线必备 | ✅ | — | ⬜ |
 | FR-AGT-GUARD-COST-001 | 成本配额 | 常用增强 | ✅ | — | ⬜ |
 | FR-STD-WS-FS-007 | 打开与识别 | 基线必备 | ✅ | — | ✅ |
