@@ -167,6 +167,10 @@ PURITY_RE = re.compile(
     r"|macOS|iOS|iPadOS|watchOS|tvOS|Linux|Windows|Android|HarmonyOS|Ubuntu|Debian"
     r"|SQLite|Gatekeeper|notariz|staple"
     r"|\.(?:py|sh|swift|yml|xcodeproj)\b"
+    r"|AGENTS\.md|AGENT-SPEC|Docs/"                        # 本仓文件名与文档目录
+    r"|(?:^|[^A-Za-z])(?:Studio|Notes|Retro)(?![A-Za-z])"   # 本仓仓名
+    r"|`(?:check|gen|verify|test|action)-[a-z0-9-]+`"      # 本仓判据脚本名（不带扩展也算）
+    r"|\.build/(?:derived/)?|URLSession|\.alert|confirmationDialog"  # 构建产物目录 / 平台 UI 专有名
 )
 LANDING_REF = re.compile(r"〈落点 #(\d+)〉")
 LANDING_ROW = re.compile(r"^\| #(\d+) \|", re.M)
@@ -427,6 +431,8 @@ def self_test(schema: dict) -> int:
          good.replace("- **判据**：【机判】`true`。", "- **判据**：【机判】`swift test` 的收尾行。"), False),
         ("通用条文写平台专有名 ⇒ 判红",
          good.replace("- **读数口径**：无。", "- **读数口径**：在 macOS 上跑。"), False),
+        ("通用条文写本仓文件名 ⇒ 判红", "- **样例条文**：入口页 `AGENTS.md` 必须与规范同号。\n- **判据**：【人判】核条数。\n- **覆盖范围**：只核条数。\n- **归属环节**：E3\n", False),
+        ("通用条文写本仓脚本名 ⇒ 判红", "- **样例条文**：这条判据由 `check-doc-numbers` 把关，够八个字。\n- **判据**：【人判】核。\n- **覆盖范围**：只核。\n- **归属环节**：C3\n", False),
         ("通用条文用落点编号 ⇒ 绿",
          good.replace("- **判据**：【机判】`true`。", "- **判据**：【机判】〈落点 #01〉 的收尾行。"), True),
     ]

@@ -452,7 +452,7 @@ CASES = [
     ("一单只给正在开发的端建",          "check-end-sheets.py",         violate_unknown_end_sheet, ()),
     ("一单与详设同构",                "check-end-sheets.py",         violate_foreign_design_ref, ()),
     ("一单是唯一进度源",               "check-plan-coverage.py",      violate_ledger_extra_id, ()),
-    ("`Docs/` 根只许三书",            "check-doc-invariants.py",     violate_doc_root_release_plan, ()),
+    ("文档根只许三书",            "check-doc-invariants.py",     violate_doc_root_release_plan, ()),
     ("跨端视图不是书",                "check-doc-invariants.py",     violate_doc_root_matrix, ()),
     ("风险不是需求",                  "check-req-ids.py",            violate_risk_as_req, ()),
     ("新需求登记一次性落齐派生出口",     "check-req-index.py",          violate_req_index_drift, ()),
