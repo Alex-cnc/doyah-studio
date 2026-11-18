@@ -77,7 +77,7 @@ def load() -> str:
 
 
 # ── 自检夹具（负例必须判红）───────────────────────────────────────────────
-FIXTURE_HEAD = "## 3 需求状态台账\n\n| 编号 | 一句话 | 模块 | 层次 | 优先级 | 实现 | 判据 | 版本 | 版本口径 |\n|---|---|---|---|---|---|---|---|---|\n"
+FIXTURE_HEAD = "## 3 需求状态（唯一源）\n\n| 编号 | 一句话 | 模块 | 层次 | 优先级 | 实现 | 判据 | 版本 | 版本口径 |\n|---|---|---|---|---|---|---|---|---|\n"
 FIXTURE_GREEN = FIXTURE_HEAD + "| FR-AAA-XX-YY-001 | a | m | l | p | ✅ | ✅ | v0.1.0-alpha | — |\n"
 FIXTURE_GAP_BLANK = FIXTURE_HEAD + "| FR-AAA-XX-YY-001 | a | m | l | p | ✅ | ⬜ | v0.1.0-alpha | — |\n"
 FIXTURE_GAP_HALF = FIXTURE_HEAD + "| FR-AAA-XX-YY-001 | a | m | l | p | ✅ | 🟡 | v0.1.0-alpha | — |\n"

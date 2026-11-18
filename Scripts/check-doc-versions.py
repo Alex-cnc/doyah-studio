@@ -77,7 +77,10 @@ def table_top_version(lines: list[str]) -> str | None:
 def header_version(lines: list[str]) -> str | None:
     """首条「版本」行里的版本号（= 文件头的自称版本）。"""
     for line in lines[:HEAD_SCAN_LINES]:
-        if "版本" not in line:
+        # 版本表的一行可以**不带「版本」二字**（如 `| **v1.3.9** | 2026-11-18 | …`）——
+        # 早先要求行内出现「版本」，于是这类行被判据静默跳过，进而把 1.3.8 → 1.3.10 报成跳段。
+        is_table_version_row = line.startswith("|") and bool(VERSION_ANY.match(line.lstrip("| ").lstrip("*")))
+        if "版本" not in line and not is_table_version_row:
             continue
         match = VERSION_ANY.search(line)
         if match:
@@ -89,7 +92,12 @@ def versions_all(lines: list[str]) -> list[str]:
     """文件头区所有「版本」行里出现的版本号（版本历史可能有多条）。"""
     found: list[str] = []
     for line in lines[:HEAD_SCAN_LINES]:
-        if "版本" not in line:
+        # 版本表的一行可以**不带「版本」二字**（如 `| **v1.3.9** | 2026-11-18 | …`）。
+        # 早先要求行内出现「版本」，这类行就被静默跳过 —— 于是 1.3.8 的下一行被读成 1.3.10，
+        # 报出「跳段」这种假红（2026-11-18 实测）。
+        is_table_version_row = line.startswith("|") and bool(
+            VERSION_ANY.match(line.lstrip("| ").lstrip("*")))
+        if "版本" not in line and not is_table_version_row:
             continue
         # 每条只取**第一个**版本号：版本身份是本行的首个版本，
         # 行内后出现的（如「派生自 macOS 详设 v1.0.22」）是引用，不是本文件的版本。

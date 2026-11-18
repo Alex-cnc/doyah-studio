@@ -616,7 +616,7 @@ def build_cases() -> list[dict]:
 
     def wipe_status_ledger(work: pathlib.Path) -> None:
         """一单§3 状态台账的标题改坏 ⇒ 回退路径读到 0 条，必须判红（不许零命中=通过）。"""
-        _edit(work / "Docs/Doyah产品开发计划任务清单-macOS.md", "## 3 需求状态台账", "## 3x 需求状态台账")
+        _edit(work / "Docs/Doyah产品开发计划任务清单-macOS.md", "## 3 需求状态（唯一源）", "## 3x 需求状态")
 
     def corrupt_ledger_status(identifier: str, replacement: str):
         """把一单§3 台账某条的状态格（第 6 格）换成**认不出的符号** ⇒ 判据必须判红并点名。

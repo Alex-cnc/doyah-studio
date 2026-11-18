@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""校验《Doyah产品开发计划任务清单》§3 需求状态台账 与 其它文档里的状态括注一致（2026-10-20 改口径）。
+"""校验《Doyah产品开发计划任务清单》§3 需求状态 与 其它文档里的状态括注一致（2026-10-20 改口径）。
 
 为什么改：状态列已从需求书正文与索引**整批迁出**（人类主人：本文件不写状态），索引也外置
 成独立文件、只剩「编号 / 域 / 层次」三列 ⇒ 旧口径（索引 ↔ 定义行）的输入不存在了。
@@ -53,7 +53,7 @@ import tempfile
 REPO = pathlib.Path(__file__).resolve().parent.parent
 PLAN_REL = "Docs/Doyah产品开发计划任务清单-macOS.md"      # 状态的真值源（§3 台账）
 LEGACY_SRS_REL = "Docs/Doyah产品需求规格说明书.md"  # 只给「旧码对照臂」用
-LEDGER_START = "## 3 需求状态台账"
+LEDGER_START = "## 3 需求状态（唯一源）"
 LEDGER_STOP = "## 4 "
 LEDGER_FLOOR = 400   # 2026-10-20 实测 425 条 ⇒ 下限留余量（防台账被删 / 解析面被削窄）
 STATUSES = "✅🟡⬜➖"
@@ -78,7 +78,7 @@ def face_files(root: pathlib.Path) -> list[pathlib.Path]:
 
 
 def parse_ledger(lines: list[str]) -> dict[str, tuple[str, int]]:
-    """一单§3「需求状态台账」：| 编号 | 一句话 | 领域 | 层次 | 优先级 | 状态 | 状态原值 |
+    """一单§3「需求状态」：| 编号 | 一句话 | 领域 | 层次 | 优先级 | 状态 | 状态原值 |
 
     2026-10-20 起**状态只有一个源**：需求书正文与索引都不再写状态，整批迁入本表
     （原 §10.1 索引状态列已摘除）。所以本判据的对账物从「索引 ↔ 定义行」改为
@@ -165,7 +165,7 @@ def run(root: pathlib.Path, face_floor: int = FACE_FLOOR,
 
 FIXTURE_PLAN = """# 一单（夹具）
 
-## 3 需求状态台账
+## 3 需求状态（唯一源）
 
 | 编号 | 一句话 | 领域 | 层次 | 优先级 | 状态 | 状态原值 |
 |---|---|---|---|---|---|---|
@@ -288,7 +288,7 @@ def run_self_test() -> int:
     # 这一例改钉「台账缺了 / 被删了不许静默打绿」——判据取不到输入时必须红）
     def check_ledger_missing():
         where = fixture("ledger-missing")
-        (where / PLAN_REL).write_text("# 一单（夹具）\n\n## 3 需求状态台账\n\n| 编号 | 一句话 | 领域 | 层次 | 优先级 | 状态 | 状态原值 |\n|---|---|---|---|---|---|---|\n\n## 4 里程碑\n", encoding="utf-8")
+        (where / PLAN_REL).write_text("# 一单（夹具）\n\n## 3 需求状态（唯一源）\n\n| 编号 | 一句话 | 领域 | 层次 | 优先级 | 状态 | 状态原值 |\n|---|---|---|---|---|---|---|\n\n## 4 里程碑\n", encoding="utf-8")
         return red(where, ("--face-floor", "1", "--ledger-floor", "1"), "一条状态都解析不到")
     case("台账被掏空（§3 里一条状态都没有）⇒ 判红（取不到输入不许当通过）", check_ledger_missing)
 

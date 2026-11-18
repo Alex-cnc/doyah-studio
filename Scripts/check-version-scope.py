@@ -37,7 +37,7 @@ import tempfile
 
 REPO = pathlib.Path(__file__).resolve().parent.parent
 PLAN_REL = "Docs/Doyah产品开发计划任务清单-macOS.md"
-LEDGER_START = "## 3 需求状态台账"
+LEDGER_START = "## 3 需求状态（唯一源）"
 LEDGER_STOP = "## 4 "
 HEADER = "| 编号 | 一句话 | 领域 | 层次 | 优先级 | 状态 | 状态原值 | 版本 | 版本口径 |"
 
@@ -166,7 +166,7 @@ def run(root: pathlib.Path, floor_rows: int, floor_alpha: int) -> int:
 
 FIXTURE_OK = """# 一单（夹具）
 
-## 3 需求状态台账
+## 3 需求状态（唯一源）
 
 | 编号 | 一句话 | 领域 | 层次 | 优先级 | 状态 | 状态原值 | 版本 | 版本口径 |
 |---|---|---|---|---|---|---|---|---|

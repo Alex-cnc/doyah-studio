@@ -67,7 +67,7 @@ def plan_statuses() -> dict[str, str]:
     all_lines = PLAN.read_text(encoding="utf-8").splitlines()
     # 只认 §3 台账（别的节里也有引用 FR 编号的表：平台矩阵、里程碑、卡点）
     try:
-        begin = next(i for i, l in enumerate(all_lines) if l.startswith("## 3 需求状态台账"))
+        begin = next(i for i, l in enumerate(all_lines) if l.startswith("## 3 需求状态（唯一源）"))
         end = next(i for i, l in enumerate(all_lines[begin:], begin) if l.startswith("## 4 "))
         lines = all_lines[begin:end]
     except StopIteration:
