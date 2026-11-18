@@ -90,4 +90,34 @@ final class AgentCommandExecutorTests: XCTestCase {
             XCTFail("rm -rf 应被策略拦下或送审批")
         }
     }
+
+    /// 概设 §18.1「引号与反斜杠不算控制字符」：带引号的只读命令必须能过；
+    /// 引号内的空格不拆词；未闭合引号必须拒（不许静默截断参数）。
+    func testQuotedArgumentsAreLiteralNotControlCharacters() {
+        let policy = AgentCommandPolicy.standard
+
+        guard case let .allowed(executable, arguments) = policy.assess(#"grep -c "FR-AGT-UX" Docs/x.md"#) else {
+            return XCTFail("带引号的只读命令不该被当控制字符拒绝")
+        }
+        XCTAssertEqual(executable, "grep")
+        XCTAssertEqual(arguments, ["-c", "FR-AGT-UX", "Docs/x.md"], "引号应被剥掉，参数按原样传给 grep")
+
+        guard case let .allowed(_, grouped) = policy.assess(#"grep "a b" f.md"#) else {
+            return XCTFail("引号分组应被允许")
+        }
+        XCTAssertEqual(grouped, ["a b", "f.md"], "引号内空格不拆词")
+
+        guard case let .refused(_, detail) = policy.assess(#"grep "unterminated f.md"#) else {
+            return XCTFail("未闭合引号必须拒，不许静默截断")
+        }
+        XCTAssertEqual(detail, "unterminated-quote")
+
+        // 控制字符照旧拒：放开的只有引号与反斜杠。
+        if case .refused = policy.assess("ls; rm -rf /") {} else {
+            XCTFail("分号必须拒")
+        }
+        if case .refused = policy.assess(#"grep "\$(whoami)" f.md"#) {} else {
+            XCTFail("引号里的 $ 也是控制字符，仍必须拒")
+        }
+    }
 }

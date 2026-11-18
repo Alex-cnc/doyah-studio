@@ -93,7 +93,7 @@
       "book": "通用开发规范.md",
       "category": "needs-build",
       "reason": "违约 = 删掉断言让用例恒绿。判据是 `swift test` 的 `Executed N tests, 0 failures` 收尾行，只在编译 + 运行后产生；文件层无法伪造「跑过且红过」。",
-      "evidence": "判据物 = `swift test` 收尾行（全量实测 5789 例 0 失败 / 19 skip）。"
+      "evidence": "判据物 = `swift test` 收尾行（全量实测 5790 例 0 失败 / 19 skip）。"
     },
     {
       "clause": "发布与分发：先定渠道与受众，再谈「发了」",
@@ -226,7 +226,7 @@
       "book": "通用开发规范.md",
       "category": "unsupported",
       "reason": "本条的机判只兜「迁移用例必须绿」（swift test），而「重复执行是否产生重复数据」要真跑两次迁移 + 查库；文件层造不出「同一个迁移跑两遍」的状态（夹具里没有库，也没有第二次执行）。",
-      "evidence": "`swift test` 全量 5789 例 0 失败（19 skip）在本轮 verify-all 内实测；幂等本身由人判。"
+      "evidence": "`swift test` 全量 5790 例 0 失败（19 skip）在本轮 verify-all 内实测；幂等本身由人判。"
     },
     {
       "clause": "出包必须签名并验证；分发到他人机器前必须公证",

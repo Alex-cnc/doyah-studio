@@ -33,7 +33,39 @@ public struct AgentCommandPolicy: Equatable, Sendable {
     ])
 
     /// 控制字符：出现即拒（不经过 shell，就没有「引号包住就安全」这一说）。
-    static let forbidden = Set(";|&`$><\n\r\\\"'".map { $0 })
+    /// **引号与反斜杠不在其中**（概设 §18.1）：不经 shell 时它们只是字面量，
+    /// 把它们当控制字符会误伤 `grep -c "FR-AGT" x.md` 这类合法只读命令（实测被拒 29 次）。
+    static let forbidden = Set(";|&`$><\n\r".map { $0 })
+
+    /// 分词：按空白拆词，**引号内的空白不拆**，引号本身剥掉。
+    ///
+    /// 不经 shell 就没有 shell 的分词器，这几件事必须自己做：
+    /// ① 引号分组（`"a b"` 是一个参数）；② 剥掉引号（否则 `grep "x"` 会去搜带引号的字面量）；
+    /// ③ **未闭合引号返回 nil** —— 必须由调用方拒掉，不许静默截断成半个参数。
+    /// 反斜杠**不做转义**（概设：只是字面量），要传特殊字符请用引号。
+    static func tokenize(_ command: String) -> [String]? {
+        var words: [String] = []
+        var current = ""
+        var quote: Character?
+        for character in command {
+            if let opener = quote {
+                if character == opener { quote = nil } else { current.append(character) }
+                continue
+            }
+            if character == "\"" || character == "'" {
+                quote = character
+                continue
+            }
+            if character == " " || character == "\t" {
+                if !current.isEmpty { words.append(current); current = "" }
+                continue
+            }
+            current.append(character)
+        }
+        guard quote == nil else { return nil }
+        if !current.isEmpty { words.append(current) }
+        return words
+    }
 
     public func assess(_ command: String) -> Verdict {
         let trimmed = command.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -43,7 +75,9 @@ public struct AgentCommandPolicy: Equatable, Sendable {
             return .refused(.commandNotAllowed, detail: "control-character:\(character)")
         }
 
-        let words = trimmed.split(whereSeparator: { $0 == " " || $0 == "\t" }).map(String.init)
+        guard let words = Self.tokenize(trimmed) else {
+            return .refused(.commandNotAllowed, detail: "unterminated-quote")
+        }
         guard let executable = words.first else { return .refused(.emptyQuery, detail: command) }
         guard !executable.contains("/") else {
             return .refused(.commandNotAllowed, detail: "executable-is-a-path:\(executable)")
