@@ -171,10 +171,28 @@ PURITY_RE = re.compile(
     r"|(?:^|[^A-Za-z])(?:Studio|Notes|Retro)(?![A-Za-z])"   # 本仓仓名
     r"|`(?:check|gen|verify|test|action)-[a-z0-9-]+`"      # 本仓判据脚本名（不带扩展也算）
     r"|\.build/(?:derived/)?|URLSession|\.alert|confirmationDialog"  # 构建产物目录 / 平台 UI 专有名
+    r"|\.agent/|Docs 根|\d+\s*份白名单"                    # 本仓隐藏目录 / 旧术语残留
+    r"|公证|keychain|Keychain|App Store|TestFlight"          # 中文写的平台生态专有名（英文正则漏掉的）
+    r"|(?:概设|需求书|详设|一单|项目册|项目规范)\s*§"        # 跨册节号引用（通用册不许指别册的节）
 )
+# 节号引用：指向本册不存在的小节也算写错（别册的节号在这里抓不到，靠上面那条前缀规则）
+SECTION_RE = re.compile(r"§\s?(\d+(?:\.\d+)*)")
 LANDING_REF = re.compile(r"〈落点 #(\d+)〉")
 LANDING_ROW = re.compile(r"^\| #(\d+) \|", re.M)
 HISTORY_LINE = re.compile(r"^> \*\*版本\*\*")   # 版本历史行记的是过去发生过的事实，不判
+
+
+def section_refs(text: str) -> list[str]:
+    """本册内 `§N.M` 引用必须指到真实存在的小节（写错的节号 = 读者找不到规矩）。"""
+    have = {m.group(1) for m in re.finditer(r"^#{2,3}\s+(\d+(?:\.\d+)*)", text, re.M)}
+    bad = []
+    for idx, line in enumerate(text.split("\n"), 1):
+        if HISTORY_LINE.match(line):
+            continue
+        for m in SECTION_RE.finditer(line):
+            if m.group(1) not in have:
+                bad.append(f"第 {idx} 行引用 §{m.group(1)}，本册没有这一节：{line.strip()[:60]}")
+    return bad
 
 
 def landing_purity(text: str) -> list[str]:
@@ -346,6 +364,8 @@ def main(argv: list[str]) -> int:
                 bad.append(f"{name}: 条文「{title}」引用了项目规范 —— 只许项目规范引用本件（单向）")
             for hit in landing_purity(text):
                 bad.append(f"{name}: {hit}")
+            for hit in section_refs(text):
+                bad.append(f"{name}: {hit}")
         for drift in index_drift(text, schema):
             bad.append(f"{name}: {drift}")
         for bad_sec in bad_sections(text, schema):
@@ -432,6 +452,7 @@ def self_test(schema: dict) -> int:
         ("通用条文写平台专有名 ⇒ 判红",
          good.replace("- **读数口径**：无。", "- **读数口径**：在 macOS 上跑。"), False),
         ("通用条文写本仓文件名 ⇒ 判红", "- **样例条文**：入口页 `AGENTS.md` 必须与规范同号。\n- **判据**：【人判】核条数。\n- **覆盖范围**：只核条数。\n- **归属环节**：E3\n", False),
+        ("通用条文写中文平台词「公证」⇒ 判红", "- **样例条文**：分发前必须公证，否则别人的机器不让跑。\n- **判据**：【人判】核。\n- **覆盖范围**：只核。\n- **归属环节**：D3\n", False),
         ("通用条文写本仓脚本名 ⇒ 判红", "- **样例条文**：这条判据由 `check-doc-numbers` 把关，够八个字。\n- **判据**：【人判】核。\n- **覆盖范围**：只核。\n- **归属环节**：C3\n", False),
         ("通用条文用落点编号 ⇒ 绿",
          good.replace("- **判据**：【机判】`true`。", "- **判据**：【机判】〈落点 #01〉 的收尾行。"), True),

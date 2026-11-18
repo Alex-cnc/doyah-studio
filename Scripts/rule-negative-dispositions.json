@@ -229,7 +229,7 @@
       "evidence": "`swift test` 全量 5790 例 0 失败（19 skip）在本轮 verify-all 内实测；幂等本身由人判。"
     },
     {
-      "clause": "出包必须签名并验证；分发到他人机器前必须公证",
+      "clause": "出包必须签名并验证；分发到他人机器前必须完成该平台的分发认证",
       "book": "通用开发规范.md",
       "category": "needs-build",
       "reason": "判据物是 `codesign --verify` 与 `spctl -a -vv` 对一个**真实出包**的结果；文件层造不出「未签名包」——要造就得先真构建一个未签名 .app（数分钟 + 真证书），那不是文件层负例。",
