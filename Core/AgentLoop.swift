@@ -329,6 +329,10 @@ public struct AgentLoopContext: Sendable {
     /// 而检查点要按**哪一轮提问**分账 —— 同一个会话里第 2 个提问**不许**接上第 1 个提问的检查点
     /// （那会把上一个问题的半截进展当成这一次的前情）。不给 ⇒ 取 `sessionID`（旧行为**逐字不变**）。
     public var checkpointScopeID: String?
+    /// **计划先获准**（`FR-AGT-PLAN-PLAN-007`）：非 `nil` = 计划模式开着。
+    /// 计划模式下写类 / 执行类工具要批准才放行；只读照旧（探索与设计本来就要读）。
+    /// 不给 ⇒ 旧行为**逐字不变**（计划模式是 opt-in，不是默认态）。
+    public var planState: AgentPlanState? = nil
 
     public init(systemPrompt: String, userPrompt: String, baseRequest: LLMRequest,
                 sessionID: String, workspace: String, chainID: String? = nil,
@@ -1174,6 +1178,36 @@ public struct AgentLoop: Sendable {
                         outcome: .denied, detail: violation,
                         sessionID: context.sessionID, hopIndex: steps - 1, chainID: context.chainID, at: startedAt))
                     continue
+                }
+                // **计划先获准**（`FR-AGT-PLAN-PLAN-007`）：计划模式下写类与执行类要批准才放行。
+                // 只读不拦 —— 「只探索与设计」本来就靠读；计划正文被改过 ⇒ 旧批准失效（判据 ②）。
+                if let plan = context.planState {
+                    let planReason: String?
+                    switch plan.verdict(for: definition) {
+                    case .allow:
+                        planReason = nil
+                    case .awaitingApproval(let fingerprint):
+                        planReason = "plan-awaiting-approval:fp=\(fingerprint)"
+                    case .planChanged(let approved, let current):
+                        planReason = "plan-changed:approved=\(approved),current=\(current)"
+                    }
+                    if let planReason {
+                        rejected.append((invocation.name, planReason))
+                        // 回灌只给**结构化原因**，不在这里写人话：Core 的用户可见文案要能本地化
+                        // （`LocalizationCoreRatchetTests` 的棘轮就是盯这个），人话由界面层按 reason 渲染。
+                        observations.append("\(invocation.name): \(planReason)")
+                        await emit(.toolStarted(name: invocation.name,
+                                                summary: AgentToolSummary.line(fromArgumentsJSON: invocation.argumentsJSON)))
+                        await emit(.toolFinished(name: invocation.name, outcome: "denied:plan", millis: nil))
+                        recordTurn(context: context, kind: .tool, role: "tool",
+                                   text: "\(invocation.name) => \(planReason)",
+                                   toolName: invocation.name, toolCallID: invocation.callID, at: startedAt)
+                        await audit?.record(AgentActionRecord.makeToolCall(
+                            toolName: invocation.name, argumentsSummary: invocation.argumentsJSON,
+                            outcome: .denied, detail: planReason,
+                            sessionID: context.sessionID, hopIndex: steps - 1, chainID: context.chainID, at: startedAt))
+                        continue
+                    }
                 }
                 // 工具分发走 **detached**（`FR-AI-20` 接线的前置条件）：`AgentToolDispatcher.dispatch` 是**同步**契约，
                 // 而宿主 `AppState` 是 `@MainActor`、本循环也从主 actor 起 —— 执行器（如 `query_db` 的查库）内部

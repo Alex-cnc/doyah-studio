@@ -10,11 +10,14 @@ public struct AgentSessionTurn: Codable, Equatable, Sendable {
         "sessionID", "workspace", "kind", "role", "text", "toolName", "toolCallID", "approval", "at",
     ]
 
-    /// 跳的类型：模型跳 / 工具跳 / 审批跳（`FR-AI-17` 验收要点 ③ 要三类都在）。
+    /// 跳的类型：模型跳 / 工具跳 / 审批跳（`FR-AI-17` 验收要点 ③ 要三类都在），
+    /// 以及**计划跳**（`FR-AGT-PLAN-PLAN-007` ④：计划模式的三态要能在会话恢复后重建，
+    /// 所以它跟着会话一起落盘 —— 另存一份状态文件等于两处真源）。
     public enum Kind: String, Codable, Sendable {
         case model
         case tool
         case approval
+        case plan
     }
 
     public var sessionID: String
@@ -398,6 +401,10 @@ public enum AgentSessionReplay {
                     return AgentChatMessage(role: .tool, text: text, createdAt: turn.at)
                 }
                 return AgentChatMessage(role: .tool, text: text + " · " + verdict, createdAt: turn.at)
+            case .plan:
+                // 计划跳是**状态载体**（JSON），不是给人看的一句话：恢复时由
+                // `AgentPlanState.replay` 重建三态，回看时间线里不铺原文（铺了就是一屏 JSON）。
+                return nil
             }
         }
     }
