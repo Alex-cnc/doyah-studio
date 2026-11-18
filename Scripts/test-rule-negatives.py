@@ -417,7 +417,7 @@ CASES = [
     ("交付包口径",                    "check-build-policy.py",        violate_build_sandbox_flip, ()),
     ("文档改动必过门禁",               "action-router.py",             violate_doc_gate_skipped, ("--changed", "--check", "--fast")),
     ("状态只写词表词",                "check-queue-needs-user.py",   violate_status_word, ()),
-    ("版本只写头部",                  "check-doc-versions.py",       violate_doc_version_row, ()),
+# 2026-11-18 撤下「版本只写头部」：口径收敛为「版本表唯一源」，头部那行已删，违规形态不复存在（转处置登记）
     ("不擅自扩大文档体系",             "check-doc-invariants.py",     violate_extra_doc, ()),
     ("编号形制五段式",                "check-req-ids.py",            violate_bad_req_id, ("--all",)),
     ("数字与路径都不写死",             "check-doc-numbers.py",        violate_doc_numbers, ()),

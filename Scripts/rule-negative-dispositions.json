@@ -234,6 +234,13 @@
       "category": "needs-build",
       "reason": "判据物是 `codesign --verify` 与 `spctl -a -vv` 对一个**真实出包**的结果；文件层造不出「未签名包」——要造就得先真构建一个未签名 .app（数分钟 + 真证书），那不是文件层负例。",
       "evidence": "命令即判据：`codesign --verify --deep --strict <App>` / `spctl -a -vv <App>`，输出须为 accepted。本轮未重跑出包，记「未验」而非通过。"
+    },
+    {
+      "clause": "版本只写头部",
+      "book": "项目管理规范.md",
+      "category": "unsupported",
+      "reason": "2026-11-18 口径收敛为「版本表是唯一源」：各书头部「当前版本 vX」与正文「文档版本：vX」已删，「只在头部写版本」这种违规形态在文件里已无法构造。取代它的形态是「版本表首行缺失/非三段式/回退」，分别由 `自动冻结`、`冻结 = 升一段`、`并发写版本号先重读文件` 三条实测用例覆盖。",
+      "evidence": "check-doc-versions.py 现以版本表首行为当前版本（`table_top_version`），头部不再参与判定。"
     }
   ]
 }
