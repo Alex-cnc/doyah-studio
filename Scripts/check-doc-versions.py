@@ -209,6 +209,34 @@ def check_step(path: pathlib.Path, current: str | None,
         return []
     return [f"{rel}: {msg}"] if (msg := step_problem(old, current)) else []
 
+def check_version_table(rel: str, lines: list[str], version: str) -> list[str]:
+    """版本表（变更台账）顶行必须 = 头部版本。
+
+    许的是「表顶不许落后」：中间缺的版次仍要人补，但表顶差一版就说明连最新一版都没记。
+    实测（2026-11-18）：概设头部 v1.3.24、表顶还停在 v1.3.12（差 12 版）；
+    需求书差 3 版、macOS 详设差 10 版、Linux 详设差 11 版。
+    **只认「版本 | 日期 | 变更要点」表头**：一单的版本是逐条 blockquote，里程碑表首格也是版本号，
+    不按表头认会误判（实测踩过：一单被读成「表顶 v0.2.0」）。
+    """
+    start = None
+    for i, ln in enumerate(lines):
+        if re.match(r"^\|\s*版本\s*\|\s*日期\s*\|", ln):
+            start = i + 2  # 跳过表头与分隔行
+            break
+    if start is None:
+        return []
+    for ln in lines[start:start + 3]:
+        m = re.match(r"^\|\s*\**\s*(v\d+\.\d+\.\d+)\s*\**\s*\|", ln)
+        if m:
+            top = m.group(1)
+            if top != version:
+                return [f"{rel}: 版本表顶行 `{top}` ≠ 头部 `{version}` —— 每一版都要在版本表登记一行（缺的版次以 git log 补）"]
+            return []
+        if ln.startswith("#"):  # 表空了
+            break
+    return []
+
+
 def check_doc(path: pathlib.Path, frozen_dir: pathlib.Path | None = None) -> list[str]:
     try:
         rel = path.relative_to(ROOT).as_posix()
@@ -236,6 +264,7 @@ def check_doc(path: pathlib.Path, frozen_dir: pathlib.Path | None = None) -> lis
         else:
             problems.extend(check_rollover(rel, path.stem, three, frozen_dir or FROZEN_DIR, path))
             problems.extend(check_step(path, version, frozen_dir))
+            problems.extend(check_version_table(rel, lines, version))
             disorder = order_problem(lines)
             if disorder:
                 problems.append(f"{rel}: {disorder}")
