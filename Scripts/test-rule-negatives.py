@@ -54,7 +54,10 @@ QFILE = ".agent/pending-agenda.md"   # 2026-11-16 待拍板队列迁出规范 §
 GENERAL = "Docs/通用开发规范.md"
 
 # 契约层锁定用的判据参数：以对侧（windows）身份改概设 ⇒ 越界必须判红
-EXCLUSIVE_ARGS = ("--mine", "windows", "--files", PRODUCT_DESIGN)
+# 2026-11-18 实测修正：基线必须量在**已提交**的树上。本仓规矩是「只提交不推送」，
+# origin/master 永远落后 ⇒ 只要有人改了契约文件，模拟 windows 侧的基线就会变红（6 条用例集体失灵）。
+# 改为 `--base HEAD`：比的是「上一条提交 vs 工作区」，与推不推无关。
+EXCLUSIVE_ARGS = ("--mine", "windows", "--files", PRODUCT_DESIGN, "--base", "HEAD")
 HARMONY = "Docs/Doyah产品详细设计说明书-HarmonyOS.md"   # 2026-11-10 按安卓基准派生（9/9）
 WINDOWS = "Docs/Doyah产品详细设计说明书-Windows.md"     # 按 macOS 基准派生（40/40）
 # 「开工先看工作区」那一条要用 diff 通道：`check-path-ownership.py` 的改动集默认取 `git diff <base>`，
