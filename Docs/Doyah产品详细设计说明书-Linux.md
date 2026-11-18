@@ -2794,9 +2794,9 @@ HStack(spacing: 0) {
 |---|---|---|
 | 纯能力层改动 | `bash Scripts/verify-core.sh` | 全绿，计数与台账一致 |
 | 要出包 | `bash Scripts/build-app.sh` | 打印字节数 + sha256 前缀 |
-| 界面改动 | `python3 Scripts/check-design-tokens.py` | 不高于基线 |
-| 新命令入口 | `python3 Scripts/check-palette-wiring.py` | 未登记差集 0 |
-| 新中文文案 | `python3 Scripts/check-core-localization.py` | 无缺键 / 无未分类 |
+| 界面改动 | `python3 Scripts/archive/check-design-tokens.py` | 不高于基线 |
+| 新命令入口 | `python3 Scripts/archive/check-palette-wiring.py` | 未登记差集 0 |
+| 新中文文案 | `python3 Scripts/archive/check-core-localization.py` | 无缺键 / 无未分类 |
 | 插件装配 | `python3 Scripts/check-plugin-assembly.py` | 装载 6 组绿 |
 | 文档改动 | `python3 Scripts/check-doc-tables.py && python3 Scripts/check-doc-layout.py` | 两者 rc=0 |
 | 本文件自检 | `python3 <skill>/scripts/audit_lld.py Docs/Doyah产品详细设计说明书-macOS.md --hld Docs/Doyah产品概要设计说明书.md --repo .` | 硬失败 0 / 告警 0 |
