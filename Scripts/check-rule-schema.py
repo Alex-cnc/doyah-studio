@@ -155,6 +155,46 @@ def index_drift(text: str, schema: dict) -> list[str]:
     return out
 
 
+# 通用册纯净度（2026-11-18 人类主人：「如果规范里出现了 xcode / swift 之类的，就有问题了，
+# 这是苹果生态的 iOS 或 macOS 等特定项目里才会出现的」）。
+# 通用册只写「对所有项目成立的规则」；本仓落点用 `〈落点 #NN〉` 指到项目册 §0.6 的表，
+# 具体脚本路径、具体命令、平台与生态专有名一律不许出现。
+PURITY_RE = re.compile(
+    r"(?:Scripts|Tests|platform|Plugins)/"                 # 具体路径
+    r"|(?:^|[^A-Za-z])(?:python3|bash|swift|xcrun|xcodebuild)(?![A-Za-z])"  # 具体工具链
+    r"|codesign|spctl|xcodegen|swiftc|XCTest|SwiftUI|AppKit|Cocoa|Foundation\.framework"
+    r"|project\.yml|Package\.swift|Podfile|Info\.plist"
+    r"|macOS|iOS|iPadOS|watchOS|tvOS|Linux|Windows|Android|HarmonyOS|Ubuntu|Debian"
+    r"|SQLite|Gatekeeper|notariz|staple"
+    r"|\.(?:py|sh|swift|yml|xcodeproj)\b"
+)
+LANDING_REF = re.compile(r"〈落点 #(\d+)〉")
+LANDING_ROW = re.compile(r"^\| #(\d+) \|", re.M)
+HISTORY_LINE = re.compile(r"^> \*\*版本\*\*")   # 版本历史行记的是过去发生过的事实，不判
+
+
+def landing_purity(text: str) -> list[str]:
+    """通用册里出现的落点/平台专有名（空列表 = 干净）。"""
+    bad = []
+    for idx, line in enumerate(text.split("\n"), 1):
+        if idx == 1 or HISTORY_LINE.match(line):
+            continue
+        m = PURITY_RE.search(line)
+        if m:
+            bad.append(f"第 {idx} 行出现「{m.group(0).strip()}」—— 落点写成 `〈落点 #NN〉`，平台与工具名写进项目册："
+                       f"{line.strip()[:70]}")
+    return bad
+
+
+def landing_drift(generic: str, project: str) -> list[str]:
+    """通用册的 〈落点 #NN〉 ↔ 项目册 §0.6 表：双向对账（空列表 = 一致）。"""
+    refs = {int(x) for x in LANDING_REF.findall(generic)}
+    rows = {int(x) for x in LANDING_ROW.findall(project)}
+    drift = [f"〈落点 #{r:02d}〉在项目册落点表里不存在（悬空引用）" for r in sorted(refs - rows)]
+    drift += [f"落点表 #{r:02d} 没有任何条文引用（空行）" for r in sorted(rows - refs)]
+    return drift
+
+
 def project_refs(text: str, schema: dict) -> list[str]:
     """通用规范里引用了项目规范的条文标题（空列表 = 单向干净）。"""
     names = set(schema["字段"].keys())
@@ -252,6 +292,8 @@ def main(argv: list[str]) -> int:
         if name == GENERIC_BOOK:
             for title in project_refs(text, schema):
                 bad.append(f"{name}: 条文「{title}」引用了项目规范 —— 只许项目规范引用本件（单向）")
+            for hit in landing_purity(text):
+                bad.append(f"{name}: {hit}")
         for drift in index_drift(text, schema):
             bad.append(f"{name}: {drift}")
         for bad_sec in bad_sections(text, schema):
@@ -279,6 +321,12 @@ def main(argv: list[str]) -> int:
                           "覆盖范围缺": min(len(gap), prev_gap) if prev else len(gap)}
         for p in problems[:40]:
             rows.append(f"    · {p}")
+
+    # 落点双向对账（通用册 〈落点 #NN〉 ↔ 项目册 §0.6 表）
+    generic_text = (DOCS / GENERIC_BOOK).read_text(encoding="utf-8")
+    project_text = (DOCS / "项目管理规范.md").read_text(encoding="utf-8")
+    for drift in landing_drift(generic_text, project_text):
+        bad.append(f"落点表: {drift}")
 
     print("条文写法判据（六字段）")
     print("\n".join(rows))
@@ -327,18 +375,38 @@ def self_test(schema: dict) -> int:
         ("通用条文引用项目规范 ⇒ 判红", cites_project, False),
         ("通用条文不引用项目规范 ⇒ 绿", generic_ok, True),
         ("条文点名不存在的脚本 ⇒ 判红", ghost_script, False),
+        ("通用条文写回具体命令 ⇒ 判红",
+         good.replace("- **判据**：【机判】`true`。", "- **判据**：【机判】`swift test` 的收尾行。"), False),
+        ("通用条文写平台专有名 ⇒ 判红",
+         good.replace("- **读数口径**：无。", "- **读数口径**：在 macOS 上跑。"), False),
+        ("通用条文用落点编号 ⇒ 绿",
+         good.replace("- **判据**：【机判】`true`。", "- **判据**：【机判】〈落点 #01〉 的收尾行。"), True),
     ]
     ok = 0
     for name, text, want_pass in cases:
         total, complete, problems = audit(text, schema)
         passed = (total == 1 and not problems and not project_refs(text, schema)
-                  and not dangling_scripts(text, schema) and not bad_sections(text, schema))
+                  and not dangling_scripts(text, schema) and not bad_sections(text, schema)
+                  and not landing_purity(text))
         mark = "✓" if passed == want_pass else "✗"
         if passed == want_pass:
             ok += 1
         print(f"  {mark} {name} ⇒ {'绿' if passed else '红'}，应为{'绿' if want_pass else '红'}")
-    print(f"自检 {ok}/{len(cases)} 达到预期")
-    return 0 if ok == len(cases) else 1
+    # 落点双向对账：悬空引用必须判红、空行必须判红
+    drift_cases = [
+        ("落点悬空 ⇒ 判红", "〈落点 #901〉", "| #01 | `x` | 全局 | y |", False),
+        ("落点表有空行 ⇒ 判红", "〈落点 #01〉", "| #01 | `x` | 全局 | y |\n| #902 | `z` | 全局 | w |", False),
+        ("落点双向一致 ⇒ 绿", "〈落点 #01〉", "| #01 | `x` | 全局 | y |", True),
+    ]
+    for name, generic, project, want_pass in drift_cases:
+        passed = not landing_drift(generic, project)
+        mark = "✓" if passed == want_pass else "✗"
+        if passed == want_pass:
+            ok += 1
+        print(f"  {mark} {name} ⇒ {'绿' if passed else '红'}，应为{'绿' if want_pass else '红'}")
+    total_cases = len(cases) + len(drift_cases)
+    print(f"自检 {ok}/{total_cases} 达到预期")
+    return 0 if ok == total_cases else 1
 
 
 if __name__ == "__main__":
