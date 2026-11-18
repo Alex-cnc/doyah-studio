@@ -237,6 +237,120 @@
       "reason": "负例执行器：2026-11-11 撤掉「冻结件只能冻结」那条用例（判据基线红，改 baseline-red 处置），保留动作函数待冻结后复活",
       "by": "macos",
       "at": "2026-11-11"
+    },
+    {
+      "glob": "AGENT-SPEC.md",
+      "reason": "单测数 5789 → 5790 跟版（Agent 引号/分词那次新增 1 例；文档数字门禁要求入口页与台账一致）",
+      "by": "macos",
+      "at": "2026-11-18"
+    },
+    {
+      "glob": "Docs/Doyah产品概要设计说明书.md",
+      "reason": "判据口径统一：全册判据列「可机检/用例可写/需人判（人工点验）」→【机判】/【人判】（142/112 处）+ §18 口径声明 + §18.1 引号条文补实现要求 + 版本口径收敛（删头部，版本表唯一源）",
+      "by": "macos",
+      "at": "2026-11-18"
+    },
+    {
+      "glob": "Docs/Doyah产品详细设计说明书-Android.md",
+      "reason": "引用修正：『平台对齐-移动端-以安卓为基准』该件从未建，改为如实表述（8 处路径 + 书名号）",
+      "by": "macos",
+      "at": "2026-11-18"
+    },
+    {
+      "glob": "Docs/Doyah产品详细设计说明书-HarmonyOS.md",
+      "reason": "同上（3 处路径引用 + 派生自行里的对齐件指路）",
+      "by": "macos",
+      "at": "2026-11-18"
+    },
+    {
+      "glob": "Docs/Doyah产品详细设计说明书-Windows.md",
+      "reason": "引用修正：归档件重指 Docs/archive/root-20261026（平台对齐-Studio-Windows 等）",
+      "by": "macos",
+      "at": "2026-11-18"
+    },
+    {
+      "glob": "Docs/Doyah产品详细设计说明书-iOS.md",
+      "reason": "同上（3 处路径引用）",
+      "by": "macos",
+      "at": "2026-11-18"
+    },
+    {
+      "glob": "Docs/Doyah产品详细设计说明书-macOS.md",
+      "reason": "引用修正（check-theme-set.py 不存在改人判、LaunchAgentLoginItem 已删除改指、归档件重指）+ 版本口径收敛（删头部，版本表唯一源）",
+      "by": "macos",
+      "at": "2026-11-18"
+    },
+    {
+      "glob": "Docs/Doyah产品需求规格说明书.md",
+      "reason": "引用修正：28 处悬空路径重指归档件 + 版本口径收敛（删头部版本行）",
+      "by": "macos",
+      "at": "2026-11-18"
+    },
+    {
+      "glob": "Docs/通用开发规范.md",
+      "reason": "本轮规范改造主体：27 环节归属字段 + 六阶段补条文（91→134 条）+ 判据口径（【机判】/【人判】+负例+覆盖范围）+ 版本只写一处",
+      "by": "macos",
+      "at": "2026-11-18"
+    },
+    {
+      "glob": "Docs/项目管理规范.md",
+      "reason": "Q 表迁出到 .agent/pending-agenda.md 后的指针改写 + 条文挂归属环节 + 覆盖范围声明",
+      "by": "macos",
+      "at": "2026-11-18"
+    },
+    {
+      "glob": "Scripts/check-agent-provider-presets.py",
+      "reason": "面外台账登记 TestsUISnapshot/AgentChatAnchorProbeTests.swift（快照探针只构造 endpoint 字符串、不发请求）",
+      "by": "macos",
+      "at": "2026-11-18"
+    },
+    {
+      "glob": "Scripts/rule-schema.json",
+      "reason": "新增可选字段「归属环节」（承载 - **归属环节**：B1）",
+      "by": "macos",
+      "at": "2026-11-18"
+    },
+    {
+      "glob": "Scripts/rule-sections.json",
+      "reason": "新建：27 个开发环节的唯一出处 + enforce 开关（收紧期缺环节即红）",
+      "by": "macos",
+      "at": "2026-11-18"
+    },
+    {
+      "glob": "Scripts/check-rule-schema.py",
+      "reason": "归属环节校验（SECTION_IDS/bad_sections/load_enforce），自检 6→9",
+      "by": "macos",
+      "at": "2026-11-18"
+    },
+    {
+      "glob": "Scripts/check-doc-versions.py",
+      "reason": "版本表成为唯一源（当前版本 = 版本表首行；删掉「表顶=头部」判据）+ 通过语跟口径",
+      "by": "macos",
+      "at": "2026-11-18"
+    },
+    {
+      "glob": "Scripts/check-doc-q-series.py",
+      "reason": "Q 表迁 .agent/pending-agenda.md 后改指 + 自测夹具补 .agent 层",
+      "by": "macos",
+      "at": "2026-11-18"
+    },
+    {
+      "glob": "Scripts/check-queue-needs-user.py",
+      "reason": "Q 表迁 .agent/pending-agenda.md 后改指 + 自测夹具补 .agent 层",
+      "by": "macos",
+      "at": "2026-11-18"
+    },
+    {
+      "glob": "Scripts/check-pending-agenda.py",
+      "reason": "Q 表迁 .agent/pending-agenda.md 后改指",
+      "by": "macos",
+      "at": "2026-11-18"
+    },
+    {
+      "glob": "Scripts/run-manual-verification-probes.sh",
+      "reason": "补接 AgentChatAnchorProbeTests 到 FILTER（清单 98→99；实测 2 例 0 失败 + 反例判红）",
+      "by": "macos",
+      "at": "2026-11-18"
     }
   ]
 }
