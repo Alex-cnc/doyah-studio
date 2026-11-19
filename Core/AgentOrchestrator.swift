@@ -14,12 +14,17 @@ public struct AgentSubtaskSpec: Equatable, Sendable {
     public var prompt: String
     /// 单路预算（秒）；0 = 用全局默认。
     public var budgetSeconds: TimeInterval
+    /// **依赖的子任务 id**（详设 §3.20：有依赖的批不许并发 —— 排序是调用方的事，本层不猜）。
+    /// 留空 = 与其他路两两无依赖，可并发。
+    public var dependsOn: [String]
 
-    public init(id: String, label: String, prompt: String, budgetSeconds: TimeInterval = 0) {
+    public init(id: String, label: String, prompt: String, budgetSeconds: TimeInterval = 0,
+                dependsOn: [String] = []) {
         self.id = id
         self.label = label
         self.prompt = prompt
         self.budgetSeconds = budgetSeconds
+        self.dependsOn = dependsOn
     }
 }
 

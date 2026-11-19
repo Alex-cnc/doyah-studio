@@ -1,4 +1,5 @@
-> **版本** **v1.3.49**（2026-11-18 **P4-系统 委派台账接线 + P4-媒体 如实标注**：`AgentSubtaskDelegation` 零生产引用 ⇒ 循环加 `delegation` 身份，每步落台账、可按 index 反查归属（判据 2/2）；**真并行子代理仍待 §3.20，不假接**。`AgentVoiceSession` 同为零引用，但麦克风按令不接 ⇒ 如实记「按令不接」，不写成已接。单测 5825 → 5827）
+> **版本** **v1.3.50**（2026-11-18 **P4-系统 编排层复核**：一单记的「待 §3.20 编排（未实现）」是**过期状态** —— 编排层早已实现并接线（`AgentOrchestrator` 有界并发、`AgentSubagentExecutor` 每路预算与三档收口、工具 `dispatch_subtasks`、AppState 注入 policy、子任务隔离 6/6）。本轮只补一个真缺口：**依赖不判**（spec 加 `dependsOn` + 两种写法解析 + 执行器跳过并点明依赖谁），判据 3/3，反证：不判依赖即红。单测 5827 → 5830）
+
 
 
 
@@ -796,7 +797,7 @@
 | P4-摄取 | FR-AGT-TOOL-INGEST-002 | `Core/AgentDocumentIngestor.swift` + `App/PDFTextExtractor.swift` | `AgentDocumentIngestorTests` 8/8（xlsx 真读 · docx 真读 · PDF 注入 PDFKit · 图片如实报） | ✅ |
 | P4-模型 | FR-AGT-TOOL-MODEL-001/002 | `Core/AgentModelPresets.swift` | 同上（三档 + 预填校验） | ✅ |
 | P4-媒体 | FR-AGT-TOOL-MEDIA-001/002 | `Core/AgentVoiceSession.swift`（状态机，17/17 单测）· `App/SpeechSynthesizer.swift`（语音出已接） | 状态机判据 17/17 在，但**零生产引用** | 🟡 **按令不接**（麦克风未放行 ⇒ 转写状态机没有消费方）；等主人放行再接，不假装已接 |
-| P4-系统 | FR-AGT-TOOL-SYS-002 | `Core/AgentSubtaskDelegation.swift` + `Core/AgentLoop.swift`（`delegation` 身份 + 每步落台账） | `AgentSubtaskLedgerLoopTests` 2/2：以子任务身份跑时每步都归到该子任务名下、可按 `index` 反查归属、主循环不凭空生台账 | 🟡 **台账已接线（2026-11-18）**；真并行子代理（独立上下文 / 失败隔离 / 汇总回主任务）仍待 §3.20 编排 —— 本条只判「标来源」，不判并行 |
+| P4-系统 | FR-AGT-TOOL-SYS-001/002 | **编排层**：`Core/AgentOrchestrator.swift`（有界并发 / 稳定序 / 来源标注）· `Core/AgentSubagentExecution.swift`（每路预算与三档收口 / 重复 id / 依赖不并发）· `Core/AgentLoop.swift`（工具 `dispatch_subtasks` 入口 + 深度锁）· `App/AppState.swift`（宿主注入 `subagentPolicy`）· `Core/AgentSubtaskDelegation.swift`（委派台账） | `AgentSubagentExecutionTests` 13/13 · `AgentSubtaskIsolationTests` 6/6（含真派单不串主对话 / 到点带 partial）/ `AgentCodeAndOrchestrationTests` 6/6 · `AgentOrchestrationDependencyTests` 3/3（有依赖不并发跑且说清依赖谁） | ✅ **已实现（2026-11-18 复核纠正：此前这条记「待 §3.20 编排（未实现）」是过期状态）**；本轮补的真缺口 = **依赖不判**（spec 加 `dependsOn`，解析两种写法，执行器跳过并点明）|
 
 > 读数口径：`swift test --filter <类名>` 实跑（Xcode 工具链）；全量 `Scripts/verify-core.sh` = **3793 项**。
 

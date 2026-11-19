@@ -58,7 +58,17 @@ public struct AgentSubagentExecutor: Sendable {
         var seen = Set<String>()
         var runnable: [AgentSubtaskSpec] = []
         var duplicates: [AgentSubtaskResult] = []
+        /// 带依赖的那几路：**不并发跑**，如实记 `.skipped` 并点明依赖谁（详设 §3.20）。
+        /// 为什么不整批拒：执行器只管调度 —— 能跑的照跑，跑不了的点出来，排序由调用方做。
+        var dependent: [AgentSubtaskResult] = []
         for spec in specs {
+            if !spec.dependsOn.isEmpty {
+                dependent.append(AgentSubtaskResult(subtaskID: spec.id, label: spec.label,
+                                                    status: .skipped,
+                                                    summary: "depends-on:" + spec.dependsOn.joined(separator: ","),
+                                                    artifacts: [], approvalFingerprint: nil))
+                continue
+            }
             if seen.contains(spec.id) {
                 duplicates.append(AgentSubtaskResult(subtaskID: spec.id, label: spec.label,
                                                      status: .skipped, summary: "duplicate-id",
@@ -74,6 +84,7 @@ public struct AgentSubagentExecutor: Sendable {
             results = await runBounded(runnable)
         }
         results.append(contentsOf: duplicates)
+        results.append(contentsOf: dependent)
         return AgentOrchestrationReport(results: Self.inInputOrder(results, specs: specs))
     }
 
@@ -323,8 +334,12 @@ public enum AgentSubtaskSpecList {
             let label = (item["label"] as? String)?
                 .trimmingCharacters(in: .whitespacesAndNewlines) ?? id
             let budget = (item["budgetSeconds"] as? Double) ?? 0
+            // 依赖可能写成 dependsOn / depends_on 两种；认不出就当没有依赖，但执行器会拒有依赖的批 ——
+            // 「认不出来」不等于「可以乱并发」。
+            let deps = (item["dependsOn"] as? [String]) ?? (item["depends_on"] as? [String]) ?? []
             specs.append(AgentSubtaskSpec(id: id, label: label.isEmpty ? id : label,
-                                          prompt: prompt, budgetSeconds: budget))
+                                          prompt: prompt, budgetSeconds: budget,
+                                          dependsOn: deps))
         }
         return .success(specs)
     }
