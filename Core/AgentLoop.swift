@@ -302,6 +302,9 @@ public struct AgentLoopResult: Equatable, Sendable {
     /// 为什么放在结果里而不是只留在事件流：事件流是**过程**（人读的过程面），
     /// 而求助卡要在这一轮**结束之后**仍然挂着（人去办了再回来），所以要随结果交出去。
     public var failureHelp: AgentHelpRequest? = nil
+    /// **过程可见**（`FR-AGT-UX-CONV-006` · P1-7）：一跳一条，`index` 与跳数同量纲；
+    /// 界面直接读这份，不自己拼（两处拼就会漂）。
+    public var stepTrace: AgentStepTrace? = nil
     /// **这段答复的出处账**（`FR-AGT-QUAL-VERIFY-003` + `FR-AGT-QUAL-VERIFY-004`）。
     ///
     /// 由 `seal()` 在收口那一处统一算：内容只取**本轮真做过的动作**（`executedTools`），
@@ -591,6 +594,7 @@ public struct AgentLoop: Sendable {
         var checkpointWriteFailures = 0
         // **详设 §3.23 接线**（2026-11-18）：五钩子挂在真实边界上，钩子出错**不许**中断会话。
         // `defer` 保证无论从哪条 return 出去，结束钩子都恰好跑一次（T-3.23-01）。
+        var trace = AgentStepTrace()
         var hookHost = AgentContextEngineHost(sessionID: context.sessionID, engine: contextEngine)
         var compressWantedAtBoundary = false
         hookHost.startSession()
@@ -647,6 +651,7 @@ public struct AgentLoop: Sendable {
         func seal(_ result: AgentLoopResult) -> AgentLoopResult {
             var copy = compression.applied(to: result)
             copy.quotaLedger = quota == nil ? nil : quotaLedger
+            copy.stepTrace = trace.records.isEmpty ? nil : trace
             // **出处账只在这里算一处**：收口是唯一同时拿得到「成文答复」与「本轮真做过的动作」的地方。
             // 没有答复（停止 / 失败）⇒ 不挂账；有答复但一条断言都没有 ⇒ 也不挂（空账没有信息量）。
             if !copy.text.isEmpty {
@@ -970,6 +975,14 @@ public struct AgentLoop: Sendable {
             }
             steps += 1
             lastText = text
+            // §P1-7：**一跳一条**可见记录（`index` 由轨迹自己按顺序给，与跳数同量纲）。
+            // 一行摘要只放「干了什么」，不放正文 —— 界面侧不再二次拼装。
+            let hopKind: AgentStepKind = invocations.isEmpty ? .decision
+                : (invocations.contains { registry.definition(named: $0.name)?.capability == .runCommand } ? .command
+                   : (invocations.contains { Self.fileAccess(for: registry.definition(named: $0.name)?.capability ?? .search) != nil } ? .file : .tool))
+            let hopLabel = invocations.isEmpty ? "answer" : invocations.map(\.name).joined(separator: ", ")
+            trace.record(kind: hopKind, label: hopLabel,
+                         detail: invocations.isEmpty ? nil : "\(invocations.count) call(s)")
             // **⑤b 运行时边界**（`FR-AGT-GUARD-PERM-003` · P2-2）：**在截批之前**先挑出违规调用。
             // 为什么必须放在这儿而不是逐条执行那里：只读工具是**按批**并发分发的
             // （`readOnlyBatchPrefix` → `runReadOnlyBatch`），逐条那一段的检查对它们根本不生效 ——

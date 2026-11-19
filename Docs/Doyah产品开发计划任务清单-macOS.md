@@ -1,4 +1,5 @@
-> **版本** **v1.3.47**（2026-11-18 **P3-3~6 记忆治理核查**：`AgentMemoryGovernance` 是**重复抽象**而非漏接线 —— 它的类别词表（preference/fact/constraint/skill）与需求书的 `MemoryKind`（routine/troubleshooting/pinned/general）对不上，而「按类型分生命周期 / 解释 / 升格脱敏」在 `Core/MemoryGovernance.swift` 里早就在用。处置：删掉重复类，活实现补一格真缺口 `removeAll(kind:workspace:)`（按类别清空），判据改判活的那份。**一处自我纠正**：第一版我连 `MemoryKind` 的 store 一起改、还把测试改成不存在的 API，编译红后回滚重做，没有硬凑）
+> **版本** **v1.3.48**（2026-11-18 **P1-7 过程可见接线**：`AgentStepTrace` 原先零生产侧引用。循环每跳落一条记录（kind 按能力分 tool/file/command/decision），`index` 与跳数同量纲、连续无空洞，随 `AgentLoopResult.stepTrace` 交出；界面仍走既有事件流，未新造 UI。判据 `AgentStepTraceLoopTests` 3/3，反证：不记轨迹即判红。**两处自我纠正**：轨迹标签原先写了汉字（「答复」「个调用」）⇒ 本地化棘轮当场判红，改机器形态 `answer` / `call(s)`；单测从 5822 → 5825）
+
 
 
 
@@ -739,7 +740,7 @@
 | P1-4 ✅ | FR-AGT-PLAN-PLAN-005 | 完成判据：报完成必须附可检验判据 —— **已落地**（核查结论：`AgentCompletionVerifier` + `EVIDENCE:` 解析 + 界面判红早在仓里，16 例判据全绿；台账此前记 ⬜ 是错的） | 25 | `AgentCompletionVerifierTests` **16/16**：无引用判 `unverified:noEvidence` / 引用本次没发生判红 / 盘上变了判红 / 命令退出码不符判红 / 纯答问判 `notClaimed` / 循环级两条端到端 | 无 |
 | P1-5 ✅ | FR-AGT-PLAN-PLAN-006 | 失败自恢复：可重试先重试，不可重试换路并说明 —— **已落地**（`AgentLoopLimits.maxConsecutiveFailures`/`fallbackModels` + 循环换路与连续失败停，实测 **35 分钟**） | 30 | `AgentLoopRecoveryTests` **4/4**：不可重试换到备用模型并跑通 / 备用表不乒乓（每模型只试一次）/ 连续失败到顶即停且报次数 / 默认值不改旧行为；`AgentLoopRetryTests` 5 例仍绿 | 无 |
 | P1-6 ✅ | FR-AGT-QUAL-VERIFY-001 | 结果自验：产出前自查（能跑跑一遍、能对对一遍）—— **已落地**（`Core/AgentSelfCheck.swift` + 循环最后一跳折表，实测 **40 分钟**） | 25 | `AgentSelfCheckTests` **9/9**：写+跑都过 / 写没复核判红 / 退出码非 0 判红 / 无退出码判红 / 复核推翻记录 / **动过东西零自验 ⇒ skipped** / 纯问答 nothingToCheck / 只读不进分母 / 机器码形状 | 无 |
-| P1-7 | FR-AGT-UX-CONV-006 | 过程可见：每一步工具/文件/命令都在界面可见 | 15 | 每一步都出现一行；无静默步 | 转写区已有 |
+| P1-7 | FR-AGT-UX-CONV-006 | 过程可见：每一步工具/文件/命令都在界面可见 —— **循环侧已接线（2026-11-18）**：一跳一条 `AgentStepRecord`（kind 按能力分 tool/file/command/decision），轨迹随 `AgentLoopResult.stepTrace` 交出，`index` 从 1 连续到跳数；界面侧仍走既有事件流（`toolStarted` / `toolFinished` 每步一行） | 15 | `AgentStepTraceLoopTests` 3/3：记录条数 == 声明跳数、无静默步、index 连续、无空标签；按 kind 可切片（file / decision 各一）；反证：不记轨迹即判红 | 转写区已有 |
 | P1-8 | FR-AGT-UX-CONV-007 | 中途干预：插话改方向 / 停手 / 追加约束 | 20 | 插话在当前步之后生效，不丢已产生结果 | P1-3 |
 | P1-9 | FR-AGT-KNOW-CTX-002 | 压缩只在会话边界：回合内只出预算报告、不改写上下文 —— **核心闸门已落地（2026-11-18）：`makeRequest` 不再调压缩器，真压只走 `compactAtBoundary`；手动 `/compact` 触发器仍缺（界面如实说「没有手动触发点」）** | 60 | `T-3.21-01~03` 循环级 3/3 全绿（`AgentCompressionBoundaryLoopTests`）：超预算回合内观察正文不被压 / 边界真压且保留决策 / 压完仍超如实拒；反证：退回旧行为即判红 | 详设 §3.21 · P1-2 |
 | P1-10 | FR-AGT-CORE-LOOP-005 / -011 | 工具注册表唯一真源 + 可见性由 profile 决定（壳不分叉实现）—— **已接线（2026-11-18）**：`AgentLoop` 请求里的工具表只放「这一壳能看见」的；拒绝理由分三种（没登记 / 不可见 / schema 没取回），两种混淆即判红 | 90 | `T-3.22-01~03` 循环级 3/3 全绿（`AgentToolCatalogLoopTests`）：不可见工具不进请求表且报「不可见」而非「没登记」/ 重复声明装载期抛错 / 两壳同指纹；反证：把「不可见」退回「没登记」即判红 | 详设 §3.22 |
@@ -777,7 +778,7 @@
 
 | 批次 | FR | 落点 | 判据（实跑） | 状态 |
 |---|---|---|---|---|
-| P1-7 | FR-AGT-UX-CONV-006 | `Core/AgentStepTrace.swift` + `AgentChat.apply` | `AgentStepTraceTests` 6/6；界面每跳一行、每次工具一行（就地收尾带耗时） | ✅ |
+| P1-7 | FR-AGT-UX-CONV-006 | `Core/AgentStepTrace.swift`（轨迹本体）· `Core/AgentLoop.swift`（每跳落一条、收口挂结果） | `AgentStepTraceTests` 6/6 + `AgentStepTraceLoopTests` 3/3（循环级） | ✅ 循环侧已接线；界面沿用既有事件流 |
 | P1-8 | FR-AGT-UX-CONV-007 | `Core/AgentIntervention.swift` + `AgentInterventionInbox` + 循环接线 | `AgentInterventionTests` 6/6 · `AgentLoopInterventionTests` 3/3（停手不再起跳、约束进下一跳、改方向换提示） | ✅ |
 | P1-9 | FR-AGT-KNOW-CTX-002 | `Core/AgentCompressionAdmission.swift`（判决+边界入口）· `Core/AgentLoop.swift`（回合内只过闸门） | `AgentCompressionAdmissionTests` 8/8 + `AgentCompressionBoundaryLoopTests` 3/3（循环级：真请求里不压） | ✅ 核心；🟡 手动触发点未做 |
 | P1-10 | FR-AGT-CORE-LOOP-005/-011 | `Core/AgentToolCatalogSnapshot.swift`（目录/快照/四种拒绝）· `Core/AgentLoop.swift`（请求工具表由目录过滤、拒绝理由三分） | `AgentToolCatalogSnapshotTests` 8/8 + `AgentToolCatalogLoopTests` 3/3（循环级） | ✅ 已接线 |
