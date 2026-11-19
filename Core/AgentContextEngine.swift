@@ -58,6 +58,29 @@ public struct AgentHookLogEntry: Equatable, Sendable {
     }
 }
 
+/// 钩子日志口（**可注入**）：循环把每次钩子调用记进来，判据与界面不用再去读私有状态。
+///
+/// 为什么是个类而不是结果字段：`AgentLoopResult` 是 `Equatable` 的公开结构，给加字段会动到
+/// 所有既有构造点；日志是旁路证据，不该挤进结果契约（`T-3.23-01` 断言 `callCount == 1`）。
+public final class AgentHookJournal: @unchecked Sendable {
+    private let lock = NSLock()
+    private var stored: [AgentHookLogEntry] = []
+
+    public init() {}
+
+    public func record(_ entries: [AgentHookLogEntry]) {
+        lock.lock(); stored = entries; lock.unlock()
+    }
+
+    public var entries: [AgentHookLogEntry] {
+        lock.lock(); defer { lock.unlock() }; return stored
+    }
+
+    public func callCount(of hook: AgentContextHook) -> Int {
+        entries.filter { $0.hook == hook }.count
+    }
+}
+
 /// 引擎协议：方法**可抛错** —— 宿主负责把抛错折成 `.failed(code:)` 并继续会话。
 public protocol AgentContextEngine: Sendable {
     func onSessionStart() throws -> AgentHookOutcome

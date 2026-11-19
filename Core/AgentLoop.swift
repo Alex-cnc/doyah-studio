@@ -395,6 +395,14 @@ public struct AgentLoop: Sendable {
     /// **压缩预算**（`NFR-AI-08` ③）：给了就在每一跳拼提示词时压一次，超限才动手。
     /// 不给 = 旧行为**逐字不变**（判据按这一条对拍）。
     public var compressionBudget: AgentContextCompressionBudget?
+    /// **引擎生命周期钩子**（详设 §3.23 · `FR-AGT-CORE-CTX-001` / `OPS-OBS-001`）。
+    /// 给了就在真实边界上跑五钩子：会话开始一次 / 每响应一次 / 每轮问一次要不要压 / 结束时压一次 + 结一次。
+    /// 不给 = 旧行为**逐字不变**（钩子是 opt-in，不是默认态）。
+    public var contextEngine: (any AgentContextEngine)? = nil
+    /// 钩子日志口（可选）：判据断言调用次数用，界面也能据此显示「引擎这次做了什么」。
+    public var hookJournal: AgentHookJournal? = nil
+    /// 会话结束边界类型（`onSessionEnd` 要记 `boundaryKind`）：由宿主按真实场景传，默认 CLI 退出。
+    public var sessionEndReason: AgentSessionEndReason = .cliExit
     /// **旧结果的折叠**（`NFR-AI-08` ③ 的另一半）：每一跳拼提示词时，把又旧又长的观察降级成
     /// 一句「这是什么 / 多大 / 在哪」，正文不再重发 —— 但**不删除**，所以模型不会忘了自己读过什么
     /// （真机根因：旧条目被整条丢掉 ⇒ 同一文件重读 22 次）。
@@ -563,6 +571,18 @@ public struct AgentLoop: Sendable {
         var skippedSteps = 0
         var skippedCheckpointLines = 0
         var checkpointWriteFailures = 0
+        // **详设 §3.23 接线**（2026-11-18）：五钩子挂在真实边界上，钩子出错**不许**中断会话。
+        // `defer` 保证无论从哪条 return 出去，结束钩子都恰好跑一次（T-3.23-01）。
+        var hookHost = AgentContextEngineHost(sessionID: context.sessionID, engine: contextEngine)
+        var compressWantedAtBoundary = false
+        hookHost.startSession()
+        hookJournal?.record(hookHost.log)
+        defer {
+            // 会话边界才真压（§3.21 禁 per-turn）：这一轮问过要不要压、并且现在到边界了，才压一次。
+            if compressWantedAtBoundary { hookHost.compress() }
+            _ = hookHost.endSession(at: sessionEndReason)
+            hookJournal?.record(hookHost.log)
+        }
         var usage = LLMUsage.unknown
         var executed: [AgentToolInvocation] = []
         var rejected: [(name: String, reason: String)] = []
@@ -818,6 +838,11 @@ public struct AgentLoop: Sendable {
                 }
                 // 这一跳读完了 ⇒ **连续失败清零**（只有「连着」才叫连续）。
                 failuresInARow = 0
+                // §3.23：每响应一次 `updateFromResponse`（幂等）；每轮问一次 `shouldCompress`，
+                // 但**不在回合内压**（§3.21）—— 只把「该压」记下来，交给上面的 defer 在边界上压。
+                hookHost.update(text)
+                if case .ok = hookHost.shouldCompress() { compressWantedAtBoundary = true }
+                hookJournal?.record(hookHost.log)
                 break   // 这一跳读完 ⇒ 跳出重试循环
             } catch {
                 // `FR-AI-30` ①：**分档**再决定要不要再试一次。
