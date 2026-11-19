@@ -196,6 +196,43 @@ def section_refs(text: str) -> list[str]:
     return bad
 
 
+def term_closure(generic: str, project: str) -> list[str]:
+    """术语闭环（两半，都是机判得住的）：
+
+    ① 术语表里的词，正文必须真的用到 —— 防止术语表变成「加了没人用」的空词柜；
+    ② 项目册的「术语对应」段必须覆盖通用册**全部**术语 —— 防止只清了一边。
+
+    判不了的第三半（正文里自造的词有没有定义）**不在本函数里**，它是人判：
+    自造词不可枚举，机器认不出「哪个词是自造词」。
+    """
+    lines = generic.split("\n")
+    start = next((i for i, l in enumerate(lines) if "**术语（" in l), None)
+    if start is None:
+        return ["通用册没有术语表 —— 术语无从闭环"]
+    end = next((i for i in range(start + 1, len(lines)) if "这些名字" in lines[i]), len(lines))
+    block = "\n".join(lines[start:end])
+    body = "\n".join(lines[:start] + lines[end:])
+    terms = [t.strip() for t in re.findall(r"\*\*([^*\n]+)\*\*\s*=", block)]
+    if not terms:
+        return ["术语表里一个 `**词** = 解释` 都没有"]
+    issues: list[str] = []
+    for term in terms:
+        key = term.split(" #")[0].strip()
+        if key not in body:
+            issues.append(f"术语表里的「{key}」正文一次都没用到（空词）")
+    proj_start = project.find("**术语对应**")
+    proj_sec = project[proj_start:] if proj_start >= 0 else ""
+    if not proj_sec:
+        issues.append("项目册没有「术语对应」段 —— 术语只在本册转，不知道在本仓叫什么")
+    else:
+        proj_sec = proj_sec.split("\n| #")[0]
+        for term in terms:
+            key = term.split(" #")[0].strip()
+            if key not in proj_sec:
+                issues.append(f"项目册「术语对应」缺「{key}」—— 本仓这个术语指什么没说")
+    return issues
+
+
 def landing_purity(text: str) -> list[str]:
     """通用册里出现的落点/平台专有名（空列表 = 干净）。"""
     bad = []
@@ -271,7 +308,8 @@ def project_refs(text: str, schema: dict) -> list[str]:
     names = set(schema["字段"].keys())
     return [title for title, body in split_clauses(text, names) if PROJECT_REF.search(body)]
 BOOKS = ["Doyah产品需求规格说明书_不做.md"]  # 占位，实际用下面 NORMS
-NORMS = ["通用开发规范.md", "项目管理规范.md"]
+PROJECT_BOOK = "项目管理规范.md"
+NORMS = [GENERIC_BOOK, PROJECT_BOOK]
 
 # 条文起行：`- **标题**：` / `1. **标题**：` / `- **标题**（2016-09-29 定）。`
 # 口径：**带「判据」声明的条目**才算条文（没声明判据的是叙述，不是条文）。
@@ -362,10 +400,13 @@ def main(argv: list[str]) -> int:
         total, complete, problems = audit(text, schema)
         if name == GENERIC_BOOK:
             for title in project_refs(text, schema):
-                bad.append(f"{name}: 条文「{title}」引用了项目规范 —— 只许项目规范引用本件（单向）")
+                bad.append(f"{name}: 条文「{title}」引用了项目规范 —— 只许项目规范引用本册（单向）")
             for hit in landing_purity(text):
                 bad.append(f"{name}: {hit}")
             for hit in section_refs(text):
+                bad.append(f"{name}: {hit}")
+            proj_path = DOCS / PROJECT_BOOK
+            for hit in term_closure(text, proj_path.read_text(encoding="utf-8") if proj_path.exists() else ""):
                 bad.append(f"{name}: {hit}")
         for drift in index_drift(text, schema):
             bad.append(f"{name}: {drift}")
@@ -487,7 +528,24 @@ def self_test(schema: dict) -> int:
         if passed == want_pass:
             ok += 1
         print(f"  {mark} {name} ⇒ {'绿' if passed else '红'}，应为{'绿' if want_pass else '红'}")
-    total_cases = len(cases) + len(drift_cases)
+    # 术语闭环：空词必须判红、项目册缺词必须判红、两边都闭环才绿
+    g_term = ("> **术语（固定含义）**：\n> **入口页** = 仓根那份索引；\n"
+              "> 这些名字每个项目各自不同。\n\n正文里要用到入口页这个词。\n")
+    p_term_ok = "> **术语对应**：入口页 = 本仓根目录那份索引。\n\n| # | 判据物 |\n|---|---|\n"
+    term_cases = [
+        ("术语表里的词正文一次没用 ⇒ 判红",
+         g_term.replace("正文里要用到入口页这个词。", "正文。"), p_term_ok, False),
+        ("项目册「术语对应」缺词 ⇒ 判红",
+         g_term, "> **术语对应**：文档根 = 文档目录。\n\n| # | 判据物 |\n|---|---|\n", False),
+        ("术语两边闭环 ⇒ 绿", g_term, p_term_ok, True),
+    ]
+    for name, gt, pt, want_clean in term_cases:
+        clean = not term_closure(gt, pt)
+        mark = "✓" if clean == want_clean else "✗"
+        if clean == want_clean:
+            ok += 1
+        print(f"  {mark} {name} ⇒ {'绿' if clean else '红'}，应为{'绿' if want_clean else '红'}")
+    total_cases = len(cases) + len(drift_cases) + len(term_cases)
     print(f"自检 {ok}/{total_cases} 达到预期")
     return 0 if ok == total_cases else 1
 
