@@ -19,6 +19,10 @@ public enum AgentToolRefusal: String, Codable, Equatable, Sendable {
     case badArguments
     /// 这一侧没接上实现（宿主没注入工具）—— 如实说，不假装能做。
     case unavailable
+    /// 已登记、但在这个 profile 里**不可见**（详设 §3.22）：与「没登记」是两条信息，不许混。
+    case notVisibleInProfile
+    /// schema 还没取回就调用（`FR-AGT-CORE-LOOP-010` 的按需发现）：先取 schema，可重试。
+    case schemaNotFetched
     /// 非白名单命令 / 控制字符（`FR-AI-20` ④）。
     case commandNotAllowed
     /// 没批准就想落盘 / 执行（`FR-AI-20` ③④⑤）。

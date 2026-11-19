@@ -403,6 +403,12 @@ public struct AgentLoop: Sendable {
     public var hookJournal: AgentHookJournal? = nil
     /// 会话结束边界类型（`onSessionEnd` 要记 `boundaryKind`）：由宿主按真实场景传，默认 CLI 退出。
     public var sessionEndReason: AgentSessionEndReason = .cliExit
+    /// **工具目录唯一真源**（详设 §3.22 · `FR-AGT-CORE-LOOP-005` / `-011`）：给了就用它决定
+    /// 「这一壳能看见哪些工具」，并且拒绝时能分清「没登记」与「不可见」。
+    /// 不给 = 旧行为**逐字不变**（用注册表全量）。
+    public var toolCatalog: AgentToolCatalog? = nil
+    /// 当前壳的 profile（决定可见集合）。
+    public var agentProfile: AgentProfileKind = .terminalShell
     /// **旧结果的折叠**（`NFR-AI-08` ③ 的另一半）：每一跳拼提示词时，把又旧又长的观察降级成
     /// 一句「这是什么 / 多大 / 在哪」，正文不再重发 —— 但**不删除**，所以模型不会忘了自己读过什么
     /// （真机根因：旧条目被整条丢掉 ⇒ 同一文件重读 22 次）。
@@ -1171,7 +1177,29 @@ public struct AgentLoop: Sendable {
                 }
                 let invocation = budgeted[invocationCursor]
                 invocationCursor += 1
-                // ⑤ 未登记 ⇒ 不执行，如实回灌
+                // ⑤ 未登记 / 不可见 / schema 没取回 ⇒ 不执行，如实回灌（三种说法必须不同，§3.22）
+                if let catalog = toolCatalog,
+                   case let .failure(refusal) = catalog.resolve(invocation.name, for: agentProfile) {
+                    let reason: String
+                    switch refusal {
+                    case .toolNotRegistered: reason = AgentToolRefusal.unregistered.rawValue
+                    case .toolNotVisibleInProfile: reason = AgentToolRefusal.notVisibleInProfile.rawValue
+                    case .schemaNotFetched: reason = AgentToolRefusal.schemaNotFetched.rawValue
+                    }
+                    rejected.append((invocation.name, reason))
+                    observations.append("\(invocation.name): \(reason)")
+                    await emit(.toolStarted(name: invocation.name,
+                                                         summary: AgentToolSummary.line(fromArgumentsJSON: invocation.argumentsJSON)))
+                    await emit(.toolFinished(name: invocation.name, outcome: "denied", millis: nil))
+                    recordTurn(context: context, kind: .tool, role: "tool",
+                               text: "\(invocation.name) => \(reason)",
+                               toolName: invocation.name, toolCallID: invocation.callID, at: startedAt)
+                    await audit?.record(AgentActionRecord.makeToolCall(
+                        toolName: invocation.name, argumentsSummary: invocation.argumentsJSON,
+                        outcome: .denied, detail: reason,
+                        sessionID: context.sessionID, hopIndex: steps - 1, chainID: context.chainID, at: startedAt))
+                    continue
+                }
                 guard let definition = registry.definition(named: invocation.name) else {
                     let reason = AgentToolRefusal.unregistered.rawValue
                     rejected.append((invocation.name, reason))
@@ -1558,7 +1586,15 @@ public struct AgentLoop: Sendable {
             prompt += "\n\n（本轮工具已关闭：不要再请求工具调用，直接给出结论。）"
         }
         request.userPrompt = prompt
-        request.tools = toolsDisabled ? [] : registry.enabledTools
+        // §3.22：目录是唯一真源 —— 请求里只放「这一壳能看见」的工具（不给目录 = 旧行为）。
+        if toolsDisabled {
+            request.tools = []
+        } else if let catalog = toolCatalog {
+            let visible = Set(catalog.snapshot(for: agentProfile).visibleNames)
+            request.tools = registry.enabledTools.filter { visible.contains($0.name) }
+        } else {
+            request.tools = registry.enabledTools
+        }
         if toolsDisabled {
             request.toolChoice = .none
         } else if request.toolChoice == nil {

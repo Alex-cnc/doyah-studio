@@ -1,4 +1,5 @@
-> **版本** **v1.3.42**（2026-11-18 **P1-11 生命周期钩子接线**：`AgentContextEngine` 原先零生产侧引用（类写完、测试绿、主循环一次没调过——与 P1-9 同一种病）。接线点：`AgentLoop.run` 起会话一次、每响应 `updateFromResponse`、每轮问 `shouldCompress`（**只问不压**，真压留给 §3.21 边界准入）、`defer` 里边界压一次 + `onSessionEnd` 恰好一次；钩子抛错折 `.failed` 不中断会话；新增 `AgentHookJournal` 旁路日志口（不动 `AgentLoopResult` 契约）。判据 `AgentContextHooksLoopTests` 4/4，反证：去掉结束钩子即判红。单测 5811 → 5815）
+> **版本** **v1.3.43**（2026-11-18 **P1-10 工具目录接线**：`AgentToolCatalogSnapshot` 原先零生产侧引用。两处接线：① 请求里的工具表由目录按 profile 过滤（不许第二处硬编码清单）；② 拒绝理由分三种 —— 没登记 / 不可见 / schema 没取回（`AgentToolRefusal` 加两值），§3.22 要求「不可见 ≠ 不存在」。判据 `AgentToolCatalogLoopTests` 3/3，反证：把「不可见」退回「没登记」即判红。单测 5815 → 5818）
+
 
 
 > 上游（活书）：同端《Doyah产品详细设计说明书 · macOS端》（`Docs/Doyah产品详细设计说明书-macOS.md`）> 需求规格说明书 > 概要设计说明书；本文件只记「要做什么」，不复制上游正文。
@@ -737,7 +738,7 @@
 | P1-7 | FR-AGT-UX-CONV-006 | 过程可见：每一步工具/文件/命令都在界面可见 | 15 | 每一步都出现一行；无静默步 | 转写区已有 |
 | P1-8 | FR-AGT-UX-CONV-007 | 中途干预：插话改方向 / 停手 / 追加约束 | 20 | 插话在当前步之后生效，不丢已产生结果 | P1-3 |
 | P1-9 | FR-AGT-KNOW-CTX-002 | 压缩只在会话边界：回合内只出预算报告、不改写上下文 —— **核心闸门已落地（2026-11-18）：`makeRequest` 不再调压缩器，真压只走 `compactAtBoundary`；手动 `/compact` 触发器仍缺（界面如实说「没有手动触发点」）** | 60 | `T-3.21-01~03` 循环级 3/3 全绿（`AgentCompressionBoundaryLoopTests`）：超预算回合内观察正文不被压 / 边界真压且保留决策 / 压完仍超如实拒；反证：退回旧行为即判红 | 详设 §3.21 · P1-2 |
-| P1-10 | FR-AGT-CORE-LOOP-005 / -011 | 工具注册表唯一真源 + 可见性由 profile 决定（壳不分叉实现）—— **契约已立（详设 §3.22），实现未跟** | 90 | `T-3.22-01~03` 全绿：重复声明停装载；不可见 ≠ 不存在；同一工具两壳同 handler | 详设 §3.22 |
+| P1-10 | FR-AGT-CORE-LOOP-005 / -011 | 工具注册表唯一真源 + 可见性由 profile 决定（壳不分叉实现）—— **已接线（2026-11-18）**：`AgentLoop` 请求里的工具表只放「这一壳能看见」的；拒绝理由分三种（没登记 / 不可见 / schema 没取回），两种混淆即判红 | 90 | `T-3.22-01~03` 循环级 3/3 全绿（`AgentToolCatalogLoopTests`）：不可见工具不进请求表且报「不可见」而非「没登记」/ 重复声明装载期抛错 / 两壳同指纹；反证：把「不可见」退回「没登记」即判红 | 详设 §3.22 |
 | P1-11 | FR-AGT-CORE-CTX-001 / OPS-OBS-001 | 引擎生命周期钩子：五钩子、`onSessionEnd` 只在真实边界、失败不中断会话 —— **已接线（2026-11-18）**：`AgentLoop.run` 起会话一次 / 每响应 update / 每轮问 shouldCompress / 边界压一次 + 结一次；钩子抛错折成 `.failed` 不中断会话 | 120 | `T-3.23-01~03` 循环级 4/4 全绿（`AgentContextHooksLoopTests`）：真实结束恰好一次（日志也 1 条）/ 钩子抛错会话照旧 finished / 无引擎如实 skipped / 回合内 end 被拒且幂等；反证：去掉结束钩子即判红 | 详设 §3.23 · P1-9 |
 
 ### P2 · 安全与权限（4 条 · ≈ 300 分钟）
@@ -775,7 +776,7 @@
 | P1-7 | FR-AGT-UX-CONV-006 | `Core/AgentStepTrace.swift` + `AgentChat.apply` | `AgentStepTraceTests` 6/6；界面每跳一行、每次工具一行（就地收尾带耗时） | ✅ |
 | P1-8 | FR-AGT-UX-CONV-007 | `Core/AgentIntervention.swift` + `AgentInterventionInbox` + 循环接线 | `AgentInterventionTests` 6/6 · `AgentLoopInterventionTests` 3/3（停手不再起跳、约束进下一跳、改方向换提示） | ✅ |
 | P1-9 | FR-AGT-KNOW-CTX-002 | `Core/AgentCompressionAdmission.swift`（判决+边界入口）· `Core/AgentLoop.swift`（回合内只过闸门） | `AgentCompressionAdmissionTests` 8/8 + `AgentCompressionBoundaryLoopTests` 3/3（循环级：真请求里不压） | ✅ 核心；🟡 手动触发点未做 |
-| P1-10 | FR-AGT-CORE-LOOP-005/-011 | `Core/AgentToolCatalogSnapshot.swift` | `AgentToolCatalogSnapshotTests` 8/8（T-3.22-01~03） | ✅ |
+| P1-10 | FR-AGT-CORE-LOOP-005/-011 | `Core/AgentToolCatalogSnapshot.swift`（目录/快照/四种拒绝）· `Core/AgentLoop.swift`（请求工具表由目录过滤、拒绝理由三分） | `AgentToolCatalogSnapshotTests` 8/8 + `AgentToolCatalogLoopTests` 3/3（循环级） | ✅ 已接线 |
 | P1-11 | FR-AGT-CORE-CTX-001 / OPS-OBS-001 | `Core/AgentContextEngine.swift`（宿主+日志口）· `Core/AgentLoop.swift`（五钩子接线，`defer` 保「恰好一次」） | `AgentContextEngineTests` 6/6 + `AgentContextHooksLoopTests` 4/4（循环级） | ✅ 已接线 |
 | P2-1 | FR-AGT-GUARD-PERM-002 | `Core/AgentPermissionConfig.swift` | `AgentPermissionBoundaryTests` 10/10（改配置立即生效 / 非法拒绝带原因） | ✅ |
 | P2-2 | FR-AGT-GUARD-PERM-003 | `Core/AgentSandboxBoundary.swift` | 同上（越界 / `..` 逃逸 / 只读根） | ✅ |
