@@ -1,4 +1,5 @@
-> **版本** **v1.3.45**（2026-11-18 **P2-3 及时刹停接线**：`AgentPreActionStop` 原先零生产侧引用。按**能力**（不是工具名——工具名只许在注册表）翻译成四类伤害性动作，命中即停这一回合；新增 `AgentLoopStop.harmfulAction` + `harmful:<标记>` + 中英文案 + 界面渲染一处；App 行数棘轮 46372 → 46373。判据 5/5，反证：去掉刹停分支即 3 例判红；单测 5821 → 5826）
+> **版本** **v1.3.46**（2026-11-18 **P3-2 优先级截断接线**：`AgentContextPriorityTruncator` 原先零生产侧引用。超预算时按优先级丢段并在提示词里明说；回灌抬头提成常量（本地化棘轮按含汉字字面量的行数记账，不能白涨）。判据 3/3，反证：全标 critical 即判红；单测 5826 → 5829）
+
 
 
 
@@ -758,7 +759,7 @@
 | # | FR | 内容 | 估时 | 判据 |
 |---|---|---|---|---|
 | P3-1 ✅ | FR-AGT-KNOW-CTX-001 | 项目上下文自动带上（工作区结构 / 分支 / 未提交改动）—— **已落地**（`Core/AgentGitFacts.swift` + `GitStatusProbe`，实测 **35 分钟**） | 45 | `AgentGitFactsTests` **9/9**：分支/ahead/behind/改动排序 · 无上游为 0 · 无分支行⇒nil · 空仓库归一 · 40 条上限且报丢弃数 · 摘要形状 · 排在目录前 · 只带摘要不带 diff · 无仓库不塞空段 |
-| P3-2 | FR-AGT-KNOW-CTX-002 | 上下文压缩（超预算按段优先级截断并标记） | 40 | 截断处可见；两次压缩结果一致 |
+| P3-2 | FR-AGT-KNOW-CTX-002 | 上下文预算不够时的优先级截断 —— **已接线（2026-11-18）**：超预算时按优先级丢段（最近一条 = critical 必留 → 折叠摘要 = high → 其余观察 = normal，先丢最老），并把丢了几段写进提示词（不静默）；预算内提示词逐字不变 | 60 | `AgentContextPriorityTruncationLoopTests` 3/3：超预算留最新丢最老且明说丢了哪些 / 预算内逐字不变 / 不给预算时旧行为；反证：把全部段标成 critical 即判红 |
 | P3-3–6 | FR-AGT-KNOW-MEM-002/003/004/005（🟡） | 记忆治理 / 对话记忆 / 参数化与技能候选 / 技能库 | 95 | 可检视、可删除、可解释；删除即真删 |
 
 ### P4 · 工具面（12 条 · ≈ 420 分钟）
@@ -784,7 +785,7 @@
 | P2-2 | FR-AGT-GUARD-PERM-003 | `Core/AgentSandboxBoundary.swift`（判定）· `Core/AgentLoop.swift`（截批前预过滤 + 拒绝回灌） | `AgentPermissionBoundaryTests` 10/10 + `AgentSandboxLoopTests` 3/3（循环级） | ✅ 已接线 |
 | P2-3 | FR-AGT-CORE-LOOP-007 | 及时刹停：伤害性动作前置停止（不建审批单、不执行）—— **已接线（2026-11-18）**：截批前按**能力**翻译成伤害性动作（删库 / 无 WHERE 删除 / 覆盖已有文件 / 伤害性命令），命中即**停这一回合**（不是回灌让模型再试）；新增停手原因 `harmful:<标记>` 与界面文案 | 60 | `AgentPreActionStopLoopTests` 5/5：删库与无 WHERE 删除停且工具层 0 调用 / 覆盖已有文件停、新建放行 / 伤害性命令停 / 停手原因可反解 / 对外发布类只在闸门本体判（本仓尚无发布工具，已写进覆盖范围） |
 | P2-4 | FR-AGT-GUARD-PERM-004 | `Core/AgentSQLStatementJudge.swift` | 同上（危险语句判红；注入不当指令） | ✅ |
-| P3-2 | FR-AGT-KNOW-CTX-002 | `Core/AgentContextPriorityTruncator.swift` | `AgentKnowledgeTests` 14/14（按优先级截断、标记可见、两次一致） | ✅ |
+| P3-2 | FR-AGT-KNOW-CTX-002 | `Core/AgentContextPriorityTruncator.swift`（优先级截断）· `Core/AgentLoop.swift`（超预算时按优先级丢段并明说） | `AgentContextPriorityTruncatorTests` 6/6 + `AgentContextPriorityTruncationLoopTests` 3/3（循环级） | ✅ 已接线 |
 | P3-3~6 | FR-AGT-KNOW-MEM-002~005 | `Core/AgentMemoryGovernance.swift` | 同上（可检视/可解释/删除即真删/技能候选） | ✅ |
 | P4-编辑 | FR-AGT-TOOL-EDIT-001 | `Core/AgentBlockEditor.swift` + 既有 `editFile` | `AgentToolFaceTests` 17/17；改走审批 + 陈旧锚点复检 + 租约（`AgentWorkspaceToolsTests`） | ✅ |
 | P4-摄取 | FR-AGT-TOOL-INGEST-001 | —— | **未实现**（2026-10-31 归正：`Core/AgentIngestion.swift` 是本地资料切块，不是联网；`fetch_url` 未启用、无 `web_search`） | ⬜ |
