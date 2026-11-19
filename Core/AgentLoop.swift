@@ -305,6 +305,9 @@ public struct AgentLoopResult: Equatable, Sendable {
     /// **过程可见**（`FR-AGT-UX-CONV-006` · P1-7）：一跳一条，`index` 与跳数同量纲；
     /// 界面直接读这份，不自己拼（两处拼就会漂）。
     public var stepTrace: AgentStepTrace? = nil
+    /// **子任务委派台账**（`FR-AGT-TOOL-SYS-002` ②：汇总时标明哪条来自哪个子任务 · P4-系统）。
+    /// 主循环这一趟若被当作某个子任务的执行体，步骤就记到该子任务名下；否则为空。
+    public var subtaskLedger: AgentSubtaskLedger? = nil
     /// **这段答复的出处账**（`FR-AGT-QUAL-VERIFY-003` + `FR-AGT-QUAL-VERIFY-004`）。
     ///
     /// 由 `seal()` 在收口那一处统一算：内容只取**本轮真做过的动作**（`executedTools`），
@@ -424,6 +427,9 @@ public struct AgentLoop: Sendable {
     /// 给了就**任何落到路径上的执行**都先过它 —— 越界根 / 只读根不许写，一律在分发前拒。
     /// 不给 = 旧行为**逐字不变**（工作区自身的根检查照旧）。
     public var sandbox: AgentSandboxBoundary? = nil
+    /// 这一趟循环**代表谁在跑**（`P4-系统`）：默认主循环；被当子任务跑时由发起方给出。
+    /// 台账 `delegatedAtStep` 要的是「第几跳派的」，所以发起方也得传，循环不猜。
+    public var delegation: (id: String, goal: String, delegatedAtStep: Int)? = nil
     /// **旧结果的折叠**（`NFR-AI-08` ③ 的另一半）：每一跳拼提示词时，把又旧又长的观察降级成
     /// 一句「这是什么 / 多大 / 在哪」，正文不再重发 —— 但**不删除**，所以模型不会忘了自己读过什么
     /// （真机根因：旧条目被整条丢掉 ⇒ 同一文件重读 22 次）。
@@ -595,6 +601,7 @@ public struct AgentLoop: Sendable {
         // **详设 §3.23 接线**（2026-11-18）：五钩子挂在真实边界上，钩子出错**不许**中断会话。
         // `defer` 保证无论从哪条 return 出去，结束钩子都恰好跑一次（T-3.23-01）。
         var trace = AgentStepTrace()
+        var ledger = AgentSubtaskLedger()
         var hookHost = AgentContextEngineHost(sessionID: context.sessionID, engine: contextEngine)
         var compressWantedAtBoundary = false
         hookHost.startSession()
@@ -652,6 +659,7 @@ public struct AgentLoop: Sendable {
             var copy = compression.applied(to: result)
             copy.quotaLedger = quota == nil ? nil : quotaLedger
             copy.stepTrace = trace.records.isEmpty ? nil : trace
+            copy.subtaskLedger = ledger.delegations.isEmpty ? nil : ledger
             // **出处账只在这里算一处**：收口是唯一同时拿得到「成文答复」与「本轮真做过的动作」的地方。
             // 没有答复（停止 / 失败）⇒ 不挂账；有答复但一条断言都没有 ⇒ 也不挂（空账没有信息量）。
             if !copy.text.isEmpty {
@@ -983,6 +991,13 @@ public struct AgentLoop: Sendable {
             let hopLabel = invocations.isEmpty ? "answer" : invocations.map(\.name).joined(separator: ", ")
             trace.record(kind: hopKind, label: hopLabel,
                          detail: invocations.isEmpty ? nil : "\(invocations.count) call(s)")
+            if let delegation {
+                if !ledger.delegations.contains(where: { $0.id == delegation.id }) {
+                    ledger.delegate(id: delegation.id, goal: delegation.goal,
+                                    atStep: delegation.delegatedAtStep)
+                }
+                ledger.appendStep(subtaskID: delegation.id, kind: hopKind, label: hopLabel)
+            }
             // **⑤b 运行时边界**（`FR-AGT-GUARD-PERM-003` · P2-2）：**在截批之前**先挑出违规调用。
             // 为什么必须放在这儿而不是逐条执行那里：只读工具是**按批**并发分发的
             // （`readOnlyBatchPrefix` → `runReadOnlyBatch`），逐条那一段的检查对它们根本不生效 ——

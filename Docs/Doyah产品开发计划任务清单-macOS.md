@@ -1,4 +1,5 @@
-> **版本** **v1.3.48**（2026-11-18 **P1-7 过程可见接线**：`AgentStepTrace` 原先零生产侧引用。循环每跳落一条记录（kind 按能力分 tool/file/command/decision），`index` 与跳数同量纲、连续无空洞，随 `AgentLoopResult.stepTrace` 交出；界面仍走既有事件流，未新造 UI。判据 `AgentStepTraceLoopTests` 3/3，反证：不记轨迹即判红。**两处自我纠正**：轨迹标签原先写了汉字（「答复」「个调用」）⇒ 本地化棘轮当场判红，改机器形态 `answer` / `call(s)`；单测从 5822 → 5825）
+> **版本** **v1.3.49**（2026-11-18 **P4-系统 委派台账接线 + P4-媒体 如实标注**：`AgentSubtaskDelegation` 零生产引用 ⇒ 循环加 `delegation` 身份，每步落台账、可按 index 反查归属（判据 2/2）；**真并行子代理仍待 §3.20，不假接**。`AgentVoiceSession` 同为零引用，但麦克风按令不接 ⇒ 如实记「按令不接」，不写成已接。单测 5825 → 5827）
+
 
 
 
@@ -794,8 +795,8 @@
 | P4-摄取 | FR-AGT-TOOL-INGEST-003 | `Core/AgentIngestion.swift` | 视觉不可用明说 | ✅ |
 | P4-摄取 | FR-AGT-TOOL-INGEST-002 | `Core/AgentDocumentIngestor.swift` + `App/PDFTextExtractor.swift` | `AgentDocumentIngestorTests` 8/8（xlsx 真读 · docx 真读 · PDF 注入 PDFKit · 图片如实报） | ✅ |
 | P4-模型 | FR-AGT-TOOL-MODEL-001/002 | `Core/AgentModelPresets.swift` | 同上（三档 + 预填校验） | ✅ |
-| P4-媒体 | FR-AGT-TOOL-MEDIA-001/002 | `Core/AgentVoiceSession.swift` · `App/SpeechSynthesizer.swift` | 转写状态机 17/17；语音出已接 AVSpeechSynthesizer（可中断） | 🟡 仅麦克风未接（人类主人令「除了麦克风」） |
-| P4-系统 | FR-AGT-TOOL-SYS-001/002 | `Core/AgentSubtaskDelegation.swift` | 每步可见 ✅；委派标来源的台账已就位 | 🟡 子任务依赖 §3.20 编排（未实现） |
+| P4-媒体 | FR-AGT-TOOL-MEDIA-001/002 | `Core/AgentVoiceSession.swift`（状态机，17/17 单测）· `App/SpeechSynthesizer.swift`（语音出已接） | 状态机判据 17/17 在，但**零生产引用** | 🟡 **按令不接**（麦克风未放行 ⇒ 转写状态机没有消费方）；等主人放行再接，不假装已接 |
+| P4-系统 | FR-AGT-TOOL-SYS-002 | `Core/AgentSubtaskDelegation.swift` + `Core/AgentLoop.swift`（`delegation` 身份 + 每步落台账） | `AgentSubtaskLedgerLoopTests` 2/2：以子任务身份跑时每步都归到该子任务名下、可按 `index` 反查归属、主循环不凭空生台账 | 🟡 **台账已接线（2026-11-18）**；真并行子代理（独立上下文 / 失败隔离 / 汇总回主任务）仍待 §3.20 编排 —— 本条只判「标来源」，不判并行 |
 
 > 读数口径：`swift test --filter <类名>` 实跑（Xcode 工具链）；全量 `Scripts/verify-core.sh` = **3793 项**。
 

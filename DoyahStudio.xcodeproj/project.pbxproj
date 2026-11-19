@@ -458,6 +458,7 @@
 		5FB10AF3AB61BEA27BFAB9F0 /* AgentSlashCommandRuntimeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA5E1C63F529BEF4CB04D59D /* AgentSlashCommandRuntimeTests.swift */; };
 		5FBA402C79171E293A80595F /* SyntheticDataPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19E3CB7E6D3980B888AFF49 /* SyntheticDataPanel.swift */; };
 		5FBB89AA4749971653D56A13 /* NoteVersionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7569BA2FFD197E6B17CFF9C1 /* NoteVersionTests.swift */; };
+		606C7C2ED958AC29BCA9E47B /* AgentSubtaskLedgerLoopTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D79D03C2B4800E0FB26BE929 /* AgentSubtaskLedgerLoopTests.swift */; };
 		607763F9BDFF77CAB553EA47 /* AgentNotifyWiringTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36860CFDFC95ED418D02CA3C /* AgentNotifyWiringTests.swift */; };
 		60BDD94CEFB69BF3DC2D211A /* AgentSessionDurabilityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6CF5EFA049C445B61F68665D /* AgentSessionDurabilityTests.swift */; };
 		615CBBEFCDFB42AB5973EDB7 /* DialogButtonSourceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B24BF79437AC8DFAEAB99F36 /* DialogButtonSourceTests.swift */; };
@@ -2256,6 +2257,7 @@
 		D70A237DA1D507197904793B /* AgentKnowledgeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentKnowledgeTests.swift; sourceTree = "<group>"; };
 		D734CF660B6D04059FC426B2 /* ReminderEntry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReminderEntry.swift; sourceTree = "<group>"; };
 		D77604E1566FDECFE46A824C /* AgentIMQQInteraction.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentIMQQInteraction.swift; sourceTree = "<group>"; };
+		D79D03C2B4800E0FB26BE929 /* AgentSubtaskLedgerLoopTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentSubtaskLedgerLoopTests.swift; sourceTree = "<group>"; };
 		D7E83FD2723B8FF86C0187E2 /* SymbolHoverSourceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SymbolHoverSourceTests.swift; sourceTree = "<group>"; };
 		D7F17BF5B11EC16E62DA53C7 /* ReminderPresentation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReminderPresentation.swift; sourceTree = "<group>"; };
 		D81FE38807C64D090234544E /* ExecutionPlanPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExecutionPlanPanel.swift; sourceTree = "<group>"; };
@@ -2719,6 +2721,7 @@
 				EEA3EC1BA88E55B78805488E /* AgentSubagentDispatchTests.swift */,
 				3B2A1323EE9655A0BB4BAFEB /* AgentSubagentExecutionTests.swift */,
 				13CEE38BA4CDDFED485A9009 /* AgentSubtaskIsolationTests.swift */,
+				D79D03C2B4800E0FB26BE929 /* AgentSubtaskLedgerLoopTests.swift */,
 				55EDE02980AE2E93C9CBEE96 /* AgentTaskScopeTests.swift */,
 				4FE76078A251BD0306431E8D /* AgentThinkingStreamTests.swift */,
 				3692EED2E2FB5904E0D2F9F0 /* AgentToolApprovalTests.swift */,
@@ -4910,6 +4913,7 @@
 				21F858BBB9EB6141EEB72F0D /* AgentSubagentDispatchTests.swift in Sources */,
 				83398E405F0AAF4568A99EB0 /* AgentSubagentExecutionTests.swift in Sources */,
 				DC36369340EA086ADB2FBA43 /* AgentSubtaskIsolationTests.swift in Sources */,
+				606C7C2ED958AC29BCA9E47B /* AgentSubtaskLedgerLoopTests.swift in Sources */,
 				C9ED2905F1EFFA455B094974 /* AgentTaskScopeTests.swift in Sources */,
 				59C54F8D960C35B8272D4F4E /* AgentThinkingStreamTests.swift in Sources */,
 				99FFF513C340D82C0BC7E958 /* AgentToolApprovalTests.swift in Sources */,
