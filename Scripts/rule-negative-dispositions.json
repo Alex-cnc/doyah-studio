@@ -117,14 +117,14 @@
       "evidence": "`check-tri-repo-parity.py` 有 `--self-test`（verify-all 第 1 项内跑）；`check-doc-sync.py` 只报告。"
     },
     {
-      "clause": "一单状态机：实现 ✅ 而判据没跟上，不许留在这一单里",
+      "clause": "进度清单状态机：实现 ✅ 而判据没跟上，不许留在这进度清单里",
       "book": "通用开发规范.md",
       "category": "unsupported",
       "reason": "本条文是给**已存在的门禁**补规则文字（原先「有判据无规则」）。违规形态 = 台账某行两列状态互相矛盾；但一单是**活件**，用例若真去改它，改的就是生产数据（CASES 机制只允许改夹具与本文件的副本）。",
       "evidence": "`check-status-gap.py` / `check-version-scope.py` 均有 `--self-test`，verify-all 第 1 项内跑。"
     },
     {
-      "clause": "卡点表与队列必须与一单同源",
+      "clause": "卡点表与队列必须与进度清单同源",
       "book": "通用开发规范.md",
       "category": "unsupported",
       "reason": "本条文是给**已存在的门禁**补规则文字（原先「有判据无规则」）。同属活件（一单 §7.1 与 `.agent/pending-agenda.md`），改它就是改生产数据；集合对账只能在真件上判。",
@@ -138,7 +138,7 @@
       "evidence": "`plan-batches.py --check` 与 `next-doc-version.py` 均无 `--self-test`；负例 = 手改 `batches.yaml` 一行后跑 `--check`，手工执行一次即可。"
     },
     {
-      "clause": "Core 平台中立、脚本不写死环境、shell 编码安全",
+      "clause": "核心层 平台中立、脚本不写死环境、shell 编码安全",
       "book": "通用开发规范.md",
       "category": "unsupported",
       "reason": "本条文是给**已存在的门禁**补规则文字（原先「有判据无规则」）。三条都是**全仓静态扫描**：违规形态是把平台依赖/连接信息/裸变量写进任意 .swift 或 .sh，夹具得复制整个仓才判得动，那不是文件层负例。",

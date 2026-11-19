@@ -178,8 +178,9 @@ def index_drift(text: str, schema: dict) -> list[str]:
 
 # 通用册纯净度（2026-11-18 人类主人：「如果规范里出现了 xcode / swift 之类的，就有问题了，
 # 这是苹果生态的 iOS 或 macOS 等特定项目里才会出现的」）。
-# 通用册只写「对所有项目成立的规则」；本仓落点用 `〈落点 #NN〉` 指到项目册 §0.6 的表，
-# 具体脚本路径、具体命令、平台与生态专有名一律不许出现。
+# 通用册只写「对所有项目成立的规则」：具体脚本路径、具体命令、平台与生态专有名一律不许出现，
+# **也不许留指回项目的指针**（2026-11-18 方向反转：此前用 `〈落点 #NN〉` 指到项目册表，等于通用册依赖项目册编号）。
+# 现在的方向只有一个：项目册的落点表逐行写「这条判据落在我仓哪儿」，通用册一个字都不指向它。
 PURITY_RE = re.compile(
     r"(?:Scripts|Tests|platform|Plugins)/"                 # 具体路径
     r"|(?:^|[^A-Za-z])(?:python3|bash|swift|xcrun|xcodebuild)(?![A-Za-z])"  # 具体工具链
@@ -196,6 +197,7 @@ PURITY_RE = re.compile(
     r"|公证|keychain|Keychain|App Store|TestFlight"          # 中文写的平台生态专有名（英文正则漏掉的）
     r"|本件"                                                # 指自己只许用「本册」（2026-11-18 统一）
     r"|(?:概设|需求书|详设|一单|项目册|项目规范)\s*§"        # 跨册节号引用（通用册不许指别册的节）
+    r"|一单|FR-[A-Z]"                                    # 项目侧的进度载体名与需求条目号（2026-11-18）
 )
 # 节号引用：指向本册不存在的小节也算写错（别册的节号在这里抓不到，靠上面那条前缀规则）
 SECTION_RE = re.compile(r"§\s?(\d+(?:\.\d+)*)")
@@ -262,7 +264,7 @@ def landing_purity(text: str) -> list[str]:
             continue
         m = PURITY_RE.search(line)
         if m:
-            bad.append(f"第 {idx} 行出现「{m.group(0).strip()}」—— 落点写成 `〈落点 #NN〉`，平台与工具名写进项目册："
+            bad.append(f"第 {idx} 行出现「{m.group(0).strip()}」—— 通用册只写形态，具体工具/平台/项目名写进项目册："
                        f"{line.strip()[:70]}")
     return bad
 
@@ -293,34 +295,53 @@ def _generic_clause_refs(text: str) -> list[dict]:
 
 
 def landing_drift(generic: str, project: str) -> list[str]:
-    """通用册的 〈落点 #NN〉 ↔ 项目册落点表：**号、环节、用在三样都要对得上**。
+    """**单向**校验（2026-11-18 方向反转）：通用册不许指回项目；项目册落点表必须点对本册条文。
 
-    为什么连后两列也判：号对得上只说明"有这么一行"，而「环节」写错 = 查表的人找错环节、
-    「用在」是占位 = 这一行等于没人维护。前两版判据只看号，于是 8 行环节是默认值、
-    11 行「用在」是「见条文引用处」也照样绿 —— 判据自欺比没有判据更糟。
+    旧版是双向对账 —— 通用册用 `〈落点 #NN〉` 指到项目册 §0.6，两边号必须一一对上。
+    人类主人指出这就是反向引用：通用册的正文里写着项目册的编号，换一个项目两个册子都得改。
+    现在改成：通用册零指针；项目册那张表的「用在」列自己点名本册条文（项目 → 本册，单向）。
+
+    三样照判：① 通用册正文不许出现落点编号；② 表里每行「用在」必须点到本册真实条文（占位、点错都红）；
+    ③ 每行「环节」必须等于它点到的条文的归属环节（环节写错 = 查表的人找错环节）。
     """
-    refs = {int(x) for x in LANDING_REF.findall(generic)}
-    rows = {int(x) for x in LANDING_ROW.findall(project)}
-    drift = [f"〈落点 #{r:02d}〉在项目册落点表里不存在（悬空引用）" for r in sorted(refs - rows)]
-    drift += [f"落点表 #{r:02d} 没有任何条文引用（空行）" for r in sorted(rows - refs)]
+    drift: list[str] = []
 
-    clause_rows = re.compile(r"^\| #(?P<id>\d+) \| `[^`]+` \| (?P<env>[^|]+) \| (?P<use>[^|]+) \|", re.M)
-    clauses = _generic_clause_refs(generic)
-    for m in clause_rows.finditer(project):
-        cid = int(m.group("id"))
-        users = [c for c in clauses if cid in c["refs"]]
-        if not users:
+    # ① 通用册正文里的落点编号 = 反向引用（版本历史行记过去事实、负例行本身就是反例示范，两者跳过）
+    for idx, line in enumerate(generic.split("\n"), 1):
+        if HISTORY_LINE.match(line) or line.lstrip().startswith("- **负例**"):
             continue
-        env_cells = {x.strip() for x in m.group("env").split("/") if x.strip() and x.strip() != "—"}
-        env_true = {c["env"] for c in users if c["env"]}
-        if env_true and env_cells != env_true:
-            drift.append(f"落点表 #{cid:02d} 的「环节」写 {sorted(env_cells) or ['—']}，"
-                         f"引用它的条文实际挂 {sorted(env_true)}")
-        use = m.group("use").strip()
-        if use in ("—", "见条文引用处"):
-            drift.append(f"落点表 #{cid:02d} 的「用在」是占位（{use}）—— 这行没人维护")
-        elif not any(c["title"][:5] in use for c in users):
-            drift.append(f"落点表 #{cid:02d} 的「用在」没点到真实引用者（实际：{users[0]['title'][:16]}）")
+        for m in LANDING_REF.finditer(line):
+            drift.append(f"通用册第 {idx} 行指回了项目册编号「{m.group(0)}」—— 只许项目册指过来，不许本册指回去")
+
+    clauses = _generic_clause_refs(generic)
+    rows = re.compile(r"^\| #(?P<id>\d+) \| (?P<what>[^|]+)\| (?P<env>[^|]+)\| (?P<use>[^|]+)\|", re.M)
+
+    # ②③ 项目册逐行：用在 → 本册条文（按标题前缀认），环节 → 那些条文的归属环节
+    for m in rows.finditer(project):
+        cid, env_cell, use = int(m.group("id")), m.group("env"), m.group("use").strip()
+        if use in ("—", "见条文引用处") or not use:
+            drift.append(f"落点表 #{cid:02d} 的「用在」是占位（{use or '空'}）—— 这行没人维护")
+            continue
+        # 「用在」列写的是本册条文标题的**前缀**（可能带「…」省略）：只认前缀，不做子串模糊匹配 ——
+        # 模糊匹配会把无关条文一起算进来，环节一多就假红，假红等于没人看。
+        # 先整串当前缀比（「用在」本身可能就是标题前缀），再按顿号拆开逐段比 ——
+        # 有些标题自己带顿号（「版本、冻结、发布规则不在本节」），只拆不比会把整条漏掉。
+        cand = [use.strip().strip("…").strip()] + [s.strip().strip("…").strip() for s in re.split(r"[、，]", use)]
+        cand = [c for c in cand if len(c) >= 3]
+        matched = [c for c in clauses if any(c["title"].startswith(cd) for cd in cand)]
+        if not matched:
+            names = "；".join(c["title"] for c in clauses[:3])
+            drift.append(f"落点表 #{cid:02d} 的「用在」（{use[:24]}）没点到本册任何条文 —— "
+                         f"本册条文形如：{names}…")
+            continue
+        # 环节判**覆盖**不判相等：「用在」是摘要（常带「…」），一个判据物本来就可能挂在更多环节上；
+        # 但漏写就是查表的人少跑一个环节，所以「点到的条文的环节」必须被行里的环节盖住。
+        env_true = {c["env"] for c in matched if c["env"]}
+        env_cells = {x.strip() for x in env_cell.split("/") if x.strip() and x.strip() != "—"}
+        missing = env_true - env_cells
+        if missing:
+            drift.append(f"落点表 #{cid:02d} 的「环节」漏了 {sorted(missing)}"
+                         f"（它点到的条文挂 {sorted(env_true)}，行里写 {sorted(env_cells) or ['—']}）")
     return drift
 
 
@@ -459,7 +480,7 @@ def main(argv: list[str]) -> int:
         for p in problems[:40]:
             rows.append(f"    · {p}")
 
-    # 落点双向对账（通用册 〈落点 #NN〉 ↔ 项目册 §0.6 表）
+    # 落点**单向**校验（项目册 §0.6 → 通用册；反方向一律判红）
     generic_text = (DOCS / GENERIC_BOOK).read_text(encoding="utf-8")
     project_text = (DOCS / "项目管理规范.md").read_text(encoding="utf-8")
     for drift in landing_drift(generic_text, project_text):
@@ -533,17 +554,19 @@ def self_test(schema: dict) -> int:
         if passed == want_pass:
             ok += 1
         print(f"  {mark} {name} ⇒ {'绿' if passed else '红'}，应为{'绿' if want_pass else '红'}")
-    # 落点双向对账：悬空引用必须判红、空行必须判红
+    # 落点**单向**校验（2026-11-18 方向反转）：通用册指回项目 ⇒ 判红；项目册「用在」点不到条文 ⇒ 判红
+    clause_clean = ("- **样例条文**：这条条文的首行正文承载「是什么」，长度必须够八个字\n"
+                    "- **判据**：【机判】〈判据物〉。\n"
+                    "- **归属环节**：B1\n")
     clause_with_ref = ("- **样例条文**：这条条文的首行正文承载「是什么」，长度必须够八个字\n"
                        "- **判据**：【机判】〈落点 #01〉。\n"
                        "- **归属环节**：B1\n")
     drift_cases = [
-        ("落点悬空 ⇒ 判红", clause_with_ref, "| #01 | `x` | B1 | 样例条文 |\n| #901 | `z` | B1 | 样例条文 |", False),
-        ("落点表有空行 ⇒ 判红", clause_with_ref, "| #01 | `x` | B1 | 样例条文 |\n| #902 | `z` | B1 | w |", False),
-        ("落点双向一致 ⇒ 绿", clause_with_ref, "| #01 | `x` | B1 | 样例条文 |", True),
-        ("落点表「环节」写错 ⇒ 判红", clause_with_ref, "| #01 | `x` | C9 | 样例条文 |", False),
-        ("落点表「用在」是占位 ⇒ 判红", clause_with_ref, "| #01 | `x` | B1 | 见条文引用处 |", False),
-        ("落点表「用在」点到别人 ⇒ 判红", clause_with_ref, "| #01 | `x` | B1 | 另一条不相干的条文 |", False),
+        ("通用册指回项目编号 ⇒ 判红", clause_with_ref, "| #01 | `x` | B1 | 样例条文 |", False),
+        ("通用册零指针 + 项目册点到条文 ⇒ 绿", clause_clean, "| #01 | `x` | B1 | 样例条文 |", True),
+        ("项目册「用在」是占位 ⇒ 判红", clause_clean, "| #01 | `x` | B1 | 见条文引用处 |", False),
+        ("项目册「用在」点到不存在的条文 ⇒ 判红", clause_clean, "| #01 | `x` | B1 | 另一条不相干的条文 |", False),
+        ("项目册「环节」漏了条文所在环节 ⇒ 判红", clause_clean, "| #01 | `x` | C9 | 样例条文 |", False),
     ]
     for name, generic, project, want_pass in drift_cases:
         passed = not landing_drift(generic, project)

@@ -145,7 +145,7 @@ def violate_section_exit(ctx) -> None:
 
 def violate_missing_negative_field(ctx) -> None:
     """六字段里只缺「负例」：条文仍带判据，但缺字段数 +1。"""
-    ctx.patch(GENERAL, "## 2 三书一单",
+    ctx.patch(GENERAL, "## 2 三书 + 进度清单",
               "- **缺负例字段的条文**：这条故意不写负例字段，必须判红。\n"
               "- **判据**：【机判】`true`。\n"
               "- **读数口径**：无。\n- **归属**：本节。\n\n## 2 三书一单")
@@ -222,7 +222,7 @@ def violate_changelog(ctx) -> None:
 
 
 def violate_end_sheet_snapshot(ctx) -> None:
-    """一单永远只有一份活件：给同一端再建一份带版本号的快照。"""
+    """进度清单永远只有一份活件：给同一端再建一份带版本号的快照。"""
     ctx.create("Docs/Doyah产品开发计划任务清单-macOS-v1.2.md", "# 一单快照\n\n不许有。\n")
 
 
@@ -328,7 +328,7 @@ def violate_platform_impl_in_srs(ctx) -> None:
 
 
 def violate_ledger_extra_id(ctx) -> None:
-    """一单是唯一进度源：台账多一条需求书索引没有的编号 ⇒ 红（多方向覆盖两个都判）。"""
+    """进度清单是唯一进度源：台账多一条需求书索引没有的编号 ⇒ 红（多方向覆盖两个都判）。"""
     head = ("| 编号 | 一句话 | 领域 | 层次 | 优先级 | 状态 | 状态原值 | 版本 | 版本口径 |\n"
             "|---|---|---|---|---|---|---|---|---|\n")
     ctx.patch(PLAN, head, head + "| FR-STD-DB-DRV-014 | 负例造出来的假需求 | DB | L2 | P1 | ⬜ | ⬜ | v1.1+ | 排期 |\n")
@@ -444,7 +444,7 @@ CASES = [
     ("编号唯一",                     "check-doc-versions.py",       violate_dup_q, ()),
     ("冻结 = 升一段",                 "check-doc-versions.py",       violate_version_regress, ()),
     ("不许有「变更记录」文件",          "check-doc-versions.py",       violate_changelog, ()),
-    ("一单永远只有一份活件",            "check-end-sheets.py",         violate_end_sheet_snapshot, ()),
+    ("进度清单永远只有一份活件",            "check-end-sheets.py",         violate_end_sheet_snapshot, ()),
     ("冻结号 = 软件号",                "check-release-freeze-parity.py", violate_freeze_parity, ()),
     ("公开仓不留凭据",            "check-no-user-data.py",       violate_internal_ip, ()),
     ("配置与凭据：默认值、可回退、不进日志",      "check-no-user-data.py",       violate_internal_ip, ()),
@@ -457,9 +457,9 @@ CASES = [
     ("一条拍板只落一处结论",           "check-status-consistency.py", violate_status_annotation, ()),
     ("每条判据配一条",                "check-self-test-counts.py",   violate_selftest_count, ("--no-run",)),
     ("PC 一体化",                     "check-platform-neutrality.py", violate_platform_impl_in_srs, ()),
-    ("一单只给正在开发的端建",          "check-end-sheets.py",         violate_unknown_end_sheet, ()),
-    ("一单与详设同构",                "check-end-sheets.py",         violate_foreign_design_ref, ()),
-    ("一单是唯一进度源",               "check-plan-coverage.py",      violate_ledger_extra_id, ()),
+    ("进度清单只给正在开发的端建",          "check-end-sheets.py",         violate_unknown_end_sheet, ()),
+    ("进度清单与详设同构",                "check-end-sheets.py",         violate_foreign_design_ref, ()),
+    ("进度清单是唯一进度源",               "check-plan-coverage.py",      violate_ledger_extra_id, ()),
     ("文档根只许三书",            "check-doc-invariants.py",     violate_doc_root_release_plan, ()),
     ("跨端视图不是书",                "check-doc-invariants.py",     violate_doc_root_matrix, ()),
     ("风险不是需求",                  "check-req-ids.py",            violate_risk_as_req, ()),
