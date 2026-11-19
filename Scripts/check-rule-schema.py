@@ -60,6 +60,27 @@ def dangling_scripts(text: str, schema: dict) -> list[str]:
 SECTION_IDS: set[str] = set()
 
 
+def section_exits() -> list[str]:
+    """归约的机器半边：每个环节必须有「出口」—— 一句话说清「拿到什么算完」。
+
+    没有出口的环节 = 无法判断做完没有 = 新人走到这里只能靠猜（这正是「归约三句」要堵的洞）。
+    """
+    p = ROOT / "Scripts" / "rule-sections.json"
+    try:
+        data = json.loads(p.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return ["rule-sections.json 读不出来 —— 环节定义无从校验"]
+    out = []
+    for e in data.get("环节", []):
+        sid = e.get("id", "?")
+        exit_text = (e.get("出口") or "").strip()
+        if len(exit_text) < 6:
+            out.append(f"环节 {sid}（{e.get('名称','?')}）没有「出口」—— 走到这一步怎么算做完没说")
+    if not data.get("环节"):
+        out.append("rule-sections.json 里一个环节都没有")
+    return out
+
+
 def load_section_ids() -> set[str]:
     """从 Scripts/rule-sections.json 取合法环节 ID（含 `全局`）；文件缺失则返回空集 ⇒ 本校验跳过。"""
     p = ROOT / "Scripts" / "rule-sections.json"
@@ -394,6 +415,8 @@ def main(argv: list[str]) -> int:
     bad: list[str] = []
     rows: list[str] = []
     new_base: dict[str, dict] = {}
+    for hit in section_exits():
+        bad.append(f"环节定义: {hit}")
     for name in NORMS:
         path = DOCS / name
         text = path.read_text(encoding="utf-8")

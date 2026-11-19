@@ -136,6 +136,13 @@ def violate_bare_clause(ctx) -> None:
               + "\n\n- **裸条文（无负例）**：只写了判据的条文，必须被判红。判据：评审。\n")
 
 
+def violate_section_exit(ctx) -> None:
+    """环节定义缺「出口」：把 B2 的出口清空，判据必须红（归约条文的机器半边）。"""
+    ctx.patch("Scripts/rule-sections.json",
+              '"出口": "一个提交只说一件事，提交信息给出验证命令与读数"',
+              '"出口": ""')
+
+
 def violate_missing_negative_field(ctx) -> None:
     """六字段里只缺「负例」：条文仍带判据，但缺字段数 +1。"""
     ctx.patch(GENERAL, "## 2 三书一单",
@@ -431,6 +438,7 @@ CASES = [
 # 2026-11-18 撤下「版本只写头部」（条文已改名为「版本只写一处（版本表首行）」）：口径收敛为「版本表唯一源」，头部那行已删，违规形态不复存在（转处置登记）
     ("不擅自扩大文档体系",             "check-doc-invariants.py",     violate_extra_doc, ()),
     ("编号形制五段式",                "check-req-ids.py",            violate_bad_req_id, ("--all",)),
+    ("归约：没见过的东西先归到已有的格子里", "check-rule-schema.py",   violate_section_exit, ()),
     ("数字与路径都不写死",             "check-doc-numbers.py",        violate_doc_numbers, ()),
     ("存量条文允许暂缺字段",           "check-rule-schema.py",        violate_bare_clause, ()),
     ("编号唯一",                     "check-doc-versions.py",       violate_dup_q, ()),
