@@ -467,7 +467,7 @@ CASES = [
     ("负例（本条自己也要有）",          "check-rule-schema.py",        violate_missing_negative_field, ()),
     ("每轮交接三件",                  "check-doc-numbers.py",        violate_handover_count, ()),
     # ── 第三轮新增（2026-11-18 · 运行层 §7.8 的机判条文）────────────────
-    ("性能读数必须落台账",             "check-perf-ledger.py",        violate_perf_threshold_loosened, ()),
+    ("性能读数必须落读数表",           "check-perf-ledger.py",        violate_perf_threshold_loosened, ()),
     ("契约层锁定",                    "check-exclusive-sections.py", violate_contract_layer, EXCLUSIVE_ARGS),
     ("能力变 → 跟 Notes 的能力契约",    "check-exclusive-sections.py", violate_notes_clause_in_studio, EXCLUSIVE_ARGS),
     ("主人直接指令",                  "check-exclusive-sections.py", violate_allow_marker_pair, EXCLUSIVE_ARGS),

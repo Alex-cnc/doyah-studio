@@ -117,14 +117,14 @@
       "evidence": "`check-tri-repo-parity.py` 有 `--self-test`（verify-all 第 1 项内跑）；`check-doc-sync.py` 只报告。"
     },
     {
-      "clause": "台账状态机：实现 ✅ 而判据没跟上，不许留在台账里",
+      "clause": "一单状态机：实现 ✅ 而判据没跟上，不许留在这一单里",
       "book": "通用开发规范.md",
       "category": "unsupported",
-      "reason": "本条文是给**已存在的门禁**补规则文字（原先「有判据无规则」）。违规形态 = 台账某行两列状态互相矛盾；但台账是**活件**，用例若真去改它，改的就是生产数据（CASES 机制只允许改夹具与本文件的副本）。",
+      "reason": "本条文是给**已存在的门禁**补规则文字（原先「有判据无规则」）。违规形态 = 台账某行两列状态互相矛盾；但一单是**活件**，用例若真去改它，改的就是生产数据（CASES 机制只允许改夹具与本文件的副本）。",
       "evidence": "`check-status-gap.py` / `check-version-scope.py` 均有 `--self-test`，verify-all 第 1 项内跑。"
     },
     {
-      "clause": "卡点表与队列必须与台账同源",
+      "clause": "卡点表与队列必须与一单同源",
       "book": "通用开发规范.md",
       "category": "unsupported",
       "reason": "本条文是给**已存在的门禁**补规则文字（原先「有判据无规则」）。同属活件（一单 §7.1 与 `.agent/pending-agenda.md`），改它就是改生产数据；集合对账只能在真件上判。",
@@ -145,7 +145,7 @@
       "evidence": "`check-core-portability.py` 有 `--self-test`；`check-script-env-parameterization.py` 与 `check-shell-locale-safety.py` 无，负例取手工加一行。"
     },
     {
-      "clause": "第三方件必须登台账 + 现编现跑",
+      "clause": "第三方件必须逐件登记 + 现编现跑",
       "book": "通用开发规范.md",
       "category": "unsupported",
       "reason": "本条文是给**已存在的门禁**补规则文字（原先「有判据无规则」）。vendored 台账判据要读 `sqlite3.h` 与交付文件的实际指纹，夹具造不出「改了一个编译宏」的真实差异。",
@@ -166,7 +166,7 @@
       "evidence": "`check-cell-decode-coverage.py` 有 `--self-test`；`check-cli-failure-readability.py` / `check-connection-failure-coverage.py` 无，负例取手工删一条文案。"
     },
     {
-      "clause": "性能阈值与读数必须落台账",
+      "clause": "性能阈值与读数必须落读数表",
       "book": "通用开发规范.md",
       "category": "unsupported",
       "reason": "本条文是给**已存在的门禁**补规则文字（原先「有判据无规则」）。判据读实测 JSON（冷启动 / 结果集滚动），夹具里没有真实测量环境，造出的读数一律是假的 —— 判了也不算数。",
