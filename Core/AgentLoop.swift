@@ -409,6 +409,10 @@ public struct AgentLoop: Sendable {
     public var toolCatalog: AgentToolCatalog? = nil
     /// 当前壳的 profile（决定可见集合）。
     public var agentProfile: AgentProfileKind = .terminalShell
+    /// **运行时边界**（详设 §3.6 权限面 · `FR-AGT-GUARD-PERM-003` · 计划 P2-2）：
+    /// 给了就**任何落到路径上的执行**都先过它 —— 越界根 / 只读根不许写，一律在分发前拒。
+    /// 不给 = 旧行为**逐字不变**（工作区自身的根检查照旧）。
+    public var sandbox: AgentSandboxBoundary? = nil
     /// **旧结果的折叠**（`NFR-AI-08` ③ 的另一半）：每一跳拼提示词时，把又旧又长的观察降级成
     /// 一句「这是什么 / 多大 / 在哪」，正文不再重发 —— 但**不删除**，所以模型不会忘了自己读过什么
     /// （真机根因：旧条目被整条丢掉 ⇒ 同一文件重读 22 次）。
@@ -958,6 +962,36 @@ public struct AgentLoop: Sendable {
             }
             steps += 1
             lastText = text
+            // **⑤b 运行时边界**（`FR-AGT-GUARD-PERM-003` · P2-2）：**在截批之前**先挑出违规调用。
+            // 为什么必须放在这儿而不是逐条执行那里：只读工具是**按批**并发分发的
+            // （`readOnlyBatchPrefix` → `runReadOnlyBatch`），逐条那一段的检查对它们根本不生效 ——
+            // 实测就是这么漏的：`read_file /etc/passwd` 一路执行到底。
+            var sandboxBlocked: [(AgentToolInvocation, String, String)] = []
+            if let sandbox {
+                budgeted = budgeted.filter { invocation in
+                    guard let definition = registry.definition(named: invocation.name),
+                          let access = Self.fileAccess(for: definition.capability),
+                          let rawPath = Self.pathArgument(invocation.argumentsJSON),
+                          case let .failure(violation) = sandbox.check(path: rawPath, access: access)
+                    else { return true }
+                    sandboxBlocked.append((invocation, Self.refusal(for: violation).rawValue, rawPath))
+                    return false
+                }
+            }
+            for (invocation, reason, rawPath) in sandboxBlocked {
+                rejected.append((invocation.name, reason))
+                observations.append("\(invocation.name): \(reason)（\(rawPath)）")
+                await emit(.toolStarted(name: invocation.name,
+                                        summary: AgentToolSummary.line(fromArgumentsJSON: invocation.argumentsJSON)))
+                await emit(.toolFinished(name: invocation.name, outcome: "denied", millis: nil))
+                recordTurn(context: context, kind: .tool, role: "tool",
+                           text: "\(invocation.name) => \(reason)",
+                           toolName: invocation.name, toolCallID: invocation.callID, at: startedAt)
+                await audit?.record(AgentActionRecord.makeToolCall(
+                    toolName: invocation.name, argumentsSummary: invocation.argumentsJSON,
+                    outcome: .denied, detail: reason,
+                    sessionID: context.sessionID, hopIndex: steps - 1, chainID: context.chainID, at: startedAt))
+            }
             // **配额记账**（`NFR-AI-04`）：一跳 = 一次模型调用 —— 次数 +1、token 按端点报的量累加。
             // 边界如实登记：客户端不数 token，端点若不回用量则 token 那一项不涨（次数仍然管用）。
             if let quota {
@@ -1602,6 +1636,31 @@ public struct AgentLoop: Sendable {
         }
         request.stream = true
         return (request, report, digestReport)
+    }
+
+    /// 能力 → 文件访问类型（`nil` = 这个能力不落路径，不归运行时边界管）。
+    static func fileAccess(for capability: AgentToolCapability) -> AgentFileAccess? {
+        switch capability {
+        case .readFile, .listDirectory, .search: return .read
+        case .writeFile, .editFile: return .write
+        default: return nil
+        }
+    }
+
+    /// 取参数里的路径（没有 `path` 键 ⇒ `nil`，交给下层自己判）。
+    static func pathArgument(_ argumentsJSON: String) -> String? {
+        guard let data = argumentsJSON.data(using: .utf8),
+              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let path = object["path"] as? String, !path.isEmpty else { return nil }
+        return path
+    }
+
+    /// 边界违规 → 对模型说的拒绝码：越界说「出界」，只读根说「策略不许」，别的都说「不可用」。
+    static func refusal(for violation: AgentSandboxViolation) -> AgentToolRefusal {
+        switch violation {
+        case .outsideRoots, .invalidPath, .rootMissing: return .outsideWorkspace
+        case .writeDeniedReadOnly, .writeDeniedReadOnlyLevel: return .deniedByPolicy
+        }
     }
 
     private func summarise(_ text: String) -> String {

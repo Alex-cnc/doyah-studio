@@ -1,4 +1,5 @@
-> **版本** **v1.3.43**（2026-11-18 **P1-10 工具目录接线**：`AgentToolCatalogSnapshot` 原先零生产侧引用。两处接线：① 请求里的工具表由目录按 profile 过滤（不许第二处硬编码清单）；② 拒绝理由分三种 —— 没登记 / 不可见 / schema 没取回（`AgentToolRefusal` 加两值），§3.22 要求「不可见 ≠ 不存在」。判据 `AgentToolCatalogLoopTests` 3/3，反证：把「不可见」退回「没登记」即判红。单测 5815 → 5818）
+> **版本** **v1.3.44**（2026-11-18 **P2-2 运行时边界接线**：`AgentSandboxBoundary` 原先零生产侧引用。接线点在**截批之前**——只读工具走 `readOnlyBatchPrefix` 按批并发分发，逐条执行处的检查对它们不生效（第一版接线就这么漏的，判据当场判红：`read_file /etc/passwd` 一路执行到底）。判据 `AgentSandboxLoopTests` 3/3；单测 5818 → 5821）
+
 
 
 
@@ -747,7 +748,7 @@
 |---|---|---|---|---|
 | P1-11+ | FR-AGT-CORE-CTX-001（供给面） | `Core/AgentContextSupply.swift` | `AgentContextWiringTests` 6/6（五类来源 · 分类预算 · 去重 · 稳定序） | ✅ |
 | P2-1 | FR-AGT-GUARD-PERM-002 | 配置面：等级 / 沙箱根 / 白名单如何声明 | 60 | 改配置立即生效；非法配置拒绝并说明 |
-| P2-2 | FR-AGT-GUARD-PERM-003 | 运行时边界：任何执行都在受限环境内 | 120 | 越界路径被拒；判据来源 = P2-1 白名单 |
+| P2-2 | FR-AGT-GUARD-PERM-003 | 运行时边界：任何执行都在受限环境内 —— **已接线（2026-11-18）**：分发**前**过 `AgentSandboxBoundary`（越界根 / `..` 逃逸 / 只读根写一律拒），且必须放在截批之前 —— 只读工具按批并发分发，逐条那一段拦不住 | 120 | `AgentSandboxLoopTests` 3/3：越界与 `..` 逃逸分发前即拒 / 只读根写报「策略不许」而读照常 / 根内放行且不给边界时旧行为不变 |
 | P2-3 | FR-AGT-CORE-LOOP-007 | 及时刹停：伤害性动作前置停止（不建审批单、不执行） | 60 | 删库/覆盖/对外发布三类各一例 ⇒ 停 |
 | P2-4 | FR-AGT-GUARD-PERM-004（🟡） | 语句级判定收口：危险语句与注入内容 | 60 | 危险语句判红；注入样本不被当指令 |
 
@@ -779,7 +780,7 @@
 | P1-10 | FR-AGT-CORE-LOOP-005/-011 | `Core/AgentToolCatalogSnapshot.swift`（目录/快照/四种拒绝）· `Core/AgentLoop.swift`（请求工具表由目录过滤、拒绝理由三分） | `AgentToolCatalogSnapshotTests` 8/8 + `AgentToolCatalogLoopTests` 3/3（循环级） | ✅ 已接线 |
 | P1-11 | FR-AGT-CORE-CTX-001 / OPS-OBS-001 | `Core/AgentContextEngine.swift`（宿主+日志口）· `Core/AgentLoop.swift`（五钩子接线，`defer` 保「恰好一次」） | `AgentContextEngineTests` 6/6 + `AgentContextHooksLoopTests` 4/4（循环级） | ✅ 已接线 |
 | P2-1 | FR-AGT-GUARD-PERM-002 | `Core/AgentPermissionConfig.swift` | `AgentPermissionBoundaryTests` 10/10（改配置立即生效 / 非法拒绝带原因） | ✅ |
-| P2-2 | FR-AGT-GUARD-PERM-003 | `Core/AgentSandboxBoundary.swift` | 同上（越界 / `..` 逃逸 / 只读根） | ✅ |
+| P2-2 | FR-AGT-GUARD-PERM-003 | `Core/AgentSandboxBoundary.swift`（判定）· `Core/AgentLoop.swift`（截批前预过滤 + 拒绝回灌） | `AgentPermissionBoundaryTests` 10/10 + `AgentSandboxLoopTests` 3/3（循环级） | ✅ 已接线 |
 | P2-3 | FR-AGT-CORE-LOOP-007 | `Core/AgentPreActionStop.swift` | `AgentPreActionStopTests` 15/15（删库/覆盖/对外发布 ⇒ 停，不建审批单） | ✅ |
 | P2-4 | FR-AGT-GUARD-PERM-004 | `Core/AgentSQLStatementJudge.swift` | 同上（危险语句判红；注入不当指令） | ✅ |
 | P3-2 | FR-AGT-KNOW-CTX-002 | `Core/AgentContextPriorityTruncator.swift` | `AgentKnowledgeTests` 14/14（按优先级截断、标记可见、两次一致） | ✅ |
