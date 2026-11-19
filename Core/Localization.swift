@@ -1512,6 +1512,8 @@ public enum LKey: String, CaseIterable, Sendable {
     case agentChatStopTokenLimit
     /// `FR-AGT-TOOL-SYS-002`：这一轮**预算到点**（子代理的 `budgetSeconds`）—— 带着已有结论收尾。
     case agentChatStopDeadline
+    /// **前置刹停**（`FR-AGT-CORE-LOOP-007`）：伤害性动作在执行前被拦下，带一句「停了什么」。
+    case agentChatStopHarmful
     /// §5.3.8「加载中」那一档：已经开始跑、正文还没吐出第一个字时的**占位行**。
     case agentChatStreamingPlaceholder
     /// §5.3.8「错误」那一档：这一轮没跑成（原因由界面拼在它后面，模板里不放占位符）。
@@ -5252,6 +5254,7 @@ public enum LocalizedStrings {
         .agentChatStopStepLimit: [.simplifiedChinese: "到了步数上限（%d 跳）—— 如实停在这里，不是说完。可以补一句更具体的要求再跑一轮。", .english: "Step limit reached (%d hops) — stopping honestly here, not finishing. Add a more specific instruction to run another round."],
         .agentChatStopTokenLimit: [.simplifiedChinese: "到了令牌上限（%d）—— 下一次请求没有发出就停了，不会半截继续烧。", .english: "Token limit reached (%d) — the next request was not sent, so nothing keeps burning."],
         .agentChatStopDeadline: [.simplifiedChinese: "到了这一路的预算时间 —— 我把已经写出来的结论先交回来（没写完的部分算没做）。", .english: "This run hit its time budget — here is what I had already written (unfinished parts are not done)."],
+        .agentChatStopHarmful: [.simplifiedChinese: "这是伤害性动作（%@），拦在执行之前 —— 没建审批单、也没执行；要我继续得你亲口说。", .english: "That is a harmful action (%@): blocked before execution — no approval request was filed and nothing ran. Say so explicitly if you want it to proceed."],
         .agentChatStopSpinning: [.simplifiedChinese: "连续 %d 次同样的调用、同样的结果 —— 我停手了：再跑一遍只会是同一句话。换个说法，或者直接告诉我下一步做什么。", .english: "Stopped after %d identical calls returning the same result — another round would repeat itself. Rephrase, or tell me the next step."],
         .agentChatStopCancelled: [.simplifiedChinese: "这一轮已被你停止（已跑过的工具结果都留着）。", .english: "You stopped this run (results from tools already run are kept)."],
         // §5.3.8 的六态：加载中要有一行「开口之前的占位」，错误档要说清「这一轮没跑成」而不是印机器码。

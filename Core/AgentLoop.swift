@@ -191,6 +191,9 @@ public enum AgentLoopStop: Equatable, Sendable {
     /// 2026-10-31 现场：状态行 `spinning 3 hops` 亮着，一条 `python3 hello.py` 仍跑满 124 步，
     /// 每一跳都弹一张「等你批准」的单子 —— 人点了上百次。报警不停 = 没拦住。
     case spinning(Int)
+    /// **前置刹停**（`FR-AGT-CORE-LOOP-007`）：删库 / 覆盖未备份文件 / 对外发布 —— 拦在执行之前。
+    /// 「不由模型自行撤销」：停就是这一回合结束，回灌让它再试等于没停。
+    case harmfulAction(String)
     case cancelled
     /// **预算到点**（子代理的 `budgetSeconds` 的落点）：停在**下一跳之前**，把已经产出的正文
     /// 当 partial 交回 —— 不是杀在 `await` 里让成果整段丢掉（2026-11-04 真机：4 批子任务
@@ -204,6 +207,7 @@ public enum AgentLoopStop: Equatable, Sendable {
         case .tokenLimit(let limit): return "tokenLimit:\(limit)"
         case .quotaLimit(let detail): return "quotaLimit:\(detail)"
         case .spinning(let hops): return "spinning:\(hops)"
+        case .harmfulAction(let marker): return "harmful:\(marker)"
         case .cancelled: return "cancelled"
         case .deadline: return "deadline"
         }
@@ -230,6 +234,10 @@ public enum AgentLoopStop: Equatable, Sendable {
         if reason.hasPrefix("spinning:") {
             guard let value = Int(reason.dropFirst("spinning:".count)) else { return nil }
             return .spinning(value)
+        }
+        if reason.hasPrefix("harmful:") {
+            let marker = String(reason.dropFirst("harmful:".count))
+            return marker.isEmpty ? nil : .harmfulAction(marker)
         }
         let quotaPrefix = "quotaLimit:"
         if reason.hasPrefix(quotaPrefix) {
@@ -978,6 +986,20 @@ public struct AgentLoop: Sendable {
                     return false
                 }
             }
+            // **⑤c 及时刹停**（`FR-AGT-CORE-LOOP-007` · P2-3）：伤害性动作**在执行前**停这一回合。
+            // 为什么不塞进 `rejected` 回灌：回灌等于交给模型再试一次 —— 需求写的是「不由模型自行撤销」。
+            if let signal = budgeted.lazy.compactMap({ invocation -> AgentStopSignal? in
+                guard let definition = registry.definition(named: invocation.name),
+                      let action = Self.preAction(for: invocation, capability: definition.capability)
+                else { return nil }
+                return AgentPreActionGate.inspect(action)
+            }).first {
+                await emit(.stopped(.harmfulAction(signal.marker)))
+                recordStop(.harmfulAction(signal.marker), context: context, at: startedAt)
+                return seal(AgentLoopResult(
+                    outcome: .stopped(.harmfulAction(signal.marker)), steps: steps,
+                    executedTools: executed, rejectedTools: rejected, usage: usage, text: ""))
+            }
             for (invocation, reason, rawPath) in sandboxBlocked {
                 rejected.append((invocation.name, reason))
                 observations.append("\(invocation.name): \(reason)（\(rawPath)）")
@@ -1636,6 +1658,33 @@ public struct AgentLoop: Sendable {
         }
         request.stream = true
         return (request, report, digestReport)
+    }
+
+    /// 把一次工具调用翻译成「伤害性动作」候选（`FR-AGT-CORE-LOOP-007`）：
+    /// **按能力翻译，不认工具名** —— 工具名只许出现在注册表（`AgentToolRegistrySourceTests` 盯着这条）。
+    static func preAction(for invocation: AgentToolInvocation, capability: AgentToolCapability) -> AgentPreAction? {
+        switch capability {
+        case .queryDatabase:
+            guard let sql = Self.stringArgument(invocation.argumentsJSON, "query")
+                ?? Self.stringArgument(invocation.argumentsJSON, "sql") else { return nil }
+            return .sql(sql)
+        case .writeFile, .editFile:
+            guard let path = Self.pathArgument(invocation.argumentsJSON) else { return nil }
+            return .fileWrite(path: path, exists: FileManager.default.fileExists(atPath: path))
+        case .runCommand:
+            guard let command = Self.stringArgument(invocation.argumentsJSON, "command") else { return nil }
+            return .command(command)
+        default:
+            return nil   // 不落「伤害性动作」四类的，交给下层自己的判据（不猜）
+        }
+    }
+
+    /// 取参数里的某个字符串键。
+    static func stringArgument(_ argumentsJSON: String, _ key: String) -> String? {
+        guard let data = argumentsJSON.data(using: .utf8),
+              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let value = object[key] as? String, !value.isEmpty else { return nil }
+        return value
     }
 
     /// 能力 → 文件访问类型（`nil` = 这个能力不落路径，不归运行时边界管）。

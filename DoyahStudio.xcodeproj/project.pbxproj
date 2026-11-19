@@ -66,6 +66,7 @@
 		0CB5CFF6C05B2A1CFC86E76B /* WorkspaceImageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8EAE0D34724F6F856EF674EA /* WorkspaceImageView.swift */; };
 		0CE4C8B4156B6EF72E56F126 /* NotebookRemovalTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F360994302BD6007E850A70 /* NotebookRemovalTests.swift */; };
 		0D32CF5BCADFB7B71AB3995F /* DesignThemeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 274BF3CF2FD1529B950432E9 /* DesignThemeTests.swift */; };
+		0D7E7B8F53C0CF962D0DD55D /* AgentPreActionStopLoopTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86AE8B5C561E1A973A4E86B5 /* AgentPreActionStopLoopTests.swift */; };
 		0E846C327938EB5891AA7453 /* QuickCaptureSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 997DC51EC20A65745310B78E /* QuickCaptureSheet.swift */; };
 		0ED1906EB6CB9D559BE1CDCC /* GitStatusProbe.swift in Sources */ = {isa = PBXBuildFile; fileRef = 262E7F13B117C0B1584C510B /* GitStatusProbe.swift */; };
 		0EE60532EA565EC6035C8E13 /* NoteLibraryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 692776AC49B8A11884733C89 /* NoteLibraryTests.swift */; };
@@ -1900,6 +1901,7 @@
 		859A23CF786D5A0C29A786AC /* ExecutionScopeTitle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExecutionScopeTitle.swift; sourceTree = "<group>"; };
 		860C4FCA0F056827241CEEC1 /* TodoOccurrenceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodoOccurrenceTests.swift; sourceTree = "<group>"; };
 		86147C51C5A0090DF3A2B5AF /* ResultExportEncoding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResultExportEncoding.swift; sourceTree = "<group>"; };
+		86AE8B5C561E1A973A4E86B5 /* AgentPreActionStopLoopTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentPreActionStopLoopTests.swift; sourceTree = "<group>"; };
 		86D957C3BF5E7A3ABAFF0FC6 /* MySQLService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MySQLService.swift; sourceTree = "<group>"; };
 		86E087129974F414584F6A18 /* NoteArchive.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoteArchive.swift; sourceTree = "<group>"; };
 		87425A5D422354594210073A /* SymbolOutlineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SymbolOutlineTests.swift; sourceTree = "<group>"; };
@@ -2668,6 +2670,7 @@
 				6841FE6CF1E7607C08CAF67F /* AgentPlanModeTests.swift */,
 				1D3C7BFDCA01BD53FAE305CA /* AgentPlanningDisciplineTests.swift */,
 				0FB39CF16A317F47D6DE4132 /* AgentPlanRowsTests.swift */,
+				86AE8B5C561E1A973A4E86B5 /* AgentPreActionStopLoopTests.swift */,
 				C95602F34A2683B8AB8FCEE6 /* AgentPreActionStopTests.swift */,
 				725E3212C9BD11FBF904759A /* AgentProfileManagementTests.swift */,
 				0C67479375EEE0C59B7152F7 /* AgentProfileTests.swift */,
@@ -4858,6 +4861,7 @@
 				E233FF4D765E0BDE88AE95D5 /* AgentPlanModeTests.swift in Sources */,
 				5CD14E78CACFED1ADC80D00C /* AgentPlanRowsTests.swift in Sources */,
 				F2D958CEF26EF687C6C6EDAC /* AgentPlanningDisciplineTests.swift in Sources */,
+				0D7E7B8F53C0CF962D0DD55D /* AgentPreActionStopLoopTests.swift in Sources */,
 				ECF1FFDB227A014D77158AAD /* AgentPreActionStopTests.swift in Sources */,
 				F50DEABB143975972D5CE897 /* AgentProfileManagementTests.swift in Sources */,
 				FD23E57BAAF77D54F22E1E94 /* AgentProfileTests.swift in Sources */,

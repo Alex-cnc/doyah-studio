@@ -624,7 +624,7 @@ final class DesignTokenRatchetTests: XCTestCase {
     func testMeasuredReadingMatchesTheOldGatesNumbers() throws {
         let face = try repoScan()
         XCTAssertEqual(face.files, 187, "扫描面的文件数与老脚本不一致")
-        XCTAssertEqual(face.codeLines, 46372, "扫描面的代码行数与老脚本不一致")
+        XCTAssertEqual(face.codeLines, 46373, "扫描面的代码行数与老脚本不一致")
         XCTAssertEqual(face.counts["App/Views/ProductOverviewSheet.swift"],
                        ["bare-textstyle": 5, "bare-foreground": 3],
                        "HEAD 上那两处红的读数是老脚本的 rc=1 读数")

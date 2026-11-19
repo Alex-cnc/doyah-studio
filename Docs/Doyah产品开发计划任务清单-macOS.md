@@ -1,4 +1,5 @@
-> **版本** **v1.3.44**（2026-11-18 **P2-2 运行时边界接线**：`AgentSandboxBoundary` 原先零生产侧引用。接线点在**截批之前**——只读工具走 `readOnlyBatchPrefix` 按批并发分发，逐条执行处的检查对它们不生效（第一版接线就这么漏的，判据当场判红：`read_file /etc/passwd` 一路执行到底）。判据 `AgentSandboxLoopTests` 3/3；单测 5818 → 5821）
+> **版本** **v1.3.45**（2026-11-18 **P2-3 及时刹停接线**：`AgentPreActionStop` 原先零生产侧引用。按**能力**（不是工具名——工具名只许在注册表）翻译成四类伤害性动作，命中即停这一回合；新增 `AgentLoopStop.harmfulAction` + `harmful:<标记>` + 中英文案 + 界面渲染一处；App 行数棘轮 46372 → 46373。判据 5/5，反证：去掉刹停分支即 3 例判红；单测 5821 → 5826）
+
 
 
 
@@ -749,7 +750,7 @@
 | P1-11+ | FR-AGT-CORE-CTX-001（供给面） | `Core/AgentContextSupply.swift` | `AgentContextWiringTests` 6/6（五类来源 · 分类预算 · 去重 · 稳定序） | ✅ |
 | P2-1 | FR-AGT-GUARD-PERM-002 | 配置面：等级 / 沙箱根 / 白名单如何声明 | 60 | 改配置立即生效；非法配置拒绝并说明 |
 | P2-2 | FR-AGT-GUARD-PERM-003 | 运行时边界：任何执行都在受限环境内 —— **已接线（2026-11-18）**：分发**前**过 `AgentSandboxBoundary`（越界根 / `..` 逃逸 / 只读根写一律拒），且必须放在截批之前 —— 只读工具按批并发分发，逐条那一段拦不住 | 120 | `AgentSandboxLoopTests` 3/3：越界与 `..` 逃逸分发前即拒 / 只读根写报「策略不许」而读照常 / 根内放行且不给边界时旧行为不变 |
-| P2-3 | FR-AGT-CORE-LOOP-007 | 及时刹停：伤害性动作前置停止（不建审批单、不执行） | 60 | 删库/覆盖/对外发布三类各一例 ⇒ 停 |
+| P2-3 | FR-AGT-CORE-LOOP-007 | 及时刹停：伤害性动作前置停止（不建审批单、不执行）—— **已接线（2026-11-18）**：截批前按**能力**翻译成伤害性动作（删库 / 无 WHERE 删除 / 覆盖已有文件 / 伤害性命令），命中即**停这一回合**（不是回灌让模型再试）；新增停手原因 `harmful:<标记>` 与界面文案 | 60 | `AgentPreActionStopLoopTests` 5/5：删库与无 WHERE 删除停且工具层 0 调用 / 覆盖已有文件停、新建放行 / 伤害性命令停 / 停手原因可反解 / 对外发布类只在闸门本体判（本仓尚无发布工具，已写进覆盖范围） |
 | P2-4 | FR-AGT-GUARD-PERM-004（🟡） | 语句级判定收口：危险语句与注入内容 | 60 | 危险语句判红；注入样本不被当指令 |
 
 ### P3 · 知识与记忆（6 条 · ≈ 180 分钟）
@@ -781,7 +782,7 @@
 | P1-11 | FR-AGT-CORE-CTX-001 / OPS-OBS-001 | `Core/AgentContextEngine.swift`（宿主+日志口）· `Core/AgentLoop.swift`（五钩子接线，`defer` 保「恰好一次」） | `AgentContextEngineTests` 6/6 + `AgentContextHooksLoopTests` 4/4（循环级） | ✅ 已接线 |
 | P2-1 | FR-AGT-GUARD-PERM-002 | `Core/AgentPermissionConfig.swift` | `AgentPermissionBoundaryTests` 10/10（改配置立即生效 / 非法拒绝带原因） | ✅ |
 | P2-2 | FR-AGT-GUARD-PERM-003 | `Core/AgentSandboxBoundary.swift`（判定）· `Core/AgentLoop.swift`（截批前预过滤 + 拒绝回灌） | `AgentPermissionBoundaryTests` 10/10 + `AgentSandboxLoopTests` 3/3（循环级） | ✅ 已接线 |
-| P2-3 | FR-AGT-CORE-LOOP-007 | `Core/AgentPreActionStop.swift` | `AgentPreActionStopTests` 15/15（删库/覆盖/对外发布 ⇒ 停，不建审批单） | ✅ |
+| P2-3 | FR-AGT-CORE-LOOP-007 | 及时刹停：伤害性动作前置停止（不建审批单、不执行）—— **已接线（2026-11-18）**：截批前按**能力**翻译成伤害性动作（删库 / 无 WHERE 删除 / 覆盖已有文件 / 伤害性命令），命中即**停这一回合**（不是回灌让模型再试）；新增停手原因 `harmful:<标记>` 与界面文案 | 60 | `AgentPreActionStopLoopTests` 5/5：删库与无 WHERE 删除停且工具层 0 调用 / 覆盖已有文件停、新建放行 / 伤害性命令停 / 停手原因可反解 / 对外发布类只在闸门本体判（本仓尚无发布工具，已写进覆盖范围） |
 | P2-4 | FR-AGT-GUARD-PERM-004 | `Core/AgentSQLStatementJudge.swift` | 同上（危险语句判红；注入不当指令） | ✅ |
 | P3-2 | FR-AGT-KNOW-CTX-002 | `Core/AgentContextPriorityTruncator.swift` | `AgentKnowledgeTests` 14/14（按优先级截断、标记可见、两次一致） | ✅ |
 | P3-3~6 | FR-AGT-KNOW-MEM-002~005 | `Core/AgentMemoryGovernance.swift` | 同上（可检视/可解释/删除即真删/技能候选） | ✅ |
