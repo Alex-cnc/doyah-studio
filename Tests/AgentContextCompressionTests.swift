@@ -172,7 +172,13 @@ final class AgentContextCompressionTests: XCTestCase {
                          sessionID: "s-compress", workspace: "ws-c")
     }
 
-    func testLoopCompressesWithinBudgetAndReportsTheNumbers() async {
+    /// **回合内不压**（详设 §3.21；2026-11-18 契约收口后改写）。
+    ///
+    /// 这条原先断言「六跳的观察段超预算 ⇒ 循环里真压过」。§3.21 定死「禁止 per-turn 压缩」之后，
+    /// 那个期望等于**断言违反契约的行为** —— 判据绿着，契约却破了。现在改判：
+    /// 预算再小，回合内也只许 defer（压缩计数 0、无 `contextCompressed` 事件、提示词不留 marker）；
+    /// 真压由 `AgentCompressionBoundaryLoopTests` 在会话边界上判。
+    func testLoopDefersCompressionToSessionBoundary() async {
         let client = ScriptedClient(toolHops: 6)
         let reader = EventRecorder()
         let loop = AgentLoop(client: client,
@@ -186,26 +192,21 @@ final class AgentContextCompressionTests: XCTestCase {
         let result = await loop.run(context: context())
 
         XCTAssertEqual(result.outcome, .finished(text: "done"))
-        XCTAssertGreaterThan(result.compressedEntries, 0, "六跳的观察段超了预算 ⇒ 必须真压过")
-        XCTAssertEqual(result.compressedDigests.count, result.compressedEntries,
-                       "丢了哪些要能逐条数出来")
-        XCTAssertGreaterThan(result.estimatedTokensSaved, 0)
+        XCTAssertEqual(result.compressedEntries, 0,
+                       "回合内压过 —— 详设 §3.21 明文禁止 per-turn 压缩")
+        XCTAssertEqual(result.estimatedTokensSaved, 0)
 
-        // 压过的那一跳请求里带 marker（模型知道早期结果被折叠），且正文比「不压」时短
-        let compressedRequest = try? XCTUnwrap(client.requests.last)
-        XCTAssertTrue((compressedRequest?.userPrompt ?? "").contains("[context compressed:"),
-                      "压过就要在提示词里留记号：\(compressedRequest?.userPrompt ?? "")")
-        XCTAssertTrue((compressedRequest?.userPrompt ?? "").contains("上一次执行结果"),
-                      "回灌段本身还在（压的是早期条目，不是整段）")
+        let lastPrompt = client.requests.last?.userPrompt ?? ""
+        XCTAssertFalse(lastPrompt.contains("[context compressed:"),
+                       "回合内不该出现压缩标记")
+        XCTAssertTrue(lastPrompt.contains("上一次执行结果"),
+                      "回灌段本身照旧（不压不等于不回灌）")
 
-        // 事件面：压缩不许静默 —— 至少一条 `contextCompressed`，且数对得上
-        let events = reader.events.compactMap { event -> (Int, Int)? in
-            if case .contextCompressed(let entries, let saved, _, _) = event { return (entries, saved) }
+        let events = reader.events.compactMap { event -> Int? in
+            if case .contextCompressed(let entries, _, _, _) = event { return entries }
             return nil
         }
-        XCTAssertFalse(events.isEmpty, "压缩必须报事件（界面那一行吃的就是它）")
-        XCTAssertEqual(events.reduce(0) { $0 + $1.0 }, result.compressedEntries,
-                       "事件里的条数加起来 = 结果里的累计条数")
+        XCTAssertTrue(events.isEmpty, "回合内不许报 `contextCompressed` —— 那等于承认压过了")
     }
 
     // MARK: - ⑧ 没给预算：旧行为逐字不变（回归判据）

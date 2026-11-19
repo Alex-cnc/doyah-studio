@@ -120,6 +120,36 @@ public enum AgentContextCompression {
                                                         marker: marker))
     }
 
+    /// **会话边界上真压**（详设 §3.21 的唯一入口）。
+    ///
+    /// 与 `admit(at:)` 的分工：`admit` 只判决、不干活（所以判据能喂纯数据）；
+    /// 本函数把「判决 + 真压 + 三样可读输出」串起来，边界调用点只需调这一个。
+    /// 注意：**回合内不许调它** —— 回合内只该拿到 `.deferToBoundary` 与预算报告。
+    public static func compactAtBoundary(
+        _ boundary: AgentSessionBoundary,
+        entries: [String],
+        budget: AgentContextCompressionBudget,
+        decisionsKept: [String] = [],
+        droppedKinds: [AgentDroppedKind] = [.verboseBody]
+    ) -> CompressionAdmission {
+        let beforeChars = entries.reduce(0) { $0 + $1.count }
+        let compressed = AgentContextCompressor.compress(entries: entries,
+                                                         baseCharacters: 0,
+                                                         budget: budget)
+        let afterChars = compressed.entries.reduce(0) { $0 + $1.count }
+            + (compressed.report.marker?.count ?? 0)
+        return admit(at: boundary,
+                     inTurn: false,
+                     tokensBefore: AgentContextCompressor.estimatedTokens(characters: beforeChars),
+                     tokenLimit: AgentContextCompressor.estimatedTokens(
+                        characters: budget.maxPromptCharacters),
+                     estimatedAfter: AgentContextCompressor.estimatedTokens(characters: afterChars),
+                     engineAvailable: true,
+                     decisionsKept: decisionsKept,
+                     droppedKinds: compressed.report.didCompress ? droppedKinds : [],
+                     marker: compressed.report.marker ?? "")
+    }
+
     /// 回合内排队时「下一个边界」取哪个：会话还没结束就是用户 `/compact`，已在收尾就是落盘前。
     public static func nextBoundary(after boundary: AgentSessionBoundary?) -> AgentSessionBoundary {
         switch boundary {

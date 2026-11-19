@@ -1,4 +1,5 @@
-# Doyah产品开发计划任务清单 · macOS 端
+> **版本** **v1.3.41**（2026-11-18 **P1-9 核心闸门落地**：`AgentLoop.makeRequest` 每跳都在回合内，此前直接调 `AgentContextCompressor.compress` ⇒ 每跳改写上下文，正是详设 §3.21 明文禁止的 per-turn 压缩（全仓唯一调用点）。改为只过 `admit(inTurn:true)` 闸门、真压只走 `AgentCompression.compactAtBoundary`；新增循环级判据 `AgentCompressionBoundaryLoopTests` 3/3（判的是**真发出去的请求**，不是纯函数）；反证：退回旧实现即判红。手动 `/compact` 触发器仍缺，界面文案据实改正）
+
 > 上游（活书）：同端《Doyah产品详细设计说明书 · macOS端》（`Docs/Doyah产品详细设计说明书-macOS.md`）> 需求规格说明书 > 概要设计说明书；本文件只记「要做什么」，不复制上游正文。
 > **版本** **v1.3.41**（2026-11-18 **§3 改名：需求状态台账 → 需求状态（唯一源）**。主人令：「我这里没有台账，只有一单」。① 本文件 §3 标题不再出现「台账」；② 需求书 18 处「一单 §3 台账」「一单台账」改成「一单 / §3」；③ 7 个判据脚本里写死的 `## 3 需求状态台账` 常量与自检夹具同批改（`check-status-consistency` / `check-version-scope` / `check-status-gap` / `check-blocker-table` / `check-board-parity` / `gen-studio-win-align` / `report-requirements`）—— 不改这几处，改名当场把状态一致性门禁打红）
 > **版本** **v1.3.40**（2026-11-18 **FR-AGT-PLAN-PLAN-007 落地**：计划模式三态（等批准 / 已批准 / 已退回）+ 内容指纹；写类工具在分发前被拦、只读照旧；退回保留正文；状态随会话跳落盘（恢复不丢）；11 例全绿，拆闸门实测 8 例判红；单测 5797 → 5808）
@@ -734,7 +735,7 @@
 | P1-6 ✅ | FR-AGT-QUAL-VERIFY-001 | 结果自验：产出前自查（能跑跑一遍、能对对一遍）—— **已落地**（`Core/AgentSelfCheck.swift` + 循环最后一跳折表，实测 **40 分钟**） | 25 | `AgentSelfCheckTests` **9/9**：写+跑都过 / 写没复核判红 / 退出码非 0 判红 / 无退出码判红 / 复核推翻记录 / **动过东西零自验 ⇒ skipped** / 纯问答 nothingToCheck / 只读不进分母 / 机器码形状 | 无 |
 | P1-7 | FR-AGT-UX-CONV-006 | 过程可见：每一步工具/文件/命令都在界面可见 | 15 | 每一步都出现一行；无静默步 | 转写区已有 |
 | P1-8 | FR-AGT-UX-CONV-007 | 中途干预：插话改方向 / 停手 / 追加约束 | 20 | 插话在当前步之后生效，不丢已产生结果 | P1-3 |
-| P1-9 | FR-AGT-KNOW-CTX-002 | 压缩只在会话边界：回合内只出预算报告、不改写上下文 —— **契约已立（详设 §3.21 v1.8），实现未跟** | 60 | `T-3.21-01~03` 全绿：回合内压缩计数 0；边界压缩后决策仍可答；压完仍超限如实报 | 详设 §3.21 · P1-2 |
+| P1-9 | FR-AGT-KNOW-CTX-002 | 压缩只在会话边界：回合内只出预算报告、不改写上下文 —— **核心闸门已落地（2026-11-18）：`makeRequest` 不再调压缩器，真压只走 `compactAtBoundary`；手动 `/compact` 触发器仍缺（界面如实说「没有手动触发点」）** | 60 | `T-3.21-01~03` 循环级 3/3 全绿（`AgentCompressionBoundaryLoopTests`）：超预算回合内观察正文不被压 / 边界真压且保留决策 / 压完仍超如实拒；反证：退回旧行为即判红 | 详设 §3.21 · P1-2 |
 | P1-10 | FR-AGT-CORE-LOOP-005 / -011 | 工具注册表唯一真源 + 可见性由 profile 决定（壳不分叉实现）—— **契约已立（详设 §3.22），实现未跟** | 90 | `T-3.22-01~03` 全绿：重复声明停装载；不可见 ≠ 不存在；同一工具两壳同 handler | 详设 §3.22 |
 | P1-11 | FR-AGT-CORE-CTX-001 / OPS-OBS-001 | 引擎生命周期钩子：五钩子、`onSessionEnd` 只在真实边界、失败不中断会话 —— **契约已立（详设 §3.23），实现未跟** | 120 | `T-3.23-01~03` 全绿：真实结束恰好一次；钩子抛错会话继续；回合内调 end 被拒 | 详设 §3.23 · P1-9 |
 
@@ -772,7 +773,7 @@
 |---|---|---|---|---|
 | P1-7 | FR-AGT-UX-CONV-006 | `Core/AgentStepTrace.swift` + `AgentChat.apply` | `AgentStepTraceTests` 6/6；界面每跳一行、每次工具一行（就地收尾带耗时） | ✅ |
 | P1-8 | FR-AGT-UX-CONV-007 | `Core/AgentIntervention.swift` + `AgentInterventionInbox` + 循环接线 | `AgentInterventionTests` 6/6 · `AgentLoopInterventionTests` 3/3（停手不再起跳、约束进下一跳、改方向换提示） | ✅ |
-| P1-9 | FR-AGT-KNOW-CTX-002 | `Core/AgentCompressionAdmission.swift` | `AgentCompressionAdmissionTests` 8/8（T-3.21-01~03） | ✅ |
+| P1-9 | FR-AGT-KNOW-CTX-002 | `Core/AgentCompressionAdmission.swift`（判决+边界入口）· `Core/AgentLoop.swift`（回合内只过闸门） | `AgentCompressionAdmissionTests` 8/8 + `AgentCompressionBoundaryLoopTests` 3/3（循环级：真请求里不压） | ✅ 核心；🟡 手动触发点未做 |
 | P1-10 | FR-AGT-CORE-LOOP-005/-011 | `Core/AgentToolCatalogSnapshot.swift` | `AgentToolCatalogSnapshotTests` 8/8（T-3.22-01~03） | ✅ |
 | P1-11 | FR-AGT-CORE-CTX-001 / OPS-OBS-001 | `Core/AgentContextEngine.swift` | `AgentContextEngineTests` 6/6（T-3.23-01~03） | ✅ |
 | P2-1 | FR-AGT-GUARD-PERM-002 | `Core/AgentPermissionConfig.swift` | `AgentPermissionBoundaryTests` 10/10（改配置立即生效 / 非法拒绝带原因） | ✅ |

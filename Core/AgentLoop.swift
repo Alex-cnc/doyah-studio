@@ -1499,7 +1499,8 @@ public struct AgentLoop: Sendable {
         request.systemPrompt = context.systemPrompt
         request.history = context.priorTurns
         var prompt = context.userPrompt
-        var report: AgentContextCompressionReport?
+        // 回合内不压缩（§3.21），所以这里恒为 nil —— 交给边界入口去压。
+        let report: AgentContextCompressionReport? = nil
         var digestReport: AgentObservationDigestReport?
         var prefix: [String] = []
         var recent = observations
@@ -1509,16 +1510,19 @@ public struct AgentLoop: Sendable {
             recent = folded.recent
             if folded.report.didFold { digestReport = folded.report }
         }
-        // 超预算压缩**只压最近那几条**：台账（「我读过哪些文件、多大」）是认得出的事实，
-        // 压掉它模型就会重读 —— 那正是这一整套要治的病（真机 vs 本次实测都验过）。
+        // **详设 §3.21：回合内禁止压缩。** 这里每一跳都在回合内，所以**只过闸门、不压**：
+        // 判决恒为 `.deferToBoundary`，能说话的只有预算报告（循环本来就会在收尾时给出）。
+        // 2026-11-18 改：此前这里直接调压缩器 ⇒ 每一跳都在改写上下文，正是 §3.21 明文禁止的
+        // per-turn 压缩（`AgentContextCompressor.compress` 全仓就这一个调用点）。
+        // 真压的入口只有一个：`AgentContextCompression.compactAtBoundary(...)`（会话边界）。
         if let budget, !recent.isEmpty {
-            let compressed = AgentContextCompressor.compress(
-                entries: recent,
-                baseCharacters: context.systemPrompt.count + context.userPrompt.count
-                    + AgentObservationDigester.joinedLength(prefix),
-                budget: budget)
-            recent = compressed.entries
-            if compressed.report.didCompress { report = compressed.report }
+            _ = AgentContextCompression.admit(
+                at: nil,
+                inTurn: true,
+                tokensBefore: 0,          // 闸门只看 inTurn：回合内一律 defer，数值不参与判决
+                tokenLimit: budget.maxPromptCharacters,
+                estimatedAfter: nil,
+                engineAvailable: true)
         }
         let entries = prefix + recent
         if !entries.isEmpty {

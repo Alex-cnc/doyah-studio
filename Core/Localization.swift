@@ -5080,7 +5080,7 @@ public enum LocalizedStrings {
         .agentMessageResend: [.simplifiedChinese: "重发这条（同样的提问再跑一轮）", .english: "Resend this turn (run the same question again)"],
         .agentResendNoAnchor: [.simplifiedChinese: "这条前面没有对应的提问，没法重发。", .english: "There is no question behind this message, so it cannot be resent."],
         .agentSlashCleared: [.simplifiedChinese: "已清空本会话的对话上下文；盘上的会话记录还在，随时能回看。", .english: "Conversation context cleared. The session log on disk is untouched and can still be reviewed."],
-        .agentSlashCompactNoTrigger: [.simplifiedChinese: "压缩在每次模型请求的边界上按预算自动发生；本版还没有手动触发点 —— 已如实告知，没有假装压过。", .english: "Compaction runs automatically at model-request boundaries within budget; this build has no manual trigger, and no compaction was pretended."],
+        .agentSlashCompactNoTrigger: [.simplifiedChinese: "压缩只在会话边界发生（会话开始 / 会话结束落盘前），回合内不压 —— 只出预算报告；本版还没有手动触发点，已如实告知，没有假装压过。", .english: "Compaction happens only at session boundaries (session start / before the session is written to disk); nothing is compressed inside a turn — only a budget report is shown. This build has no manual trigger yet, and that is reported honestly rather than faked."],
         .agentSlashSearch: [.simplifiedChinese: "「%@」命中 %ld 条会话（按标题匹配）。", .english: "\"%@\" matches %ld sessions (by title)."],
         .agentSlashStopRequested: [.simplifiedChinese: "已请求中断这一跑：在下一跳之前停，已产生的工具结果仍留痕。", .english: "Stop requested: it halts before the next hop, and tool results already produced stay on record."],
         .agentSlashStopNotRunning: [.simplifiedChinese: "当前没有在跑的任务，没有可中断的。", .english: "Nothing is running right now, so there is nothing to interrupt."],
