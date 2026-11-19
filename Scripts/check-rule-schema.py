@@ -118,6 +118,80 @@ def bad_sections(text: str, schema: dict) -> list[str]:
     return out
 
 
+def load_book_structure() -> dict:
+    """`rule-sections.json` 的 `章` 块：非环节章白名单 + 禁词 + 错位上限。缺则返回空字典 ⇒ 本节校验跳过。"""
+    try:
+        return json.loads((ROOT / "Scripts" / "rule-sections.json").read_text(encoding="utf-8")).get("章", {})
+    except (OSError, ValueError):
+        return {}
+
+
+def _chapter_envs(title: str) -> set[str]:
+    """章标题点名的环节集合。认三种写法：`B1` / `B1–B6` / 光秃秃一个组字母（`C、D、F` = 整组）。"""
+    out: set[str] = set()
+    for m in re.finditer(r"([A-F])\s*(\d)?\s*(?:[–\-~]\s*[A-F]?\s*(\d))?", title):
+        letter, lo, hi = m.group(1), m.group(2), m.group(3)
+        if lo and hi:
+            out |= {f"{letter}{i}" for i in range(int(lo), int(hi) + 1)}
+        elif lo:
+            out.add(f"{letter}{lo}")
+        else:
+            out |= {i for i in SECTION_IDS if i.startswith(letter)}
+    return out
+
+
+def book_structure(text: str) -> list[str]:
+    """**本书的章 = 环节**：判三件，另记一个必须下降的读数。
+
+    ① 每个 `## ` 章要么是环节章（标题点名 A1…F4），要么在白名单里 —— 不在 ⇒ 红（不许随手新开一章）。
+    ② 白名单里的章正文已经没有了 ⇒ 红（白名单只减不增，删掉的章必须同批从白名单划掉）。
+    ③ 条文「归属环节」必须落在它所在章点名的环节里（非环节章按整表算，因为它是跨环节的元规则章）；
+       落不进去的记一条「错位」，条数只许下降（`错位上限`）—— 这是「补记」欠下的债，得还。
+    另：章标题里出现禁词（补记/杂项/临时/其它）⇒ 红，且白名单也不豁免（现状已在白名单里，靠只减不增收口）。
+    """
+    cfg = load_book_structure()
+    if not cfg or not SECTION_IDS:
+        return []
+    whitelist = set(cfg.get("非环节章白名单", []))
+    banned = cfg.get("禁词", [])
+    ceiling = int(cfg.get("错位上限", 0))
+    out: list[str] = []
+    seen_chapters: set[str] = set()
+    chapter = ""
+    misplaced = 0
+    for line in text.split("\n"):
+        m = re.match(r"^## (.+)$", line)
+        if m:
+            chapter = m.group(1).strip()
+            seen_chapters.add(chapter)
+            for word in ([] if chapter in whitelist else banned):
+                if word in chapter:
+                    out.append(f"章「{chapter}」带禁用名「{word}」—— 章节名要写它是什么环节，"
+                               f"「补记」是结构失控的痕迹；现存这几章靠白名单只减不增收口，不许再新开")
+            if chapter not in whitelist and not _chapter_envs(chapter):
+                out.append(f"章「{chapter}」既不是环节章（标题没点名 A1…F4）也不在非环节章白名单里 —— "
+                           f"新章必须是环节章；跨环节的元规则只能进既有白名单章")
+            continue
+        if line.startswith("- **归属环节**：") and chapter:
+            env = line.split("：", 1)[1].strip().split()[0] if "：" in line else ""
+            if env in ("", "全局"):
+                continue
+            allowed = _chapter_envs(chapter) or SECTION_IDS
+            if env not in allowed:
+                misplaced += 1
+    for gone in sorted(whitelist - seen_chapters):
+        out.append(f"白名单里的章「{gone}」正文已经没有了 —— 把它从 rule-sections.json 划掉（白名单只减不增）")
+    legacy = [c for c in sorted(whitelist & seen_chapters) if any(w in c for w in banned)]
+    if legacy:
+        # 已存在的「补记」章不判红 —— 判据永远红等于没人看；但它们进债务读数，重排完必须归零。
+        out.append(f"[债务] 白名单里还挂着 {len(legacy)} 个「补记」章（只减不增）："
+                   + "；".join(c.split(" ")[0] for c in legacy))
+    if misplaced > ceiling:
+        out.append(f"条文错位 {misplaced} 条 > 上限 {ceiling} 条（条文躺在了不点它归属环节的章里）—— "
+                   f"新条文必须落进自己的环节章；这个读数只许下降")
+    return out
+
+
 def coverage_gap(text: str, schema: dict) -> list[str]:
     """写了【判据】却没声明「覆盖范围」的条文标题（铁律 13 的落地判据）。
 
@@ -456,6 +530,12 @@ def main(argv: list[str]) -> int:
             bad.append(f"{name}: {drift}")
         for bad_sec in bad_sections(text, schema):
             bad.append(f"{name}: {bad_sec}")
+        if name == GENERIC_BOOK:
+            for hit in book_structure(text):
+                if hit.startswith("[债务]"):
+                    rows.append(f"{name}: {hit}")          # 债务读数：报出来但不判红
+                else:
+                    bad.append(f"{name}: {hit}")
         for miss in dangling_scripts(text, schema):
             bad.append(f"{name}: 条文点名的脚本不存在 —— 「{miss}」（判据悬空，删脚本必须同批改条文）")
         incomplete = total - complete
@@ -591,7 +671,27 @@ def self_test(schema: dict) -> int:
         if clean == want_clean:
             ok += 1
         print(f"  {mark} {name} ⇒ {'绿' if clean else '红'}，应为{'绿' if want_clean else '红'}")
-    total_cases = len(cases) + len(drift_cases) + len(term_cases)
+    # 章结构（本书的章 = 环节）：新章必须是环节章；「补记」类章不许新开；条文不许躺错章
+    cfg = load_book_structure()
+    whitelist_heads = "".join(f"## {c}\n\n" for c in cfg.get("非环节章白名单", []))
+    def _book(chapter: str, env: str = "B1", repeat: int = 1) -> str:
+        body = "".join(f"- **样例条文**：{i} 号条文的首行正文要够八个字\n- **判据**：【机判】`true`。\n"
+                       f"- **归属环节**：{env}\n\n" for i in range(repeat))
+        return whitelist_heads + f"## {chapter}\n\n" + body
+    structure_cases = [
+        ("新开「其他补记」章 ⇒ 判红", _book("10 其他补记"), False),
+        ("新开环节章且条文归属对得上 ⇒ 绿", _book("10 实现环节规则（B1）"), True),
+        ("条文躺进不点它的章 ⇒ 超上限判红", _book("10 实现环节规则（B1）", env="F1", repeat=64), False),
+        ("环节章点名范围覆盖条文归属 ⇒ 绿", _book("10 实现环节规则（B1–B6）", env="B4"), True),
+    ]
+    for name, text, want_clean in structure_cases:
+        hits = [h for h in book_structure(text) if not h.startswith("[债务]")]
+        clean = not hits
+        mark = "✓" if clean == want_clean else "✗"
+        if clean == want_clean:
+            ok += 1
+        print(f"  {mark} {name} ⇒ {'绿' if clean else '红'}，应为{'绿' if want_clean else '红'}")
+    total_cases = len(cases) + len(drift_cases) + len(term_cases) + len(structure_cases)
     print(f"自检 {ok}/{total_cases} 达到预期")
     return 0 if ok == total_cases else 1
 
