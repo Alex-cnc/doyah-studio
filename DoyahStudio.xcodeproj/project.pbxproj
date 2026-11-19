@@ -855,6 +855,7 @@
 		B9CB3FAD1F10A6C1D93AE315 /* AgentNotificationPoster.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B20D4EFEBD3351745C21758 /* AgentNotificationPoster.swift */; };
 		B9FE18DB1033993980F2EBC5 /* Dialects.swift in Sources */ = {isa = PBXBuildFile; fileRef = F106607CE6B98F00FEDCBC75 /* Dialects.swift */; };
 		BA02085503D73FC53573A505 /* TerminalCursor.swift in Sources */ = {isa = PBXBuildFile; fileRef = D478A8C38FF7B347941A2067 /* TerminalCursor.swift */; };
+		BA35A7DBD34AEC328B79B73C /* AgentCompressionBoundaryLoopTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 631B1107F955E7725EBDB593 /* AgentCompressionBoundaryLoopTests.swift */; };
 		BA93462618212C6C6F1E072E /* DataTaskSpecGenerator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0576F89BB4D8E5135D45C62B /* DataTaskSpecGenerator.swift */; };
 		BA9953197F581434E1918846 /* DiagnosticMarksTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B7502E8C81683BF5C69E5D9 /* DiagnosticMarksTests.swift */; };
 		BAAF8AD411E560CD1245E9EE /* DiagnosisObjectLinks.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA061659B9FF2F9B59BAE1E8 /* DiagnosisObjectLinks.swift */; };
@@ -1737,6 +1738,7 @@
 		626FF13E471664E3071303F2 /* ScrollOffsetSpy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScrollOffsetSpy.swift; sourceTree = "<group>"; };
 		629DAAF0F7DFCC521F1421BC /* MCPProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCPProtocol.swift; sourceTree = "<group>"; };
 		62AD46A3CA2702DF6A7B0927 /* TerminalSubToolbar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalSubToolbar.swift; sourceTree = "<group>"; };
+		631B1107F955E7725EBDB593 /* AgentCompressionBoundaryLoopTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentCompressionBoundaryLoopTests.swift; sourceTree = "<group>"; };
 		63535CB61D5293C04BC8E4C2 /* reminder-golden-v1.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "reminder-golden-v1.json"; sourceTree = "<group>"; };
 		6440247C43F21DC52EDF7E86 /* ProcessStartTime.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProcessStartTime.swift; sourceTree = "<group>"; };
 		64686494BF562946793C5271 /* WorkspaceRootOrigin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceRootOrigin.swift; sourceTree = "<group>"; };
@@ -2585,6 +2587,7 @@
 				1C4D2A18930F7280BBDE3FD4 /* AgentCompletionVerifierTests.swift */,
 				52352206B969B9C177D7B5EF /* AgentComposerHistoryTests.swift */,
 				69F2ECECBD7667092AB1C680 /* AgentCompressionAdmissionTests.swift */,
+				631B1107F955E7725EBDB593 /* AgentCompressionBoundaryLoopTests.swift */,
 				DE4176D5EC996BBFD83F43DC /* AgentConfigurationTests.swift */,
 				96E49702A6686C54C99FEF23 /* AgentConnectionProbeTests.swift */,
 				BC9039CEA99B1E9F195828B5 /* AgentContextCompressionTests.swift */,
@@ -4771,6 +4774,7 @@
 				97179C0C32F6702ACE81A969 /* AgentCompletionVerifierTests.swift in Sources */,
 				B715CB39C45613937276B612 /* AgentComposerHistoryTests.swift in Sources */,
 				B7CD0FB9A73F81535B6DB38F /* AgentCompressionAdmissionTests.swift in Sources */,
+				BA35A7DBD34AEC328B79B73C /* AgentCompressionBoundaryLoopTests.swift in Sources */,
 				299724539D789B6F94195F43 /* AgentConfigurationTests.swift in Sources */,
 				E372A590EE4FAB6FCE21DB62 /* AgentConnectionProbeTests.swift in Sources */,
 				CB15DE3B75FE7B0315E44CA5 /* AgentContextCompressionTests.swift in Sources */,

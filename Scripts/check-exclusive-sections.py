@@ -420,15 +420,11 @@ def check(files, mine, theirs, base, diff_text, quiet=False, contract_owner="app
         if not quiet:
             print("✅ 越界检查：本次改动未涉及受检文档（或无可解析 diff）")
         return 0
-    msg = head_message()
-    blanket = None
-    for tag in TAGS:
-        blanket = re.search(r"%s\s*:\s*(.+)" % tag, msg)
-        if blanket:
-            break
-    if blanket:
-        print("⏭️  越界检查：HEAD 提交信息含豁免（理由：%s）—— 放行" % blanket.group(1).strip())
-        return 0
+    # 2026-11-18 删掉「HEAD 提交信息含豁免 ⇒ 整份放行」这条 blanket：
+    # 本脚本判的是「**工作区** vs base」，工作区改动没有归属提交 —— HEAD 的注记跟它无关。
+    # 留着它的实测后果：任何一次带 `contract-change:` 的提交，会让**它之后的所有**越界检查
+    # 永久放行（本仓实测：一次提交 ⇒ 6 条负例集体失灵，「该红的不红了」）。
+    # 豁免只认**可归属的**注记：该行或上一行的 `contract-change：理由` / `[独占:*]`。
     violations, legacy, legacy_soft, checked, contracts = [], [], [], 0, []
     newsecs = []          # 判据 ④：非契约所有者新开、又没带 [独占:*] 的节标题（含新开 [开放]）
     # 口径 A（2026-10-01 拍板 · 三仓同改）：豁免只认「本次新增行自己带的注记」。先把本次 diff 的
@@ -536,8 +532,8 @@ def check(files, mine, theirs, base, diff_text, quiet=False, contract_owner="app
         for path, ln, snip in newsecs:
             print("   %s:%d 新插入的节标题：%s" % (path, ln, snip))
         print("   处理：① 给新节标上 `[独占:%s]`；② 新台账节 / 契约层新地请交 %s 侧开；"
-              "③ 确有必要时在该行或上一行注 `%s：理由`（或提交信息 `%s: 理由`）。"
-              % (mine, contract_owner, CONTRACT_TAG, CONTRACT_TAG))
+              "③ 确有必要时在该行或上一行注 `%s：理由`。"
+              % (mine, contract_owner, CONTRACT_TAG))
     if violations:
         print("❌ 越界检查不通过：%d 处改动落在对侧独占节内（本侧=%s）" % (len(violations), mine))
         for path, ln, tok, title, snip in violations:

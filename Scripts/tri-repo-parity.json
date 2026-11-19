@@ -42,8 +42,8 @@
    },
    "expect": {
     "studio": {
-     "sha256": "37cc427ec4e8df7d0516394149b002054bf0566f416b41d14694a6497dffa107",
-     "lines": 1000
+     "sha256": "ed369444d75c68bc4bd39ba9179edd3c61fbeb78b3ad3f45a382d66f99c87654",
+     "lines": 996
     },
     "notes": {
      "sha256": "37cc427ec4e8df7d0516394149b002054bf0566f416b41d14694a6497dffa107",
