@@ -726,7 +726,12 @@ def main(argv: list[str]) -> int:
             print(f"✗ 有 {len(rest)} 条没归进任何批次：{', '.join(rest)}（补规则，不许手塞）")
             rc = 1
         old = OUT.read_text(encoding="utf-8") if OUT.exists() else ""
-        if old.strip() != text.strip():
+        # 「# 生成于 <日期>」是出文件那天的时间戳，不是内容：把它从比对里剔掉。
+        # 不剔的话，跨过零点那一天 `--check` 必红一次（2026-11-20 实测：只差这一行日期就判「不一致」）——
+        # 每天必红一次的判据等于没有判据，人只会学会「红了就跑 --write」。
+        strip_date = lambda s: "\n".join("" if ln.startswith("# 生成于 ") else ln
+                                          for ln in s.split("\n"))
+        if strip_date(old).strip() != strip_date(text).strip():
             print("✗ .agent/batches.yaml 与 plan.yaml 不一致 ⇒ 跑 --write 重出")
             rc = 1
         if rc == 0:
