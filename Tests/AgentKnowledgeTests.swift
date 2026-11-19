@@ -53,85 +53,45 @@ final class AgentKnowledgeTests: XCTestCase {
         XCTAssertFalse(report.didTruncate)
     }
 
-    // MARK: 记忆治理
+    // MARK: 记忆治理（真实现：`AgentMemoryStore` + `MemoryGovernance`）
+    //
+    // 2026-11-18：原先这里判的是 `AgentMemoryGovernance` —— 一个**零生产引用的重复抽象**：
+    // 它的类别词表（preference/fact/constraint/skill）与需求书里那份（`MemoryKind`：routine /
+    // troubleshooting / pinned / general）对不上，而「按类型分生命周期 / 解释 / 升格脱敏」在
+    // `Core/MemoryGovernance.swift` 里早有实现并在用。同一能力两处真源 ⇒ 删掉它，判据改判活的那份。
 
-    private func governance() throws -> AgentMemoryGovernance {
-        var g = AgentMemoryGovernance()
-        try g.upsert(kind: .preference, key: "language", value: "中文", source: "会话 1")
-        try g.upsert(kind: .constraint, key: "readonly", value: "只读模式", source: "会话 2")
-        try g.upsert(kind: .fact, key: "repo", value: "doyah-studio", source: "会话 3")
-        return g
-    }
-
-    func testListIsStableAndFilterable() throws {
-        let g = try governance()
-        XCTAssertEqual(g.list().count, 3)
-        XCTAssertEqual(g.list(kind: .constraint).map(\.key), ["readonly"])
-        XCTAssertEqual(g.list(), g.list(), "两次导出必须逐字相同")
-    }
-
-    func testExplainSaysWhereItCameFrom() throws {
-        let g = try governance()
-        let text = g.explain(id: "preference:language")
-        XCTAssertEqual(text, "preference/language = 中文 ← 会话 1")
-        XCTAssertNil(g.explain(id: "nope"))
-    }
-
-    func testDeleteReallyDeletes() throws {
-        var g = try governance()
-        XCTAssertTrue(g.delete(id: "preference:language"))
-        XCTAssertNil(g.item(id: "preference:language"))
-        XCTAssertFalse(g.export().contains("language"), "真删：导出里也不许再出现")
-        XCTAssertFalse(g.delete(id: "preference:language"), "再删一次返回 false")
-    }
-
-    func testDeleteAllByKind() throws {
-        var g = try governance()
-        XCTAssertEqual(g.deleteAll(kind: .constraint), 1)
-        XCTAssertTrue(g.list(kind: .constraint).isEmpty)
-        XCTAssertEqual(g.list().count, 2)
-    }
-
-    func testUpsertReplacesSameKey() throws {
-        var g = try governance()
-        try g.upsert(kind: .preference, key: "language", value: "英文", source: "会话 4")
-        XCTAssertEqual(g.list(kind: .preference).count, 1, "同键只留一条")
-        XCTAssertEqual(g.item(id: "preference:language")?.value, "英文")
-    }
-
-    func testEmptyValueRejected() throws {
-        var g = try governance()
-        XCTAssertThrowsError(try g.upsert(kind: .fact, key: "k", value: "   ", source: "s")) { error in
-            XCTAssertEqual(error as? AgentMemoryGovernanceError, .emptyValue)
+    private func seededStore() throws -> (AgentMemoryStore, String) {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("doyah-mem-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let store = AgentMemoryStore(directory: dir)
+        let workspace = dir.path
+        for (kind, note) in [(MemoryKind.pinned, "巡检脚本"),
+                             (MemoryKind.routine, "每日汇总"),
+                             (MemoryKind.general, "跨连接写法")] {
+            try store.record(AgentMemoryDraft(workspace: workspace, connection: "", kind: kind,
+                                              note: note, key: nil))
         }
-        XCTAssertThrowsError(try g.upsert(kind: .fact, key: " ", value: "v", source: "s")) { error in
-            XCTAssertEqual(error as? AgentMemoryGovernanceError, .emptyKey)
-        }
+        return (store, workspace)
     }
 
-    // MARK: 技能候选
-
-    func testSkillCandidatesAreParameterized() throws {
-        let g = AgentMemoryGovernance()
-        let candidates = g.skillCandidates(from: [
-            "swift test --filter AgentA",
-            "swift test --filter AgentB",
-            "git status",
-        ])
-        XCTAssertEqual(candidates.count, 1)
-        XCTAssertEqual(candidates.first?.key, "swift test --filter <value>")
-        XCTAssertEqual(candidates.first?.kind, .skillCandidate)
+    /// `FR-AGT-KNOW-MEM-002` ②：**按类别清空**只删这一类，其余原样留着，且是**真删**。
+    func testRemoveAllByKindOnlyTouchesThatKind() throws {
+        let (store, workspace) = try seededStore()
+        let removed = try store.removeAll(kind: .pinned, workspace: workspace)
+        XCTAssertEqual(removed, 1, "只该删掉那一条")
+        let left = store.entries(workspace: workspace).entries
+        XCTAssertEqual(left.count, 2)
+        XCTAssertFalse(left.contains { $0.memoryKind == .pinned }, "这一类必须真删（不是打标记）")
+        XCTAssertEqual(try store.removeAll(kind: .pinned, workspace: workspace), 0,
+                       "再删一次 = 0（没这条也算如实）")
     }
 
-    func testParameterizeReplacesPathsAndFiles() {
-        XCTAssertEqual(AgentMemoryGovernance.parameterize("cat /work/proj/Core/A.swift"),
-                       "cat <path>")
-        XCTAssertEqual(AgentMemoryGovernance.parameterize("swift build --package-path /work/x"),
-                       "swift build --package-path <path>")
-    }
-
-    func testSingleOccurrenceIsNotACandidate() {
-        let g = AgentMemoryGovernance()
-        XCTAssertTrue(g.skillCandidates(from: ["git status"]).isEmpty)
+    /// `FR-AGT-KNOW-MEM-002` ②：删单条 = 真删，不连坐。
+    func testRemoveByIdReallyDeletes() throws {
+        let (store, workspace) = try seededStore()
+        let id = try XCTUnwrap(store.entries(workspace: workspace).entries.first?.id)
+        XCTAssertTrue(try store.remove(id: id, workspace: workspace))
+        XCTAssertEqual(store.entries(workspace: workspace).entries.count, 2)
     }
 }

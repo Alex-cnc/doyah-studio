@@ -1,4 +1,5 @@
-> **版本** **v1.3.46**（2026-11-18 **P3-2 优先级截断接线**：`AgentContextPriorityTruncator` 原先零生产侧引用。超预算时按优先级丢段并在提示词里明说；回灌抬头提成常量（本地化棘轮按含汉字字面量的行数记账，不能白涨）。判据 3/3，反证：全标 critical 即判红；单测 5826 → 5829）
+> **版本** **v1.3.47**（2026-11-18 **P3-3~6 记忆治理核查**：`AgentMemoryGovernance` 是**重复抽象**而非漏接线 —— 它的类别词表（preference/fact/constraint/skill）与需求书的 `MemoryKind`（routine/troubleshooting/pinned/general）对不上，而「按类型分生命周期 / 解释 / 升格脱敏」在 `Core/MemoryGovernance.swift` 里早就在用。处置：删掉重复类，活实现补一格真缺口 `removeAll(kind:workspace:)`（按类别清空），判据改判活的那份。**一处自我纠正**：第一版我连 `MemoryKind` 的 store 一起改、还把测试改成不存在的 API，编译红后回滚重做，没有硬凑）
+
 
 
 
@@ -786,7 +787,7 @@
 | P2-3 | FR-AGT-CORE-LOOP-007 | 及时刹停：伤害性动作前置停止（不建审批单、不执行）—— **已接线（2026-11-18）**：截批前按**能力**翻译成伤害性动作（删库 / 无 WHERE 删除 / 覆盖已有文件 / 伤害性命令），命中即**停这一回合**（不是回灌让模型再试）；新增停手原因 `harmful:<标记>` 与界面文案 | 60 | `AgentPreActionStopLoopTests` 5/5：删库与无 WHERE 删除停且工具层 0 调用 / 覆盖已有文件停、新建放行 / 伤害性命令停 / 停手原因可反解 / 对外发布类只在闸门本体判（本仓尚无发布工具，已写进覆盖范围） |
 | P2-4 | FR-AGT-GUARD-PERM-004 | `Core/AgentSQLStatementJudge.swift` | 同上（危险语句判红；注入不当指令） | ✅ |
 | P3-2 | FR-AGT-KNOW-CTX-002 | `Core/AgentContextPriorityTruncator.swift`（优先级截断）· `Core/AgentLoop.swift`（超预算时按优先级丢段并明说） | `AgentContextPriorityTruncatorTests` 6/6 + `AgentContextPriorityTruncationLoopTests` 3/3（循环级） | ✅ 已接线 |
-| P3-3~6 | FR-AGT-KNOW-MEM-002~005 | `Core/AgentMemoryGovernance.swift` | 同上（可检视/可解释/删除即真删/技能候选） | ✅ |
+| P3-3~6 | FR-AGT-KNOW-MEM-002~005 | **真实现在活路径上**：`Core/AgentMemory.swift`（检视 / 解释 / 删单条 / `removeAll(kind:)` 按类别清空）· `Core/MemoryGovernance.swift`（按类型分生命周期 / 升格脱敏 / 记录策略）· `Core/RoutineCandidate.swift`（参数化与例行候选）· `Core/AgentSkillSedimentation.swift`（技能沉淀） | `AgentKnowledgeTests` 7/7（含新增「按类别清空只动那一类」「删单条即真删」）· `RoutineCandidateTests` · `AgentMemory*Tests` | ✅ 已由活实现覆盖；**重复死类 `Core/AgentMemoryGovernance.swift` 已删**（零生产引用，且它的类别词表与需求书的 `MemoryKind` 对不上） |
 | P4-编辑 | FR-AGT-TOOL-EDIT-001 | `Core/AgentBlockEditor.swift` + 既有 `editFile` | `AgentToolFaceTests` 17/17；改走审批 + 陈旧锚点复检 + 租约（`AgentWorkspaceToolsTests`） | ✅ |
 | P4-摄取 | FR-AGT-TOOL-INGEST-001 | —— | **未实现**（2026-10-31 归正：`Core/AgentIngestion.swift` 是本地资料切块，不是联网；`fetch_url` 未启用、无 `web_search`） | ⬜ |
 | P4-摄取 | FR-AGT-TOOL-INGEST-003 | `Core/AgentIngestion.swift` | 视觉不可用明说 | ✅ |

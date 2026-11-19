@@ -619,6 +619,20 @@ public struct AgentMemoryStore: Sendable {
         return count
     }
 
+    /// **按类别清空**（`FR-AGT-KNOW-MEM-002`「可整层清空」的按类一格）：只删这一类，其余不动；
+    /// 返回真删掉的条数（只作用于事实源 —— 索引是派生缓存，重建自然同步）。
+    /// 认不出类别的条目一律不动（宁可少删，不猜着删）。
+    @discardableResult
+    public func removeAll(kind: MemoryKind, workspace: String) throws -> Int {
+        let loaded = entries(workspace: workspace)
+        guard !loaded.workspaceMismatch else { return 0 }
+        let remaining = loaded.entries.filter { $0.memoryKind != kind }
+        let removed = loaded.entries.count - remaining.count
+        guard removed > 0 else { return 0 }
+        try write(entries: remaining, workspace: workspace)
+        return removed
+    }
+
     // MARK: - 读
 
     /// 读回一个工作区的记忆。

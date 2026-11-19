@@ -116,14 +116,14 @@
     {
       "key": "core-tests",
       "label": "Core 单测项数（verify-core.sh 实测）",
-      "value": 5829,
+      "value": 5822,
       "unit": "项",
       "measure": {
         "kind": "count-file",
         "file": ".build/core-test-count.txt",
         "regex": "(\\d+)",
         "expect": [
-          5829
+          5822
         ],
         "writtenBy": "Scripts/verify-core.sh（同一次运行写出；verify-all.sh 在第 1 项之前删掉它 ⇒ 本轮没跑第 1 项时它不存在，判据如实报『跳过』而不是拿旧值当现状）",
         "note": " 2026-11-09（判据搬家第一批 · 本地化/文案 8 条）：8 条 `check-*.py` 搬进 `swift test`，新增 5 类 46 例（Localization* / LanguageRegistryShape）+ TestsUISnapshot 14 例（MenuLanguageGate / UISnapshotLanguageCoverage，默认 skip 2 例）⇒ 实测 5572 → **5618**；**2026-11-09（判据搬家第二批 · 设计令牌 5 条）：`check-design-tokens.py` 搬进 `Tests/DesignTokenRatchetTests.swift`（15 例）⇒ 实测 5618 → **5633**。 **2026-11-10（判据搬家第三批 · UI 交互 9 条）：`check-empty-action-buttons.py` → `Tests/EmptyActionButtonGateTests.swift`（7 例）+ `check-editor-line-numbers.py` → `Tests/EditorLineNumberSurfacesTests.swift`（7 例）⇒ 实测 5633 → **5647**（`./Scripts/verify-core.sh` 实跑 5647 / 0 失败）。**"

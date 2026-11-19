@@ -589,7 +589,6 @@
 		7E632363646D4BAF1A15B107 /* AgentModelPresets.swift in Sources */ = {isa = PBXBuildFile; fileRef = D96975B02FB70E889CC23DB9 /* AgentModelPresets.swift */; };
 		7EA39DD8CA5A6717F823EFCB /* TableDesignExtrasSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = BAE2ADC6A0C2F4EA781CD739 /* TableDesignExtrasSection.swift */; };
 		7F28487DB7C8AB4D31B125FD /* DatabaseStats.swift in Sources */ = {isa = PBXBuildFile; fileRef = C022EA38ED16D30DE5B586C4 /* DatabaseStats.swift */; };
-		7F4EDC82D4AF8DDD69B528DE /* AgentMemoryGovernance.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9F64F8D750FA966BD3249EB /* AgentMemoryGovernance.swift */; };
 		7FB757741DA25E50678DD20A /* WorkspaceImageOpenTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F699408D9F23FDE885CBEE8 /* WorkspaceImageOpenTests.swift */; };
 		7FC9F43665DAFAFF121250A0 /* NoteVersion.swift in Sources */ = {isa = PBXBuildFile; fileRef = F97863304EE5C016B4A043F4 /* NoteVersion.swift */; };
 		7FF97F5AED3C30BF3292D012 /* DoyahStudioApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDFAC628E0B2AB245467C31B /* DoyahStudioApp.swift */; };
@@ -2124,7 +2123,6 @@
 		B9A1A269E855BB258E4483F1 /* IndentProfileTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IndentProfileTests.swift; sourceTree = "<group>"; };
 		B9CB635B2BEE5CEDE548D9EF /* ConnectionAppearance.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionAppearance.swift; sourceTree = "<group>"; };
 		B9E7277E16BBDAFCE6C82664 /* ExecutionGuards.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExecutionGuards.swift; sourceTree = "<group>"; };
-		B9F64F8D750FA966BD3249EB /* AgentMemoryGovernance.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentMemoryGovernance.swift; sourceTree = "<group>"; };
 		BA7156016D9959D47209F41B /* AgentIMOriginGate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentIMOriginGate.swift; sourceTree = "<group>"; };
 		BAE2ADC6A0C2F4EA781CD739 /* TableDesignExtrasSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TableDesignExtrasSection.swift; sourceTree = "<group>"; };
 		BB071DB2DA6452C23CD46929 /* AgentSQLPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentSQLPanel.swift; sourceTree = "<group>"; };
@@ -3175,7 +3173,6 @@
 				2F452692B52252484312A5E7 /* AgentMemory.swift */,
 				C4CDA3B64DB10713F1728A5E /* AgentMemoryContext.swift */,
 				371062B2834BD06B3D44AA83 /* AgentMemoryDesk.swift */,
-				B9F64F8D750FA966BD3249EB /* AgentMemoryGovernance.swift */,
 				47B8CC2313FF5F51F7065529 /* AgentMemoryRetrieval.swift */,
 				7A391F7930D8F14BE59EAC8C /* AgentMemoryWriteGate.swift */,
 				74E0466F5F5C04A90B6EFD44 /* AgentMentionParser.swift */,
@@ -4392,7 +4389,6 @@
 				026262DDE6A8D601FADB4652 /* AgentMemory.swift in Sources */,
 				FCA839AC0739E4FCC7E801DB /* AgentMemoryContext.swift in Sources */,
 				9165BEDBFE41A3D2C1DC5C69 /* AgentMemoryDesk.swift in Sources */,
-				7F4EDC82D4AF8DDD69B528DE /* AgentMemoryGovernance.swift in Sources */,
 				CF86F4E0FF1A03E9CEFF83B1 /* AgentMemoryRetrieval.swift in Sources */,
 				B86D86A5E2DEFCAC01140FC2 /* AgentMemoryWriteGate.swift in Sources */,
 				F50BFBC0276CCC86290F4D01 /* AgentMentionParser.swift in Sources */,
