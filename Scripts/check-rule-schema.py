@@ -34,8 +34,8 @@ BASELINE = ROOT / "Scripts" / "rule-schema-baseline.json"
 # （项目规范可以写「见《通用开发规范》§X」）。理由：通用规范要能整体搬到另一个项目，
 # 里面一旦出现「见《项目管理规范》§5」这种指回，搬过去就是悬空引用。
 GENERIC_BOOK = "通用开发规范.md"
-PROJECT_REF = re.compile(r"《项目管理规范》|项目管理规范\s*§\s*\d")
-PROJECT_REF = re.compile(r"《项目管理规范》|项目管理规范\s*§\s*\d")
+# 反向引用（通用册 → 项目册）的**可枚举形态**：书名、简称、见/详见+项目册、落点编号、以及「本仓有/无…判据物」这类项目事实断言（2026-11-18 实测漏掉前两种，补上）
+PROJECT_REF = re.compile(r"《项目管理规范》|项目管理规范\s*§\s*\d|见\s*项目册|详见\s*项目册|本仓\s*(?:有|无)[^。；]{0,12}判据|本仓\s*两条")
 
 # 条文点名的脚本必须存在（2026-11-10）：条文里写 `Scripts/xxx.py` 是「判据在哪」的唯一线索，
 # 脚本删了而条文没改 ⇒ 判据静默悬空，到有人真去跑才发现。这里把悬空引用当场判红。
@@ -934,7 +934,20 @@ def self_test(schema: dict) -> int:
         if clean:
             ok += 1
         print(f"  {mark} {name} ⇒ 违规 {len(hits) if not note else 0} 条 / 待建 {int(note)}")
-    total_cases = len(cases) + len(drift_cases) + len(term_cases) + len(structure_cases) + len(genre_cases) + len(pre_cases) + len(num_cases)
+    # 反向引用（通用册 → 项目册）：可枚举形态都要认出来（2026-11-18 实测漏过「见项目册」与「本仓两条命令」）
+    ref_cases = [
+        ("写成「见项目册」⇒ 算反向引用", "- **甲甲**：这条正文够八个字。\n- **判据**：【机判】`true`。\n  口径见项目册。\n", True),
+        ("写成书名《项目管理规范》⇒ 算反向引用", "- **乙乙**：这条正文够八个字。\n- **判据**：【机判】`true`。\n  详见《项目管理规范》。\n", True),
+        ("写「本仓无运行期判据物」⇒ 算项目事实断言", "- **丙丙**：这条正文够八个字。\n- **判据**：【机判】`true`。\n  覆盖范围：本仓无运行期判据物。\n", True),
+        ("只写形态「本仓若没有 ⇒ 报未知」⇒ 不算", "- **丁丁**：这条正文够八个字。\n- **判据**：【机判】`true`。\n  覆盖范围：本仓若没有该判据物，只许报未知。\n", False),
+    ]
+    for name, body, want in ref_cases:
+        hits = project_refs("## 一\n" + body, schema)
+        ok_case = bool(hits) == want
+        print(("  ✓ " if ok_case else "  ✗ ") + f"{name} ⇒ {'判红' if hits else '放行'}")
+        if ok_case:
+            ok += 1
+    total_cases = len(cases) + len(drift_cases) + len(term_cases) + len(structure_cases) + len(genre_cases) + len(pre_cases) + len(num_cases) + len(ref_cases)
     print(f"自检 {ok}/{total_cases} 达到预期")
     return 0 if ok == total_cases else 1
 
