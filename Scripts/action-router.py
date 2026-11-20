@@ -288,7 +288,10 @@ def main() -> int:
             print(f"❌ 留痕：{b}")
         if bad_trace:
             return 1
-        print("✓ 留痕：本次提交的规范改动有「第N条：新增/修改/废止 + 理由」")
+        if any(b in s for s in staged for b in RULE_BOOKS):
+            print("✓ 留痕：本次提交的规范改动有「第N条：新增/修改/废止 + 理由」")
+        else:
+            print("· 留痕：本次提交没动规范，免判")
         return 0
 
     if args.list or not (args.action or args.changed):
