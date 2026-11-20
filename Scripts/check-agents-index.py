@@ -28,17 +28,52 @@ ROOT = Path(__file__).resolve().parent.parent
 RULES = ROOT / "Docs" / "通用开发规范.md"
 INDEX = ROOT / "AGENTS.md"
 
-RULE_LINE = re.compile(r"^(\d+)\.\s+\*\*(.+?)\*\*", re.M)
-INDEX_LINE = re.compile(r"^(\d+)\.\s+(.+)$", re.M)
-INDEX_HEADING = "## 1 铁律目录"
+STATUTE_LINE = re.compile(r"^第\s*([一二三四五六七八九十百千零〇0-9]+)\s*条\s*[【\[]\s*([^】\]]+?)\s*[】\]]", re.M)
+INDEX_LINE = re.compile(r"^-\s*第\s*([一二三四五六七八九十百千零〇0-9]+)\s*条\s*[·・]\s*(.+)$", re.M)
+INDEX_HEADING = "## 1 红线与基本原则（条号对照）"
 TRIGGER_HEADING = "## 2 什么时候必须回去读全文"
 
 
+CN = "零一二三四五六七八九"
+
+
+def cn_to_num(s: str) -> int:
+    s = s.strip()
+    if s.isdigit():
+        return int(s)
+    unit = {"千": 1000, "百": 100, "十": 10}
+    total = section = last = 0
+    for ch in s:
+        if ch in CN:
+            last = CN.index(ch)
+            section = last
+        elif ch in unit:
+            section = (last or 1) * unit[ch]
+            total += section
+            last = 0
+    return total + last
+
+
 def load_rules(path: Path) -> list[tuple[int, str]]:
+    """正文侧：全书 `第N条【标题】`（重建后唯一形态）。"""
     text = path.read_text(encoding="utf-8")
-    head, _, tail = text.partition("## 2 ")
-    body = head or text
-    return [(int(n), title) for n, title in RULE_LINE.findall(body)]
+    return [(cn_to_num(n), title.strip()) for n, title in STATUTE_LINE.findall(text)]
+
+
+def load_globals(path: Path) -> set[int]:
+    """正文里归属环节 = 全局的那些条号（元规则章 + Agent 纪律章 + 附则）。"""
+    text = path.read_text(encoding="utf-8")
+    nums: set[int] = set()
+    cur = None
+    for line in text.split("\n"):
+        m = STATUTE_LINE.match(line)
+        if m:
+            cur = cn_to_num(m.group(1))
+            continue
+        if cur is not None and re.match(r"^(?:（[一二三四五六七八九十]+）|- )\*\*归属环节\*\*[：:]\s*全局", line.strip()):
+            nums.add(cur)
+            cur = None
+    return nums
 
 
 def load_index(path: Path) -> list[tuple[int, str]]:
@@ -50,7 +85,7 @@ def load_index(path: Path) -> list[tuple[int, str]]:
     stop = section.find("\n## ")
     if stop >= 0:
         section = section[:stop]
-    return [(int(n), line.strip()) for n, line in INDEX_LINE.findall(section)]
+    return [(cn_to_num(n), line.strip()) for n, line in INDEX_LINE.findall(section)]
 
 
 def normalise(text: str) -> str:
@@ -70,6 +105,7 @@ def check(rules_path: Path, index_path: Path) -> tuple[int, dict]:
         return 0, report
 
     rules = load_rules(rules_path)
+    rule_numbers = [n for n, _ in sorted(rules)]
     index = load_index(index_path)
     index_text = index_path.read_text(encoding="utf-8")
 
@@ -82,26 +118,29 @@ def check(rules_path: Path, index_path: Path) -> tuple[int, dict]:
     if TRIGGER_HEADING not in index_text:
         report["problems"].append(f"AGENTS.md 缺触发器小节「{TRIGGER_HEADING}」—— 只有目录没有「何时读正文」等于没写")
 
-    rule_numbers = [n for n, _ in rules]
     index_numbers = [n for n, _ in index]
-    if rule_numbers != list(range(1, len(rule_numbers) + 1)):
-        report["problems"].append(f"规范里的铁律编号不连续：{rule_numbers}")
-    if index_numbers and index_numbers != rule_numbers:
-        missing = sorted(set(rule_numbers) - set(index_numbers))
-        extra = sorted(set(index_numbers) - set(rule_numbers))
-        detail = []
-        if missing:
-            detail.append(f"索引缺第 {missing} 条")
-        if extra:
-            detail.append(f"索引多出第 {extra} 条（正文没有）")
-        if not detail:
-            detail.append(f"编号顺序不一致：正文 {rule_numbers} / 索引 {index_numbers}")
-        report["problems"].append("；".join(detail))
+    if not rule_numbers:
+        report["uncovered"] = [sources[0] + "（没解析出任何 `第N条【标题】`）"]
+        report["status"] = "unknown"
+        return 0, report
+    globals_ = load_globals(rules_path)
+    if not globals_:
+        report["uncovered"] = [sources[0] + "（没解析出任何「归属环节：全局」的条文）"]
+        report["status"] = "unknown"
+        return 0, report
+    missing = sorted(globals_ - set(index_numbers))
+    extra = sorted(set(index_numbers) - globals_)
+    if missing:
+        report["problems"].append(f"AGENTS.md 条号表缺第 {missing} 条 —— 归属环节为「全局」的条文必须进这张表")
+    if extra:
+        report["problems"].append(f"AGENTS.md 条号表多出第 {extra} 条 —— 正文没有这条，或它不是「全局」条文")
+    if index_numbers != sorted(set(index_numbers)):
+        report["problems"].append("AGENTS.md 条号表没按条号升序或存在重号")
 
-    by_number = {n: line for n, line in index}
-    for number, title in rules:
-        line = by_number.get(number)
-        if line is None:
+    book = {n: title for n, title in rules}
+    for number, line in index:
+        title = book.get(number)
+        if title is None:
             continue
         keyword = normalise(title)[:4]
         if keyword and keyword not in normalise(line):
@@ -132,7 +171,7 @@ def self_test() -> int:
 
             # 负例 1：索引里删掉一条铁律 ⇒ 必须红
             text = (root / "AGENTS.md").read_text(encoding="utf-8")
-            mutated = re.sub(r"(?m)^5\. .*\n", "", text, count=1)
+            mutated = re.sub(r"(?m)^- 第七条 .*\n", "", text, count=1)
             (root / "AGENTS.md").write_text(mutated, encoding="utf-8")
             code, rep = check(root / "Docs" / "通用开发规范.md", root / "AGENTS.md")
             if code == 0:
@@ -150,7 +189,7 @@ def self_test() -> int:
             # 负例 3：正文新增第 16 条、索引没跟 ⇒ 必须红
             rules_text = (root / "Docs" / "通用开发规范.md").read_text(encoding="utf-8")
             (root / "Docs" / "通用开发规范.md").write_text(
-                rules_text.replace("\n## 2 四书一单", "\n16. **新加的第16条**：索引没跟上时这条要红。\n\n## 2 四书一单", 1),
+                rules_text.rstrip("\n") + "\n\n第123条【新加的全局条】\n（一）**是什么**：这条故意不被索引收，判据必须红。\n（二）**归属环节**：全局\n",
                 encoding="utf-8")
             code, rep = check(root / "Docs" / "通用开发规范.md", root / "AGENTS.md")
             if code == 0:
@@ -184,7 +223,7 @@ def main() -> int:
         print("未知：覆盖不全，无法判定（" + "、".join(report["uncovered"]) + "）")
         return code
     if code == 0:
-        print(f"✓ AGENTS.md 索引与规范一致（{report['rules']} 条铁律，索引 {report['index']} 条，触发器小节在位）")
+        print(f"✓ AGENTS.md 索引与规范一致（{report['rules']} 条条文，索引 {report['index']} 条，触发器小节在位）")
         return 0
     for problem in report["problems"]:
         print(f"❌ {problem}")

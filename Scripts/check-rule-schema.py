@@ -126,6 +126,21 @@ def load_book_structure() -> dict:
         return {}
 
 
+ENVS: dict[str, tuple[str, str]] = {}  # main() 里填；导入时也填一次，好让 --self-test 直接可用
+
+
+def _load_envs() -> dict[str, tuple[str, str]]:
+    path = ROOT / "Scripts" / "rule-sections.json"
+    data = json.loads(path.read_text(encoding="utf-8"))
+    return {e["id"]: (e["阶段"], e["名称"]) for e in data["环节"]}
+
+
+try:  # --self-test 走的是这条：不跑 main，也得有环节表
+    ENVS = _load_envs()
+except Exception:  # 环节表缺失时让 main 报错，别在导入期炸
+    ENVS = {}
+
+
 def _chapter_envs(title: str) -> set[str]:
     """章标题点名的环节集合。认三种写法：`B1` / `B1–B6` / 光秃秃一个组字母（`C、D、F` = 整组）。"""
     out: set[str] = set()
@@ -141,55 +156,86 @@ def _chapter_envs(title: str) -> set[str]:
 
 
 def book_structure(text: str) -> list[str]:
-    """**本书的章 = 环节**：判三件，另记一个必须下降的读数。
+    """**本书的章 = 开发阶段**（重构后的结构）：判三件，另记一个必须为 0 的读数。
 
-    ① 每个 `## ` 章要么是环节章（标题点名 A1…F4），要么在白名单里 —— 不在 ⇒ 红（不许随手新开一章）。
-    ② 白名单里的章正文已经没有了 ⇒ 红（白名单只减不增，删掉的章必须同批从白名单划掉）。
-    ③ 条文「归属环节」必须落在它所在章点名的环节里（非环节章按整表算，因为它是跨环节的元规则章）；
-       落不进去的记一条「错位」，条数只许下降（`错位上限`）—— 这是「补记」欠下的债，得还。
-    另：章标题里出现禁词（补记/杂项/临时/其它）⇒ 红，且白名单也不豁免（现状已在白名单里，靠只减不增收口）。
+    ① 每个 `## ` 章必须在 `章表` 里 —— 不在 ⇒ 红（不许随手新开一章）；
+    ② 章名里出现禁词（补记/杂项/临时/其它/其他）⇒ 红；
+    ③ 条文「归属环节」的所属阶段必须等于所在章的阶段（总纲 / Agent 权利义务 / 附则 三章要求「全局」），
+       不等即记一条「错位」，上限 0 —— 重建后这个读数必须一直是 0。
+    章表是唯一结构源，写 `Scripts/rule-sections.json` 的 `章` 块。
     """
     cfg = load_book_structure()
     if not cfg or not SECTION_IDS:
         return []
-    whitelist = set(cfg.get("非环节章白名单", []))
+    table = cfg.get("章表") or {}
     banned = cfg.get("禁词", [])
     ceiling = int(cfg.get("错位上限", 0))
+    phase_of = {sid: sec for sid, (sec, _name) in ENVS.items()}
     out: list[str] = []
-    seen_chapters: set[str] = set()
+    seen: set[str] = set()
     chapter = ""
-    misplaced = 0
+    misplaced: list[str] = []
     for line in text.split("\n"):
         m = re.match(r"^## (.+)$", line)
         if m:
             chapter = m.group(1).strip()
-            seen_chapters.add(chapter)
-            for word in ([] if chapter in whitelist else banned):
+            seen.add(chapter)
+            if chapter not in table:
+                out.append(f"章「{chapter}」不在章表里 —— 本书只有九章（章 = 开发阶段）；"
+                           f"新开章必须先在 rule-sections.json 的章表登记，否则等于随手加章节")
+            for word in banned:
                 if word in chapter:
-                    out.append(f"章「{chapter}」带禁用名「{word}」—— 章节名要写它是什么环节，"
-                               f"「补记」是结构失控的痕迹；现存这几章靠白名单只减不增收口，不许再新开")
-            if chapter not in whitelist and not _chapter_envs(chapter):
-                out.append(f"章「{chapter}」既不是环节章（标题没点名 A1…F4）也不在非环节章白名单里 —— "
-                           f"新章必须是环节章；跨环节的元规则只能进既有白名单章")
+                    out.append(f"章「{chapter}」带禁用名「{word}」—— 章的命名是「阶段」，不是「补记」")
             continue
-        if line.startswith("- **归属环节**：") and chapter:
-            env = line.split("：", 1)[1].strip().split()[0] if "：" in line else ""
-            if env in ("", "全局"):
-                continue
-            allowed = _chapter_envs(chapter) or SECTION_IDS
-            if env not in allowed:
-                misplaced += 1
-    for gone in sorted(whitelist - seen_chapters):
-        out.append(f"白名单里的章「{gone}」正文已经没有了 —— 把它从 rule-sections.json 划掉（白名单只减不增）")
-    legacy = [c for c in sorted(whitelist & seen_chapters) if any(w in c for w in banned)]
-    if legacy:
-        # 已存在的「补记」章不判红 —— 判据永远红等于没人看；但它们进债务读数，重排完必须归零。
-        out.append(f"[债务] 白名单里还挂着 {len(legacy)} 个「补记」章（只减不增）："
-                   + "；".join(c.split(" ")[0] for c in legacy))
-    if misplaced > ceiling:
-        out.append(f"条文错位 {misplaced} 条 > 上限 {ceiling} 条（条文躺在了不点它归属环节的章里）—— "
-                   f"新条文必须落进自己的环节章；这个读数只许下降")
+        em = re.match(r"^(?:（[一二三四五六七八九十]+）|- )\*\*归属环节\*\*[：:]\s*(\S+)", line.strip())
+        if not em or not chapter:
+            continue
+        env = em.group(1)
+        want = table.get(chapter)
+        if want is None:
+            continue
+        if want in ("全局", "叙述"):
+            if env != "全局":
+                misplaced.append(f"章「{chapter}」是元规则章，条文却挂归属环节 {env}（应写「全局」）")
+            continue
+        if env == "全局":
+            misplaced.append(f"章「{chapter}」是阶段章（{want}），条文却写「全局」—— 阶段条文必须挂具体环节")
+            continue
+        got = phase_of.get(env)
+        if got is None:
+            misplaced.append(f"条文归属环节「{env}」不在环节表里（章「{chapter}」）")
+        elif got != want:
+            misplaced.append(f"章「{chapter}」（{want}）里躺着挂 {env}（{got}）的条文")
+    # 「章表登记了但正文没有」只在样本像一本真书时才判（自检用的是单章片段）
+    for gone in (sorted(set(table) - seen) if len(seen) >= 5 else []):
+        out.append(f"章表里登记了「{gone}」但正文没有这一章 —— 章表与正文必须同源")
+    if misplaced:
+        out.append(f"[错位] {len(misplaced)} 条：" + "；".join(misplaced[:6]))
+        if len(misplaced) > ceiling:
+            out.append(f"条文错位 {len(misplaced)} 条 > 上限 {ceiling} 条 —— 条文必须落进自己阶段的章")
     return out
+
+
+def _blank_why(body: str) -> bool:
+    """「为什么」写了没有：字段不存在、内容过短、或写着「出处未记」占位 ⇒ 都算欠账。
+
+    写占位符不能把欠账抹平 —— 否则只要批量填「出处未记」，欠账读数就归零，
+    那正是「坏判据比没有判据更危险」。
+    """
+    m = re.search(r"\*\*为什么\*\*[：:](.+)", body)
+    if not m:
+        return True
+    val = m.group(1).strip()
+    return len(val) < 8 or val.startswith("出处未记")
+
+
+def _blank_cap(body: str) -> bool:
+    """「能力前提」同上：占位符不算答。"""
+    m = re.search(r"\*\*能力前提\*\*[：:](.+)", body)
+    if not m:
+        return True
+    val = m.group(1).strip()
+    return len(val) < 6 or val.startswith("出处未记")
 
 
 def clause_genre(text: str, schema: dict, book: str) -> tuple[list[str], list[str]]:
@@ -213,9 +259,9 @@ def clause_genre(text: str, schema: dict, book: str) -> tuple[list[str], list[st
     total = missing_why = missing_cap = 0
     for _title, body in split_clauses(text, names, require_judge=False):
         total += 1
-        if "**为什么**" not in body:
+        if _blank_why(body):
             missing_why += 1
-        if "**能力前提**" not in body:
+        if _blank_cap(body):
             missing_cap += 1
     out: list[str] = []
     if missing_why > why_floor:
@@ -412,7 +458,8 @@ def landing_purity(text: str) -> list[str]:
 def _generic_clause_refs(text: str) -> list[dict]:
     """通用册条文 → 标题 / 归属环节 / 引用的落点号（含标题行上的引用）。"""
     clause_re = re.compile(r"^(?:\d+\.|-)\s+\*\*(?P<t>[^*]{2,120}?)\*\*")
-    env_re = re.compile(r"^- \*\*归属环节\*\*：(.+)$")
+    statute_re = re.compile(r"^第\s*[一二三四五六七八九十百千零〇0-9]+\s*条\s*[【\[]\s*(?P<t>[^】\]]{2,120}?)\s*[】\]]")
+    env_re = re.compile(r"^(?:（[一二三四五六七八九十]+）|- )\*\*归属环节\*\*[：:](.+)$")
     field = {"判据", "负例", "覆盖范围", "不是什么", "归属环节", "处理方式", "为什么", "读数口径", "归属", "落点"}
     out: list[dict] = []
     cur = None
@@ -422,7 +469,7 @@ def _generic_clause_refs(text: str) -> list[dict]:
             if cur is not None and not cur["env"]:
                 cur["env"] = em.group(1).strip()
             continue
-        cm = clause_re.match(line)
+        cm = statute_re.match(line) or clause_re.match(line)
         if cm and cm.group("t").strip() not in field:
             cur = {"title": cm.group("t").strip(), "env": "", "refs": [int(x) for x in LANDING_REF.findall(line)]}
             out.append(cur)
@@ -641,8 +688,9 @@ def main(argv: list[str]) -> int:
     if "--self-test" in argv:
         return self_test(schema)
 
-    global SECTION_IDS
+    global SECTION_IDS, ENVS
     SECTION_IDS = load_section_ids()
+    ENVS = _load_envs()
     base = json.loads(BASELINE.read_text(encoding="utf-8")) if BASELINE.exists() else {}
     bad: list[str] = []
     rows: list[str] = []
@@ -825,9 +873,10 @@ def self_test(schema: dict) -> int:
         return whitelist_heads + f"## {chapter}\n\n" + body
     structure_cases = [
         ("新开「其他补记」章 ⇒ 判红", _book("10 其他补记"), False),
-        ("新开环节章且条文归属对得上 ⇒ 绿", _book("10 实现环节规则（B1）"), True),
-        ("条文躺进不点它的章 ⇒ 超上限判红", _book("10 实现环节规则（B1）", env="F1", repeat=64), False),
-        ("环节章点名范围覆盖条文归属 ⇒ 绿", _book("10 实现环节规则（B1–B6）", env="B4"), True),
+        ("章不在章表里 ⇒ 判红", _book("第十三章 收尾"), False),
+        ("阶段章里躺对环节的条文 ⇒ 绿", _book("第三章 规划", env="A1"), True),
+        ("阶段章里躺着别的阶段的条文 ⇒ 判红", _book("第三章 规划", env="F1", repeat=3), False),
+        ("元规则章里条文挂业务环节 ⇒ 判红", _book("第一章 总纲", env="A1"), False),
     ]
     for name, text, want_clean in structure_cases:
         hits = [h for h in book_structure(text) if not h.startswith("[债务]")]
@@ -842,9 +891,11 @@ def self_test(schema: dict) -> int:
                 f"- **判据**：【机判】`true`。\n- **归属环节**：B1\n")
         return body + (("- **为什么**：从某次事故上长出来的。\n"
                         "- **能力前提**：要一个能跑门禁的终端。\n") if with_why else "")
+    _why_floor = int(schema.get("体裁", {}).get("棘轮", {}).get("通用开发规范.md", {}).get("为什么基线", 0))
+    _cap_floor = int(schema.get("体裁", {}).get("棘轮", {}).get("通用开发规范.md", {}).get("能力前提基线", 0))
     genre_cases = [
-        ("新条文不写为什么 ⇒ 超基线判红", "".join(_genre_clause(i) for i in range(117)), False),
-        ("新条文写满 Why / What / How ⇒ 绿", "".join(_genre_clause(i) for i in range(116)) + _genre_clause(999, True), True),
+        ("新条文不写为什么 ⇒ 超基线判红", "".join(_genre_clause(i) for i in range(_why_floor + 1)), False),
+        ("新条文写满 Why / What / How ⇒ 绿", "".join(_genre_clause(i) for i in range(_why_floor)) + _genre_clause(999, True), True),
     ]
     for name, text, want_clean in genre_cases:
         hits, _ = clause_genre(text, schema, "通用开发规范.md")

@@ -262,6 +262,27 @@
       "category": "needs-build",
       "reason": "判据物是 `TestsUISnapshot/MenuLanguageGateTests.swift`，注释里写明**要真 App**（`run-manual-verification-probes.sh` 打包之后那一步）。造「菜单出现第三种语言」必须先构建一个含该语言的 App，文件层无法构造。",
       "evidence": "命令：`Scripts/run-manual-verification-probes.sh --filter MenuLanguageGateTests`（需先 build-app）；本轮未跑。"
+    },
+    {
+      "clause": "给谁看、什么时候看",
+      "book": "通用开发规范.md",
+      "category": "unsupported",
+      "reason": "判据是【人判】+ 一条『章首缺必读块报读数』的软读数：文件层造得出『章首没写必读』，但这条的判定标准是『必读那几条选对没有』，机器判不了选得对不对。",
+      "evidence": "条内已写明只报人判；机判部分退化为读数，不构成红。"
+    },
+    {
+      "clause": "谁能改、怎么改",
+      "book": "通用开发规范.md",
+      "category": "needs-build",
+      "reason": "违约形态 = Agent 未获批准就改条文。判断依据是提交信息与批准记录，属运行时事实，文件层没有『这次改动被批准过』的状态可造。",
+      "evidence": "留痕判据在提交钩子侧；本轮未接入自动判定。"
+    },
+    {
+      "clause": "废止与修订",
+      "book": "通用开发规范.md",
+      "category": "needs-build",
+      "reason": "机判要求『废止条指向存在的替代条 / 活条不许引用已废止条』，目前没有脚本实现（本册还没有废止条，判据无处落地）。",
+      "evidence": "条内判据已写，实现排在重建后的第一批。"
     }
   ]
 }

@@ -136,6 +136,31 @@ def violate_bare_clause(ctx) -> None:
               + "\n\n- **裸条文（无负例）**：只写了判据的条文，必须被判红。判据：评审。\n")
 
 
+def violate_scope_project_tool(ctx) -> None:
+    """效力与范围：往总纲写具体平台的构建命令 ⇒ landing_purity 必须判红。"""
+    ctx.write(GENERAL, (ROOT / GENERAL).read_text(encoding="utf-8").rstrip("\n")
+              + "\n\n0. **负例条文：写进具体平台命令**：出包前先跑 xcodebuild 再提交。\n"
+                "- **不是什么**：无。\n- **判据**：【机判】`true`。\n- **负例**：无。\n"
+                "- **读数口径**：无。\n- **归属环节**：全局\n")
+
+
+def violate_structure_new_chapter(ctx) -> None:
+    """本书的结构：新开第十三章 ⇒ 章表判据必须判红。"""
+    ctx.write(GENERAL, (ROOT / GENERAL).read_text(encoding="utf-8").rstrip("\n")
+              + "\n\n## 第十章 其他规则\n\n0. **负例条文：手里有什么就记什么**：随手新开一章放杂项。\n"
+                "- **不是什么**：无。\n- **判据**：【机判】`true`。\n- **负例**：无。\n"
+                "- **读数口径**：无。\n- **归属环节**：全局\n")
+
+
+def violate_version_order(ctx) -> None:
+    """版本与生效：在最新版本行之前插一条更老的版本 ⇒ 版本纪律必须判红。"""
+    text = (ROOT / GENERAL).read_text(encoding="utf-8")
+    first = next(i for i, l in enumerate(text.split("\n")) if l.startswith("> **版本**"))
+    lines = text.split("\n")
+    lines.insert(first, "> **版本** v0.0.1（假版本行，用来证明版本顺序判据会拦）")
+    ctx.write(GENERAL, "\n".join(lines))
+
+
 def violate_genre_no_why(ctx) -> None:
     """条文体裁（七问）：加一条**没有「为什么」**的条文 ⇒ 缺 Why 计数 +1 超基线 ⇒ 判据必须红。"""
     ctx.write(GENERAL,
@@ -160,11 +185,11 @@ def violate_section_exit(ctx) -> None:
 
 
 def violate_missing_negative_field(ctx) -> None:
-    """六字段里只缺「负例」：条文仍带判据，但缺字段数 +1。"""
-    ctx.patch(GENERAL, "## 2 三书 + 进度清单",
-              "- **缺负例字段的条文**：这条故意不写负例字段，必须判红。\n"
-              "- **判据**：【机判】`true`。\n"
-              "- **读数口径**：无。\n- **归属**：本节。\n\n## 2 三书一单")
+    """六字段里只缺「负例」：条文仍带判据，但缺字段数 +1（重建后按条号形态造）。"""
+    ctx.write(GENERAL, (ROOT / GENERAL).read_text(encoding="utf-8").rstrip("\n")
+              + "\n\n0. **负例条文：缺负例字段**：这条故意不写负例字段，必须判红。\n"
+                "- **不是什么**：无。\n- **判据**：【机判】`true`。\n"
+                "- **读数口径**：无。\n- **归属环节**：全局\n")
 
 
 def violate_extra_end_sheet(ctx) -> None:
@@ -455,6 +480,9 @@ CASES = [
     ("不擅自扩大文档体系",             "check-doc-invariants.py",     violate_extra_doc, ()),
     ("编号形制五段式",                "check-req-ids.py",            violate_bad_req_id, ("--all",)),
     ("条文体裁：一条条文要回答七问（5W1H1W）", "check-rule-schema.py", violate_genre_no_why, ()),
+    ("本规范的效力与范围", "check-rule-schema.py", violate_scope_project_tool, ()),
+    ("本书的结构", "check-rule-schema.py", violate_structure_new_chapter, ()),
+    ("版本与生效", "check-doc-versions.py", violate_version_order, ()),
     ("规则分两册：通用册写形态，项目册写事实", "check-rule-schema.py", violate_booking_project_facts, ()),
     ("归约：没见过的东西先归到已有的格子里", "check-rule-schema.py",   violate_section_exit, ()),
     ("数字与路径都不写死",             "check-doc-numbers.py",        violate_doc_numbers, ()),
@@ -482,7 +510,7 @@ CASES = [
     ("跨端视图不是书",                "check-doc-invariants.py",     violate_doc_root_matrix, ()),
     ("风险不是需求",                  "check-req-ids.py",            violate_risk_as_req, ()),
     ("新需求登记一次性落齐派生出口",     "check-req-index.py",          violate_req_index_drift, ()),
-    ("负例（本条自己也要有）",          "check-rule-schema.py",        violate_missing_negative_field, ()),
+    ("条文缺判据或负例即判红",          "check-rule-schema.py",        violate_missing_negative_field, ()),
     ("每轮交接三件",                  "check-doc-numbers.py",        violate_handover_count, ()),
     # ── 第三轮新增（2026-11-18 · 运行层 §7.8 的机判条文）────────────────
     ("性能读数必须落读数表",           "check-perf-ledger.py",        violate_perf_threshold_loosened, ()),
