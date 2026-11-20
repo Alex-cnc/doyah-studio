@@ -41,9 +41,9 @@ PY = sys.executable or "python3"
 ACTIONS: dict[str, dict] = {
     "改文档": {
         "read": [
-            "AGENTS.md §0 四条红线",
-            "Docs/通用开发规范.md §2 三书一单 · §3 版本纪律 · §4 门禁清单",
-            "Docs/通用开发规范.md §2「平台详设按基准书移植」（动平台详设时）",
+            "AGENTS.md 开头四条红线（括号里是条号）",
+            "Docs/通用开发规范.md 第2条（规则分两册）· 第14条（文档改动必过门禁）· 第九章附则（版本与生效）",
+            "Docs/通用开发规范.md 第25条「端详设从本族基准派生，不各写一本」（动平台详设时）",
         ],
         "checks": [
             ("check-doc-versions.py", []),
@@ -59,12 +59,12 @@ ACTIONS: dict[str, dict] = {
         ],
     },
     "改判据脚本": {
-        "read": ["Docs/通用开发规范.md §1 铁律 13/14/15（覆盖范围 / 必红负例 / 独立验收层）"],
+        "read": ["Docs/通用开发规范.md 第7、8、9条（覆盖范围 / 必红负例 / 独立验收层）"],
         "checks": [("check-doc-numbers.py", [])],
     },
     "改代码": {
         "read": [
-            "AGENTS.md §0 四条红线",
+            "AGENTS.md 开头四条红线（括号里是条号）",
             "新增菜单项时必须同批登记 Core/MenuLocalization.swift 的 menuKeys，并跑全量 swift test（禁只跑 --filter）",
         ],
         "checks": [("__swift_test__", [])],
@@ -74,11 +74,11 @@ ACTIONS: dict[str, dict] = {
         "checks": [("__npm_test__", [])],
     },
     "动凭据或用户数据": {
-        "read": ["AGENTS.md §4（PUBLIC 仓：凭据、内网地址、个人内容不进仓）"],
+        "read": ["AGENTS.md 第47条（公开仓不留凭据 / 内网地址 / 个人内容）"],
         "checks": [("check-no-user-data.py", [])],
     },
     "推送": {
-        "read": ["AGENTS.md §0 四条红线（说完成必须附命令输出）"],
+        "read": ["AGENTS.md 开头四条红线 · 第63条（说完成必须附命令输出）"],
         "checks": [("__verify_all__", [])],
     },
 }
