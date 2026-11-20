@@ -470,7 +470,16 @@ def violate_verify_all_abort_removed(ctx) -> None:
     t = (ROOT / rel).read_text(encoding="utf-8")
     anchor = 'trap \'on_failure "$?" "$LINENO" "$BASH_COMMAND"\' ERR'
     assert anchor in t, "verify-all.sh 里找不到 ERR 陷阱那一行"
-    ctx.write(rel, t.replace(anchor, "# 负例：ERR 陷阱被拿掉", 1))
+    # 替换必须**字节等长**：本负例改的是「正在执行的脚本」，bash 按字节偏移续读，
+    # 文件一缩短，后面的行整体前移 ⇒ bash 读到半行 —— 实测症状是第 9/10 项报
+    # `agent-provider-presets.py: command not found`、全量收尾报 `unexpected EOF`（EXIT=2）。
+    # 这一类「负例撞坏执行器」的假红，2026-11-18 由等长替换根治。
+    a = anchor.encode("utf-8")
+    b = "# 负例：ERR 陷阱被拿掉".encode("utf-8")
+    assert len(b) <= len(a), "负例注释比原文还长，等长替换不成立"
+    repl = (b + b" " * (len(a) - len(b))).decode("utf-8")
+    assert len(repl.encode("utf-8")) == len(a)
+    ctx.write(rel, t.replace(anchor, repl, 1))
 
 
 def violate_build_sandbox_flip(ctx) -> None:
