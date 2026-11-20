@@ -496,6 +496,8 @@ NORMS = [GENERIC_BOOK, PROJECT_BOOK]
 # 条文起行：`- **标题**：` / `1. **标题**：` / `- **标题**（2016-09-29 定）。`
 # 口径：**带「判据」声明的条目**才算条文（没声明判据的是叙述，不是条文）。
 CLAUSE_RE = re.compile(r"^(?:-|\d+\.) \*\*(?P<title>[^*]{2,120}?)\*\*(?:（[^）]{0,120}）)?[：:。]?")
+# 法条形态：`第N条【标题】`（重建后唯一形态；旧 `- **标题**：` 在迁移期内继续认）
+STATUTE_RE = re.compile(r"^第\s*[一二三四五六七八九十百千零〇0-9]+\s*条\s*[【\[]\s*(?P<title>[^】\]]{2,120}?)\s*[】\]]")
 
 
 def load_schema() -> dict:
@@ -522,6 +524,12 @@ def split_clauses(text: str, field_names: set[str], require_judge: bool = True) 
                 out.append((cur_title, "\n".join(cur)))
                 cur_title, cur = None, []
             continue
+        sm = STATUTE_RE.match(line)
+        if sm:
+            if cur_title is not None:
+                out.append((cur_title, "\n".join(cur)))
+            cur_title, cur = sm.group("title"), [line]
+            continue
         m = CLAUSE_RE.match(line)
         if m and m.group("title") in field_names:
             if cur_title is not None:
@@ -539,6 +547,69 @@ def split_clauses(text: str, field_names: set[str], require_judge: bool = True) 
     if require_judge:
         out = [(t, b) for (t, b) in out if "**判据**" in b or "判据：" in b]
     return out
+
+
+CN_DIGITS = "零一二三四五六七八九"
+
+
+def num_to_cn(n: int) -> str:
+    """1 → 一，10 → 十，16 → 十六，116 → 一百一十六（法条口径）。"""
+    if n <= 0:
+        return "零"
+    if n < 10:
+        return CN_DIGITS[n]
+    if n < 20:
+        return "十" + (CN_DIGITS[n % 10] if n % 10 else "")
+    out, zero = "", False
+    for unit_val, unit in ((1000, "千"), (100, "百"), (10, "十"), (1, "")):
+        d = n // unit_val % 10
+        if d:
+            if zero and out:
+                out += "零"
+            out += CN_DIGITS[d] + unit
+            zero = False
+        elif out:
+            zero = True
+    return out
+
+
+def cn_to_num(s: str) -> int:
+    s = s.strip()
+    if s.isdigit():
+        return int(s)
+    unit = {"千": 1000, "百": 100, "十": 10}
+    total, section, last = 0, 0, 0
+    for ch in s:
+        if ch in CN_DIGITS:
+            last = CN_DIGITS.index(ch)
+            section = last
+        elif ch in unit:
+            section = (last or 1) * unit[ch]
+            total += section
+            last = 0
+    return total + last
+
+
+CLAUSE_NUM_RE = re.compile(r"^第\s*([一二三四五六七八九十百千零〇0-9]+)\s*条")
+
+
+def numbering(text: str) -> list[str]:
+    """条号连续性：从第一条起，逐条 +1，不许跳号 / 重号 / 复用。
+
+    只认行首 `第N条` 的条文标题行。没有条号的旧形态（`- **标题**`）不算 —— 重建期间
+    它报 [待建] 读数，不判红。
+    """
+    nums = [cn_to_num(m.group(1)) for m in (CLAUSE_NUM_RE.match(l) for l in text.split("\n")) if m]
+    if not nums:
+        return ["[待建] 尚未使用条号（第一条…）：重建后启用条号连续性判据"]
+    bad = []
+    for i, n in enumerate(nums, 1):
+        if n != i:
+            bad.append(f"第 {i} 条位置写的是第 {n} 条（{num_to_cn(i)} ⇒ {num_to_cn(n)}）—— 条号必须从 1 连续、不跳号不重号")
+            if len(bad) >= 5:
+                bad.append("（其余同类问题略）")
+                break
+    return bad
 
 
 def audit(text: str, schema: dict) -> tuple[int, int, list[str]]:
@@ -602,6 +673,8 @@ def main(argv: list[str]) -> int:
                     rows.append(f"{name}: {hit}")          # 债务读数：报出来但不判红
                 else:
                     bad.append(f"{name}: {hit}")
+        for hit in numbering(text):
+            (rows if hit.startswith("[待建]") else bad).append(f"{name}: {hit}")
         pre_bad, pre_notes = preamble_form(text, require=(name == GENERIC_BOOK))
         rows.extend(f"{name}: {n}" for n in pre_notes)
         bad.extend(f"{name}: {hit}" for hit in pre_bad)
@@ -794,7 +867,23 @@ def self_test(schema: dict) -> int:
         if clean:
             ok += 1
         print(f"  {mark} {name} ⇒ 违规 {len(hits)} 条 / 读数 {len(notes)} 条")
-    total_cases = len(cases) + len(drift_cases) + len(term_cases) + len(structure_cases) + len(genre_cases) + len(pre_cases)
+    # 条号连续性：连续绿 / 跳号红 / 重号红 / 还未用条号只记待建
+    num_cases = [
+        ("条号连续 ⇒ 绿", "第一条【甲】\n（一）**是什么**：够八个字的正文。\n第二条【乙】\n（一）**是什么**：够八个字的正文。\n", False, False),
+        ("条号跳号 ⇒ 红", "第一条【甲】\n第二条【乙】\n第三条【丙】…\n第五条【丁】\n", True, False),
+        ("条号重号 ⇒ 红", "第一条【甲】\n第三条【乙】\n第三条【丙】\n", True, False),
+        ("还没用条号 ⇒ 只记待建", "- **甲**：够八个字的正文。\n- **判据**：【机判】`true`\n", False, True),
+    ]
+    for name, text, want_red, want_note in num_cases:
+        hits = numbering(text)
+        real = [h for h in hits if not h.startswith("[待建]")]
+        note = len(real) != len(hits)
+        clean = (bool(real) == want_red) and (note == want_note)
+        mark = "✓" if clean else "✗"
+        if clean:
+            ok += 1
+        print(f"  {mark} {name} ⇒ 违规 {len(hits) if not note else 0} 条 / 待建 {int(note)}")
+    total_cases = len(cases) + len(drift_cases) + len(term_cases) + len(structure_cases) + len(genre_cases) + len(pre_cases) + len(num_cases)
     print(f"自检 {ok}/{total_cases} 达到预期")
     return 0 if ok == total_cases else 1
 
