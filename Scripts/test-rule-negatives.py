@@ -52,6 +52,7 @@ PLAN = "Docs/Doyah产品开发计划任务清单-macOS.md"
 PM = "Docs/项目管理规范.md"
 QFILE = ".agent/pending-agenda.md"   # 2026-11-16 待拍板队列迁出规范 §4：Q 行现在在这里
 GENERAL = "Docs/通用开发规范.md"
+PROJECT = "Docs/项目管理规范.md"
 
 # 契约层锁定用的判据参数：以对侧（windows）身份改概设 ⇒ 越界必须判红
 # 2026-11-18 实测修正：基线必须量在**已提交**的树上。本仓规矩是「只提交不推送」，
@@ -134,6 +135,23 @@ def violate_bare_clause(ctx) -> None:
     ctx.write(GENERAL,
               (ROOT / GENERAL).read_text(encoding="utf-8").rstrip("\n")
               + "\n\n- **裸条文（无负例）**：只写了判据的条文，必须被判红。判据：评审。\n")
+
+
+def violate_project_numbering(ctx) -> None:
+    """本册的结构与条号：项目册条号跳号 ⇒ numbering() 必须判红。"""
+    ctx.write(PROJECT, (ROOT / PROJECT).read_text(encoding="utf-8").rstrip("\n")
+              + "\n\n第九十九条【跳号的负例条】\n（一）**是什么**：这条故意跳号，判据必须红。\n"
+                "（二）**判据**：【机判】`true`。\n（三）**归属环节**：全局\n")
+
+
+def violate_term_correspondence(ctx) -> None:
+    """术语对应：删掉项目册的「术语对应」段 ⇒ term_closure 必须判红。"""
+    text = (ROOT / PROJECT).read_text(encoding="utf-8")
+    i = text.find("**术语对应**")
+    if i < 0:
+        raise AssertionError("项目册里找不到「术语对应」段")
+    end = text.find("\n## ", i)
+    ctx.write(PROJECT, text[:i] + (text[end:] if end > 0 else ""))
 
 
 def violate_scope_project_tool(ctx) -> None:
@@ -481,6 +499,8 @@ CASES = [
     ("编号形制五段式",                "check-req-ids.py",            violate_bad_req_id, ("--all",)),
     ("条文体裁：一条条文要回答七问（5W1H1W）", "check-rule-schema.py", violate_genre_no_why, ()),
     ("本规范的效力与范围", "check-rule-schema.py", violate_scope_project_tool, ()),
+    ("本册的结构与条号", "check-rule-schema.py", violate_project_numbering, ()),
+    ("术语对应", "check-rule-schema.py", violate_term_correspondence, ()),
     ("本书的结构", "check-rule-schema.py", violate_structure_new_chapter, ()),
     ("版本与生效", "check-doc-versions.py", violate_version_order, ()),
     ("规则分两册：通用册写形态，项目册写事实", "check-rule-schema.py", violate_booking_project_facts, ()),
