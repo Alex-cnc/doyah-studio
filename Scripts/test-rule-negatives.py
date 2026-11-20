@@ -136,6 +136,13 @@ def violate_bare_clause(ctx) -> None:
               + "\n\n- **裸条文（无负例）**：只写了判据的条文，必须被判红。判据：评审。\n")
 
 
+def violate_booking_project_facts(ctx) -> None:
+    """规则分两册：往通用册塞一句项目工具名 ⇒ 「本册零项目事实」判据必须红。"""
+    ctx.write(GENERAL,
+              (ROOT / GENERAL).read_text(encoding="utf-8").rstrip("\n")
+              + "\n\n- **举例条文**：出包前先跑一遍 xcodebuild，日志留档。\n")
+
+
 def violate_section_exit(ctx) -> None:
     """环节定义缺「出口」：把 B2 的出口清空，判据必须红（归约条文的机器半边）。"""
     ctx.patch("Scripts/rule-sections.json",
@@ -438,6 +445,7 @@ CASES = [
 # 2026-11-18 撤下「版本只写头部」（条文已改名为「版本只写一处（版本表首行）」）：口径收敛为「版本表唯一源」，头部那行已删，违规形态不复存在（转处置登记）
     ("不擅自扩大文档体系",             "check-doc-invariants.py",     violate_extra_doc, ()),
     ("编号形制五段式",                "check-req-ids.py",            violate_bad_req_id, ("--all",)),
+    ("规则分两册：通用册写形态，项目册写事实", "check-rule-schema.py", violate_booking_project_facts, ()),
     ("归约：没见过的东西先归到已有的格子里", "check-rule-schema.py",   violate_section_exit, ()),
     ("数字与路径都不写死",             "check-doc-numbers.py",        violate_doc_numbers, ()),
     ("存量条文允许暂缺字段",           "check-rule-schema.py",        violate_bare_clause, ()),
