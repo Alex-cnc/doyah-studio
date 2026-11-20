@@ -28,6 +28,7 @@
 from __future__ import annotations
 
 import argparse
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -179,6 +180,33 @@ def run_check(script: str, extra: list[str], fast: bool) -> tuple[bool, str]:
     return ok, f"{'✅' if ok else '❌'} {script} {' '.join(extra)} {detail}".strip()
 
 
+RULE_BOOKS = ("Docs/通用开发规范.md", "Docs/项目管理规范.md")
+TRACE_RE = re.compile(r"第\s*[一二三四五六七八九十百零〇0-9]+\s*条\s*[：:]\s*(新增|修改|废止)")
+NOCHANGE_RE = re.compile(r"条文无改动")
+REPLACE_RE = re.compile(r"被第\s*[一二三四五六七八九十百零〇0-9]+\s*条\s*替代")
+
+
+def rule_change_trace(paths: list[str], message: str) -> list[str]:
+    """规范留痕（通用册第 6 条 · 判据的机判那一半）。
+
+    改了规范就必须在提交信息里写「第N条：新增 / 修改 / 废止 + 理由」；
+    写「废止」还必须有「被第N条替代」。只改错字、改表格、只动版本行时，写「条文无改动」即可。
+    为什么必须机判：这是唯一能机判「谁改了什么」的地方 —— 人判要读完 diff，等于没有。
+    """
+    if not any(b in p for p in paths for b in RULE_BOOKS):
+        return []
+    if NOCHANGE_RE.search(message):
+        return []
+    hits = [m.group(1) for m in TRACE_RE.finditer(message)]
+    out: list[str] = []
+    if not hits:
+        out.append("改了规范，但提交信息里没有「第N条：新增 / 修改 / 废止 + 理由」"
+                   "（只改错字或表格时写「条文无改动」）—— 第 6 条要求留痕")
+    if "废止" in hits and not REPLACE_RE.search(message):
+        out.append("提交信息写了「废止」，但没写「被第N条替代」—— 废止必须指向替代条")
+    return out
+
+
 def self_test() -> int:
     cases = [
         (["Docs/Doyah产品详细设计说明书-Linux.md"], ["改文档"]),
@@ -215,7 +243,21 @@ def self_test() -> int:
     empty = [n for n, a in ACTIONS.items() if not a["checks"]]
     print(("  ✓ " if not empty else "  ✗ ") + f"每个动作都有判据（空判据动作：{empty or '无'}）")
     bad += 0 if not empty else 1
-    total = len(cases) + 3
+    # 留痕判据（通用册第 6 条）：改规范必须写「第N条：新增/修改/废止 + 理由」
+    trace_cases = [
+        ("改规范但没写留痕", ["Docs/通用开发规范.md"], "顺手改了措辞", 1),
+        ("写了「第6条：修改」", ["Docs/通用开发规范.md"], "第6条：修改 —— 权限矩阵补 Agent 只许提案", 0),
+        ("写「废止」不给替代条", ["Docs/通用开发规范.md"], "第30条：废止 —— 与第18条重复", 1),
+        ("废止并给替代条", ["Docs/通用开发规范.md"], "第30条：废止 —— 被第18条替代", 0),
+        ("只改错字（条文无改动）", ["Docs/通用开发规范.md"], "错字修正（条文无改动）", 0),
+        ("没动规范", ["Core/AgentLoop.swift"], "随便改代码", 0),
+    ]
+    for name, paths, msg, want in trace_cases:
+        got = len(rule_change_trace(paths, msg))
+        ok = got == want
+        print(("  ✓ " if ok else "  ✗ ") + f"留痕：{name} ⇒ {got} 处（应 {want}）")
+        bad += 0 if ok else 1
+    total = len(cases) + 3 + len(trace_cases)
     print(f"自检{'通过' if not bad else '失败'}（{total-bad}/{total}）")
     return 0 if not bad else 1
 
@@ -228,11 +270,26 @@ def main() -> int:
     ap.add_argument("--check", action="store_true", help="跑对应判据")
     ap.add_argument("--fast", action="store_true", help="只跑轻判据（提交钩子用）")
     ap.add_argument("--base", help="与某个基线比较（默认暂存区，其次工作区）")
+    ap.add_argument("--trace-check", metavar="MSG_FILE",
+                    help="commit-msg 钩子用：按待提交信息判「改规范有没有留痕」")
     ap.add_argument("--self-test", action="store_true")
     args = ap.parse_args()
 
     if args.self_test:
         return self_test()
+
+    if args.trace_check:
+        msg = Path(args.trace_check).read_text(encoding="utf-8", errors="replace")
+        # core.quotepath=false：中文路径默认会被转义成 \351\200\232…，那样就认不出「改了规范」⇒ 假绿
+        staged = subprocess.run(["git", "-c", "core.quotepath=false", "diff", "--cached", "--name-only"],
+                                capture_output=True, text=True).stdout.split()
+        bad_trace = rule_change_trace(staged, msg)
+        for b in bad_trace:
+            print(f"❌ 留痕：{b}")
+        if bad_trace:
+            return 1
+        print("✓ 留痕：本次提交的规范改动有「第N条：新增/修改/废止 + 理由」")
+        return 0
 
     if args.list or not (args.action or args.changed):
         print("动作清单（有限闭集；新增动作必须同时给判据）\n")
@@ -258,8 +315,16 @@ def main() -> int:
         return 0
 
     paths = changed_paths(args.base)
+    # 留痕不在这里判：pre-commit 阶段 git 还没写 COMMIT_EDITMSG（那里放的是上一条提交信息，读了会假绿）。
+    # 留痕由 commit-msg 钩子传文件路径进来，走 --trace-check。
+    trace_bad: list[str] = []
     acts = actions_for(paths)
     print(f"本次改动 {len(paths)} 个文件 ⇒ 命中动作：{'、'.join(acts) if acts else '（无需动作）'}")
+    if trace_bad:
+        for b in trace_bad:
+            print(f"  ❌ 留痕：{b}")
+        if args.check:
+            return 1
     if not args.check:
         return 0
     if len(acts) > 1:

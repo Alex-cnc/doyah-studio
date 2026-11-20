@@ -304,6 +304,13 @@
       "category": "unsupported",
       "reason": "判定对象是「三类敏感改动有没有同批改判据」——这是流程事实，文件层只能看到结果，看不到『同批』这个时序关系。",
       "evidence": "落点表悬空那一半已由 landing_drift 覆盖。"
+    },
+    {
+      "clause": "文档改动必过门禁",
+      "book": "通用开发规范.md",
+      "category": "baseline-red",
+      "reason": "执行器是总入口 action-router：它在夹具里跑 --changed --check 会按「改了文档」去调真判据，而夹具只有半份仓 ⇒ 基线本身 rc=1，负例的红与不红无法区分。这条的实质判据由 check-doc-* 一组脚本各自证明，总入口只负责把它们串起来。",
+      "evidence": "2026-11-18 实测：negatives 里该项恒为『基线本红 rc=1』；同一批 check-doc-versions / check-doc-tables / check-doc-numbers 均有用例实测红。"
     }
   ]
 }

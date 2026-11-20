@@ -20,4 +20,12 @@ mkdir -p "$HOOKS"
 cp "$SRC" "$HOOKS/pre-commit"
 chmod +x "$HOOKS/pre-commit"
 echo "已安装：$HOOKS/pre-commit"
+
+# commit-msg：规范留痕（通用册第 6 条）—— 必须挂在这里，pre-commit 阶段读不到待提交信息
+SRC2="$(dirname "$0")/commit-msg"
+if [ -f "$SRC2" ]; then
+  cp "$SRC2" "$HOOKS/commit-msg"
+  chmod +x "$HOOKS/commit-msg"
+  echo "已安装：$HOOKS/commit-msg（规范留痕）"
+fi
 echo "验证：git commit 前会先跑本仓检查（五层回归 / 越界门禁）；临时绕过用 git commit --no-verify"
