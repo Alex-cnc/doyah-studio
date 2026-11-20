@@ -228,6 +228,36 @@ def clause_genre(text: str, schema: dict, book: str) -> tuple[list[str], list[st
     return out, notes
 
 
+PREAMBLE_HEAD = re.compile(r"^##\s*序言\s*$", re.M)
+# 序言里出现这些词，说明它开始写规矩了 —— 规矩只许写进「条」，序言只许叙述
+PREAMBLE_SPEECH = re.compile(r"必须|不得|不许|禁止|判据|【机判】|【人判】|归属环节|第\s*[一二三四五六七八九十百零〇0-9]+\s*条")
+
+
+def preamble_form(text: str, require: bool = True) -> tuple[list[str], list[str]]:
+    """序言是叙述层：无条号、无判据、无负例 —— 但它也不许藏规矩。
+
+    判据只查一件：序言正文里有没有规范语句（必须/不得/判据/第N条…）。
+    有 ⇒ 红，理由是「规矩只许写进条里」—— 今天 §4.2 就是以 `**规矩**：` 躺在散文里、
+    判据整整一年看不见它，这条判据就是防它复发。
+    返回 (违规, 读数)。
+    """
+    m = PREAMBLE_HEAD.search(text)
+    if not m:
+        return [], (["[待建] 序言未建立：重建后启用本判（今天起它只是缺件读数，不判红）"] if require else [])
+    rest = text[m.end():]
+    nxt = re.search(r"^##\s", rest, re.M)
+    body = rest[: nxt.start()] if nxt else rest
+    hits = []
+    for i, line in enumerate(body.split("\n"), 1):
+        s = line.strip()
+        if not s:
+            continue
+        for mm in PREAMBLE_SPEECH.finditer(s):
+            hits.append(f"序言第 {i} 行出现规范语句「{mm.group(0)}」⇒ 规矩只许写进「条」，序言只许叙述：{s[:40]}")
+            break
+    return hits, []
+
+
 def coverage_gap(text: str, schema: dict) -> list[str]:
     """写了【判据】却没声明「覆盖范围」的条文标题（铁律 13 的落地判据）。
 
@@ -572,6 +602,9 @@ def main(argv: list[str]) -> int:
                     rows.append(f"{name}: {hit}")          # 债务读数：报出来但不判红
                 else:
                     bad.append(f"{name}: {hit}")
+        pre_bad, pre_notes = preamble_form(text, require=(name == GENERIC_BOOK))
+        rows.extend(f"{name}: {n}" for n in pre_notes)
+        bad.extend(f"{name}: {hit}" for hit in pre_bad)
         genre_bad, genre_notes = clause_genre(text, schema, name)
         rows.extend(f"{name}: {n}" for n in genre_notes)
         bad.extend(f"{name}: {hit}" for hit in genre_bad)
@@ -747,7 +780,21 @@ def self_test(schema: dict) -> int:
         if clean == want_clean:
             ok += 1
         print(f"  {mark} {name} ⇒ {'绿' if clean else '红'}，应为{'绿' if want_clean else '红'}")
-    total_cases = len(cases) + len(drift_cases) + len(term_cases) + len(structure_cases) + len(genre_cases)
+    # 序言是叙述层：写「为什么」绿；写规矩或引用条号红；没有序言只出待建读数
+    pre_cases = [
+        ("序言只讲为什么 ⇒ 绿", "## 序言\n\n这本规范是从三次返工里长出来的。它替接手的人省掉重复踩坑。\n\n## 1 总纲\n", 0, False),
+        ("序言里写「必须」⇒ 红", "## 序言\n\n改完文档必须以 exit 0 收尾。\n\n## 1 总纲\n", 1, False),
+        ("序言里引用条号 ⇒ 红", "## 序言\n\n详见第 42 条。\n\n## 1 总纲\n", 1, False),
+        ("没有序言 ⇒ 不算违规，只记待建", "## 1 总纲\n", 0, True),
+    ]
+    for name, text, want_red, want_note in pre_cases:
+        hits, notes = preamble_form(text)
+        clean = (len(hits) == want_red) and (bool(notes) == want_note)
+        mark = "✓" if clean else "✗"
+        if clean:
+            ok += 1
+        print(f"  {mark} {name} ⇒ 违规 {len(hits)} 条 / 读数 {len(notes)} 条")
+    total_cases = len(cases) + len(drift_cases) + len(term_cases) + len(structure_cases) + len(genre_cases) + len(pre_cases)
     print(f"自检 {ok}/{total_cases} 达到预期")
     return 0 if ok == total_cases else 1
 
