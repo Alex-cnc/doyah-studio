@@ -620,11 +620,13 @@ final class DesignTokenRatchetTests: XCTestCase {
 /// ｜ 2026-11-13 IM 通道六项落地（分块 / 媒体 / 附件 / 失败判 / 命令 / 按钮），代码行 46045 → **46169**（+124）｜审批继电器一批 → **46209**（+40）｜对话区贴底锚定 → **46210**｜贴底排版（GeometryReader + minHeight）→ **46214**｜空态回顶部 → **46218**｜刷屏闸门 → **46229**｜只推真等人的 → **46239**。
     /// = `bare-color 2 / bare-foreground 97 / bare-spacing 52 / bare-textstyle 180`
     /// （其中 8 处就是 `knownDrift`；基线 2/102/56/189 是**预算**，现值更低 = 已销账但没下调基线）。
+    /// ｜ 2026-11-20 手动 `/compact`（`Core/AgentManualCompaction.swift` + `AgentChatModel` 三处接线）：
+    ///    代码行 46373 → **46421**（+48；新件 1 份、无裸样式令牌，文件数 187 不变）。
     /// 这一条是「搬过来没换口径」的证据 —— 计数差一处它就红。
     func testMeasuredReadingMatchesTheOldGatesNumbers() throws {
         let face = try repoScan()
         XCTAssertEqual(face.files, 187, "扫描面的文件数与老脚本不一致")
-        XCTAssertEqual(face.codeLines, 46373, "扫描面的代码行数与老脚本不一致")
+        XCTAssertEqual(face.codeLines, 46421, "扫描面的代码行数与老脚本不一致")
         XCTAssertEqual(face.counts["App/Views/ProductOverviewSheet.swift"],
                        ["bare-textstyle": 5, "bare-foreground": 3],
                        "HEAD 上那两处红的读数是老脚本的 rc=1 读数")

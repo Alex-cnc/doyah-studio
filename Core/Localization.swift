@@ -1300,7 +1300,10 @@ public enum LKey: String, CaseIterable, Sendable {
     case agentResendNoAnchor
     // 斜杠命令（`FR-AGT-UX-CONV-014` / `-015`）：全部**本地执行**的结果话术。
     case agentSlashCleared
-    case agentSlashCompactNoTrigger
+    case agentSlashCompactApplied
+    case agentSlashCompactDeferred
+    case agentSlashCompactNothing
+    case agentSlashCompactRefused
     case agentSlashSearch
     case agentSlashStopRequested
     case agentSlashStopNotRunning
@@ -5082,7 +5085,10 @@ public enum LocalizedStrings {
         .agentMessageResend: [.simplifiedChinese: "重发这条（同样的提问再跑一轮）", .english: "Resend this turn (run the same question again)"],
         .agentResendNoAnchor: [.simplifiedChinese: "这条前面没有对应的提问，没法重发。", .english: "There is no question behind this message, so it cannot be resent."],
         .agentSlashCleared: [.simplifiedChinese: "已清空本会话的对话上下文；盘上的会话记录还在，随时能回看。", .english: "Conversation context cleared. The session log on disk is untouched and can still be reviewed."],
-        .agentSlashCompactNoTrigger: [.simplifiedChinese: "压缩只在会话边界发生（会话开始 / 会话结束落盘前），回合内不压 —— 只出预算报告；本版还没有手动触发点，已如实告知，没有假装压过。", .english: "Compaction happens only at session boundaries (session start / before the session is written to disk); nothing is compressed inside a turn — only a budget report is shown. This build has no manual trigger yet, and that is reported honestly rather than faked."],
+        .agentSlashCompactApplied: [.simplifiedChinese: "已压缩：早期的 %ld 条助手正文折成一行，%ld → %ld token；你问过的话一句没动（会话记录也还在盘上）。", .english: "Compacted: %ld earlier assistant replies folded into one line, %ld → %ld tokens. None of your own messages were touched (the session log is still on disk)."],
+        .agentSlashCompactDeferred: [.simplifiedChinese: "压缩已排队：回合内不改上下文（§3.21），本回合收尾的会话边界上执行 —— 做完会在这里报读数。", .english: "Compaction queued: context is never rewritten mid-turn, so it runs at this turn's session boundary. The reading will show up here when it is done."],
+        .agentSlashCompactNothing: [.simplifiedChinese: "现在没什么可压的：助手正文还不到 %ld 条，折了是净损失。", .english: "Nothing to compact: fewer than %ld assistant replies so far, so folding would cost more than it saves."],
+        .agentSlashCompactRefused: [.simplifiedChinese: "压缩后仍超上限（%ld → %ld token），这次不压 —— 不静默截断。", .english: "Still over the limit after compaction (%ld → %ld tokens), so nothing was cut: silent truncation is not allowed."],
         .agentSlashSearch: [.simplifiedChinese: "「%@」命中 %ld 条会话（按标题匹配）。", .english: "\"%@\" matches %ld sessions (by title)."],
         .agentSlashStopRequested: [.simplifiedChinese: "已请求中断这一跑：在下一跳之前停，已产生的工具结果仍留痕。", .english: "Stop requested: it halts before the next hop, and tool results already produced stay on record."],
         .agentSlashStopNotRunning: [.simplifiedChinese: "当前没有在跑的任务，没有可中断的。", .english: "Nothing is running right now, so there is nothing to interrupt."],

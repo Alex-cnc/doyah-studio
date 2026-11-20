@@ -3,6 +3,7 @@
 
 | 版本 | 日期 | 变更要点（逐轮细节看 git 提交） |
 |---|---|---|
+| **v1.3.22** | 2026-11-20 | **§3.21 补 `userCompact` 边界的真落点**：`Core/AgentManualCompaction.compact(history:budget:inTurn:decisionsKept:)` —— 手动 `/compact` 折助手正文（用户原话不动）、回合内 `.deferred(.userCompact)` 由收尾边界兑现、压完仍超限 `.refused` 且历史原样；`AgentChatModel.historyTurns()` 按「压缩基线 + 压缩点之后新话」重建前情。判据 `Tests/AgentManualCompactionTests` 6 例 |
 | **v1.3.21** | 2026-11-18 | **版本口径收敛（主人令：版本头要了干啥，有版本表就行了）**：删掉头部「当前版本」行与正文写死的「文档版本：vX」，当前版本一律 = **本表首行**；判据 `check-doc-versions` 改为取表首（无表的一单走 blockquote 日志兜底）。同一个事实只写一处，不再有「头部与表顶差 12 版」这种漂移 |
 | **v1.3.20** | 2026-11-18 | **引用修正**：`check-theme-set.py`（310 条对比度）**不存在**，改人判；`Core/LaunchAgentLoginItem.swift` 已删除，兜底改指 `LaunchAtLogin.swift` + `SMAppServiceLoginItem.swift`；悬空路径重指归档件。**本表未逐版回填：v1.3.13–v1.3.19 的逐版要点以 git log 为准** |
 | **v1.3.9** | 2026-11-14 | 审批推送只对 `.pendingApproval` 生效（代签档 `.approved` 不推）；判据 `T-3.25-18` |
@@ -891,6 +892,13 @@
 **日志字段**：必记 `sessionID` · `boundary` · `beforeTokens` / `afterTokens` · `droppedKinds[]` · `durationMs` · `outcome`；**禁记**被压缩正文（只记类别与字数）。
 
 **测试 ID**：`T-3.21-01`（回合内不压）· `T-3.21-02`（边界压且保留决策）· `T-3.21-03`（压完仍超限如实报）· `T-3.21-04`（降级只折正文、按路径钉住、幂等）· `T-3.21-05`（窗数回执）· `T-3.21-06`（死路关工具）· `T-3.21-07`（先搜后读）
+
+**`userCompact` 边界的落点（手动触发点）**：`Core/AgentManualCompaction.compact(history:budget:inTurn:decisionsKept:)`。
+用户在对话里敲 `/compact` 走这一条：①只折**助手正文**，用户原话一个字不动（压掉「我问了什么」会让模型答非所问）；
+②回合内返回 `.deferred(.userCompact)`，由本轮收尾的 `finish` 在边界上兑现（不在回合里改上下文）；
+③界面报「折了几条 / 前后 token / 丢了哪一类」，压完仍超上限返回 `.refused` 且历史**原样**。
+`App/AgentChatModel.historyTurns()` 以「压缩基线 + 压缩点之后新说的话」重建前情 —— 已折掉的那段不再重复带。
+判据：`Tests/AgentManualCompactionTests`（6 例：回合内只排队 / 太短不折 / 用户原话不动 / 三个读数 / 幂等 / 压完仍超拒）。
 
 **回合内的「降级」与本节的关系（2026-11-16 补）**：本节禁的是**改写/丢弃**上下文。回合内唯一允许的动作是
 `Core/AgentObservationDigest.swift` 的**降级**（旧工具结果折成一行台账），它有自己的三条硬规矩：

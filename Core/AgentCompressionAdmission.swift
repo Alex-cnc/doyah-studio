@@ -46,15 +46,19 @@ public struct AgentCompressionProduct: Equatable, Sendable {
     public var droppedKinds: [AgentDroppedKind]
     /// ③ 截断处标记（界面可见的那一句）。
     public var marker: String
+    /// 折掉的助手正文条数（手动 `/compact` 报「折了几条」用；自动压缩用不到，默认 0）。
+    public var foldedReplies: Int
 
     public init(boundary: AgentSessionBoundary, tokensBefore: Int, tokensAfter: Int,
-                decisionsKept: [String], droppedKinds: [AgentDroppedKind], marker: String) {
+                decisionsKept: [String], droppedKinds: [AgentDroppedKind], marker: String,
+                foldedReplies: Int = 0) {
         self.boundary = boundary
         self.tokensBefore = tokensBefore
         self.tokensAfter = tokensAfter
         self.decisionsKept = decisionsKept
         self.droppedKinds = droppedKinds
         self.marker = marker
+        self.foldedReplies = foldedReplies
     }
 }
 

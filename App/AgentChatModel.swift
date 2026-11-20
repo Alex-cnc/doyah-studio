@@ -478,6 +478,16 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
     /// 不接 ⇒ 这一轮不记账（如实：跨轮累计不会涨，配额也就永远到不了上限 —— 那正是旧缺口）。
     var recordQuotaLedger: ((AgentQuotaLedger) -> Void)?
 
+    /// `/compact` 之后的**新前情基线**：早期助手正文已折成一行，用户原话逐字留着。
+    /// `nil` = 还没压过（历史照常从消息流现算）。
+    private(set) var manualCompactionBase: [LLMTurn]?
+    /// 压缩那一刻消息流的长度：下标 < 它的消息已经被 `manualCompactionBase` 代表，不再重复带。
+    private(set) var manualCompactionMark = 0
+    /// 回合内被要求 `/compact`：§3.21 不允许回合内改上下文 ⇒ 排到本回合收尾的边界上补做。
+    private(set) var compactQueuedAtBoundary = false
+    /// 手动压缩的预算口径（与循环自动压缩同一个类型；`keepRecentEntries` 决定留几条正文）。
+    var manualCompactionBudget = AgentContextCompressionBudget()
+
     /// 吞吐（token/秒）：**只在这两样都有读数时给**，算不出来就不显示（不编）。
     var tokensPerSecond: Double? {
         guard let seconds = lastElapsedSeconds, seconds > 0.05, sessionUsage.completionTokens > 0 else { return nil }
@@ -823,10 +833,9 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
             await writeSlashAudit(effect, outcome: .executed)
 
         case .compactContext:
-            // 压缩本身在 `AgentLoop` 的请求边界上按预算自动发生（`AgentContextCompressionBudget`）；
-            // 本版**没有**手动触发点 —— 如实说，不假装压过。
-            state.appendNotice(L(.agentSlashCompactNoTrigger))
-            await writeSlashAudit(effect, outcome: .failed, detail: "noManualTrigger")
+            // **手动触发点**（`FR-AGT-KNOW-CTX-002` · 边界 `userCompact`）：
+            // 折的是「早期助手正文」，用户原话一个字不动；回合内只排队，不在回合里改上下文（§3.21）。
+            await runManualCompaction(effect: effect)
 
         case let .searchSessions(query):
             // 会话列表按工作区读一次（每敲一句就扫盘是浪费；这里是显式命令，扫一次合理）。
@@ -925,6 +934,51 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
     }
 
     /// 写一条斜杠命令的审计（一条命令一条）。
+    /// `/compact` 的真实现（`FR-AGT-KNOW-CTX-002` · 边界 `userCompact`）。
+    ///
+    /// 折的是**早期助手正文**：用户原话一个字不动（压掉「我问了什么」会让模型答非所问）；
+    /// 回合内一律只排队 —— §3.21 不许在回合里改上下文，本回合收尾时由 `finish` 兑现。
+    /// 三种结局都要如实报：压了（带读数）/ 没得压 / 压完仍超限（拒不静默截断）。
+    private func runManualCompaction(effect: AgentSlashCommandEffect?) async {
+        let history = historyTurns()
+        let result = AgentManualCompaction.compact(history: history,
+                                                   budget: manualCompactionBudget,
+                                                   inTurn: state.isRunning)
+        switch result.status {
+        case .deferred:
+            compactQueuedAtBoundary = true
+            state.appendNotice(L(.agentSlashCompactDeferred))
+            if let effect {
+                await writeSlashAudit(effect, outcome: .generated, detail: "queued:userCompact")
+            }
+        case .compacted:
+            manualCompactionBase = result.history
+            manualCompactionMark = messages.count
+            compactQueuedAtBoundary = false
+            let folded = result.product?.foldedReplies ?? 0
+            let before = result.product?.tokensBefore ?? 0
+            let after = result.product?.tokensAfter ?? 0
+            state.appendNotice(L(.agentSlashCompactApplied,
+                                 Int64(folded), Int64(before), Int64(after)))
+            if let effect {
+                await writeSlashAudit(effect, outcome: .executed,
+                                      detail: "folded=\(folded) tokens=\(before)->\(after)")
+            }
+        case .nothingToCompress:
+            state.appendNotice(L(.agentSlashCompactNothing,
+                                 Int64(AgentManualCompaction.minimumAssistantTurns)))
+            if let effect {
+                await writeSlashAudit(effect, outcome: .executed, detail: "nothingToCompress")
+            }
+        case let .refused(before, after):
+            state.appendNotice(L(.agentSlashCompactRefused, Int64(before), Int64(after)))
+            if let effect {
+                await writeSlashAudit(effect, outcome: .failed,
+                                      detail: "stillOverLimit \(before)->\(after)")
+            }
+        }
+    }
+
     private func writeSlashAudit(_ effect: AgentSlashCommandEffect,
                                  outcome: AgentActionRecord.Outcome,
                                  detail: String? = nil) async {
@@ -989,10 +1043,14 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
     /// Core 不该知道界面的消息结构，宿主也不该另抄一份。
     /// 当前这条提问**不在内**（它作为 `userPrompt` 单独发，带上就重复了）。
     func historyTurns(maxCharacters: Int = 6_000) -> [LLMTurn] {
+        // `/compact` 之后：前情 = 压缩基线（早期回复已折、用户原话未动）+ 之后再说的那几句。
+        let base = manualCompactionBase ?? []
         var picked: [LLMTurn] = []
-        var used = 0
+        var used = base.reduce(0) { $0 + $1.content.count }
         var skippedCurrent = false
-        for message in messages.reversed() {
+        for (index, message) in messages.enumerated().reversed() {
+            // 压缩点之前的消息已经由基线代表 —— 再带一次就等于把折叠白丢了。
+            if manualCompactionBase != nil, index < manualCompactionMark { break }
             guard message.role == .user || message.role == .assistant else { continue }
             guard !message.isStreaming else { continue }
             let text = message.text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -1006,7 +1064,7 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
             used += text.count
             picked.append(LLMTurn(role: message.role.rawValue, content: text))
         }
-        return picked.reversed()
+        return base + picked.reversed()
     }
 
     func adoptSession(_ id: String, workspacePath: String?) -> Bool {
@@ -1672,6 +1730,11 @@ final class AgentChatModel: ObservableObject, AgentLoopObserver {
         // **配额回写**（`NFR-AI-04`）：这一轮跳级累加过的账本交回宿主，跨轮才累计得起来
         //（不回写 ⇒ 每个上限在真实路径上都永远不会触发，正是 v3.88 修掉的那条第 1 项缺口）。
         if let ledger = result.quotaLedger { recordQuotaLedger?(ledger) }
+        // 回合内请求过的 `/compact`：收尾这一刻就是它的边界 —— 在这里补做（不许永远排队）。
+        if compactQueuedAtBoundary {
+            compactQueuedAtBoundary = false
+            Task { await self.runManualCompaction(effect: nil) }
+        }
         // **日配额记账**（`FR-AGT-OPS-OBS-002`）：这一轮真花掉的 token 进当日账。
         // 只算这一轮的增量（不是会话累计）—— 日配额按「今天花了多少」算，不是「这条会话花了多少」。
         let turnTokens = (result.usage.promptTokens ?? 0) + (result.usage.completionTokens ?? 0)
