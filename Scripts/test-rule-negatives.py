@@ -136,6 +136,15 @@ def violate_bare_clause(ctx) -> None:
               + "\n\n- **裸条文（无负例）**：只写了判据的条文，必须被判红。判据：评审。\n")
 
 
+def violate_genre_no_why(ctx) -> None:
+    """条文体裁（七问）：加一条**没有「为什么」**的条文 ⇒ 缺 Why 计数 +1 超基线 ⇒ 判据必须红。"""
+    ctx.write(GENERAL,
+              (ROOT / GENERAL).read_text(encoding="utf-8").rstrip("\n")
+              + "\n\n0. **负例条文：不写为什么**：这条条文的首行正文要够八个字。\n"
+                "- **不是什么**：无。\n- **判据**：【机判】`true`。\n- **负例**：无。\n"
+                "- **读数口径**：无。\n- **归属环节**：B1\n")
+
+
 def violate_booking_project_facts(ctx) -> None:
     """规则分两册：往通用册塞一句项目工具名 ⇒ 「本册零项目事实」判据必须红。"""
     ctx.write(GENERAL,
@@ -445,6 +454,7 @@ CASES = [
 # 2026-11-18 撤下「版本只写头部」（条文已改名为「版本只写一处（版本表首行）」）：口径收敛为「版本表唯一源」，头部那行已删，违规形态不复存在（转处置登记）
     ("不擅自扩大文档体系",             "check-doc-invariants.py",     violate_extra_doc, ()),
     ("编号形制五段式",                "check-req-ids.py",            violate_bad_req_id, ("--all",)),
+    ("条文体裁：一条条文要回答七问（5W1H1W）", "check-rule-schema.py", violate_genre_no_why, ()),
     ("规则分两册：通用册写形态，项目册写事实", "check-rule-schema.py", violate_booking_project_facts, ()),
     ("归约：没见过的东西先归到已有的格子里", "check-rule-schema.py",   violate_section_exit, ()),
     ("数字与路径都不写死",             "check-doc-numbers.py",        violate_doc_numbers, ()),

@@ -192,6 +192,42 @@ def book_structure(text: str) -> list[str]:
     return out
 
 
+def clause_genre(text: str, schema: dict, book: str) -> tuple[list[str], list[str]]:
+    """**条文体裁（七问）**：每条必须回答 `Why / What / How / Capability / Who / When`。
+
+    六字段只管「是什么 + 怎么判」；缺的两问是：
+    - **为什么**（Why）：这条是从哪件事上长出来的、不写会出什么事。没有它，条文就是无来由的检查项。
+    - **能力前提**（Capability）：要什么工具 / 权限 / 环境，才守得住、才判得了。没有它，条文在拿不到那个能力的场合就是一句空话。
+
+    判定用**计数棘轮**（存量欠账见 `rule-schema.json` 的 `体裁.棘轮`）：缺这两问的条文条数只许降。
+    这样新条文缺字段会立刻让计数上升 ⇒ 判红；补一条老条文，基线跟着降一条。
+    """
+    genre = schema.get("体裁", {})
+    ratchet = genre.get("棘轮", {})
+    if not ratchet:
+        return [], []
+    names = set(schema["字段"].keys()) | {"为什么", "能力前提"}
+    per_book = ratchet.get(book, {})
+    why_floor = int(per_book.get("为什么基线", 0))
+    cap_floor = int(per_book.get("能力前提基线", 0))
+    total = missing_why = missing_cap = 0
+    for _title, body in split_clauses(text, names, require_judge=False):
+        total += 1
+        if "**为什么**" not in body:
+            missing_why += 1
+        if "**能力前提**" not in body:
+            missing_cap += 1
+    out: list[str] = []
+    if missing_why > why_floor:
+        out.append(f"缺「为什么」的条文 {missing_why} 条 > 基线 {why_floor} 条 —— 新条文必须写清"
+                   f"「这条是从哪件事上长出来的、不写会怎样」")
+    if missing_cap > cap_floor:
+        out.append(f"缺「能力前提」的条文 {missing_cap} 条 > 基线 {cap_floor} 条 —— 不写要什么工具/权限/环境，"
+                   f"条文在拿不到那能力的场合就是空话")
+    notes = [f"[欠账] 七问欠账：缺「为什么」{missing_why}/{total} 条、缺「能力前提」{missing_cap}/{total} 条（只许降）"]
+    return out, notes
+
+
 def coverage_gap(text: str, schema: dict) -> list[str]:
     """写了【判据】却没声明「覆盖范围」的条文标题（铁律 13 的落地判据）。
 
@@ -536,6 +572,9 @@ def main(argv: list[str]) -> int:
                     rows.append(f"{name}: {hit}")          # 债务读数：报出来但不判红
                 else:
                     bad.append(f"{name}: {hit}")
+        genre_bad, genre_notes = clause_genre(text, schema, name)
+        rows.extend(f"{name}: {n}" for n in genre_notes)
+        bad.extend(f"{name}: {hit}" for hit in genre_bad)
         for miss in dangling_scripts(text, schema):
             bad.append(f"{name}: 条文点名的脚本不存在 —— 「{miss}」（判据悬空，删脚本必须同批改条文）")
         incomplete = total - complete
@@ -691,7 +730,24 @@ def self_test(schema: dict) -> int:
         if clean == want_clean:
             ok += 1
         print(f"  {mark} {name} ⇒ {'绿' if clean else '红'}，应为{'绿' if want_clean else '红'}")
-    total_cases = len(cases) + len(drift_cases) + len(term_cases) + len(structure_cases)
+    # 条文体裁（七问）：新条文缺「为什么 / 能力前提」⇒ 计数超基线 ⇒ 红
+    def _genre_clause(i: int, with_why: bool = False) -> str:
+        body = (f"- **样例条文{i}**：这条条文的首行正文要够八个字\n"
+                f"- **判据**：【机判】`true`。\n- **归属环节**：B1\n")
+        return body + (("- **为什么**：从某次事故上长出来的。\n"
+                        "- **能力前提**：要一个能跑门禁的终端。\n") if with_why else "")
+    genre_cases = [
+        ("新条文不写为什么 ⇒ 超基线判红", "".join(_genre_clause(i) for i in range(117)), False),
+        ("新条文写满 Why / What / How ⇒ 绿", "".join(_genre_clause(i) for i in range(116)) + _genre_clause(999, True), True),
+    ]
+    for name, text, want_clean in genre_cases:
+        hits, _ = clause_genre(text, schema, "通用开发规范.md")
+        clean = not hits
+        mark = "✓" if clean == want_clean else "✗"
+        if clean == want_clean:
+            ok += 1
+        print(f"  {mark} {name} ⇒ {'绿' if clean else '红'}，应为{'绿' if want_clean else '红'}")
+    total_cases = len(cases) + len(drift_cases) + len(term_cases) + len(structure_cases) + len(genre_cases)
     print(f"自检 {ok}/{total_cases} 达到预期")
     return 0 if ok == total_cases else 1
 
