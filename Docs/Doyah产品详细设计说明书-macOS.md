@@ -3,6 +3,7 @@
 
 | 版本 | 日期 | 变更要点（逐轮细节看 git 提交） |
 |---|---|---|
+| **v1.3.23** | 2026-11-21 | **§3.30 补 ④ 依赖判定**（`AgentSubagentExecution` 认两种写法，未满足即跳过并点名；`Tests/AgentOrchestrationDependencyTests` 3 例，`T-3.30-04`）· **§3.21 补超预算优先级截断**（`AgentContextPriorityTruncator` + `AgentLoop.makeRequest`，丢序 critical→high→normal，`T-3.21-08`）· **§3.24 去「未建」并补按类别清空落点**（`AgentMemoryStore.removeAll(kind:workspace:)`，`T-3.24-07`）；三处均 2026-11-19 已落代码，本节补契约 |
 | **v1.3.22** | 2026-11-20 | **§3.21 补 `userCompact` 边界的真落点**：`Core/AgentManualCompaction.compact(history:budget:inTurn:decisionsKept:)` —— 手动 `/compact` 折助手正文（用户原话不动）、回合内 `.deferred(.userCompact)` 由收尾边界兑现、压完仍超限 `.refused` 且历史原样；`AgentChatModel.historyTurns()` 按「压缩基线 + 压缩点之后新话」重建前情。判据 `Tests/AgentManualCompactionTests` 6 例 |
 | **v1.3.21** | 2026-11-18 | **版本口径收敛（主人令：版本头要了干啥，有版本表就行了）**：删掉头部「当前版本」行与正文写死的「文档版本：vX」，当前版本一律 = **本表首行**；判据 `check-doc-versions` 改为取表首（无表的一单走 blockquote 日志兜底）。同一个事实只写一处，不再有「头部与表顶差 12 版」这种漂移 |
 | **v1.3.20** | 2026-11-18 | **引用修正**：`check-theme-set.py`（310 条对比度）**不存在**，改人判；`Core/LaunchAgentLoginItem.swift` 已删除，兜底改指 `LaunchAtLogin.swift` + `SMAppServiceLoginItem.swift`；悬空路径重指归档件。**本表未逐版回填：v1.3.13–v1.3.19 的逐版要点以 git log 为准** |
@@ -891,7 +892,13 @@
 
 **日志字段**：必记 `sessionID` · `boundary` · `beforeTokens` / `afterTokens` · `droppedKinds[]` · `durationMs` · `outcome`；**禁记**被压缩正文（只记类别与字数）。
 
-**测试 ID**：`T-3.21-01`（回合内不压）· `T-3.21-02`（边界压且保留决策）· `T-3.21-03`（压完仍超限如实报）· `T-3.21-04`（降级只折正文、按路径钉住、幂等）· `T-3.21-05`（窗数回执）· `T-3.21-06`（死路关工具）· `T-3.21-07`（先搜后读）
+**测试 ID**：`T-3.21-01`（回合内不压）· `T-3.21-02`（边界压且保留决策）· `T-3.21-03`（压完仍超限如实报）· `T-3.21-04`（降级只折正文、按路径钉住、幂等）· `T-3.21-05`（窗数回执）· `T-3.21-06`（死路关工具）· `T-3.21-07`（先搜后读）· `T-3.21-08`（超预算按优先级丢段并明说）
+
+**超预算时的优先级截断（与压缩的分工）**：压缩解决「上下文超上限」，截断解决「这一条请求的字符预算」，两件事不许互相代偿。
+落点 `Core/AgentContextPriorityTruncator.truncate(sections:maxCharacters:)`，由 `AgentLoop.makeRequest` 在**超预算时**调用：
+丢段顺序固定 —— 最近一条观察（critical，必留）→ 折叠摘要（high）→ 其余观察（normal，先丢最老）；
+丢了几段**写进提示词**（不静默），**预算内提示词逐字不变**。判据 `Tests/AgentKnowledgeTests`（截断 6 例）
+`Tests/AgentContextPriorityTruncationLoopTests` 3 例（循环级）。负例：随机丢、或丢了不报 ⇒ 判红。
 
 **`userCompact` 边界的落点（手动触发点）**：`Core/AgentManualCompaction.compact(history:budget:inTurn:decisionsKept:)`。
 用户在对话里敲 `/compact` 走这一条：①只折**助手正文**，用户原话一个字不动（压掉「我问了什么」会让模型答非所问）；
@@ -975,12 +982,13 @@
 
 **测试 ID**：`T-3.23-01`（真实结束触发一次）· `T-3.23-02`（钩子抛错不中断会话）· `T-3.23-03`（回合内调 end 被拒）
 
-### 3.24 记忆写入 / 检索 / 冲突 / 上下文账本（**未建**）
+### 3.24 记忆写入 / 检索 / 冲突 / 上下文账本
 
 - 对应概设条款：概要设计 §18.9 记忆 · §18.10 项目上下文
-- 对应需求：`FR-AGT-KNOW-MEM-006`（写入过闸）· `-007`（相关性检索）· `-008`（冲突）· `-009`（上下文账本）· `FR-AGT-KNOW-CTX-003`（项目规则文件）
+- 对应需求：`FR-AGT-KNOW-MEM-002`（治理，含按类别清空）· `-006`（写入过闸）· `-007`（相关性检索）· `-008`（冲突）· `-009`（上下文账本）· `FR-AGT-KNOW-CTX-003`（项目规则文件）
 
-**为什么单列一条**：核对时发现这五件事**都没有落点** —— 记忆只有读（`AgentMemoryContext.references` 挂进上下文），`AgentMemoryStore.record()` 除测试外**零调用点**，盘上连记忆目录都没有；技能只有声明式登记与披露，没有沉淀。本节是**待建契约**，建成前不许在台账上标 ✅。
+**为什么单列一条**：立契时（2026-10-28 之前）这五件事**都没有落点** —— 记忆只有读（`AgentMemoryContext.references` 挂进上下文），`AgentMemoryStore.record()` 除测试外**零调用点**，盘上连记忆目录都没有；技能只有声明式登记与披露，没有沉淀。
+**现状（2026-11-21 复核）**：写入过闸、项目规则文件、按类别清空三件已建（下表标「已建」）；其余按表逐件核，**落地与否以一单 §3 为准** —— 本节只给契约与落点，不在这里记状态。
 
 **落点（各一个文件，判据与实现同批）**
 
@@ -990,12 +998,13 @@
 | 相关性检索 | `Core/AgentMemoryRetrieval.swift`（打分：词命中 + 类别 + 时间衰减；**命中理由逐条可解释**；宁可少给） | `Tests/AgentMemoryRetrievalTests` |
 | 冲突消解 | `Core/AgentMemoryWriteGate.swift`（`superseding`：同键新者胜、旧值进 `supersededNotes`（上限 20，超出从最早丢）、来源轮次跟到最新；键 = 显式 `key`，无键才退粗指纹） | `Tests/AgentMemoryWriteGateTests` |
 | 上下文账本 | `Core/AgentContextLedger.swift`（五段 token 与占比、被裁条目逐条点名、只读） | `Tests/AgentContextLedgerTests` |
+| 按类别清空 | `Core/AgentMemory.swift` 的 `AgentMemoryStore.removeAll(kind:workspace:)`（**已建 2026-11-19**：只动那一类、认不出的类别一律不动、返回真删条数；整层清空照旧是另一条路） | `Tests/AgentKnowledgeTests`（按类别清空 1 例） |
 | 项目规则文件 | 读 `AGENTS.md` / `DOYAH.md` / `.doyah/rules`（只读，带路径进上下文；找不到明说）—— **已建 2026-10-28**：`Core/AgentProjectRules.swift`（142 行）+ `AgentContextReference.projectRule`（排上下文最前）+ App 接线 | `Tests/AgentProjectRulesTests` **10 例**（已绿） |
 | 技能沉淀 | `Core/AgentSkillSedimentation.swift`（只从成功且被确认的任务抽、可检视可作废、只动登记档） | `Tests/AgentSkillSedimentationTests` |
 
 **禁止行为**：禁止把记忆写入做成「模型觉得重要就静默落库」；禁止按时效平铺最近 N 条冒充检索；禁止同键两条同时进上下文；禁止账本改写正文；禁止规则文件进可写面。
 
-**测试 ID**：`T-3.24-01`（无指令不落库）· `T-3.24-02`（相关命中、无关不进）· `T-3.24-03`（同键新者胜、旧值可查）· `T-3.24-04`（账本逐段报数且只读）· `T-3.24-05`（规则文件读入带路径 / 找不到明说）· `T-3.24-06`（只抽成功且被确认的做法）
+**测试 ID**：`T-3.24-01`（无指令不落库）· `T-3.24-02`（相关命中、无关不进）· `T-3.24-03`（同键新者胜、旧值可查）· `T-3.24-04`（账本逐段报数且只读）· `T-3.24-05`（规则文件读入带路径 / 找不到明说）· `T-3.24-06`（只抽成功且被确认的做法）· `T-3.24-07`（按类别清空只动那一类）
 
 ### 3.25 IM 通道凭据：扫码接入 / 手填 / 自检
 
@@ -1750,14 +1759,16 @@
 | ① | **子路事件不进主对话** | `Core/AgentSubtaskEventChannel.swift`（分流通道） | 子代理的工具调用、进度、错误直接混进主对话流，用户以为主控自己跑偏了 | `Tests/AgentSubtaskIsolationTests.swift`（子路发 3 条事件：主对话只收到 1 条归并摘要） |
 | ② | **预算按子循环截止时刻算** | `Core/AgentSubagentExecution.swift` + `Core/AgentLoop.swift` | 预算沿用主控截止时刻 ⇒ 子路一开跑就「超时」，或反过来无限跑 | 同上（子路 deadline = 派单时刻 + 子预算，主控预算不受影响） |
 | ③ | **同 id 重派换子会话号** | `Core/AgentSubagentExecution.swift` | 复用旧子会话号 ⇒ 新一轮继承了上一轮的上下文，模型照着旧结论干活 | 同上（同 id 重派后会话号不同，历史不串） |
+| ④ | **声明了依赖的那一路不许并发跑** | `Core/AgentSubagentExecution.swift`（认 `dependsOn` 与 `depends_on` 两种写法） | 依赖未完成仍开跑 ⇒ 子代理照着还不存在的产物干活，归并里也看不出它凭什么这么干 | `Tests/AgentOrchestrationDependencyTests.swift`（3 例：依赖未满足即跳过并点名依赖谁 / 两种写法等价 / 没写依赖照常并行） |
 
 **禁止行为**
 
 - 禁止子路直接写主对话的消息数组（必须经 `AgentSubtaskEventChannel` 归并）。
 - 禁止子路继承主控的凭据与授权（§3.20 已禁，这里再钉一次：审批单只能由主控出）。
 - 禁止把「重派」实现成「续跑」（重派 = 新会话号 + 新预算 + 干净上下文）。
+- 禁止忽略依赖声明直接并发（跳过并**点名依赖谁**，让模型自己决定下一步；不替它自动重排）。
 
-**测试 ID**：`T-3.30-01`（子路事件不混主对话）· `T-3.30-02`（子路预算独立于主控）· `T-3.30-03`（同 id 重派换子会话号）
+**测试 ID**：`T-3.30-01`（子路事件不混主对话）· `T-3.30-02`（子路预算独立于主控）· `T-3.30-03`（同 id 重派换子会话号）· `T-3.30-04`（依赖未满足即跳过并点名依赖谁）
 
 ### 3.37 过程区高度自适应与结论正文去壳
 
